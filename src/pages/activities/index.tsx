@@ -9,7 +9,7 @@ import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { NextPageWithLayout } from "~/pages/_app";
 
 const ActivitiesPage: NextPageWithLayout = () => {
-  const [nameFilter, setNameFilter] = React.useState("");
+  const [searchFilter, setSearchFilter] = React.useState("");
 
   return (
     <>
@@ -20,14 +20,14 @@ const ActivitiesPage: NextPageWithLayout = () => {
           <SearchIcon className="text-muted-foreground pointer-events-none absolute left-2.5 size-3.5" />
           <input
             type="text"
-            placeholder="Search by name..."
-            value={nameFilter}
-            onChange={(e) => setNameFilter(e.target.value)}
+            placeholder="Search activities..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
             className="placeholder:text-muted-foreground h-8 w-44 rounded-md bg-transparent py-1 pl-8 pr-2 text-sm outline-none"
           />
-          {nameFilter && (
+          {searchFilter && (
             <button
-              onClick={() => setNameFilter("")}
+              onClick={() => setSearchFilter("")}
               className="text-muted-foreground hover:text-foreground absolute right-1.5 flex size-4 items-center justify-center"
             >
               <XIcon className="size-3" />
@@ -38,7 +38,7 @@ const ActivitiesPage: NextPageWithLayout = () => {
         <SyncPanel />
       </Toolbar>
       <div className="flex flex-1 flex-col overflow-hidden p-0 pt-3 md:p-4">
-        <ActivitiesTable nameFilter={nameFilter} />
+        <ActivitiesTable searchFilter={searchFilter} />
       </div>
     </>
   );

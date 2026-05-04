@@ -109,11 +109,6 @@ const columns = [
     header: () => <span>Title</span>,
     size: 3,
     meta: { minWidth: 140 },
-    filterFn: (row, _columnId, filterValue: string) => {
-      if (!filterValue) return true;
-      const name: string = row.getValue("name");
-      return name.toLowerCase().includes(filterValue.toLowerCase());
-    },
   }),
   columnHelper.accessor("startDateLocal", {
     cell: (info) => <span className="truncate">{format(new Date(info.getValue()), "P p", { locale: enGB })}</span>,
@@ -147,6 +142,17 @@ const columns = [
     sortingFn: "basic",
     size: 1,
   }),
+  columnHelper.accessor("averageSpeed", {
+    cell: (info) => {
+      const activity = info.row.original;
+      return activity.averageSpeed === 0
+        ? ""
+        : getSportConfig(activity.type).formatSpeed(activity.averageSpeed);
+    },
+    header: () => <span>Pace</span>,
+    sortingFn: "basic",
+    size: 1,
+  }),
   columnHelper.accessor("load", {
     cell: (info) => {
       const value = info.getValue();
@@ -162,7 +168,24 @@ const ROW_HEIGHT = 48;
 const VIRTUALIZER_OVERSCAN = 20;
 const SKELETON_ROW_COUNT = 25;
 
-export function ActivitiesTable(props: { nameFilter?: string; timePeriodId?: number }) {
+const activitySearchFilter = (
+  row: Row<ActivityWithoutMap>,
+  _columnId: string,
+  filterValue: string,
+) => {
+  if (!filterValue) return true;
+  const activity = row.original;
+  const haystack = [
+    activity.name,
+    formatActivityType(activity.type),
+    format(new Date(activity.startDateLocal), "P p", { locale: enGB }),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(filterValue.toLowerCase());
+};
+
+export function ActivitiesTable(props: { searchFilter?: string; timePeriodId?: number }) {
   const activitiesQuery = useActivitiesQuery(
     props.timePeriodId != null ? { timePeriodId: props.timePeriodId } : undefined,
   );
@@ -186,15 +209,11 @@ export function ActivitiesTable(props: { nameFilter?: string; timePeriodId?: num
     [activitiesQuery.data, loadPreferences],
   );
 
-  const columnFilters = React.useMemo(
-    () => (props.nameFilter ? [{ id: "name", value: props.nameFilter }] : []),
-    [props.nameFilter],
-  );
-
   const table = useReactTable({
     data,
     columns,
-    state: { columnFilters },
+    state: { globalFilter: props.searchFilter ?? "" },
+    globalFilterFn: activitySearchFilter,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),

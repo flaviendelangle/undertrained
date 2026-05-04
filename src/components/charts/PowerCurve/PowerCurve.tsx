@@ -125,96 +125,145 @@ export default PowerCurve;
 
 // --- Single activity mode ---
 
+const ACTIVITY_RANGE_ID = "activity";
+const ACTIVITY_RANGE: DateRange = { id: ACTIVITY_RANGE_ID, label: "This Activity" };
+const SINGLE_ACTIVITY_TYPES = ["Ride", "VirtualRide"];
+const SINGLE_ACTIVITY_LOCKED_IDS = new Set([ACTIVITY_RANGE_ID]);
+
 function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
   const tokens = useChartTokens();
   const athleteId = useAthleteId();
-  const [showAllTime, setShowAllTime] = React.useState(true);
+  const [ranges, setRanges] = React.useState<DateRange[]>([
+    ACTIVITY_RANGE,
+    presetToRange("all"),
+  ]);
   const [mode, setMode] = React.useState<PowerCurveMode>("watts");
   const { resolveForDate } = useRiderSettingsTimeline();
 
+  const addRange = (range: DateRange) => {
+    setRanges((prev) => {
+      if (prev.some((r) => r.id === range.id)) return prev;
+      return [...prev, range];
+    });
+  };
+
+  const removeRange = (id: string) => {
+    setRanges((prev) => prev.filter((r) => r.id !== id));
+  };
+
   const { data: activity } = trpc.activities.get.useQuery({ stravaId });
 
-  const { data: allTimeBests } = trpc.analytics.getPowerCurve.useQuery(
-    {
-      athleteId: athleteId!,
-      activityTypes: ["Ride", "VirtualRide"],
-    },
-    { enabled: athleteId != null && showAllTime },
+  // One query per non-activity range
+  const queryRanges = ranges.filter((r) => r.id !== ACTIVITY_RANGE_ID);
+  const queries = trpc.useQueries((t) =>
+    queryRanges.map((range) =>
+      t.analytics.getPowerCurve(
+        {
+          athleteId: athleteId!,
+          activityTypes: SINGLE_ACTIVITY_TYPES,
+          dateFrom: range.dateFrom,
+          dateTo: range.dateTo,
+        },
+        { enabled: athleteId != null },
+      ),
+    ),
   );
 
-  const activityData = React.useMemo(() => {
-    const powerBests = activity?.powerBests;
-    if (!powerBests) return null;
-    return Object.entries(powerBests)
-      .map(([durationStr, watts]) => ({
-        duration: Number(durationStr),
-        watts: Number(watts),
-      }))
-      .sort((a, b) => a.duration - b.duration);
-  }, [activity?.powerBests]);
-
   const { xData, series, activityMetadata } = React.useMemo(() => {
-    if (!activityData || activityData.length === 0) {
-      return { xData: [] as number[], series: [] as PowerCurveSeriesData[], activityMetadata: {} as ActivityMetadataMap };
-    }
+    const powerBests = activity?.powerBests;
+    const activityData = powerBests
+      ? Object.entries(powerBests)
+          .map(([durationStr, watts]) => ({
+            duration: Number(durationStr),
+            watts: Number(watts),
+          }))
+          .sort((a, b) => a.duration - b.duration)
+      : [];
 
-    const activityByDuration = new Map(activityData.map((d) => [d.duration, d.watts]));
-
-    const allTimeByDuration = new Map(
-      (allTimeBests ?? []).map((d) => [
-        d.duration,
-        { watts: d.watts, activityStravaId: d.activityStravaId, activityName: d.activityName, activityStartDate: d.activityStartDate },
-      ]),
-    );
+    const queryResults = queries.map((q) => q.data ?? []);
 
     const durationSet = new Set<number>();
     for (const d of activityData) durationSet.add(d.duration);
-    if (showAllTime && allTimeBests) {
-      for (const d of allTimeBests) durationSet.add(d.duration);
+    for (const result of queryResults) {
+      for (const d of result) durationSet.add(d.duration);
     }
     const durations = [...durationSet].sort((a, b) => a - b);
 
+    if (durations.length === 0) {
+      return {
+        xData: [] as number[],
+        series: [] as PowerCurveSeriesData[],
+        activityMetadata: {} as ActivityMetadataMap,
+      };
+    }
+
     const metadata: ActivityMetadataMap = {};
 
-    // Activity weight (single date)
     const activityStartDate = activity?.startDate;
     const activityWeight = activityStartDate
       ? resolveForDate(activityStartDate).weightKg
       : null;
 
-    const chartSeries: PowerCurveSeriesData[] = [
-      {
-        id: "activity",
-        yData: durations.map((d) => activityByDuration.get(d) ?? null),
-        label: "This Activity",
-        color: tokens.palette[1],
-        weights: durations.map(() => activityWeight),
-      },
-    ];
+    let queryIdx = 0;
+    const chartSeries: PowerCurveSeriesData[] = ranges.map((range, i) => {
+      const color = tokens.palette[i % tokens.palette.length];
 
-    if (showAllTime && allTimeBests) {
-      const allTimeSeriesId = "all-time";
-      metadata[allTimeSeriesId] = durations.map((d) => {
-        const entry = allTimeByDuration.get(d);
+      if (range.id === ACTIVITY_RANGE_ID) {
+        const byDuration = new Map(activityData.map((d) => [d.duration, d.watts]));
+        return {
+          id: range.id,
+          yData: durations.map((d) => byDuration.get(d) ?? null),
+          label: range.label,
+          color,
+          weights: durations.map(() => activityWeight),
+        };
+      }
+
+      const data = queryResults[queryIdx++] ?? [];
+      const seriesId = `range-${i}`;
+      const byDuration = new Map(
+        data.map((d) => [
+          d.duration,
+          {
+            watts: d.watts,
+            activityStravaId: d.activityStravaId,
+            activityName: d.activityName,
+            activityStartDate: d.activityStartDate,
+          },
+        ]),
+      );
+
+      metadata[seriesId] = durations.map((d) => {
+        const entry = byDuration.get(d);
         if (!entry) return null;
-        return { activityStravaId: entry.activityStravaId, activityName: entry.activityName, activityStartDate: entry.activityStartDate };
+        return {
+          activityStravaId: entry.activityStravaId,
+          activityName: entry.activityName,
+          activityStartDate: entry.activityStartDate,
+        };
       });
 
-      chartSeries.push({
-        id: allTimeSeriesId,
-        yData: durations.map((d) => allTimeByDuration.get(d)?.watts ?? null),
-        label: "All-Time Best",
-        color: tokens.palette[0],
+      return {
+        id: seriesId,
+        yData: durations.map((d) => byDuration.get(d)?.watts ?? null),
+        label: range.label,
+        color,
         weights: durations.map((d) => {
-          const entry = allTimeByDuration.get(d);
+          const entry = byDuration.get(d);
           if (!entry?.activityStartDate) return null;
           return resolveForDate(entry.activityStartDate).weightKg;
         }),
-      });
-    }
+      };
+    });
 
     return { xData: durations, series: chartSeries, activityMetadata: metadata };
-  }, [activityData, allTimeBests, showAllTime, tokens.palette, activity?.startDate, resolveForDate]);
+  }, [activity, queries, ranges, tokens.palette, resolveForDate]);
+
+  const hint = (
+    <FeatureHint hintId="hint-activity-power-curve" title="Power Curve" side="right">
+      Your best sustained power efforts at each duration. Add date ranges to compare this activity against your historical bests and spot improvements.
+    </FeatureHint>
+  );
 
   if (xData.length === 0) {
     return <EmptyChart />;
@@ -222,24 +271,20 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
 
   return (
     <div className="bg-card flex h-96 w-full flex-col rounded-md">
-      <div className="border-border flex items-center gap-2 border-b p-4">
-        <h3 className="shrink-0 text-lg font-semibold">Cycling Power Curve</h3>
-        <FeatureHint hintId="hint-activity-power-curve" title="Power Curve" side="right">
-          Your best sustained power efforts at each duration. Toggle &quot;vs All-Time&quot; to compare this activity against your historical bests and spot improvements.
-        </FeatureHint>
-        <div className="bg-border mx-1 h-4 w-px" />
-        <label className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          <input
-            type="checkbox"
-            checked={showAllTime}
-            onChange={(e) => setShowAllTime(e.target.checked)}
-            className="accent-primary size-3.5"
-          />
-          vs All-Time
-        </label>
-        <div className="flex-1" />
-        <ModeToggle mode={mode} onModeChange={setMode} />
-      </div>
+      <Toolbar
+        ranges={ranges}
+        onAddPreset={addRange}
+        onAddCustom={addRange}
+        onRemove={removeRange}
+        lockedRangeIds={SINGLE_ACTIVITY_LOCKED_IDS}
+        athleteId={athleteId}
+        activityTypes={SINGLE_ACTIVITY_TYPES}
+        workoutTypes={undefined}
+        mode={mode}
+        onModeChange={setMode}
+        showCustomRange={false}
+        hint={hint}
+      />
       <div className="min-h-0 flex-1">
         <PowerCurveWebGLChart xData={xData} series={series} activityMetadata={activityMetadata} mode={mode} />
       </div>
@@ -429,6 +474,8 @@ function Toolbar({
   workoutTypes,
   mode,
   onModeChange,
+  showCustomRange = true,
+  hint,
 }: {
   ranges: DateRange[];
   onAddPreset: (range: DateRange) => void;
@@ -440,6 +487,8 @@ function Toolbar({
   workoutTypes?: number[];
   mode: PowerCurveMode;
   onModeChange: (mode: PowerCurveMode) => void;
+  showCustomRange?: boolean;
+  hint?: React.ReactNode;
 }) {
   const tokens = useChartTokens();
 
@@ -460,13 +509,14 @@ function Toolbar({
         activityTypes={activityTypes}
         workoutTypes={workoutTypes}
       />
-      <CustomRangePopover onAdd={onAddCustom} />
+      {showCustomRange && <CustomRangePopover onAdd={onAddCustom} />}
     </>
   );
 
   return (
     <div className="border-border flex items-center gap-2 border-b p-4">
       <h3 className="shrink-0 text-lg font-semibold">Cycling Power Curve</h3>
+      {hint}
 
       {/* Desktop: range controls inline */}
       <div className="hidden items-center gap-2 sm:flex">
