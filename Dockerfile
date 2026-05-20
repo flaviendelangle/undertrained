@@ -35,6 +35,8 @@ COPY --from=builder /app/src/server/db/migrations ./src/server/db/migrations
 COPY --from=builder /app/drizzle.config.ts ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
+# Webhook management CLI (pnpm webhook:view/create/delete) runs via tsx at runtime
+COPY --from=builder /app/scripts ./scripts
 
 USER nextjs
 EXPOSE 3000
