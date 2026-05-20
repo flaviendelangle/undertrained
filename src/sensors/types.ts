@@ -273,21 +273,6 @@ export function predictRaceTime(vdot: number, distanceMeters: number): number {
   return (lo + hi) / 2;
 }
 
-/** %VO2max that a lactate-threshold pace corresponds to (fast edge of Daniels' Threshold zone). */
-export const THRESHOLD_PACE_PCT_VO2MAX = 0.88;
-
-/**
- * Approximate VDOT from a lactate-threshold pace (m/s). The threshold pace sits
- * at the fast edge of Daniels' Threshold zone (~88% VO2max), so
- * `VO2max ≈ oxygenCost(thresholdVelocity) / 0.88`. Lets us derive running pace
- * zones for athletes who have a stored threshold pace but no race result.
- */
-export function vdotFromThresholdPace(metersPerSecond: number): number {
-  if (metersPerSecond <= 0) return 0;
-  const vMetersPerMin = metersPerSecond * 60;
-  return oxygenCost(vMetersPerMin) / THRESHOLD_PACE_PCT_VO2MAX;
-}
-
 export const RUNNING_ZONES = [
   { name: "Easy", color: "#808080" },
   { name: "Marathon", color: "#3B82F6" },
@@ -334,31 +319,4 @@ export function computeRunningZones(vdot: number): PaceRange[] {
     { slow: intervalSlow, fast: intervalFast },
     { slow: repSlow, fast: repFast },
   ];
-}
-
-/**
- * Map a running pace (seconds/km) to a Daniels zone. Picks the zone whose pace
- * range contains the value; for paces in a gap between ranges, the nearest range
- * wins (handles the non-contiguous Marathon band cleanly).
- */
-export function findRunningPaceZone(
-  secondsPerKm: number,
-  vdot: number,
-): { zone: (typeof RUNNING_ZONES)[number]; index: number } {
-  const ranges = computeRunningZones(vdot);
-  let bestIndex = 0;
-  let bestDistance = Infinity;
-  for (let i = 0; i < ranges.length; i++) {
-    const lo = Math.min(ranges[i].slow, ranges[i].fast);
-    const hi = Math.max(ranges[i].slow, ranges[i].fast);
-    const distance =
-      secondsPerKm >= lo && secondsPerKm <= hi
-        ? 0
-        : Math.min(Math.abs(secondsPerKm - lo), Math.abs(secondsPerKm - hi));
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestIndex = i;
-    }
-  }
-  return { zone: RUNNING_ZONES[bestIndex], index: bestIndex };
 }

@@ -13,26 +13,32 @@ import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
-import {
-  findHeartRateZone,
-  findPowerZone,
-  findRunningPaceZone,
-  vdotFromThresholdPace,
-  type RiderSettings,
-} from "~/sensors/types";
+import { findHeartRateZone, findPowerZone, type RiderSettings } from "~/sensors/types";
 import { formatElapsed } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 import { ChartThemeProvider } from "../ChartThemeProvider";
+import {
+  computeLapGapSpeed,
+  findRunningPaceZone,
+  parseSampleStreams,
+} from "./lapZones";
 
 /** Subset of the stored lap shape consumed by the chart. */
 interface LapDatum {
   index: number;
   name: string;
   elapsedTime: number;
+  startIndex: number;
+  endIndex: number;
   averageSpeed: number;
   averageWatts?: number | null;
   averageHeartrate?: number | null;
+}
+
+interface StreamRow {
+  type: string;
+  data: string;
 }
 
 /** A lap laid out for rendering: cumulative time span + bar height + colour. */
@@ -58,6 +64,8 @@ interface ActivityLapsProps {
   /** Activity start date — used to resolve the rider settings in effect then. */
   startDate: string;
   laps: readonly LapDatum[] | null;
+  /** Activity streams (for Grade-Adjusted Pace on running laps). */
+  streams?: readonly StreamRow[] | null;
 }
 
 const X_AXIS_ID = "time";
@@ -65,11 +73,17 @@ const Y_AXIS_ID = "value";
 const BAR_GAP_PX = 1;
 
 export default function ActivityLaps(props: ActivityLapsProps) {
-  const { activityType, startDate, laps } = props;
+  const { activityType, startDate, laps, streams } = props;
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
   const { resolveForDate } = useRiderSettingsTimeline();
   const [hover, setHover] = React.useState<HoverState | null>(null);
+
+  // Parse streams once (hooks must run before any early return).
+  const sampleStreams = React.useMemo(
+    () => parseSampleStreams(streams),
+    [streams],
+  );
 
   const sportConfig = getSportConfig(activityType);
 
@@ -77,20 +91,14 @@ export default function ActivityLaps(props: ActivityLapsProps) {
   if (!laps || laps.length <= 1) return null;
 
   const settings = resolveForDate(startDate);
-  // Bar height: average power (W) for cycling, average speed (m/s) otherwise.
   const usePower = sportConfig.lapMetricStreamType === "watts";
-
-  const vdot =
-    !usePower && settings.runThresholdPace > 0
-      ? vdotFromThresholdPace(settings.runThresholdPace)
-      : 0;
+  const isRunning = sportConfig.category === "running";
 
   const formatValue = (v: number) =>
     usePower ? `${Math.round(v)} W` : sportConfig.formatSpeed(v);
 
-  // Lay laps out end-to-end along a cumulative-time axis so each bar's WIDTH is
-  // proportional to its duration (Strava-style). Prefix sums give each lap's
-  // start without mutating render-scope state.
+  // Lay laps out end-to-end on a cumulative-time axis so each bar's WIDTH is
+  // proportional to its duration. Prefix sums avoid mutating render-scope state.
   const starts = laps.reduce<number[]>((acc, lap, i) => {
     acc.push(i === 0 ? 0 : acc[i - 1] + laps[i - 1].elapsedTime);
     return acc;
@@ -98,8 +106,27 @@ export default function ActivityLaps(props: ActivityLapsProps) {
   const totalDuration = laps.reduce((sum, lap) => sum + lap.elapsedTime, 0);
 
   const bars: LapBar[] = laps.map((lap, i) => {
-    const value = usePower ? (lap.averageWatts ?? 0) : lap.averageSpeed;
-    const zone = getLapZone(lap, { usePower, settings, vdot });
+    // Running uses Grade-Adjusted Pace (VAP) for both height and zone; cycling
+    // uses average power; other sports use raw average speed.
+    let value: number;
+    if (usePower) {
+      value = lap.averageWatts ?? 0;
+    } else if (isRunning) {
+      value =
+        computeLapGapSpeed(sampleStreams, lap.startIndex, lap.endIndex) ??
+        lap.averageSpeed;
+    } else {
+      value = lap.averageSpeed;
+    }
+
+    const zone = resolveLapZone({
+      value,
+      usePower,
+      isRunning,
+      settings,
+      averageHeartrate: lap.averageHeartrate ?? null,
+    });
+
     return {
       name: lap.name,
       start: starts[i],
@@ -111,11 +138,12 @@ export default function ActivityLaps(props: ActivityLapsProps) {
       zoneName: zone?.name ?? null,
     };
   });
+
   const maxValue = Math.max(...bars.map((b) => b.value));
   // Nothing to plot when no lap carries the primary metric (e.g. powerless ride).
   if (totalDuration <= 0 || maxValue <= 0) return null;
 
-  const valueLabel = usePower ? "Power" : sportConfig.speedLabel;
+  const valueLabel = usePower ? "Power" : isRunning ? "GAP" : sportConfig.speedLabel;
 
   return (
     <ChartThemeProvider>
@@ -124,10 +152,14 @@ export default function ActivityLaps(props: ActivityLapsProps) {
           <h3 className="text-lg font-semibold">Laps</h3>
           <FeatureHint hintId="hint-activity-laps" title="Laps">
             Each lap (interval) as a bar — width is its duration, height its
-            average {usePower ? "power" : "pace"} — colored by training zone from
-            your {usePower ? "FTP" : "run threshold pace"} (same model as the
-            Toolbox Zone Calculator). Falls back to heart-rate zones when that
-            metric is missing.
+            average {usePower ? "power" : isRunning ? "grade-adjusted pace (GAP)" : "pace"}
+            {isRunning ? ", colored by intervals.icu pace zone" : usePower ? ", colored by power zone" : ""}.
+            {usePower
+              ? " From your FTP."
+              : isRunning
+                ? " From your run threshold pace."
+                : ""}{" "}
+            Falls back to heart-rate zones when that metric is missing.
           </FeatureHint>
         </div>
         <div className="relative min-h-0 flex-1">
@@ -238,30 +270,29 @@ function LapTooltip({ hover }: { hover: HoverState }) {
 }
 
 /**
- * Metric-matched zone for a lap: power zones (FTP) for cycling, Daniels pace
- * zones (VDOT derived from run threshold pace) for running. Falls back to
- * heart-rate zones (Karvonen) when the primary metric or its threshold is
- * unavailable. Returns null when nothing can be resolved.
+ * Metric-matched zone for a lap, returning name + colour:
+ * - cycling → power zones (FTP),
+ * - running → intervals.icu pace zones vs the run threshold pace (value is GAP),
+ * - otherwise / when the primary metric is missing → heart-rate zones (Karvonen).
  */
-function getLapZone(
-  lap: LapDatum,
-  opts: { usePower: boolean; settings: RiderSettings; vdot: number },
-): { name: string; color: string } | null {
-  const { usePower, settings, vdot } = opts;
+function resolveLapZone(opts: {
+  value: number;
+  usePower: boolean;
+  isRunning: boolean;
+  settings: RiderSettings;
+  averageHeartrate: number | null;
+}): { name: string; color: string } | null {
+  const { value, usePower, isRunning, settings, averageHeartrate } = opts;
 
-  const watts = lap.averageWatts ?? 0;
-  if (usePower && settings.ftp > 0 && watts > 0) {
-    return findPowerZone(watts, settings.ftp).zone;
+  if (usePower && settings.ftp > 0 && value > 0) {
+    return findPowerZone(value, settings.ftp).zone;
   }
-  if (!usePower && vdot > 0 && lap.averageSpeed > 0) {
-    const secondsPerKm = 1000 / lap.averageSpeed;
-    return findRunningPaceZone(secondsPerKm, vdot).zone;
+  if (isRunning && settings.runThresholdPace > 0 && value > 0) {
+    return findRunningPaceZone(value, settings.runThresholdPace);
   }
-
-  if (lap.averageHeartrate != null && settings.maxHr > 0) {
-    return findHeartRateZone(lap.averageHeartrate, settings.maxHr, settings.restingHr)
+  if (averageHeartrate != null && settings.maxHr > 0) {
+    return findHeartRateZone(averageHeartrate, settings.maxHr, settings.restingHr)
       .zone;
   }
-
   return null;
 }

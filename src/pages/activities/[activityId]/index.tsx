@@ -195,6 +195,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             activityType={activity.type}
             startDate={activity.startDate}
             laps={activity.laps}
+            streams={streamsData}
           />
           {hasPower && <PowerCurve stravaId={activity.stravaId} />}
         </div>
