@@ -27,7 +27,11 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-undertrained}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-undertrained}
     ports:
-      - "3000:3000"
+      # Bind to loopback only: Caddy reaches the app over the internal compose
+      # network (app:3000); this mapping just keeps host-local tooling and the
+      # deploy health check (curl localhost:3000) working without exposing the
+      # app directly to the internet.
+      - "127.0.0.1:3000:3000"
 
   caddy:
     image: caddy:2-alpine
