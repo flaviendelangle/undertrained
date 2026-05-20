@@ -35,6 +35,7 @@ import {
   fetchStreamsFromStrava,
   getAccessToken,
   getBestEffortModels,
+  getLapModels,
   getModelFromStravaActivity,
 } from "./strava";
 
@@ -395,6 +396,8 @@ async function syncActivityDetailsPhase(
               fetchDetailedActivity(accessToken, activity.stravaId),
             );
             await storeBestEfforts(db, activity.id, detailed);
+            // Laps live on the same DetailedActivity — store them for free.
+            await storeLaps(db, activity.id, detailed);
             progressed = true;
           } catch (e) {
             if (isStravaNotFound(e)) {
@@ -575,6 +578,23 @@ export async function storeBestEfforts(
       .set({ areBestEffortsLoaded: true, bestEffortFetchAttempts: 0 })
       .where(eq(activities.id, activityId));
   });
+}
+
+/**
+ * Persists the laps of a freshly fetched DetailedActivity onto the activity row.
+ * Free wherever the detailed activity is already in hand (run sync, webhook
+ * create, per-activity reload). No "loaded" flag — the chart simply renders laps
+ * only when more than one is present.
+ */
+export async function storeLaps(
+  db: Database,
+  activityId: number,
+  detailed: Pick<DetailedActivity, "laps">,
+) {
+  await db
+    .update(activities)
+    .set({ laps: getLapModels(detailed) })
+    .where(eq(activities.id, activityId));
 }
 
 type ActivityForScoring = {

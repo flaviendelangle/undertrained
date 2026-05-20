@@ -1,7 +1,6 @@
 import * as React from "react";
 
 import { SlidersHorizontalIcon } from "lucide-react";
-import { format } from "date-fns";
 
 import { BarChartPro, type ZoomData } from "@mui/x-charts-pro";
 
@@ -18,6 +17,7 @@ import {
   formatCompact,
   useChartTokens,
 } from "~/lib/chartTokens";
+import { formatSlice } from "~/utils/dateUtils";
 import { formatActivityType } from "~/utils/format";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
@@ -198,7 +198,7 @@ export default function ActivitiesTimeline() {
                 id: TIME_AXIS_ID,
                 scaleType: "band",
                 data: xAxisData,
-                valueFormatter: (value: Date) => format(value, "MM/yyyy"),
+                valueFormatter: (value: Date) => formatSlice(value, precision),
                 zoom: { filterMode: "discard" },
                 height: isMobile ? AXIS_SIZE.mobile.height : AXIS_SIZE.desktop.height,
               },

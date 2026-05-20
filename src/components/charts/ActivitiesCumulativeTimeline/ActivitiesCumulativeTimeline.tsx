@@ -28,6 +28,14 @@ const MONTH_LABELS = Array.from({ length: 12 }, (_, i) =>
   format(new Date(2024, i, 1), "MMMM", { locale: enGB }),
 );
 
+/** Format a duration given in hours as e.g. "8h30" (rounded to the minute). */
+function formatHoursMinutes(hours: number): string {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h}h${String(m).padStart(2, "0")}`;
+}
+
 export default function ActivitiesCumulativeTimeline() {
   const [metric, setMetric] = React.useState("distance");
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>([]);
@@ -53,6 +61,23 @@ export default function ActivitiesCumulativeTimeline() {
   });
 
   const metricConfig = METRICS.find((el) => el.value === metric);
+
+  // Format the numeric value shown in the tooltip: hours render as "8h30",
+  // everything else is rounded and gets the metric unit appended (the bare
+  // series values would otherwise show as long unitless decimals).
+  const formatValue = React.useCallback(
+    (value: number | null) => {
+      if (value == null) {
+        return "";
+      }
+      if (metricConfig?.unit === "h") {
+        return formatHoursMinutes(value);
+      }
+      const formatted = Math.round(value).toLocaleString();
+      return metricConfig?.unit ? `${formatted} ${metricConfig.unit}` : formatted;
+    },
+    [metricConfig],
+  );
 
   const series = React.useMemo(() => {
     if (!metricConfig) {
@@ -91,13 +116,30 @@ export default function ActivitiesCumulativeTimeline() {
       }
 
       return {
+        id: year,
         label: year,
         data: monthlyData,
+        valueFormatter: formatValue,
         showMark: false,
         curve: "natural" as const,
       };
     });
-  }, [groupedActivities, metricConfig, metricContext]);
+  }, [groupedActivities, metricConfig, metricContext, formatValue]);
+
+  // Default to showing only the three most recent years; older ones stay
+  // hidden but can be re-enabled from the legend. Applied once data first
+  // arrives (the series start empty while the activities query loads).
+  type HiddenItems = NonNullable<React.ComponentProps<typeof LineChart>["hiddenItems"]>;
+  const [hiddenItems, setHiddenItems] = React.useState<HiddenItems>([]);
+  const appliedDefaultHidden = React.useRef(false);
+  React.useEffect(() => {
+    if (!appliedDefaultHidden.current && series.length > 0) {
+      appliedDefaultHidden.current = true;
+      setHiddenItems(
+        series.slice(0, -3).map((s) => ({ type: "line", seriesId: s.id })),
+      );
+    }
+  }, [series]);
 
   return (
     <ChartThemeProvider>
@@ -172,6 +214,9 @@ export default function ActivitiesCumulativeTimeline() {
             margin={isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard}
             hideLegend={isMobile}
             slots={{ tooltip: ChartTooltip }}
+            slotProps={{ legend: { toggleVisibilityOnClick: true } }}
+            hiddenItems={hiddenItems}
+            onHiddenItemsChange={setHiddenItems}
           />
         </div>
       </div>

@@ -8,6 +8,7 @@ import { ActivityActionsMenu } from "~/components/ActivityActionsMenu";
 import { ActivityMap } from "~/components/ActivityMap";
 import { ActivityStats } from "~/components/ActivityStats";
 import { ElevationProfile } from "~/components/ElevationProfile";
+import { ActivityLaps } from "~/components/charts/ActivityLaps";
 import { ActivityStreams } from "~/components/charts/ActivityStreams";
 import { PowerCurve } from "~/components/charts/PowerCurve";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
@@ -189,6 +190,11 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             stravaId={activity.stravaId}
             onHoverPositionChange={setHoverPosition}
             hiddenStreams={hiddenStreams}
+          />
+          <ActivityLaps
+            activityType={activity.type}
+            startDate={activity.startDate}
+            laps={activity.laps}
           />
           {hasPower && <PowerCurve stravaId={activity.stravaId} />}
         </div>

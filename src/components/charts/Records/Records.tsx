@@ -103,23 +103,9 @@ export default function Records() {
   const sportOptions = React.useMemo(() => {
     const opts: { value: Sport; label: React.ReactNode }[] = [];
     if (options?.hasCycling)
-      opts.push({
-        value: "cycling",
-        label: (
-          <span className="flex items-center gap-1.5">
-            <RideIcon className="size-3.5" /> Cycling
-          </span>
-        ),
-      });
+      opts.push({ value: "cycling", label: <RideIcon className="size-3.5" /> });
     if (options && options.runDistances.length > 0)
-      opts.push({
-        value: "running",
-        label: (
-          <span className="flex items-center gap-1.5">
-            <RunIcon className="size-3.5" /> Running
-          </span>
-        ),
-      });
+      opts.push({ value: "running", label: <RunIcon className="size-3.5" /> });
     return opts;
   }, [options]);
 
@@ -228,122 +214,100 @@ export default function Records() {
     }
   }
 
-  const thirdLabel = heartrateActive
-    ? "Duration"
-    : !isCycling
-      ? "Distance"
-      : cyclingMetric === "power"
-        ? "Duration"
-        : cyclingMetric === "speed"
-          ? "Distance"
-          : "Measure";
+  const typeSelect = isCycling ? (
+    <RecordSelect
+      items={(Object.keys(CYCLING_METRIC_LABELS) as CyclingMetric[]).map(
+        (m) => ({ key: m, label: CYCLING_METRIC_LABELS[m] }),
+      )}
+      selected={cyclingMetric}
+      onSelect={setCyclingMetric}
+    />
+  ) : (
+    <RecordSelect
+      items={(Object.keys(RUNNING_METRIC_LABELS) as RunningMetric[]).map(
+        (m) => ({ key: m, label: RUNNING_METRIC_LABELS[m] }),
+      )}
+      selected={runningMetric}
+      onSelect={setRunningMetric}
+    />
+  );
+
+  const thirdSelect = heartrateActive ? (
+    <RecordSelect
+      items={DURATIONS.map((d) => ({ key: d.seconds, label: d.label }))}
+      selected={duration}
+      onSelect={setDuration}
+    />
+  ) : !isCycling ? (
+    <RecordSelect
+      items={(options?.runDistances ?? []).map((d) => ({
+        key: d.name,
+        label: d.name,
+      }))}
+      selected={distanceName}
+      onSelect={setDistanceName}
+    />
+  ) : cyclingMetric === "power" ? (
+    <RecordSelect
+      items={DURATIONS.map((d) => ({ key: d.seconds, label: d.label }))}
+      selected={duration}
+      onSelect={setDuration}
+    />
+  ) : cyclingMetric === "speed" ? (
+    <RecordSelect
+      items={CYCLING_SPEED_DISTANCES.map((d) => ({
+        key: d.meters,
+        label: d.label,
+      }))}
+      selected={speedDistance}
+      onSelect={setSpeedDistance}
+    />
+  ) : (
+    <RecordSelect
+      items={ELEVATION_KINDS.map((k) => ({ key: k.key, label: k.label }))}
+      selected={elevationKind}
+      onSelect={setElevationKind}
+    />
+  );
 
   return (
-    <RecordsCardShell title="Personal bests">
-      <div className="flex h-full flex-col">
-        {/* Selectors — one row on desktop, wraps onto more rows when narrow */}
-        <div className="border-border flex flex-wrap items-center gap-x-6 gap-y-2 border-b px-4 py-3">
-          {sportOptions.length > 0 && (
-            <Selector label="Sport">
-              <SegmentedToggle
-                value={sport}
-                onChange={setSport}
-                options={sportOptions}
-              />
-            </Selector>
-          )}
-          <Selector label="Type">
-            {isCycling ? (
-              <SegmentedToggle
-                value={cyclingMetric}
-                onChange={setCyclingMetric}
-                options={(
-                  Object.keys(CYCLING_METRIC_LABELS) as CyclingMetric[]
-                ).map((m) => ({ value: m, label: CYCLING_METRIC_LABELS[m] }))}
-              />
-            ) : (
-              <SegmentedToggle
-                value={runningMetric}
-                onChange={setRunningMetric}
-                options={(
-                  Object.keys(RUNNING_METRIC_LABELS) as RunningMetric[]
-                ).map((m) => ({ value: m, label: RUNNING_METRIC_LABELS[m] }))}
-              />
-            )}
-          </Selector>
-          <Selector label={thirdLabel}>
-            {heartrateActive ? (
-              <RecordSelect
-                items={DURATIONS.map((d) => ({
-                  key: d.seconds,
-                  label: d.label,
-                }))}
-                selected={duration}
-                onSelect={setDuration}
-              />
-            ) : !isCycling ? (
-              <RecordSelect
-                items={(options?.runDistances ?? []).map((d) => ({
-                  key: d.name,
-                  label: d.name,
-                }))}
-                selected={distanceName}
-                onSelect={setDistanceName}
-              />
-            ) : cyclingMetric === "power" ? (
-              <RecordSelect
-                items={DURATIONS.map((d) => ({
-                  key: d.seconds,
-                  label: d.label,
-                }))}
-                selected={duration}
-                onSelect={setDuration}
-              />
-            ) : cyclingMetric === "speed" ? (
-              <RecordSelect
-                items={CYCLING_SPEED_DISTANCES.map((d) => ({
-                  key: d.meters,
-                  label: d.label,
-                }))}
-                selected={speedDistance}
-                onSelect={setSpeedDistance}
-              />
-            ) : (
-              <RecordSelect
-                items={ELEVATION_KINDS.map((k) => ({
-                  key: k.key,
-                  label: k.label,
-                }))}
-                selected={elevationKind}
-                onSelect={setElevationKind}
-              />
-            )}
-          </Selector>
+    <RecordsCardShell
+      title="Personal bests"
+      headerStart={
+        <div className="flex items-center gap-2">
+          {typeSelect}
+          {thirdSelect}
         </div>
-
-        {/* Leaderboard */}
-        <div className="min-h-0 flex-1 overflow-auto">
-          {isLoading ? (
-            <RecordsEmptyState message="Loading…" />
-          ) : entries.length === 0 ? (
-            <RecordsEmptyState message={emptyMessage} />
-          ) : (
-            <ol>
-              {entries.map((e, i) => (
-                <RecordRow
-                  key={e.stravaId}
-                  rank={i + 1}
-                  value={e.value}
-                  sub={e.sub}
-                  activityName={e.name}
-                  activityStravaId={e.stravaId}
-                  date={e.date}
-                />
-              ))}
-            </ol>
-          )}
-        </div>
-      </div>
+      }
+      headerExtra={
+        sportOptions.length > 0 ? (
+          <SegmentedToggle
+            value={sport}
+            onChange={setSport}
+            options={sportOptions}
+          />
+        ) : undefined
+      }
+    >
+      {isLoading ? (
+        <RecordsEmptyState message="Loading…" />
+      ) : entries.length === 0 ? (
+        <RecordsEmptyState message={emptyMessage} />
+      ) : (
+        <ol>
+          {entries.map((e, i) => (
+            <RecordRow
+              key={e.stravaId}
+              rank={i + 1}
+              value={e.value}
+              sub={e.sub}
+              activityName={e.name}
+              activityStravaId={e.stravaId}
+              date={e.date}
+            />
+          ))}
+        </ol>
+      )}
     </RecordsCardShell>
   );
 }
@@ -401,23 +365,6 @@ function RecordRow({
         </div>
       </Link>
     </li>
-  );
-}
-
-function Selector({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-muted-foreground shrink-0 text-xs font-medium tracking-wider uppercase">
-        {label}
-      </span>
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>
   );
 }
 

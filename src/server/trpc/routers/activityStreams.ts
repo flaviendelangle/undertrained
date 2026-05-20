@@ -12,7 +12,11 @@ import {
   getModelFromStravaActivity,
   type normalizeStreams,
 } from "../../lib/strava";
-import { computeActivityScoresInternal, storeStreams } from "../../lib/sync";
+import {
+  computeActivityScoresInternal,
+  storeLaps,
+  storeStreams,
+} from "../../lib/sync";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 const USABLE_TYPES = new Set([
@@ -168,6 +172,9 @@ export const activityStreamsRouter = router({
           areStreamsLoaded: false,
         })
         .where(eq(activities.id, activity.id));
+
+      // Laps come from the detailed activity we already fetched above — free.
+      await storeLaps(ctx.db, activity.id, rawActivity);
 
       await storeAndRecomputeScores(
         ctx.db,

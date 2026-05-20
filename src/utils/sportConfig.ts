@@ -79,6 +79,13 @@ export class SportConfig {
   /** Which stat to show as the third hero metric on an activity card. */
   readonly heroThirdStat: "elevation" | "pace" = "elevation";
 
+  /**
+   * Stream type whose panel the lap (interval) bars are drawn on, and whose
+   * per-lap average drives each bar's height — `"watts"` (Power) for cycling,
+   * `"velocity_smooth"` (Pace/Speed) for running, swimming, and generic sports.
+   */
+  readonly lapMetricStreamType: string = "velocity_smooth";
+
   // ── Sport category & capabilities ───────────────────────────
 
   /** The broad sport category this activity type belongs to. */
@@ -169,6 +176,7 @@ class CyclingSportConfig extends SportConfig {
 
   override readonly category = "cycling" as const;
   override readonly hasPowerMetrics = true;
+  override readonly lapMetricStreamType = "watts";
 
   override readonly tssLabel = "TSS";
   override readonly tssSettingsHint =

@@ -13,6 +13,8 @@ import {
 } from "drizzle-orm/pg-core";
 import type { ActivityStats } from "strava-v3";
 
+import type { StoredLap } from "../lib/stravaTypes";
+
 // ── Enums ──────────────────────────────────────────────────────────────
 
 export const syncJobStatusEnum = pgEnum("sync_job_status", [
@@ -86,6 +88,9 @@ export const activities = pgTable(
     // Max average heart rate (bpm) sustained per duration, from the heartrate
     // stream (running & cycling, including indoor — HR is a real sensor metric).
     heartrateBests: jsonb("heartrate_bests").$type<Record<number, number>>(),
+    // Lap (interval) splits derived from the DetailedActivity `laps` array — no
+    // extra Strava request. Null = never captured (rendered only when length > 1).
+    laps: jsonb("laps").$type<StoredLap[]>(),
     areBestEffortsLoaded: boolean("are_best_efforts_loaded")
       .notNull()
       .default(false),

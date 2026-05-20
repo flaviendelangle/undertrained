@@ -1,14 +1,14 @@
 import * as React from "react";
 
 import { FeatureHint } from "~/components/primitives/FeatureHint";
-import { Select } from "~/components/primitives/Select";
+import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useChartTokens } from "~/lib/chartTokens";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 import { MultiPanelChart } from "./MultiPanelChart";
-import type { PreparedStream, XAxisMode } from "./types";
+import type { PreparedStream, StreamStats, XAxisMode } from "./types";
 
 const X_AXIS_OPTIONS: { value: XAxisMode; label: string }[] = [
   { value: "time", label: "Time" },
@@ -59,6 +59,7 @@ function parseStreamData(data: string): number[] | null {
     return null;
   }
 }
+
 
 export default function ActivityStreams(props: ActivityStreamsProps) {
   const { stravaId, onHoverPositionChange, hiddenStreams } = props;
@@ -134,19 +135,33 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 
       let yMin = Infinity;
       let yMax = -Infinity;
+      let sum = 0;
       for (const v of yData) {
         if (v < yMin) yMin = v;
         if (v > yMax) yMax = v;
+        sum += v;
       }
       if (!Number.isFinite(yMin)) yMin = 0;
       if (!Number.isFinite(yMax)) yMax = 1;
+      const avg = yData.length > 0 ? sum / yData.length : 0;
       const range = yMax - yMin;
       const padding = range > 0 ? range * 0.05 : 1;
 
-      return { def, yData, yMin: yMin - padding, yMax: yMax + padding };
+      return {
+        def,
+        yData,
+        yMin: yMin - padding,
+        yMax: yMax + padding,
+        stats: { min: yMin, max: yMax, avg },
+      };
     }).filter(
-      (s): s is { def: StreamDef; yData: number[]; yMin: number; yMax: number } =>
-        s !== null,
+      (s): s is {
+        def: StreamDef;
+        yData: number[];
+        yMin: number;
+        yMax: number;
+        stats: StreamStats;
+      } => s !== null,
     );
 
     return { parsed, distanceData };
@@ -161,7 +176,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
     }
 
     const preparedStreams: PreparedStream[] = parsedStreams.parsed.map(
-      ({ def, yData, yMin, yMax }) => ({
+      ({ def, yData, yMin, yMax, stats }) => ({
         config: {
           type: def.type,
           title:
@@ -178,6 +193,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
         yData,
         yMin,
         yMax,
+        stats,
       }),
     );
 
@@ -226,13 +242,13 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
         <FeatureHint hintId="hint-activity-streams" title="Time Series">
           Heart rate, power, cadence, speed, and altitude plotted over time or
           distance. Hover to see all metrics at a specific point. Toggle the
-          X-axis between time and distance using the dropdown.
+          X-axis between time and distance.
         </FeatureHint>
         <div className="flex-1" />
         {xAxisOptions.length > 1 && (
-          <Select
+          <SegmentedToggle
             value={xAxisMode}
-            onValueChange={setXAxisMode}
+            onChange={setXAxisMode}
             options={xAxisOptions}
           />
         )}

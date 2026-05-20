@@ -39,7 +39,7 @@ export function ChartTooltip() {
     >
       <div
         className="border-border bg-popover text-popover-foreground rounded-md border px-3 py-2 shadow-md"
-        style={{ pointerEvents: "auto" }}
+        style={{ pointerEvents: "none" }}
       >
         {tooltipData.map(
           ({ axisId, axisFormattedValue, seriesItems, mainAxis }) => (

@@ -3,10 +3,10 @@ import * as React from "react";
 import { bisector } from "d3-array";
 import { scaleLinear } from "d3-scale";
 
-import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
+import { useChartTokens } from "~/lib/chartTokens";
 import { formatElapsed } from "~/utils/format";
+import type { SportConfig } from "~/utils/sportConfig";
 
-import { Crosshair } from "./Crosshair";
 import type { MultiPanelChartProps, PanelLayout } from "./types";
 import { colorToGLColor } from "~/lib/webgl/colors";
 import {
@@ -19,10 +19,40 @@ import { type PanelRenderData, WebGLChartRenderer } from "~/lib/webgl/renderer";
 const PANEL_HEIGHT = 100;
 const ALTITUDE_PANEL_HEIGHT = 70;
 const PANEL_GAP = 4;
-const MARGIN = CHART_MARGINS.compact;
+// The left gutter holds the title + summary stats (outside the plot area);
+// the right gutter holds the live value at the hovered x-coordinate.
+const MARGIN = { top: 8, right: 72, bottom: 36, left: 84 };
+const LEFT_LABEL_X = 8 - MARGIN.left; // left-aligned in the gutter, 8px from edge
 const Y_AXIS_TICKS = 4;
 const X_AXIS_TICKS = 8;
 const LINE_HALF_WIDTH = 0.75; // 1.5px total line width
+// Minimum horizontal drag (px) that counts as a zoom selection rather than a
+// click. Doubles as the guard against degenerate (zero-width) zoom ranges.
+const MIN_DRAG_PX = 6;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(value, max));
+
+/** Format a stream value with its unit. Speed (m/s) is delegated to the sport
+ * config so each sport picks its own unit (km/h for cycling, pace for running). */
+function formatStreamValue(
+  value: number,
+  unit: string,
+  sportConfig: SportConfig | null,
+): string {
+  if (unit === "bpm" || unit === "rpm" || unit === "W") {
+    return `${Math.round(value)} ${unit}`;
+  }
+  if (unit === "m/s") {
+    return sportConfig
+      ? sportConfig.formatSpeed(value)
+      : `${(value * 3.6).toFixed(1)} km/h`;
+  }
+  if (unit === "m") {
+    return `${Math.round(value)} ${unit}`;
+  }
+  return `${value.toFixed(1)} ${unit}`;
+}
 
 const d3BisectorObj = bisector<number, number>((d: number) => d);
 const d3Bisector = (arr: ArrayLike<number>, x: number) => d3BisectorObj.left(arr, x);
@@ -41,10 +71,13 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   const svgRef = React.useRef<SVGSVGElement>(null);
   const [width, setWidth] = React.useState(0);
   const [hoverIndex, setHoverIndex] = React.useState<number | null>(null);
-  const [hoverClientPos, setHoverClientPos] = React.useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  // Visible x-range, in `activeXData` units. `null` = full extent (no zoom).
+  const [zoomDomain, setZoomDomain] = React.useState<[number, number] | null>(
+    null,
+  );
+  // Drag selection, in pixel-x within the drawing area.
+  const [dragStart, setDragStart] = React.useState<number | null>(null);
+  const [dragCurrent, setDragCurrent] = React.useState<number | null>(null);
   const rafRef = React.useRef<number>(0);
   const [webglAvailable, setWebglAvailable] = React.useState(true);
   const [renderer, setRenderer] = React.useState<WebGLChartRenderer | null>(
@@ -109,13 +142,24 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   const activeXData =
     xAxisMode === "distance" && distanceData ? distanceData : xData;
 
-  const xScale = React.useMemo(() => {
-    if (activeXData.length === 0)
-      return scaleLinear().domain([0, 1]).range([0, drawingWidth]);
-    return scaleLinear()
-      .domain([activeXData[0], activeXData[activeXData.length - 1]])
-      .range([0, drawingWidth]);
-  }, [activeXData, drawingWidth]);
+  const baseDomain = React.useMemo<[number, number]>(
+    () =>
+      activeXData.length === 0
+        ? [0, 1]
+        : [activeXData[0], activeXData[activeXData.length - 1]],
+    [activeXData],
+  );
+  const domain = zoomDomain ?? baseDomain;
+  const xScale = React.useMemo(
+    () => scaleLinear().domain(domain).range([0, drawingWidth]),
+    [domain, drawingWidth],
+  );
+
+  // Reset the zoom when the x-axis unit changes (time↔distance) or a different
+  // activity's streams load, so a stale domain is never applied.
+  React.useEffect(() => {
+    setZoomDomain(null);
+  }, [xAxisMode, streams]);
 
   // Y-scales per panel
   const yScales = React.useMemo(
@@ -195,8 +239,39 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   }, [renderer, panels, xScale, yScales, activeXData, drawingWidth, tokens]);
 
   // Mouse handling
+  /** Pointer x relative to the drawing area's left edge (un-clamped). */
+  const getSvgX = React.useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    return e.clientX - rect.left - MARGIN.left;
+  }, []);
+
+  const handleMouseDown = React.useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      const svgX = getSvgX(e);
+      if (svgX === null) return;
+      cancelAnimationFrame(rafRef.current);
+      const x = clamp(svgX, 0, drawingWidth);
+      setDragStart(x);
+      setDragCurrent(x);
+      // Hide the crosshair while selecting a zoom range.
+      setHoverIndex(null);
+      onHoverIndexChange?.(null);
+    },
+    [getSvgX, drawingWidth, onHoverIndexChange],
+  );
+
   const handleMouseMove = React.useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
+      // While selecting a zoom range, track the drag instead of the crosshair.
+      if (dragStart !== null) {
+        const svgX = getSvgX(e);
+        if (svgX === null) return;
+        setDragCurrent(clamp(svgX, 0, drawingWidth));
+        return;
+      }
+
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
         const svg = svgRef.current;
@@ -206,7 +281,6 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
 
         if (svgX < 0 || svgX > drawingWidth) {
           setHoverIndex(null);
-          setHoverClientPos(null);
           return;
         }
 
@@ -221,19 +295,46 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
         }
 
         setHoverIndex(dataIndex);
-        setHoverClientPos({ x: e.clientX, y: e.clientY });
         onHoverIndexChange?.(dataIndex);
       });
     },
-    [drawingWidth, xScale, xAxisMode, distanceData, xData, onHoverIndexChange],
+    [
+      dragStart,
+      getSvgX,
+      drawingWidth,
+      xScale,
+      xAxisMode,
+      distanceData,
+      xData,
+      onHoverIndexChange,
+    ],
   );
+
+  const handleMouseUp = React.useCallback(() => {
+    if (dragStart !== null && dragCurrent !== null) {
+      const lo = Math.min(dragStart, dragCurrent);
+      const hi = Math.max(dragStart, dragCurrent);
+      // Ignore clicks / negligible drags so a double-click never zooms.
+      if (hi - lo >= MIN_DRAG_PX) {
+        setZoomDomain([xScale.invert(lo), xScale.invert(hi)]);
+      }
+    }
+    setDragStart(null);
+    setDragCurrent(null);
+  }, [dragStart, dragCurrent, xScale]);
 
   const handleMouseLeave = React.useCallback(() => {
     cancelAnimationFrame(rafRef.current);
+    // Cancel any in-progress selection and clear the crosshair.
+    setDragStart(null);
+    setDragCurrent(null);
     setHoverIndex(null);
-    setHoverClientPos(null);
     onHoverIndexChange?.(null);
   }, [onHoverIndexChange]);
+
+  const handleDoubleClick = React.useCallback(() => {
+    setZoomDomain(null);
+  }, []);
 
   // Clean up rAF on unmount
   React.useEffect(() => {
@@ -280,8 +381,11 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
         ref={svgRef}
         width={width}
         height={totalHeight}
+        onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
+        onDoubleClick={handleDoubleClick}
         className="relative select-none"
         style={{ background: "transparent" }}
       >
@@ -343,32 +447,44 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
               />
             )}
 
-            {/* Y-axis labels (always SVG) */}
-            {yScales[i].ticks(Y_AXIS_TICKS).map((tick) => (
-              <text
-                key={tick}
-                x={-6}
-                y={yScales[i](tick)}
-                textAnchor="end"
-                dominantBaseline="middle"
-                fill={tokens.axisLabel}
-                fontSize={10}
-              >
-                {panel.stream.config.unit === "m/s"
-                  ? `${Math.round(tick * 3.6)} km/h`
-                  : `${Math.round(tick)} ${panel.stream.config.unit}`}
-              </text>
-            ))}
-
-            {/* Panel title (always SVG) */}
+            {/* Title + summary stats (left gutter, always visible) */}
             <text
-              x={4}
+              x={LEFT_LABEL_X}
               y={12}
               fill={panel.stream.config.color}
               fontSize={11}
               fontWeight={500}
             >
               {panel.stream.config.title}
+            </text>
+            <text x={LEFT_LABEL_X} y={26} fill={tokens.axisLabel} fontSize={10}>
+              {`max ${formatStreamValue(panel.stream.stats.max, panel.stream.config.unit, sportConfig)}`}
+            </text>
+            <text x={LEFT_LABEL_X} y={38} fill={tokens.axisLabel} fontSize={10}>
+              {`avg ${formatStreamValue(panel.stream.stats.avg, panel.stream.config.unit, sportConfig)}`}
+            </text>
+
+            {/* Live value at the hovered x (right gutter, fixed row per panel) */}
+            <text
+              x={drawingWidth + MARGIN.right - 4}
+              y={panel.height / 2}
+              textAnchor="end"
+              dominantBaseline="middle"
+              fontSize={12}
+              fontWeight={hoverIndex !== null ? 600 : 400}
+              fill={
+                hoverIndex !== null && panel.stream.yData[hoverIndex] !== undefined
+                  ? panel.stream.config.color
+                  : tokens.axisLabel
+              }
+            >
+              {hoverIndex !== null && panel.stream.yData[hoverIndex] !== undefined
+                ? formatStreamValue(
+                    panel.stream.yData[hoverIndex],
+                    panel.stream.config.unit,
+                    sportConfig,
+                  )
+                : "—"}
             </text>
           </g>
         ))}
@@ -403,6 +519,47 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
           })}
         </g>
 
+        {/* Drag-to-zoom selection band. Spans the full chart height down to the
+            x-axis; only the vertical edges are stroked (the card already frames
+            the top and bottom). */}
+        {dragStart !== null && dragCurrent !== null && (
+          <g pointerEvents="none">
+            {(() => {
+              const lo = MARGIN.left + Math.min(dragStart, dragCurrent);
+              const hi = MARGIN.left + Math.max(dragStart, dragCurrent);
+              const bottom = MARGIN.top + drawingHeight;
+              return (
+                <>
+                  <rect
+                    x={lo}
+                    y={0}
+                    width={hi - lo}
+                    height={bottom}
+                    fill={tokens.crosshair}
+                    fillOpacity={0.15}
+                  />
+                  <line
+                    x1={lo}
+                    y1={0}
+                    x2={lo}
+                    y2={bottom}
+                    stroke={tokens.crosshair}
+                    strokeOpacity={0.5}
+                  />
+                  <line
+                    x1={hi}
+                    y1={0}
+                    x2={hi}
+                    y2={bottom}
+                    stroke={tokens.crosshair}
+                    strokeOpacity={0.5}
+                  />
+                </>
+              );
+            })()}
+          </g>
+        )}
+
         {/* Crosshair (always SVG) */}
         {crosshairX !== null && hoverIndex !== null && (
           <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
@@ -433,20 +590,24 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
                 />
               );
             })}
+            {/* Hovered x-value readout, on the x-axis row */}
+            <text
+              x={crosshairX}
+              y={drawingHeight + 18}
+              textAnchor="middle"
+              fill={tokens.crosshair}
+              fontSize={11}
+              fontWeight={600}
+              stroke={tokens.cardBg}
+              strokeWidth={3}
+              style={{ paintOrder: "stroke" }}
+              pointerEvents="none"
+            >
+              {formatX(activeXData[hoverIndex] ?? hoverIndex)}
+            </text>
           </g>
         )}
       </svg>
-
-      {/* Layer 3: HTML Tooltip */}
-      {hoverIndex !== null && hoverClientPos && (
-        <Crosshair
-          hoverIndex={hoverIndex}
-          clientPos={hoverClientPos}
-          streams={streams}
-          xValue={activeXData[hoverIndex] ?? hoverIndex}
-          formatX={formatX}
-        />
-      )}
     </div>
   );
 }

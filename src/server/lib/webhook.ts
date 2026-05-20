@@ -13,6 +13,7 @@ import {
 import {
   computeActivityScoresInternal,
   storeBestEfforts,
+  storeLaps,
   storeStreams,
   syncAthleteStats,
 } from "./sync";
@@ -139,6 +140,14 @@ async function handleActivityCreate(
         err,
       );
     }
+  }
+
+  // Store laps for all activity types — they ride along on the detailed activity
+  // we already fetched, so this costs no extra request.
+  try {
+    await storeLaps(db, activityId, rawActivity);
+  } catch (err) {
+    console.error(`[webhook] Failed to store laps for ${stravaActivityId}:`, err);
   }
 
   // Refresh the athlete's curated all-time stats (cheap, keeps Records fresh)

@@ -7,6 +7,7 @@ import {
   endOfQuarter,
   endOfWeek,
   endOfYear,
+  format,
   isSameMonth,
   isSameQuarter,
   isSameWeek,
@@ -62,6 +63,24 @@ export function addUnit(
       return addMonths(date, amount);
     case "week":
       return addWeeks(date, amount);
+  }
+}
+
+/**
+ * Label a time-slice start date at the granularity of its precision, so the
+ * axis/tick text matches the selected bucket size (e.g. a week bucket shows the
+ * week's start day rather than just "MM/yyyy").
+ */
+export function formatSlice(date: Date, precision: SlicePrecision): string {
+  switch (precision) {
+    case "year":
+      return format(date, "yyyy", LOCALE_OPTIONS);
+    case "quarter":
+      return format(date, "QQQ yyyy", LOCALE_OPTIONS);
+    case "month":
+      return format(date, "MMM yyyy", LOCALE_OPTIONS);
+    case "week":
+      return format(date, "d MMM yyyy", LOCALE_OPTIONS);
   }
 }
 

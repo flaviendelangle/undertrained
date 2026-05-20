@@ -10,11 +10,21 @@ export interface StreamConfig {
   area: boolean;
 }
 
+export interface StreamStats {
+  /** Actual (unpadded) minimum of the data. */
+  min: number;
+  /** Actual (unpadded) maximum of the data. */
+  max: number;
+  /** Arithmetic mean of the data. */
+  avg: number;
+}
+
 export interface PreparedStream {
   config: StreamConfig;
   yData: number[];
   yMin: number;
   yMax: number;
+  stats: StreamStats;
 }
 
 export interface PanelLayout {

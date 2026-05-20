@@ -26,6 +26,25 @@ export interface StravaActivity {
   } | null;
 }
 
+/**
+ * Compact lap (interval) record stored on the activity row. Derived from the
+ * `laps` array of a DetailedActivity — no extra Strava request. `startIndex`/
+ * `endIndex` reference the activity's stream samples, so they map directly onto
+ * the Time Series chart's x-axis.
+ */
+export interface StoredLap {
+  index: number;
+  name: string;
+  startIndex: number;
+  endIndex: number;
+  elapsedTime: number;
+  distance: number;
+  averageSpeed: number;
+  averageWatts?: number;
+  averageHeartrate?: number;
+  averageCadence?: number;
+}
+
 /** Strava stream object as returned by the API. */
 export interface StravaStream {
   type: string;

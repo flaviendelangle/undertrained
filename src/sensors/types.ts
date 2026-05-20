@@ -180,3 +180,185 @@ export function getPowerZoneName(power: number, ftp: number): string {
 export function getPowerZoneIndex(power: number, ftp: number): number {
   return findPowerZone(power, ftp).index;
 }
+
+// ── Heart-rate zones (Karvonen / heart-rate reserve) ─────────────────
+
+export const HR_ZONES = [
+  { name: "Recovery", minPct: 0.5, maxPct: 0.6, color: "#808080" },
+  { name: "Aerobic", minPct: 0.6, maxPct: 0.7, color: "#3B82F6" },
+  { name: "Tempo", minPct: 0.7, maxPct: 0.8, color: "#22C55E" },
+  { name: "Threshold", minPct: 0.8, maxPct: 0.9, color: "#EAB308" },
+  { name: "VO2max", minPct: 0.9, maxPct: 1.0, color: "#EF4444" },
+] as const;
+
+/**
+ * Map a heart rate (bpm) to a zone via the Karvonen / heart-rate-reserve model:
+ * `pct = (hr - resting) / (max - resting)`. Mirrors {@link findPowerZone} — each
+ * zone's `maxPct` is its upper cutoff.
+ */
+export function findHeartRateZone(
+  hr: number,
+  maxHr: number,
+  restingHr: number,
+): { zone: (typeof HR_ZONES)[number]; index: number } {
+  const reserve = maxHr - restingHr;
+  const pct = reserve > 0 ? (hr - restingHr) / reserve : 0;
+  for (let i = 0; i < HR_ZONES.length; i++) {
+    if (pct < HR_ZONES[i].maxPct) return { zone: HR_ZONES[i], index: i };
+  }
+  return { zone: HR_ZONES[HR_ZONES.length - 1], index: HR_ZONES.length - 1 };
+}
+
+export function getHeartRateZoneColor(
+  hr: number,
+  maxHr: number,
+  restingHr: number,
+): string {
+  return findHeartRateZone(hr, maxHr, restingHr).zone.color;
+}
+
+// ── Running pace zones (Jack Daniels VDOT) ───────────────────────────
+
+/** Oxygen cost of running at velocity v (meters/min). */
+export function oxygenCost(v: number): number {
+  return -4.6 + 0.182258 * v + 0.000104 * v * v;
+}
+
+/** Fraction of VO2max sustainable for t minutes. */
+export function pctVO2max(t: number): number {
+  return (
+    0.8 +
+    0.1894393 * Math.exp(-0.012778 * t) +
+    0.2989558 * Math.exp(-0.1932605 * t)
+  );
+}
+
+/** Compute VDOT from a race distance (meters) and time (minutes). */
+export function computeVdot(distanceMeters: number, timeMinutes: number): number {
+  const v = distanceMeters / timeMinutes;
+  return oxygenCost(v) / pctVO2max(timeMinutes);
+}
+
+/** Convert VMA (km/h) to VDOT — VO2 at that velocity IS VO2max by definition. */
+export function vdotFromVma(vmaKmh: number): number {
+  const vMetersPerMin = (vmaKmh * 1000) / 60;
+  return oxygenCost(vMetersPerMin);
+}
+
+/** Convert a target %VO2max to pace in seconds/km. */
+export function paceSecondsPerKmFromVdotPct(vdot: number, pct: number): number {
+  const targetVO2 = vdot * pct;
+  const a = 0.000104;
+  const b = 0.182258;
+  const c = -4.6 - targetVO2;
+  const discriminant = b * b - 4 * a * c;
+  if (discriminant < 0) return 0;
+  const v = (-b + Math.sqrt(discriminant)) / (2 * a); // meters/min
+  if (v <= 0) return 0;
+  return (1000 / v) * 60; // seconds per km
+}
+
+/** Predict race time (minutes) for a distance via bisection on VDOT. */
+export function predictRaceTime(vdot: number, distanceMeters: number): number {
+  let lo = 1;
+  let hi = 600;
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    if (computeVdot(distanceMeters, mid) > vdot) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return (lo + hi) / 2;
+}
+
+/** %VO2max that a lactate-threshold pace corresponds to (fast edge of Daniels' Threshold zone). */
+export const THRESHOLD_PACE_PCT_VO2MAX = 0.88;
+
+/**
+ * Approximate VDOT from a lactate-threshold pace (m/s). The threshold pace sits
+ * at the fast edge of Daniels' Threshold zone (~88% VO2max), so
+ * `VO2max ≈ oxygenCost(thresholdVelocity) / 0.88`. Lets us derive running pace
+ * zones for athletes who have a stored threshold pace but no race result.
+ */
+export function vdotFromThresholdPace(metersPerSecond: number): number {
+  if (metersPerSecond <= 0) return 0;
+  const vMetersPerMin = metersPerSecond * 60;
+  return oxygenCost(vMetersPerMin) / THRESHOLD_PACE_PCT_VO2MAX;
+}
+
+export const RUNNING_ZONES = [
+  { name: "Easy", color: "#808080" },
+  { name: "Marathon", color: "#3B82F6" },
+  { name: "Threshold", color: "#22C55E" },
+  { name: "Interval", color: "#EAB308" },
+  { name: "Repetition", color: "#EF4444" },
+] as const;
+
+export interface PaceRange {
+  /** Slower pace (higher seconds/km value). */
+  slow: number;
+  /** Faster pace (lower seconds/km value). */
+  fast: number;
+}
+
+export function computeRunningZones(vdot: number): PaceRange[] {
+  // Easy: 59-74% VO2max
+  const easySlow = paceSecondsPerKmFromVdotPct(vdot, 0.59);
+  const easyFast = paceSecondsPerKmFromVdotPct(vdot, 0.74);
+
+  // Marathon: predicted marathon race pace (± ~5 sec/km range)
+  const marathonTimeMin = predictRaceTime(vdot, 42195);
+  const marathonPace = (marathonTimeMin * 60) / 42.195; // seconds/km
+  const marathonSlow = marathonPace + 5;
+  const marathonFast = marathonPace - 5;
+
+  // Threshold: 83-88% VO2max
+  const thresholdSlow = paceSecondsPerKmFromVdotPct(vdot, 0.83);
+  const thresholdFast = paceSecondsPerKmFromVdotPct(vdot, 0.88);
+
+  // Interval: 95-100% VO2max
+  const intervalSlow = paceSecondsPerKmFromVdotPct(vdot, 0.95);
+  const intervalFast = paceSecondsPerKmFromVdotPct(vdot, 1.0);
+
+  // Repetition: Interval pace minus 15s/km (VDOT >= 50) or 20s/km (VDOT < 50)
+  const repOffset = vdot >= 50 ? 15 : 20;
+  const repSlow = intervalFast - repOffset + 5;
+  const repFast = intervalFast - repOffset - 5;
+
+  return [
+    { slow: easySlow, fast: easyFast },
+    { slow: marathonSlow, fast: marathonFast },
+    { slow: thresholdSlow, fast: thresholdFast },
+    { slow: intervalSlow, fast: intervalFast },
+    { slow: repSlow, fast: repFast },
+  ];
+}
+
+/**
+ * Map a running pace (seconds/km) to a Daniels zone. Picks the zone whose pace
+ * range contains the value; for paces in a gap between ranges, the nearest range
+ * wins (handles the non-contiguous Marathon band cleanly).
+ */
+export function findRunningPaceZone(
+  secondsPerKm: number,
+  vdot: number,
+): { zone: (typeof RUNNING_ZONES)[number]; index: number } {
+  const ranges = computeRunningZones(vdot);
+  let bestIndex = 0;
+  let bestDistance = Infinity;
+  for (let i = 0; i < ranges.length; i++) {
+    const lo = Math.min(ranges[i].slow, ranges[i].fast);
+    const hi = Math.max(ranges[i].slow, ranges[i].fast);
+    const distance =
+      secondsPerKm >= lo && secondsPerKm <= hi
+        ? 0
+        : Math.min(Math.abs(secondsPerKm - lo), Math.abs(secondsPerKm - hi));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = i;
+    }
+  }
+  return { zone: RUNNING_ZONES[bestIndex], index: bestIndex };
+}

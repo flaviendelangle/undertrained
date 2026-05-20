@@ -21,16 +21,15 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useRiderSettings } from "~/hooks/useRiderSettings";
-import { POWER_ZONES } from "~/sensors/types";
+import {
+  HR_ZONES,
+  POWER_ZONES,
+  RUNNING_ZONES,
+  computeRunningZones,
+  computeVdot,
+  vdotFromVma,
+} from "~/sensors/types";
 import { formatMinutesSeconds } from "~/utils/format";
-
-const HR_ZONES = [
-  { name: "Recovery", minPct: 0.5, maxPct: 0.6, color: "#808080" },
-  { name: "Aerobic", minPct: 0.6, maxPct: 0.7, color: "#3B82F6" },
-  { name: "Tempo", minPct: 0.7, maxPct: 0.8, color: "#22C55E" },
-  { name: "Threshold", minPct: 0.8, maxPct: 0.9, color: "#EAB308" },
-  { name: "VO2max", minPct: 0.9, maxPct: 1.0, color: "#EF4444" },
-] as const;
 
 type Tab = "power" | "heart-rate" | "running-pace";
 
@@ -51,64 +50,7 @@ const REFERENCE_OPTIONS: { id: ReferenceType; label: string }[] = [
   { id: "vma", label: "VMA" },
 ];
 
-// --- Jack Daniels VDOT formulas ---
-
-/** Oxygen cost of running at velocity v (meters/min) */
-function oxygenCost(v: number): number {
-  return -4.6 + 0.182258 * v + 0.000104 * v * v;
-}
-
-/** Fraction of VO2max sustainable for t minutes */
-function pctVO2max(t: number): number {
-  return (
-    0.8 +
-    0.1894393 * Math.exp(-0.012778 * t) +
-    0.2989558 * Math.exp(-0.1932605 * t)
-  );
-}
-
-/** Compute VDOT from race distance (meters) and time (minutes) */
-function computeVdot(distanceMeters: number, timeMinutes: number): number {
-  const v = distanceMeters / timeMinutes;
-  return oxygenCost(v) / pctVO2max(timeMinutes);
-}
-
-/** Convert VMA (km/h) to VDOT */
-function vdotFromVma(vmaKmh: number): number {
-  // VMA in m/min, then compute VO2 at that speed — that IS VO2max by definition
-  const vMetersPerMin = (vmaKmh * 1000) / 60;
-  return oxygenCost(vMetersPerMin);
-}
-
-/** Convert a target %VO2max to pace in seconds/km */
-function paceSecondsPerKmFromVdotPct(vdot: number, pct: number): number {
-  const targetVO2 = vdot * pct;
-  const a = 0.000104;
-  const b = 0.182258;
-  const c = -4.6 - targetVO2;
-  const discriminant = b * b - 4 * a * c;
-  if (discriminant < 0) return 0;
-  const v = (-b + Math.sqrt(discriminant)) / (2 * a); // meters/min
-  if (v <= 0) return 0;
-  return (1000 / v) * 60; // seconds per km
-}
-
-/** Predict race time (in minutes) for a given distance using bisection */
-function predictRaceTime(vdot: number, distanceMeters: number): number {
-  // Find t such that computeVdot(distanceMeters, t) = vdot
-  let lo = 1;
-  let hi = 600;
-  for (let i = 0; i < 100; i++) {
-    const mid = (lo + hi) / 2;
-    const computed = computeVdot(distanceMeters, mid);
-    if (computed > vdot) {
-      lo = mid; // running too fast (time too short)
-    } else {
-      hi = mid;
-    }
-  }
-  return (lo + hi) / 2;
-}
+// --- Jack Daniels VDOT formulas live in ~/sensors/types (shared with lap zones) ---
 
 interface RaceRef {
   type: ReferenceType;
@@ -703,54 +645,6 @@ function HrZonesTable({
       </ToolboxTable>
     </div>
   );
-}
-
-const RUNNING_ZONES = [
-  { name: "Easy", color: "#808080" },
-  { name: "Marathon", color: "#3B82F6" },
-  { name: "Threshold", color: "#22C55E" },
-  { name: "Interval", color: "#EAB308" },
-  { name: "Repetition", color: "#EF4444" },
-] as const;
-
-interface PaceRange {
-  /** Slower pace (higher seconds/km value) */
-  slow: number;
-  /** Faster pace (lower seconds/km value) */
-  fast: number;
-}
-
-function computeRunningZones(vdot: number): PaceRange[] {
-  // Easy: 59-74% VO2max (slow pace = lower %, fast pace = higher %)
-  const easySlow = paceSecondsPerKmFromVdotPct(vdot, 0.59);
-  const easyFast = paceSecondsPerKmFromVdotPct(vdot, 0.74);
-
-  // Marathon: predicted marathon race pace (± ~5 sec/km range)
-  const marathonTimeMin = predictRaceTime(vdot, 42195);
-  const marathonPace = (marathonTimeMin * 60) / 42.195; // seconds/km
-  const marathonSlow = marathonPace + 5;
-  const marathonFast = marathonPace - 5;
-
-  // Threshold: 83-88% VO2max
-  const thresholdSlow = paceSecondsPerKmFromVdotPct(vdot, 0.83);
-  const thresholdFast = paceSecondsPerKmFromVdotPct(vdot, 0.88);
-
-  // Interval: 95-100% VO2max
-  const intervalSlow = paceSecondsPerKmFromVdotPct(vdot, 0.95);
-  const intervalFast = paceSecondsPerKmFromVdotPct(vdot, 1.0);
-
-  // Repetition: Interval pace minus 15s/km (VDOT >= 50) or 20s/km (VDOT < 50)
-  const repOffset = vdot >= 50 ? 15 : 20;
-  const repSlow = intervalFast - repOffset + 5;
-  const repFast = intervalFast - repOffset - 5;
-
-  return [
-    { slow: easySlow, fast: easyFast },
-    { slow: marathonSlow, fast: marathonFast },
-    { slow: thresholdSlow, fast: thresholdFast },
-    { slow: intervalSlow, fast: intervalFast },
-    { slow: repSlow, fast: repFast },
-  ];
 }
 
 function RunningPaceZonesTable({ vdot }: { vdot: number }) {

@@ -85,6 +85,10 @@ export default function FitnessChart() {
     }
   }, [xData.length, defaultZoom]);
 
+  // Mirror the Fitness (CTL) series visibility so the "highest fitness ever"
+  // reference line can hide alongside it when toggled off via the legend.
+  const [fitnessHidden, setFitnessHidden] = React.useState(false);
+
   const yAxisWidth = isMobile ? AXIS_SIZE.mobile.width : AXIS_SIZE.desktop.width;
   const xAxisHeight = isMobile ? AXIS_SIZE.mobile.height : AXIS_SIZE.desktop.height;
   const todayDate = series.length > 0 ? series[series.length - 1].date : null;
@@ -94,8 +98,6 @@ export default function FitnessChart() {
       <div className="bg-card flex h-96 w-full flex-col rounded-md">
         <div className="border-border flex items-center gap-3 border-b p-4">
           <h3 className="shrink-0 text-lg font-semibold">Fitness</h3>
-          <LegendSwatch color={fitnessColor} label="Fitness (CTL)" />
-          <LegendSwatch color={fatigueColor} label="Fatigue (ATL)" />
         </div>
 
         <div className="flex min-h-0 flex-1">
@@ -135,10 +137,13 @@ export default function FitnessChart() {
                 series={seriesConfig}
                 margin={CHART_MARGINS.standard}
                 grid={{ horizontal: true }}
-                hideLegend
                 slots={{ tooltip: ChartTooltip }}
+                slotProps={{ legend: { toggleVisibilityOnClick: true } }}
+                onHiddenItemsChange={(hiddenItems) =>
+                  setFitnessHidden(hiddenItems.some((item) => item.seriesId === "ctl"))
+                }
               >
-                {targetFitness > 0 && (
+                {targetFitness > 0 && !fitnessHidden && (
                   <ChartsReferenceLine
                     axisId={LOAD_AXIS_ID}
                     y={targetFitness}
@@ -218,15 +223,6 @@ function Stat({
         {value}
       </span>
     </div>
-  );
-}
-
-function LegendSwatch({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="text-muted-foreground hidden items-center gap-1.5 text-xs sm:inline-flex">
-      <span className="inline-block h-1 w-3 rounded-full" style={{ backgroundColor: color }} />
-      {label}
-    </span>
   );
 }
 

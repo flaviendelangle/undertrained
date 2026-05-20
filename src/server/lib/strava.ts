@@ -12,7 +12,7 @@ import { TRPCError } from "@trpc/server";
 import type { Database } from "../db";
 import { athletes } from "../db/schema";
 import { env } from "../env";
-import type { StravaActivity, StravaStream } from "./stravaTypes";
+import type { StoredLap, StravaActivity, StravaStream } from "./stravaTypes";
 
 const stravaTokenResponseSchema = z.object({
   access_token: z.string(),
@@ -245,4 +245,34 @@ export function getBestEffortModels(
     prRank: e.pr_rank ?? null,
     startDate: e.start_date ?? activity.start_date,
   }));
+}
+
+/**
+ * Maps the `laps` of a DetailedActivity into the compact `StoredLap[]` we persist
+ * on the activity row. `start_index`/`end_index` reference the stream samples, so
+ * they map straight onto the Time Series chart. `average_watts` is present on the
+ * Strava payload for power-equipped activities but missing from the strava-v3 type,
+ * so we read it via a loosened shape.
+ */
+export function getLapModels(
+  activity: Pick<DetailedActivity, "laps">,
+): StoredLap[] {
+  return (activity.laps ?? []).map((l) => {
+    const withPower = l as typeof l & {
+      average_watts?: number;
+      average_heartrate?: number;
+    };
+    return {
+      index: l.lap_index,
+      name: l.name,
+      startIndex: l.start_index,
+      endIndex: l.end_index,
+      elapsedTime: l.elapsed_time,
+      distance: l.distance,
+      averageSpeed: l.average_speed,
+      averageWatts: withPower.average_watts,
+      averageHeartrate: withPower.average_heartrate,
+      averageCadence: l.average_cadence,
+    };
+  });
 }
