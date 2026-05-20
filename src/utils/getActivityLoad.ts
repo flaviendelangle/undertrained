@@ -1,3 +1,5 @@
+import type { RiderSettingsTimeline } from "~/sensors/types";
+
 import { getSportConfig } from "./sportConfig";
 
 interface ActivityLike {
@@ -10,6 +12,17 @@ export interface LoadAlgorithmPreferences {
   cyclingLoadAlgorithm: "tss" | "hrss";
   runningLoadAlgorithm: "rtss" | "hrss";
   swimmingLoadAlgorithm: "stss" | "hrss";
+}
+
+/** Extracts the per-sport load-algorithm preferences from a rider timeline. */
+export function getLoadPreferences(
+  timeline: RiderSettingsTimeline,
+): LoadAlgorithmPreferences {
+  return {
+    cyclingLoadAlgorithm: timeline.cyclingLoadAlgorithm,
+    runningLoadAlgorithm: timeline.runningLoadAlgorithm,
+    swimmingLoadAlgorithm: timeline.swimmingLoadAlgorithm,
+  };
 }
 
 export interface LoadResult {
@@ -37,7 +50,7 @@ const ALGORITHM_INFO = {
   },
 } as const;
 
-type Algorithm = keyof typeof ALGORITHM_INFO;
+export type LoadAlgorithm = keyof typeof ALGORITHM_INFO;
 
 export function getActivityLoad(
   activity: ActivityLike,
@@ -45,13 +58,13 @@ export function getActivityLoad(
 ): LoadResult {
   const sportConfig = getSportConfig(activity.type);
 
-  let preferred: Algorithm;
-  let sportSpecific: Algorithm;
+  let preferred: LoadAlgorithm;
+  let sportSpecific: LoadAlgorithm;
 
   const key = sportConfig.loadAlgorithmKey;
-  if (key != null && key in preferences) {
-    preferred = (preferences as unknown as Record<string, Algorithm>)[key];
-    sportSpecific = sportConfig.defaultLoadAlgorithm as Algorithm;
+  if (key != null) {
+    preferred = preferences[key];
+    sportSpecific = sportConfig.defaultLoadAlgorithm;
   } else {
     preferred = "hrss";
     sportSpecific = "hrss";

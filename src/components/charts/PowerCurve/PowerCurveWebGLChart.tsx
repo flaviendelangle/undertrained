@@ -11,6 +11,7 @@ import {
   colorToGLColor,
 } from "~/lib/webgl";
 
+import { formatDuration } from "./formatDuration";
 import { PowerCurveTooltip } from "./PowerCurveTooltip";
 import type { PowerCurveSeriesData, ActivityInfo } from "./types";
 
@@ -30,21 +31,6 @@ const X_AXIS_TICKS = [
 ];
 
 const d3BisectorObj = bisector<number, number>((d: number) => d);
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const hours = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  if (hours > 0) {
-    return mins === 0
-      ? `${hours}h`
-      : `${hours}h${mins.toString().padStart(2, "0")}`;
-  }
-  return secs === 0
-    ? `${mins}min`
-    : `${mins}m${secs.toString().padStart(2, "0")}s`;
-}
 
 // --- Props ---
 

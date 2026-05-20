@@ -2,6 +2,7 @@ import * as React from "react";
 
 import Link from "next/link";
 
+import { formatDuration } from "./formatDuration";
 import type { ActivityInfo } from "./types";
 
 interface TooltipEntry {
@@ -19,21 +20,6 @@ interface PowerCurveTooltipProps {
   duration: number;
   entries: TooltipEntry[];
   frozen: boolean;
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const hours = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  if (hours > 0) {
-    return mins === 0
-      ? `${hours}h`
-      : `${hours}h${mins.toString().padStart(2, "0")}`;
-  }
-  return secs === 0
-    ? `${mins}min`
-    : `${mins}m${secs.toString().padStart(2, "0")}s`;
 }
 
 function formatValue(value: number, unit: string): string {

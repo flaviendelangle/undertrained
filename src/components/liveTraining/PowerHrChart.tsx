@@ -29,7 +29,10 @@ export function PowerHrChart(props: PowerHrChartProps) {
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
 
-  const points = showAll ? dataPoints : dataPoints.slice(-WINDOW_SECONDS);
+  const points = React.useMemo(
+    () => (showAll ? dataPoints : dataPoints.slice(-WINDOW_SECONDS)),
+    [dataPoints, showAll],
+  );
 
   const xLabels = React.useMemo(() => {
     const totalPoints = points.length;

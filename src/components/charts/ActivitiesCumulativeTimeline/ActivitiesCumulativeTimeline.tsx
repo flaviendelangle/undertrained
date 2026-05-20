@@ -19,6 +19,7 @@ import { useTimeSlices } from "~/hooks/useTimeSlices";
 import { CHART_MARGINS, AXIS_SIZE, formatCompact, useChartTokens } from "~/lib/chartTokens";
 import { cn } from "~/lib/utils";
 import { formatActivityType } from "~/utils/format";
+import { getLoadPreferences } from "~/utils/getActivityLoad";
 import { getSportConfig } from "~/utils/sportConfig";
 
 import { METRICS, MetricSelect, type MetricContext } from "../../MetricSelect";
@@ -38,14 +39,8 @@ export default function ActivitiesCumulativeTimeline() {
   const { timeline } = useRiderSettingsTimeline();
 
   const metricContext: MetricContext = React.useMemo(
-    () => ({
-      loadPreferences: {
-        cyclingLoadAlgorithm: timeline.cyclingLoadAlgorithm,
-        runningLoadAlgorithm: timeline.runningLoadAlgorithm,
-        swimmingLoadAlgorithm: timeline.swimmingLoadAlgorithm,
-      },
-    }),
-    [timeline.cyclingLoadAlgorithm, timeline.runningLoadAlgorithm, timeline.swimmingLoadAlgorithm],
+    () => ({ loadPreferences: getLoadPreferences(timeline) }),
+    [timeline],
   );
 
   const slices = useTimeSlices({

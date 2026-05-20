@@ -4,7 +4,7 @@ import { InfoIcon, PlusIcon, XIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { NumberField } from "~/components/ui/number-field";
-import { formatDuration } from "~/utils/format";
+import { formatDuration, formatMinutesSeconds } from "~/utils/format";
 
 import {
   ToolboxTable,
@@ -105,11 +105,6 @@ function predictTime(model: { a: number; b: number }, km: number): number {
   return model.a * Math.pow(km, model.b);
 }
 
-function formatPace(totalSeconds: number): string {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = Math.round(totalSeconds % 60);
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
 
 function RaceInputFields({
   label,
@@ -340,7 +335,7 @@ export function RacePredictor() {
                       {formatDuration(predicted)}
                     </ToolboxTableCell>
                     <ToolboxTableCell className="text-muted-foreground tabular-nums">
-                      {formatPace(pacePerKm)} /km
+                      {formatMinutesSeconds(pacePerKm)} /km
                     </ToolboxTableCell>
                   </ToolboxTableRow>
                 );

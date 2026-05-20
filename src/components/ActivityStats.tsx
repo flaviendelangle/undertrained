@@ -23,7 +23,7 @@ import { StatSection } from "~/components/primitives/StatSection";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { cn } from "~/lib/utils";
 import { formatHumanDuration } from "~/utils/format";
-import { getActivityLoad } from "~/utils/getActivityLoad";
+import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
 import { getSportConfig } from "~/utils/sportConfig";
 
 interface Stat {
@@ -111,11 +111,7 @@ export const ActivityStats = React.memo(function ActivityStats({
           ]
         : []),
     ...(() => {
-      const loadResult = getActivityLoad(activity, {
-        cyclingLoadAlgorithm: timeline.cyclingLoadAlgorithm,
-        runningLoadAlgorithm: timeline.runningLoadAlgorithm,
-        swimmingLoadAlgorithm: timeline.swimmingLoadAlgorithm,
-      });
+      const loadResult = getActivityLoad(activity, getLoadPreferences(timeline));
       return loadResult.value != null
         ? [
             {

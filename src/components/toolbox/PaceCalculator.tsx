@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { Button } from "~/components/ui/button";
 import { NumberField } from "~/components/ui/number-field";
-import { formatDuration } from "~/utils/format";
+import { formatDuration, formatMinutesSeconds } from "~/utils/format";
 
 import {
   ToolboxTable,
@@ -20,14 +20,6 @@ const DISTANCES = [
   { label: "10 km", km: 10 },
   { label: "5 km", km: 5 },
 ] as const;
-
-const TABLE_DISTANCES = DISTANCES;
-
-function formatPace(totalSeconds: number): string {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = Math.round(totalSeconds % 60);
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
 
 // Generate pace rows from 2:30 to 9:00 in 5-second increments
 const paceRows = (() => {
@@ -81,7 +73,7 @@ export function PaceCalculator() {
         (durationSeconds ?? 0);
       if (totalDurSec <= 0) return null;
       const pacePerKm = totalDurSec / distanceKm;
-      return `${formatPace(pacePerKm)} /km`;
+      return `${formatMinutesSeconds(pacePerKm)} /km`;
     }
   }, [
     mode,
@@ -238,7 +230,7 @@ export function PaceCalculator() {
           <ToolboxTableHeader>
             <ToolboxTableHeaderRow>
               <ToolboxTableHead first>Pace /km</ToolboxTableHead>
-              {TABLE_DISTANCES.map((d) => (
+              {DISTANCES.map((d) => (
                 <ToolboxTableHead key={d.label}>{d.label}</ToolboxTableHead>
               ))}
             </ToolboxTableHeaderRow>
@@ -249,7 +241,7 @@ export function PaceCalculator() {
                 <ToolboxTableCell first>
                   {row.paceLabel}
                 </ToolboxTableCell>
-                {TABLE_DISTANCES.map((d) => (
+                {DISTANCES.map((d) => (
                   <ToolboxTableCell
                     key={d.label}
                     className="text-muted-foreground tabular-nums"

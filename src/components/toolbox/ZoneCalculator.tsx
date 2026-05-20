@@ -22,6 +22,7 @@ import {
 } from "~/components/ui/tooltip";
 import { useRiderSettings } from "~/hooks/useRiderSettings";
 import { POWER_ZONES } from "~/sensors/types";
+import { formatMinutesSeconds } from "~/utils/format";
 
 const HR_ZONES = [
   { name: "Recovery", minPct: 0.5, maxPct: 0.6, color: "#808080" },
@@ -107,13 +108,6 @@ function predictRaceTime(vdot: number, distanceMeters: number): number {
     }
   }
   return (lo + hi) / 2;
-}
-
-function formatPace(totalSeconds: number): string {
-  const rounded = Math.round(totalSeconds);
-  const minutes = Math.floor(rounded / 60);
-  const seconds = rounded % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 interface RaceRef {
@@ -798,7 +792,8 @@ function RunningPaceZonesTable({ vdot }: { vdot: number }) {
                   </div>
                 </ToolboxTableCell>
                 <ToolboxTableCell className="tabular-nums">
-                  {formatPace(range.fast)}–{formatPace(range.slow)}
+                  {formatMinutesSeconds(range.fast)}–
+                  {formatMinutesSeconds(range.slow)}
                 </ToolboxTableCell>
                 <ToolboxTableCell className="text-muted-foreground tabular-nums">
                   {slowKmh}–{fastKmh} km/h

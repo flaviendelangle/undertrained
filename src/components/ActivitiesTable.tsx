@@ -28,7 +28,7 @@ import {
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { formatActivityType, formatDuration } from "~/utils/format";
-import { getActivityLoad } from "~/utils/getActivityLoad";
+import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
 import { getSportConfig } from "~/utils/sportConfig";
 
 type ActivityWithoutMap = Omit<Activity, "mapPolyline"> & { load: number | null };
@@ -193,12 +193,8 @@ export function ActivitiesTable(props: { searchFilter?: string; timePeriodId?: n
   const tableContainerRef = React.useRef<HTMLDivElement>(null);
 
   const loadPreferences = React.useMemo(
-    () => ({
-      cyclingLoadAlgorithm: timeline.cyclingLoadAlgorithm,
-      runningLoadAlgorithm: timeline.runningLoadAlgorithm,
-      swimmingLoadAlgorithm: timeline.swimmingLoadAlgorithm,
-    }),
-    [timeline.cyclingLoadAlgorithm, timeline.runningLoadAlgorithm, timeline.swimmingLoadAlgorithm],
+    () => getLoadPreferences(timeline),
+    [timeline],
   );
 
   const data = React.useMemo(

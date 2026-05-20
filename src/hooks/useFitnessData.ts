@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import { computeFitnessSeries, type FitnessPoint } from "~/lib/fitness";
+import { getLoadPreferences } from "~/utils/getActivityLoad";
 
 import { useActivitiesQuery } from "./useActivitiesQuery";
 import { useRiderSettingsTimeline } from "./useRiderSettings";
@@ -25,16 +26,8 @@ export function useFitnessData(): UseFitnessDataResult {
   const { timeline } = useRiderSettingsTimeline();
 
   const preferences = React.useMemo(
-    () => ({
-      cyclingLoadAlgorithm: timeline.cyclingLoadAlgorithm,
-      runningLoadAlgorithm: timeline.runningLoadAlgorithm,
-      swimmingLoadAlgorithm: timeline.swimmingLoadAlgorithm,
-    }),
-    [
-      timeline.cyclingLoadAlgorithm,
-      timeline.runningLoadAlgorithm,
-      timeline.swimmingLoadAlgorithm,
-    ],
+    () => getLoadPreferences(timeline),
+    [timeline],
   );
 
   const series = React.useMemo(() => {

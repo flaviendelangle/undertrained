@@ -32,6 +32,12 @@ export function formatElapsed(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** Minutes:seconds from a duration, e.g. "4:05". Stays m:ss even past an hour. */
+export function formatMinutesSeconds(seconds: number): string {
+  const rounded = Math.round(seconds);
+  return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")}`;
+}
+
 export function formatActivityType(activityType: string): string {
   return activityType.replace(/([A-Z])/g, " $1").trim();
 }

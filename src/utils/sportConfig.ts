@@ -1,5 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import type { RiderSettings } from "~/sensors/types";
+import type {
+  LoadAlgorithm,
+  LoadAlgorithmPreferences,
+} from "~/utils/getActivityLoad";
 import {
   Activity,
   Bike,
@@ -144,7 +148,7 @@ export class SportConfig {
    *
    * `null` when the sport has no configurable load algorithm.
    */
-  readonly loadAlgorithmKey: string | null = null;
+  readonly loadAlgorithmKey: keyof LoadAlgorithmPreferences | null = null;
 
   /**
    * The default (sport-specific) load-algorithm key.
@@ -153,7 +157,7 @@ export class SportConfig {
    *
    * @example `"tss"` (cycling), `"rtss"` (running), `"stss"` (swimming)
    */
-  readonly defaultLoadAlgorithm: string = "hrss";
+  readonly defaultLoadAlgorithm: LoadAlgorithm = "hrss";
 }
 
 // ── Cycling ─────────────────────────────────────────────────────
@@ -327,7 +331,7 @@ export function getActivityTypesByCategory(
 
 export interface LoadAlgorithmConfig {
   label: string;
-  key: string;
+  key: keyof LoadAlgorithmPreferences;
   options: readonly { value: string; label: string }[];
 }
 

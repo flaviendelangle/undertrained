@@ -8,13 +8,13 @@ import { formatElapsed } from "~/utils/format";
 
 import { Crosshair } from "./Crosshair";
 import type { MultiPanelChartProps, PanelLayout } from "./types";
-import { colorToGLColor } from "./webgl/colors";
+import { colorToGLColor } from "~/lib/webgl/colors";
 import {
   buildAreaMesh,
   buildGridLinesMesh,
   buildLineStripMesh,
-} from "./webgl/geometry";
-import { type PanelRenderData, WebGLChartRenderer } from "./webgl/renderer";
+} from "~/lib/webgl/geometry";
+import { type PanelRenderData, WebGLChartRenderer } from "~/lib/webgl/renderer";
 
 const PANEL_HEIGHT = 100;
 const ALTITUDE_PANEL_HEIGHT = 70;
