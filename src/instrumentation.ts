@@ -19,6 +19,10 @@ export async function register() {
       ]),
     );
 
-  // Auto-register Strava webhook subscription if callback URL is configured
-  await ensureWebhookSubscription();
+  // Auto-register the Strava webhook subscription if a callback URL is set.
+  // Deliberately not awaited: registration waits for this server to start
+  // serving its callback (so Strava's synchronous validation can reach it),
+  // which only happens after register() resolves. ensureWebhookSubscription
+  // handles its own errors, so a floating promise here is safe.
+  void ensureWebhookSubscription();
 }

@@ -62,35 +62,91 @@ export async function ensureWebhookSubscription(): Promise<void> {
   }
 }
 
+/**
+ * Strava validates the callback synchronously when a subscription is created:
+ * it immediately GETs the callback URL and expects hub.challenge echoed back.
+ * On startup this runs from instrumentation register(), whose promise resolves
+ * *before* the Next.js server starts accepting requests — so without waiting,
+ * Strava's validation hits a server that isn't listening yet and returns
+ * "callback url not verifiable". We poll our own callback locally until it
+ * responds correctly, which guarantees the server is up before we ask Strava.
+ */
+async function waitForLocalCallback(timeoutMs = 60_000): Promise<boolean> {
+  const port = process.env.PORT ?? "3000";
+  const challenge = `startup-${Date.now()}`;
+  const url =
+    `http://127.0.0.1:${port}/api/strava/webhook` +
+    `?hub.mode=subscribe` +
+    `&hub.verify_token=${encodeURIComponent(env.STRAVA_WEBHOOK_VERIFY_TOKEN)}` +
+    `&hub.challenge=${challenge}`;
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+      if (res.ok) {
+        const data = (await res.json()) as { "hub.challenge"?: string };
+        if (data["hub.challenge"] === challenge) {
+          return true;
+        }
+      }
+    } catch {
+      // Server not accepting requests yet — retry until the deadline.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  return false;
+}
+
 async function createSubscription(): Promise<void> {
-  console.log(
-    `[webhook] Creating subscription for ${env.STRAVA_WEBHOOK_CALLBACK_URL}`,
-  );
-
-  const res = await fetch(STRAVA_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: env.STRAVA_CLIENT_ID,
-      client_secret: env.STRAVA_CLIENT_SECRET,
-      callback_url: env.STRAVA_WEBHOOK_CALLBACK_URL!,
-      verify_token: env.STRAVA_WEBHOOK_VERIFY_TOKEN,
-    }),
-    signal: AbortSignal.timeout(30_000),
-  });
-
-  if (!res.ok) {
+  // Make sure our own callback is serving before asking Strava to validate it.
+  const ready = await waitForLocalCallback();
+  if (!ready) {
     console.error(
-      "[webhook] Failed to create subscription:",
-      res.status,
-      await res.text(),
+      "[webhook] Local callback never became ready; skipping subscription creation",
     );
     return;
   }
 
-  const data = await res.json();
-  activeSubscriptionId = data.id;
-  console.log(`[webhook] Subscription created (id=${activeSubscriptionId})`);
+  console.log(
+    `[webhook] Creating subscription for ${env.STRAVA_WEBHOOK_CALLBACK_URL}`,
+  );
+
+  // Caddy may take a moment longer than the app to route the public callback,
+  // so retry the create a few times if Strava reports it can't verify yet.
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const res = await fetch(STRAVA_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: env.STRAVA_CLIENT_ID,
+        client_secret: env.STRAVA_CLIENT_SECRET,
+        callback_url: env.STRAVA_WEBHOOK_CALLBACK_URL!,
+        verify_token: env.STRAVA_WEBHOOK_VERIFY_TOKEN,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      activeSubscriptionId = data.id;
+      console.log(`[webhook] Subscription created (id=${activeSubscriptionId})`);
+      return;
+    }
+
+    const body = await res.text();
+    const notVerifiable = res.status === 400 && body.includes("not verifiable");
+    console.error(
+      `[webhook] Create attempt ${attempt}/${maxAttempts} failed: ${res.status} ${body}`,
+    );
+    // Only "not verifiable" is worth retrying (transient readiness); bail on
+    // anything else (bad credentials, duplicate subscription, etc.).
+    if (!notVerifiable || attempt === maxAttempts) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+  }
 }
 
 async function deleteSubscription(id: number): Promise<void> {
