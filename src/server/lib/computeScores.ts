@@ -177,6 +177,16 @@ export function calculateSwimmingTSS(
 }
 
 /**
+ * Headline power-curve durations (seconds) that the UI surfaces as chips
+ * (mirroring Strava's power best-effort list). Always included when within
+ * range, even if the regular stepping would skip them (e.g. 45 min).
+ */
+const HEADLINE_POWER_DURATIONS = [
+  5, 15, 30, 60, 120, 180, 300, 480, 600, 900, 1200, 1800, 2700, 3600, 7200,
+  10800,
+];
+
+/**
  * Generates power curve duration points (in seconds) up to maxDuration.
  *
  * - Every second from 1s to 30s
@@ -184,27 +194,21 @@ export function calculateSwimmingTSS(
  * - Every 30s from 330s to 1200s (20 min)
  * - Every 120s from 1320s to 3600s (1 h)
  * - Every 300s from 3900s onwards
+ * - Plus the headline durations above (so UI chips always have a data point)
  */
 export function generatePowerCurveDurations(maxDuration: number): number[] {
-  const durations: number[] = [];
+  const durations = new Set<number>();
 
-  for (let d = 1; d <= Math.min(30, maxDuration); d += 1) {
-    durations.push(d);
-  }
-  for (let d = 35; d <= Math.min(300, maxDuration); d += 5) {
-    durations.push(d);
-  }
-  for (let d = 330; d <= Math.min(1200, maxDuration); d += 30) {
-    durations.push(d);
-  }
-  for (let d = 1320; d <= Math.min(3600, maxDuration); d += 120) {
-    durations.push(d);
-  }
-  for (let d = 3900; d <= maxDuration; d += 300) {
-    durations.push(d);
+  for (let d = 1; d <= Math.min(30, maxDuration); d += 1) durations.add(d);
+  for (let d = 35; d <= Math.min(300, maxDuration); d += 5) durations.add(d);
+  for (let d = 330; d <= Math.min(1200, maxDuration); d += 30) durations.add(d);
+  for (let d = 1320; d <= Math.min(3600, maxDuration); d += 120) durations.add(d);
+  for (let d = 3900; d <= maxDuration; d += 300) durations.add(d);
+  for (const d of HEADLINE_POWER_DURATIONS) {
+    if (d <= maxDuration) durations.add(d);
   }
 
-  return durations;
+  return [...durations].sort((a, b) => a - b);
 }
 
 /**
@@ -248,35 +252,154 @@ export function computePowerBests(
   wattsStream: number[],
   timeStream?: number[],
 ): Record<number, number> {
-  // Expand to per-second if time stream available, also filters out NaN
-  const watts =
-    timeStream?.length === wattsStream.length
-      ? expandToPerSecond(wattsStream, timeStream)
-      : wattsStream.map((v) => (Number.isFinite(v) ? v : 0));
-
+  const watts = toPerSecond(wattsStream, timeStream);
   const result: Record<number, number> = {};
-  const durations = generatePowerCurveDurations(watts.length);
+  for (const [duration, avg] of maxWindowAverages(watts)) {
+    result[duration] = Math.round(avg);
+  }
+  return result;
+}
+
+/**
+ * Computes the maximum average heart rate (bpm) sustained over each target
+ * duration, from a `heartrate` stream — the HR equivalent of the power curve.
+ * Same durations as {@link computePowerBests}.
+ */
+export function computeHeartrateBests(
+  hrStream: number[],
+  timeStream?: number[],
+): Record<number, number> {
+  const hr = toPerSecond(hrStream, timeStream);
+  const result: Record<number, number> = {};
+  for (const [duration, avg] of maxWindowAverages(hr)) {
+    result[duration] = Math.round(avg);
+  }
+  return result;
+}
+
+/**
+ * Computes the fastest time (seconds) to cover each target distance (meters),
+ * from the cumulative `distance` stream and aligned `time` stream — the cycling
+ * equivalent of Strava's distance best efforts (which the API doesn't expose).
+ *
+ * Uses a two-pointer sweep: both streams are monotonic, so for each start index
+ * the end index only moves forward. Distances longer than the ride are skipped.
+ */
+export function computeSpeedEfforts(
+  distanceStream: number[],
+  timeStream: number[],
+  targetDistances: number[],
+): Record<number, number> {
+  const result: Record<number, number> = {};
+  const n = distanceStream.length;
+  if (n < 2 || timeStream.length !== n) return result;
+
+  const total = distanceStream[n - 1] - distanceStream[0];
+
+  for (const target of targetDistances) {
+    if (total < target) continue;
+
+    let best = Infinity;
+    let j = 0;
+    for (let i = 0; i < n; i++) {
+      if (j < i) j = i;
+      while (j < n && distanceStream[j] - distanceStream[i] < target) j++;
+      if (j >= n) break;
+      const elapsed = timeStream[j] - timeStream[i];
+      if (elapsed > 0 && elapsed < best) best = elapsed;
+    }
+
+    if (best < Infinity) result[target] = Math.round(best);
+  }
+
+  return result;
+}
+
+/**
+ * Detects the biggest single climb (meters) from an `altitude` stream, in the
+ * spirit of Strava's climb detection: a climb is a sustained ascent that tolerates
+ * descents that are small relative to what's already been climbed, and ends only
+ * once you drop far enough below its running peak. Returns the largest such climb's gain.
+ *
+ * The descent tolerance is adaptive: a long col can swallow a 30–40 m dip mid-ascent
+ * (a village, a false-flat descent) and still count as one climb, while two genuinely
+ * separate hills — divided by a descent large compared to the first one's gain — stay
+ * split. A flat absolute tolerance can't do both: too low and big climbs get chopped at
+ * every dip, too high and adjacent small hills get merged.
+ */
+export function computeBiggestClimb(altitudeStream: number[]): number {
+  const alt = altitudeStream.filter((v) => Number.isFinite(v));
+  if (alt.length < 2) return 0;
+
+  let best = 0;
+  let baseAlt = alt[0]; // valley where the current climb started
+  let peakAlt = alt[0]; // highest point reached in the current climb
+
+  for (let i = 1; i < alt.length; i++) {
+    const a = alt[i];
+    // A descent ends the climb once it exceeds a floor AND a fraction of the gain
+    // so far: the more you've climbed, the bigger the dip you can ride through.
+    const tolerance = Math.max(
+      CLIMB_DESCENT_MIN_DROP,
+      CLIMB_DESCENT_FRACTION * (peakAlt - baseAlt),
+    );
+    if (a > peakAlt) {
+      peakAlt = a;
+    } else if (peakAlt - a > tolerance) {
+      // Dropped far enough below the peak → the climb has ended; bank it.
+      best = Math.max(best, peakAlt - baseAlt);
+      baseAlt = a;
+      peakAlt = a;
+    } else if (a < baseAlt) {
+      // Still drifting down before any real ascent → lower the valley.
+      baseAlt = a;
+      peakAlt = a;
+    }
+  }
+
+  best = Math.max(best, peakAlt - baseAlt);
+  return Math.round(best);
+}
+
+/** A descent only ends a climb once it drops at least this many meters below the peak (noise floor). */
+const CLIMB_DESCENT_MIN_DROP = 25;
+/** ...or this fraction of the elevation already gained in the current climb, whichever is larger. */
+const CLIMB_DESCENT_FRACTION = 0.2;
+
+/** Expands a sparse stream to per-second values (filtering NaN) when a matching time stream is present. */
+function toPerSecond(values: number[], timeStream?: number[]): number[] {
+  return timeStream?.length === values.length
+    ? expandToPerSecond(values, timeStream)
+    : values.map((v) => (Number.isFinite(v) ? v : 0));
+}
+
+/**
+ * For each generated power-curve duration, yields the maximum average value of
+ * a per-second series over a sliding window of that length.
+ */
+function* maxWindowAverages(
+  values: number[],
+): Generator<[duration: number, average: number]> {
+  const durations = generatePowerCurveDurations(values.length);
 
   for (const duration of durations) {
-    if (watts.length < duration) continue;
+    if (values.length < duration) continue;
 
     let windowSum = 0;
     for (let i = 0; i < duration; i++) {
-      windowSum += watts[i];
+      windowSum += values[i];
     }
     let maxSum = windowSum;
 
-    for (let i = duration; i < watts.length; i++) {
-      windowSum += watts[i] - watts[i - duration];
+    for (let i = duration; i < values.length; i++) {
+      windowSum += values[i] - values[i - duration];
       if (windowSum > maxSum) {
         maxSum = windowSum;
       }
     }
 
-    result[duration] = Math.round(maxSum / duration);
+    yield [duration, maxSum / duration];
   }
-
-  return result;
 }
 
 interface ResolvedSettings {

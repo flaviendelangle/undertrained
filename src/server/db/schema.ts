@@ -11,6 +11,7 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { ActivityStats } from "strava-v3";
 
 // ── Enums ──────────────────────────────────────────────────────────────
 
@@ -77,6 +78,20 @@ export const activities = pgTable(
     tss: real("tss"),
     workoutType: integer("workout_type"),
     powerBests: jsonb("power_bests").$type<Record<number, number>>(),
+    // Fastest time (seconds) to cover each standard distance (meters), computed
+    // from distance/time streams — Strava doesn't expose cycling best efforts.
+    speedEfforts: jsonb("speed_efforts").$type<Record<number, number>>(),
+    // Biggest single climb (meters) detected from the altitude stream.
+    biggestClimb: real("biggest_climb"),
+    // Max average heart rate (bpm) sustained per duration, from the heartrate
+    // stream (running & cycling, including indoor — HR is a real sensor metric).
+    heartrateBests: jsonb("heartrate_bests").$type<Record<number, number>>(),
+    areBestEffortsLoaded: boolean("are_best_efforts_loaded")
+      .notNull()
+      .default(false),
+    bestEffortFetchAttempts: integer("best_effort_fetch_attempts")
+      .notNull()
+      .default(0),
   },
   (t) => [
     uniqueIndex("activities_strava_id_idx").on(t.stravaId),
@@ -85,6 +100,10 @@ export const activities = pgTable(
     index("activities_athlete_streams_loaded_idx").on(
       t.athlete,
       t.areStreamsLoaded,
+    ),
+    index("activities_athlete_best_efforts_idx").on(
+      t.athlete,
+      t.areBestEffortsLoaded,
     ),
   ],
 );
@@ -106,6 +125,54 @@ export const activityStreams = pgTable(
   (t) => [
     index("activity_streams_activity_id_idx").on(t.activityId),
     index("activity_streams_activity_id_type_idx").on(t.activityId, t.type),
+  ],
+);
+
+/**
+ * Snapshot of Strava's curated athlete stats (one row per athlete).
+ *
+ * We store the raw `ActivityStats` payload (biggest ride distance, biggest
+ * climb, and all-time/YTD/recent ride·run·swim totals) and only render it —
+ * we never query inside the JSON. Refreshed on every sync and webhook event.
+ */
+export const athleteStats = pgTable(
+  "athlete_stats",
+  {
+    id: serial("id").primaryKey(),
+    athlete: integer("athlete")
+      .notNull()
+      .references(() => athletes.id, { onDelete: "cascade" }),
+    data: jsonb("data").notNull().$type<ActivityStats>(),
+    fetchedAt: bigint("fetched_at", { mode: "number" }).notNull(),
+  },
+  (t) => [uniqueIndex("athlete_stats_athlete_idx").on(t.athlete)],
+);
+
+/**
+ * Strava-computed "best efforts" for run activities (one row per effort).
+ *
+ * Strava recomputes these official bests when an athlete crops or corrects an
+ * activity, so they are more authoritative than recomputing from raw streams.
+ * The all-time PR for a distance is the minimum `elapsedTime` per `name`.
+ */
+export const bestEfforts = pgTable(
+  "best_efforts",
+  {
+    id: serial("id").primaryKey(),
+    activityId: integer("activity_id")
+      .notNull()
+      .references(() => activities.id, { onDelete: "cascade" }),
+    stravaEffortId: bigint("strava_effort_id", { mode: "number" }),
+    name: text("name").notNull(), // "400m", "1k", "1 mile", "5k", "Half-Marathon", ...
+    distance: real("distance").notNull(), // meters
+    elapsedTime: integer("elapsed_time").notNull(),
+    movingTime: integer("moving_time"),
+    prRank: integer("pr_rank"),
+    startDate: text("start_date").notNull(),
+  },
+  (t) => [
+    index("best_efforts_activity_id_idx").on(t.activityId),
+    index("best_efforts_activity_id_name_idx").on(t.activityId, t.name),
   ],
 );
 

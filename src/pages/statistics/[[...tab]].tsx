@@ -32,6 +32,10 @@ const EddingtonChart = nextDynamic(
     import("~/components/charts/EddingtonChart").then((m) => m.EddingtonChart),
   { ssr: false },
 );
+const Records = nextDynamic(
+  () => import("~/components/charts/Records/Records"),
+  { ssr: false },
+);
 
 const StatisticsPage: NextPageWithLayout = () => {
   const router = useRouter();
@@ -64,6 +68,7 @@ const StatisticsPage: NextPageWithLayout = () => {
           <ActivitiesCumulativeTimeline />
           <PowerCurve activityTypes={getActivityTypesByCategory("cycling")} />
           <EddingtonChart />
+          <Records />
         </div>
       </div>
     </>

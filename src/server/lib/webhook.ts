@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import strava from "strava-v3";
 
+import { getSportConfig } from "../../utils/sportConfig";
 import { db } from "../db";
 import type { Database } from "../db";
 import { activities, athletes, riderSettings, syncJobs, timePeriods } from "../db/schema";
@@ -9,7 +10,12 @@ import {
   getAccessToken,
   getModelFromStravaActivity,
 } from "./strava";
-import { computeActivityScoresInternal, storeStreams } from "./sync";
+import {
+  computeActivityScoresInternal,
+  storeBestEfforts,
+  storeStreams,
+  syncAthleteStats,
+} from "./sync";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -123,6 +129,28 @@ async function handleActivityCreate(
     return;
   }
 
+  // Store run best efforts from the already-fetched detailed activity (no extra call)
+  if (getSportConfig(rawActivity.type).category === "running") {
+    try {
+      await storeBestEfforts(db, activityId, rawActivity);
+    } catch (err) {
+      console.error(
+        `[webhook] Failed to store best efforts for ${stravaActivityId}:`,
+        err,
+      );
+    }
+  }
+
+  // Refresh the athlete's curated all-time stats (cheap, keeps Records fresh)
+  try {
+    await syncAthleteStats(db, athleteId);
+  } catch (err) {
+    console.error(
+      `[webhook] Failed to refresh athlete stats for athlete ${athleteId}:`,
+      err,
+    );
+  }
+
   // Compute scores (power bests are always computed; TSS/HRSS require rider settings)
   try {
     const settingsDoc =
@@ -177,9 +205,17 @@ async function handleActivityUpdate(
     return;
   }
 
-  const patch: Partial<{ name: string; type: string }> = {};
+  const patch: Partial<{
+    name: string;
+    type: string;
+    areBestEffortsLoaded: boolean;
+  }> = {};
   if (updates.title) patch.name = updates.title;
-  if (updates.type) patch.type = updates.type;
+  // Type change can flip an activity into/out of "run" → re-fetch best efforts on next sync.
+  if (updates.type) {
+    patch.type = updates.type;
+    patch.areBestEffortsLoaded = false;
+  }
 
   if (Object.keys(patch).length > 0) {
     await db

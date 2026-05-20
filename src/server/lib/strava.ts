@@ -1,5 +1,10 @@
 import { eq } from "drizzle-orm";
 import strava from "strava-v3";
+import type {
+  ActivityStats,
+  DetailedActivity,
+  DetailedSegmentEffort,
+} from "strava-v3";
 import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
@@ -191,4 +196,53 @@ export async function fetchStreamsFromStrava(
   });
 
   return streams ? normalizeStreams(streams) : [];
+}
+
+/**
+ * Fetches the athlete's curated all-time stats (biggest ride/climb, ride·run·swim
+ * totals). One cheap call — Strava keeps these in sync with the athlete's edits.
+ */
+export async function fetchAthleteStats(
+  accessToken: string,
+  stravaAthleteId: number,
+): Promise<ActivityStats> {
+  return strava.athletes.stats({
+    access_token: accessToken,
+    id: String(stravaAthleteId),
+  });
+}
+
+/**
+ * Fetches the full DetailedActivity, which (unlike the summary returned by
+ * `listActivities`) includes `best_efforts` for run activities.
+ */
+export async function fetchDetailedActivity(
+  accessToken: string,
+  stravaId: number,
+): Promise<DetailedActivity> {
+  return strava.activities.get({
+    access_token: accessToken,
+    id: String(stravaId),
+  });
+}
+
+/**
+ * Maps the `best_efforts` of a DetailedActivity into `bestEfforts` table rows.
+ * Returns an empty array for activities without best efforts (treadmill/manual
+ * runs), which is intentional — they still get marked as loaded.
+ */
+export function getBestEffortModels(
+  activity: Pick<DetailedActivity, "best_efforts" | "start_date">,
+  activityId: number,
+) {
+  return (activity.best_efforts ?? []).map((e: DetailedSegmentEffort) => ({
+    activityId,
+    stravaEffortId: e.id ?? null,
+    name: e.name,
+    distance: e.distance ?? 0,
+    elapsedTime: e.elapsed_time,
+    movingTime: e.moving_time ?? null,
+    prRank: e.pr_rank ?? null,
+    startDate: e.start_date ?? activity.start_date,
+  }));
 }

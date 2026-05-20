@@ -1,26 +1,40 @@
 import { and, asc, count, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 import strava from "strava-v3";
+import type { DetailedActivity } from "strava-v3";
 
-import { getSportConfig } from "../../utils/sportConfig";
+import {
+  getActivityTypesByCategory,
+  getSportConfig,
+} from "../../utils/sportConfig";
 import type { Database } from "../db";
 import {
   activities,
   activityStreams,
+  athletes,
+  athleteStats,
+  bestEfforts,
   riderSettings,
   syncJobs,
 } from "../db/schema";
+import { CYCLING_SPEED_DISTANCE_METERS } from "../../utils/cyclingRecordDistances";
 import {
   calculateHRSS,
   calculateRunningTSS,
   calculateSwimmingTSS,
   calculateTSS,
+  computeBiggestClimb,
+  computeHeartrateBests,
   computePowerBests,
+  computeSpeedEfforts,
   resolveRiderSettings,
 } from "./computeScores";
 import type { normalizeStreams } from "./strava";
 import {
+  fetchAthleteStats,
+  fetchDetailedActivity,
   fetchStreamsFromStrava,
   getAccessToken,
+  getBestEffortModels,
   getModelFromStravaActivity,
 } from "./strava";
 
@@ -28,6 +42,86 @@ const PAGE_SIZE = 50;
 const BATCH_SIZE = 50;
 const STREAM_FETCH_CONCURRENCY = 3;
 const MAX_STREAM_FETCH_ATTEMPTS = 3;
+const MAX_BEST_EFFORT_FETCH_ATTEMPTS = 3;
+
+/** Strava activity types treated as runs (which expose best efforts). */
+const RUN_TYPES = getActivityTypesByCategory("running");
+
+/** Stream types loaded for score/record computation. */
+const SCORING_STREAM_TYPES = [
+  "time",
+  "heartrate",
+  "watts",
+  "velocity_smooth",
+  "altitude",
+  "distance",
+];
+
+/**
+ * True when a Strava request failed with HTTP 404. For the streams and
+ * detailed-activity endpoints this means the activity has no such data
+ * (manual / indoor / streamless activity) or was removed — not a transient
+ * error — so the activity should be marked done rather than retried.
+ */
+function isStravaNotFound(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "statusCode" in e &&
+    (e as { statusCode?: number }).statusCode === 404
+  );
+}
+
+/** True when a Strava request was rejected for exceeding the rate limit (HTTP 429). */
+function isRateLimited(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "statusCode" in e &&
+    (e as { statusCode?: number }).statusCode === 429
+  );
+}
+
+/**
+ * Milliseconds until Strava's next 15-minute rate-limit window (the limit resets
+ * on the quarter-hour), plus a small buffer.
+ */
+function msUntilRateLimitReset(): number {
+  const QUARTER = 15 * 60_000;
+  const now = Date.now();
+  return QUARTER - (now % QUARTER) + 2_000;
+}
+
+/**
+ * Wraps a Strava API call with rate-limit protection. `strava-v3` updates
+ * `strava.rateLimiting` from the response headers of every request, so we:
+ *  - pause *before* a call if we've already hit the read limit, and
+ *  - on a 429 that slips through (concurrent requests racing), sleep until the
+ *    window resets and retry once.
+ * This keeps a large historical backfill from getting the app blocked.
+ */
+async function callStrava<T>(fn: () => Promise<T>): Promise<T> {
+  if (strava.rateLimiting.readExceeded()) {
+    const waitMs = msUntilRateLimitReset();
+    console.warn(
+      `[sync] Strava read rate limit reached — pausing ${Math.round(waitMs / 1000)}s until reset`,
+    );
+    await delay(waitMs);
+  }
+  try {
+    return await fn();
+  } catch (e) {
+    if (isRateLimited(e)) {
+      const waitMs = msUntilRateLimitReset();
+      console.warn(
+        `[sync] Strava 429 — pausing ${Math.round(waitMs / 1000)}s until reset, then retrying`,
+      );
+      await delay(waitMs);
+      return await fn();
+    }
+    throw e;
+  }
+}
 
 export type SyncMode = "load_new" | "load_missing" | "reload_all" | "recompute_scores";
 
@@ -53,7 +147,8 @@ export async function runSyncInBackground(
       }
 
       await syncActivitiesPhase(db, athleteId, syncJobId, options);
-      await syncStreamsPhase(db, athleteId, syncJobId);
+      await syncActivityDetailsPhase(db, athleteId, syncJobId);
+      await syncAthleteStats(db, athleteId);
     }
     await computeScoresPhase(db, athleteId, syncJobId);
   } catch (error) {
@@ -93,12 +188,14 @@ async function syncActivitiesPhase(
     });
     if (job?.status !== "fetching_activities") return;
 
-    const pageActivities = await strava.athlete.listActivities({
-      access_token: accessToken,
-      per_page: PAGE_SIZE,
-      page,
-      ...(options.after != null ? { after: options.after } : {}),
-    });
+    const pageActivities = await callStrava(() =>
+      strava.athlete.listActivities({
+        access_token: accessToken,
+        per_page: PAGE_SIZE,
+        page,
+        ...(options.after != null ? { after: options.after } : {}),
+      }),
+    );
 
     if (pageActivities.length === 0) break;
 
@@ -142,6 +239,14 @@ async function syncActivitiesPhase(
                   THEN false
                   ELSE activities.are_streams_loaded
                 END`,
+                // A corrected/cropped activity → re-fetch Strava's recomputed best efforts.
+                areBestEffortsLoaded: sql`CASE
+                  WHEN activities.distance != excluded.distance
+                    OR activities.moving_time != excluded.moving_time
+                    OR activities.elapsed_time != excluded.elapsed_time
+                  THEN false
+                  ELSE activities.are_best_efforts_loaded
+                END`,
               }
             : {}),
         },
@@ -161,17 +266,12 @@ async function syncActivitiesPhase(
     await delay(5_000);
   }
 
-  // Transition to streams phase
+  // Transition to the details phase. Count per-activity work still pending:
+  // streams to fetch, plus runs missing their best efforts.
   const [{ total }] = await db
     .select({ total: count() })
     .from(activities)
-    .where(
-      and(
-        eq(activities.athlete, athleteId),
-        eq(activities.areStreamsLoaded, false),
-        lt(activities.streamFetchAttempts, MAX_STREAM_FETCH_ATTEMPTS),
-      ),
-    );
+    .where(and(eq(activities.athlete, athleteId), needsDetailFetch()));
 
   await db
     .update(syncJobs)
@@ -183,9 +283,43 @@ async function syncActivitiesPhase(
     .where(eq(syncJobs.id, syncJobId));
 }
 
-// ── Phase 2: Fetch streams from Strava ────────────────────────────────
+/**
+ * SQL predicate: an activity still needs a per-activity Strava fetch — either
+ * its streams aren't loaded, or it's a run whose best efforts aren't loaded.
+ * Both are bounded by their retry-attempt caps.
+ */
+function needsDetailFetch() {
+  const streamsPending = and(
+    eq(activities.areStreamsLoaded, false),
+    lt(activities.streamFetchAttempts, MAX_STREAM_FETCH_ATTEMPTS),
+  );
+  if (RUN_TYPES.length === 0) return streamsPending;
+  return or(
+    streamsPending,
+    and(
+      inArray(activities.type, RUN_TYPES),
+      eq(activities.areBestEffortsLoaded, false),
+      lt(activities.bestEffortFetchAttempts, MAX_BEST_EFFORT_FETCH_ATTEMPTS),
+    ),
+  );
+}
 
-async function syncStreamsPhase(
+// ── Phase 2: Fetch per-activity data from Strava ──────────────────────
+
+/**
+ * Fetches the per-activity data we pull one-by-one from Strava: streams (every
+ * activity) and best efforts (runs only). Both are fetched in the *same* pass —
+ * a run that needs both gets its streams and its detailed activity together —
+ * so we never scan the activity set twice.
+ *
+ * Note: streams (`/activities/{id}/streams`) and best efforts (which live on the
+ * DetailedActivity, `/activities/{id}`) are different endpoints, so a run that
+ * needs both still costs two requests; there is no single call that returns both.
+ * Every request goes through {@link callStrava}, which pauses on the Strava rate
+ * limit so a large backfill can't get the app blocked (it resumes automatically;
+ * progress is persisted via the loaded flags).
+ */
+async function syncActivityDetailsPhase(
   db: Database,
   athleteId: number,
   syncJobId: number,
@@ -196,24 +330,24 @@ async function syncStreamsPhase(
     const job = await db.query.syncJobs.findFirst({
       where: eq(syncJobs.id, syncJobId),
     });
-    if (job?.status !== "fetching_streams") return;
+    // Status-agnostic, but stop if the job was cancelled/failed/finished.
+    if (!job || job.status === "failed" || job.status === "completed") return;
 
     const accessToken = await getAccessToken(db, athleteId);
 
     const batch = await db
-      .select({ id: activities.id, stravaId: activities.stravaId })
+      .select({
+        id: activities.id,
+        stravaId: activities.stravaId,
+        type: activities.type,
+        areStreamsLoaded: activities.areStreamsLoaded,
+        areBestEffortsLoaded: activities.areBestEffortsLoaded,
+      })
       .from(activities)
-      .where(
-        and(
-          eq(activities.athlete, athleteId),
-          eq(activities.areStreamsLoaded, false),
-          lt(activities.streamFetchAttempts, MAX_STREAM_FETCH_ATTEMPTS),
-        ),
-      )
+      .where(and(eq(activities.athlete, athleteId), needsDetailFetch()))
       .limit(10);
 
     if (batch.length === 0) {
-      // Transition to score computation
       await db
         .update(syncJobs)
         .set({ status: "computing_scores" })
@@ -221,31 +355,71 @@ async function syncStreamsPhase(
       return;
     }
 
-    // Fetch streams concurrently with limited parallelism to respect Strava rate limits
     const results = await runWithConcurrency(
       batch,
       async (activity) => {
-        try {
-          const normalized = await fetchStreamsFromStrava(
-            accessToken,
-            activity.stravaId,
-          );
-          await storeStreams(db, activity.id, normalized);
-          return true;
-        } catch (e) {
-          console.error(
-            `[syncStreamsPhase] Failed for activity ${activity.stravaId}:`,
-            e,
-          );
-          // Increment attempt counter; give up after MAX_STREAM_FETCH_ATTEMPTS tries
-          await db
-            .update(activities)
-            .set({
-              streamFetchAttempts: sql`${activities.streamFetchAttempts} + 1`,
-            })
-            .where(eq(activities.id, activity.id));
-          return false;
+        let progressed = false;
+
+        // Streams (all activity types).
+        if (!activity.areStreamsLoaded) {
+          try {
+            const normalized = await callStrava(() =>
+              fetchStreamsFromStrava(accessToken, activity.stravaId),
+            );
+            await storeStreams(db, activity.id, normalized);
+            progressed = true;
+          } catch (e) {
+            if (isStravaNotFound(e)) {
+              // No streams (manual/indoor/streamless) — mark loaded, don't retry.
+              await storeStreams(db, activity.id, []);
+              progressed = true;
+            } else {
+              console.error(
+                `[syncActivityDetailsPhase] streams failed for ${activity.stravaId}:`,
+                e,
+              );
+              await db
+                .update(activities)
+                .set({
+                  streamFetchAttempts: sql`${activities.streamFetchAttempts} + 1`,
+                })
+                .where(eq(activities.id, activity.id));
+            }
+          }
         }
+
+        // Best efforts (runs only) — reuses the detailed activity GET.
+        if (RUN_TYPES.includes(activity.type) && !activity.areBestEffortsLoaded) {
+          try {
+            const detailed = await callStrava(() =>
+              fetchDetailedActivity(accessToken, activity.stravaId),
+            );
+            await storeBestEfforts(db, activity.id, detailed);
+            progressed = true;
+          } catch (e) {
+            if (isStravaNotFound(e)) {
+              // Activity no longer accessible — stop retrying it.
+              await db
+                .update(activities)
+                .set({ areBestEffortsLoaded: true, bestEffortFetchAttempts: 0 })
+                .where(eq(activities.id, activity.id));
+              progressed = true;
+            } else {
+              console.error(
+                `[syncActivityDetailsPhase] best efforts failed for ${activity.stravaId}:`,
+                e,
+              );
+              await db
+                .update(activities)
+                .set({
+                  bestEffortFetchAttempts: sql`${activities.bestEffortFetchAttempts} + 1`,
+                })
+                .where(eq(activities.id, activity.id));
+            }
+          }
+        }
+
+        return progressed;
       },
       STREAM_FETCH_CONCURRENCY,
     );
@@ -256,6 +430,30 @@ async function syncStreamsPhase(
       .set({ streamsFetched: totalFetched })
       .where(eq(syncJobs.id, syncJobId));
   }
+}
+
+/**
+ * Fetches and upserts the athlete's curated all-time stats. Cheap (one GET),
+ * idempotent via the unique athlete index.
+ */
+export async function syncAthleteStats(db: Database, athleteId: number) {
+  const athlete = await db.query.athletes.findFirst({
+    where: eq(athletes.id, athleteId),
+  });
+  if (!athlete) return;
+
+  const accessToken = await getAccessToken(db, athleteId);
+  const data = await callStrava(() =>
+    fetchAthleteStats(accessToken, athlete.stravaAthleteId),
+  );
+
+  await db
+    .insert(athleteStats)
+    .values({ athlete: athleteId, data, fetchedAt: Date.now() })
+    .onConflictDoUpdate({
+      target: athleteStats.athlete,
+      set: { data: sql`excluded.data`, fetchedAt: sql`excluded.fetched_at` },
+    });
 }
 
 // ── Phase 3: Compute scores ───────────────────────────────────────────
@@ -351,6 +549,34 @@ export async function storeStreams(
   });
 }
 
+/**
+ * Replaces the stored best efforts for an activity with the ones from a freshly
+ * fetched DetailedActivity, then marks the activity as loaded. Idempotent
+ * (delete-then-insert) so re-syncs of corrected activities stay consistent.
+ * An empty `best_efforts` array still marks the activity loaded (so manual /
+ * treadmill runs aren't retried forever).
+ */
+export async function storeBestEfforts(
+  db: Database,
+  activityId: number,
+  detailed: Pick<DetailedActivity, "best_efforts" | "start_date">,
+) {
+  const models = getBestEffortModels(detailed, activityId);
+
+  await db.transaction(async (tx) => {
+    await tx.delete(bestEfforts).where(eq(bestEfforts.activityId, activityId));
+
+    if (models.length > 0) {
+      await tx.insert(bestEfforts).values(models);
+    }
+
+    await tx
+      .update(activities)
+      .set({ areBestEffortsLoaded: true, bestEffortFetchAttempts: 0 })
+      .where(eq(activities.id, activityId));
+  });
+}
+
 type ActivityForScoring = {
   id: number;
   athlete: number;
@@ -414,12 +640,7 @@ async function computeActivityScoresBatch(
             activityStreams.activityId,
             activitiesWithStreams.map((a) => a.id),
           ),
-          inArray(activityStreams.type, [
-            "time",
-            "heartrate",
-            "watts",
-            "velocity_smooth",
-          ]),
+          inArray(activityStreams.type, SCORING_STREAM_TYPES),
         ),
       );
 
@@ -464,6 +685,18 @@ function parseStreamDocs(
   }
 }
 
+/** Extracts one stream type's samples for an activity (chunks concatenated in order). */
+function streamData(
+  docs: StreamDoc[],
+  type: string,
+  activityId: number,
+): number[] | undefined {
+  const matched = docs
+    .filter((s) => s.type === type)
+    .sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0));
+  return matched.length > 0 ? parseStreamDocs(matched, activityId) : undefined;
+}
+
 export async function computeActivityScoresInternal(
   db: Database,
   activity: ActivityForScoring,
@@ -481,6 +714,9 @@ export async function computeActivityScoresInternal(
     tss?: number;
     hrss?: number;
     powerBests?: Record<number, number> | null;
+    speedEfforts?: Record<number, number> | null;
+    biggestClimb?: number | null;
+    heartrateBests?: Record<number, number> | null;
   } = {};
 
   const sc = getSportConfig(activity.type);
@@ -525,74 +761,62 @@ export async function computeActivityScoresInternal(
         .where(
           and(
             eq(activityStreams.activityId, activity.id),
-            inArray(activityStreams.type, [
-            "time",
-            "heartrate",
-            "watts",
-            "velocity_smooth",
-          ]),
+            inArray(activityStreams.type, SCORING_STREAM_TYPES),
           ),
         ));
 
-    // Extract time stream (used for accurate HRSS and power bests)
-    const timeDocs = streamDocs
-      .filter((s) => s.type === "time")
-      .sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0));
-    let timeData: number[] | undefined;
-    if (timeDocs.length > 0) {
-      timeData = parseStreamDocs(timeDocs, activity.id);
+    const timeData = streamData(streamDocs, "time", activity.id);
+
+    // HR powers both HRSS (needs settings) and HR bests (running & cycling,
+    // including indoor — HR is a real sensor metric).
+    const hrData = streamData(streamDocs, "heartrate", activity.id);
+    if (settings && hrData) {
+      patch.hrss = Math.round(calculateHRSS(hrData, settings, timeData));
+    }
+    if (hrData && (sc.category === "cycling" || sc.category === "running")) {
+      patch.heartrateBests = computeHeartrateBests(hrData, timeData);
+    } else {
+      patch.heartrateBests = null;
     }
 
-    if (settings) {
-      const hrDocs = streamDocs
-        .filter((s) => s.type === "heartrate")
-        .sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0));
-
-      if (hrDocs.length > 0) {
-        const hrData = parseStreamDocs(hrDocs, activity.id);
-        if (hrData) {
-          patch.hrss = Math.round(calculateHRSS(hrData, settings, timeData));
-        }
-      }
-    }
-
-    // Running rTSS (needs velocity_smooth stream)
-    if (
-      settings &&
-      sc.category === "running" &&
-      settings.runThresholdPace > 0
-    ) {
-      const velocityDocs = streamDocs
-        .filter((s) => s.type === "velocity_smooth")
-        .sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0));
-
-      if (velocityDocs.length > 0 && timeData) {
-        const velocityData = parseStreamDocs(velocityDocs, activity.id);
-        if (velocityData) {
-          patch.tss = Math.round(
-            calculateRunningTSS(
-              velocityData,
-              timeData,
-              settings.runThresholdPace,
-            ),
-          );
-        }
+    if (settings && sc.category === "running" && settings.runThresholdPace > 0) {
+      const velocityData = streamData(streamDocs, "velocity_smooth", activity.id);
+      if (velocityData && timeData) {
+        patch.tss = Math.round(
+          calculateRunningTSS(velocityData, timeData, settings.runThresholdPace),
+        );
       }
     }
 
     if (sc.hasPowerMetrics) {
-      const wattsDocs = streamDocs
-        .filter((s) => s.type === "watts")
-        .sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0));
-
-      if (wattsDocs.length > 0) {
-        const wattsData = parseStreamDocs(wattsDocs, activity.id);
-        if (wattsData) {
-          patch.powerBests = computePowerBests(wattsData, timeData);
-        }
+      const wattsData = streamData(streamDocs, "watts", activity.id);
+      if (wattsData) {
+        patch.powerBests = computePowerBests(wattsData, timeData);
       }
     } else {
       patch.powerBests = null;
+    }
+
+    // Cycling Speed (distance best efforts) & biggest climb, computed from
+    // existing streams. Excludes virtual rides — their distance/altitude are
+    // simulated, not real records.
+    if (sc.category === "cycling" && activity.type !== "VirtualRide") {
+      const distanceData = streamData(streamDocs, "distance", activity.id);
+      if (distanceData && timeData) {
+        patch.speedEfforts = computeSpeedEfforts(
+          distanceData,
+          timeData,
+          CYCLING_SPEED_DISTANCE_METERS,
+        );
+      }
+
+      const altitudeData = streamData(streamDocs, "altitude", activity.id);
+      if (altitudeData) {
+        patch.biggestClimb = computeBiggestClimb(altitudeData);
+      }
+    } else {
+      patch.speedEfforts = null;
+      patch.biggestClimb = null;
     }
   }
 

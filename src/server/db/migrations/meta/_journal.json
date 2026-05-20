@@ -57,6 +57,41 @@
       "when": 1773532800000,
       "tag": "0007_fix_athlete_id_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779259509842,
+      "tag": "0008_thankful_the_hunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779265083033,
+      "tag": "0009_reflective_kate_bishop",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779266180909,
+      "tag": "0010_lethal_banshee",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1779266196703,
+      "tag": "0011_lonely_monster_badoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1779267621861,
+      "tag": "0012_broad_mindworm",
+      "breakpoints": true
     }
   ]
 }
