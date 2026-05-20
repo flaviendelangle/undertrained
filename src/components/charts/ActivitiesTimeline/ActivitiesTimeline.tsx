@@ -3,7 +3,7 @@ import * as React from "react";
 import { FilterIcon, SlidersHorizontalIcon } from "lucide-react";
 import { format } from "date-fns";
 
-import { BarChartPro } from "@mui/x-charts-pro";
+import { BarChartPro, type ZoomData } from "@mui/x-charts-pro";
 
 import { Button } from "~/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
@@ -27,12 +27,23 @@ import { PrecisionSelect } from "../../PrecisionSelect";
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { ChartTooltip } from "../ChartTooltip";
 
+const TIME_AXIS_ID = "time";
+const DEFAULT_ZOOM_STEPS = 12;
+
+/** Format a duration given in hours as e.g. "8h30" (rounded to the minute). */
+function formatHoursMinutes(hours: number): string {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h}h${String(m).padStart(2, "0")}`;
+}
+
 export default function ActivitiesTimeline() {
-  const [metric, setMetric] = React.useState("distance");
+  const [metric, setMetric] = React.useState("movingTime");
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>([]);
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
-  const [precision, setPrecision] = React.useState<SlicePrecision>("month");
+  const [precision, setPrecision] = React.useState<SlicePrecision>("week");
   const activitiesQuery = useActivitiesQuery({ activityTypes: selectedTypes });
   const { timeline } = useRiderSettingsTimeline();
 
@@ -63,7 +74,50 @@ export default function ActivitiesTimeline() {
     [groupedActivities],
   );
 
+  // Default the visible range to the most recent 12 slices (12 weeks, months,
+  // etc. depending on the precision). The zoom start/end are percentages of the
+  // band scale, so we map the cutoff slice index to a percentage.
+  const defaultZoom = React.useMemo<ZoomData[]>(() => {
+    const count = xAxisData.length;
+    if (count <= DEFAULT_ZOOM_STEPS) {
+      return [{ axisId: TIME_AXIS_ID, start: 0, end: 100 }];
+    }
+    return [
+      { axisId: TIME_AXIS_ID, start: ((count - DEFAULT_ZOOM_STEPS) / count) * 100, end: 100 },
+    ];
+  }, [xAxisData]);
+
+  const [zoomData, setZoomData] = React.useState<ZoomData[]>(defaultZoom);
+
+  // Reset to the 12-week default once data is available, and again whenever the
+  // precision changes (which rebuilds the slices). A manual zoom by the user is
+  // preserved across background refetches because we only re-apply per precision.
+  const appliedPrecisionRef = React.useRef<SlicePrecision | null>(null);
+  React.useEffect(() => {
+    if (xAxisData.length > 0 && appliedPrecisionRef.current !== precision) {
+      appliedPrecisionRef.current = precision;
+      setZoomData(defaultZoom);
+    }
+  }, [precision, xAxisData.length, defaultZoom]);
+
   const metricConfig = METRICS.find((el) => el.value === metric);
+
+  // Format the numeric value shown in the tooltip: round to one decimal and
+  // append the metric unit (the bare series values would otherwise render as
+  // long unitless decimals).
+  const formatValue = React.useCallback(
+    (value: number | null) => {
+      if (value == null) {
+        return "";
+      }
+      if (metricConfig?.unit === "h") {
+        return formatHoursMinutes(value);
+      }
+      const formatted = value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+      return metricConfig?.unit ? `${formatted} ${metricConfig.unit}` : formatted;
+    },
+    [metricConfig],
+  );
 
   const series = React.useMemo(() => {
     if (!metricConfig) {
@@ -85,9 +139,10 @@ export default function ActivitiesTimeline() {
           return acc;
         }, 0),
       ),
+      valueFormatter: formatValue,
       stack: "total",
     }));
-  }, [groupedActivities, metricConfig, metricContext, activitiesQuery.data]);
+  }, [groupedActivities, metricConfig, metricContext, activitiesQuery.data, formatValue]);
 
   return (
     <ChartThemeProvider>
@@ -163,9 +218,11 @@ export default function ActivitiesTimeline() {
         </div>
         <div className="min-h-0 flex-1">
           <BarChartPro
+            zoomData={zoomData}
+            onZoomChange={setZoomData}
             xAxis={[
               {
-                id: "time",
+                id: TIME_AXIS_ID,
                 scaleType: "band",
                 data: xAxisData,
                 valueFormatter: (value: Date) => format(value, "MM/yyyy"),

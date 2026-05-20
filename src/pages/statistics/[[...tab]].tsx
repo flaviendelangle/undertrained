@@ -9,6 +9,10 @@ import { Toolbar } from "~/components/settings/SettingsToolbar";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { getActivityTypesByCategory } from "~/utils/sportConfig";
 
+const FitnessChart = nextDynamic(
+  () => import("~/components/charts/FitnessChart").then((m) => m.FitnessChart),
+  { ssr: false },
+);
 const ActivitiesTimeline = nextDynamic(
   () =>
     import("~/components/charts/ActivitiesTimeline").then(
@@ -64,6 +68,7 @@ const StatisticsPage: NextPageWithLayout = () => {
             Training volume and intensity trends over time. Configure your rider
             settings to see training load data in the charts.
           </PageIntro>
+          <FitnessChart />
           <ActivitiesTimeline />
           <ActivitiesCumulativeTimeline />
           <PowerCurve activityTypes={getActivityTypesByCategory("cycling")} />
