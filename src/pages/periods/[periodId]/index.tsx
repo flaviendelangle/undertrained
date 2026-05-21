@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 
 import { ActivitiesTable } from "~/components/ActivitiesTable";
+import { PageTitle } from "~/components/PageTitle";
 import { TimePeriodForm } from "~/components/periods/TimePeriodForm";
 import { TimePeriodStats } from "~/components/periods/TimePeriodStats";
 import { CardTitle } from "~/components/primitives/CardTitle";
@@ -96,6 +97,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
 
   return (
     <>
+      <PageTitle title={period.name} />
       <Toolbar>
         <Link
           href="/periods"

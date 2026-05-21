@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 
 import { ActivityActionsMenu } from "~/components/ActivityActionsMenu";
+import { PageTitle } from "~/components/PageTitle";
 import { ActivityMap } from "~/components/ActivityMap";
 import { ActivityStats } from "~/components/ActivityStats";
 import { ElevationProfile } from "~/components/ElevationProfile";
@@ -119,6 +120,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
 
   return (
     <>
+      <PageTitle title={activity.name} />
       <Toolbar actions={<ActivityActionsMenu stravaId={activity.stravaId} />}>
         <Link
           href={backHref}

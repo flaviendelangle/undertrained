@@ -27,7 +27,7 @@ const ActivitiesPage: NextPageWithLayout = () => {
         <ListIcon className="size-4" />
         <span className="font-semibold">Activities</span>
       </Toolbar>
-      <div className="flex flex-1 flex-col overflow-hidden p-0 pt-3 md:p-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <ActivitiesTable searchFilter={searchFilter} />
       </div>
     </>

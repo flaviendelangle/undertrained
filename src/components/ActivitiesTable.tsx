@@ -231,7 +231,7 @@ export function ActivitiesTable(props: { searchFilter?: string; timePeriodId?: n
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <Table
         containerRef={tableContainerRef}
-        containerClassName="border-border min-h-0 flex-1 md:border"
+        containerClassName="min-h-0 flex-1"
         className="text-muted-foreground grid min-w-[700px] text-left text-sm"
       >
         <TableHeader className="bg-accent text-muted-foreground sticky top-0 z-10 grid text-xs uppercase">
