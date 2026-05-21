@@ -123,6 +123,10 @@
   --color-chart-grid-strong: var(--chart-grid-strong);
   --color-chart-axis-label: var(--chart-axis-label);
   --color-chart-crosshair: var(--chart-crosshair);
+  --color-sport-cycling: var(--sport-cycling);
+  --color-sport-running: var(--sport-running);
+  --color-sport-swimming: var(--sport-swimming);
+  --color-sport-other: var(--sport-other);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -166,6 +170,10 @@
   --chart-grid-strong: #c4c5ce;
   --chart-axis-label: #81828f;
   --chart-crosshair: #81828f;
+  --sport-cycling: oklch(0.58 0.20 354.308);
+  --sport-running: oklch(0.55 0.11 184.704);
+  --sport-swimming: oklch(0.58 0.16 254.624);
+  --sport-other: oklch(0.52 0.17 280);
   --sidebar: oklch(0.97 0.005 260);
   --sidebar-foreground: oklch(0.145 0.015 260);
   --sidebar-primary: oklch(0.45 0.15 170);
@@ -208,6 +216,10 @@
   --chart-grid-strong: #81828f;
   --chart-axis-label: #b5b6bf;
   --chart-crosshair: #a5a6b1;
+  --sport-cycling: oklch(0.72 0.22 354.308);
+  --sport-running: oklch(0.70 0.12 184.704);
+  --sport-swimming: oklch(0.74 0.17 254.624);
+  --sport-other: oklch(0.68 0.18 280);
   --sidebar: oklch(0.21 0.012 265);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.65 0.15 170);

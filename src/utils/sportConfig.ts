@@ -14,8 +14,19 @@ import {
   Waves,
 } from "lucide-react";
 
+import { formatElapsed } from "~/utils/format";
+
 /** Broad sport category used to drive load-algorithm selection, TSS labels, and settings UI. */
 export type SportCategory = "cycling" | "running" | "swimming" | "other";
+
+/** Minimal activity shape needed to build the per-sport Journal stats line. */
+export interface JournalStatsActivity {
+  distance: number;
+  averageSpeed: number;
+  movingTime: number;
+  weightedAverageWatts: number | null;
+  averageWatts: number | null;
+}
 
 interface LoadAlgorithmOption {
   readonly value: string;
@@ -32,6 +43,14 @@ interface LoadAlgorithmOption {
 export class SportConfig {
   /** Icon component used to represent this sport in the UI. */
   readonly icon: LucideIcon;
+
+  /**
+   * Theme-aware CSS color (a `var(--sport-*)` reference) used to colour this
+   * sport across the UI — e.g. the activity chips in the Journal page.
+   *
+   * Assigned per {@link SportCategory}; the base class is the generic "other" hue.
+   */
+  readonly color: string = "var(--sport-other)";
 
   constructor(icon: LucideIcon = Activity) {
     this.icon = icon;
@@ -66,6 +85,25 @@ export class SportConfig {
    */
   formatPreciseDistance(meters: number): string {
     return `${(meters / 1000).toFixed(2)} km`;
+  }
+
+  /**
+   * Build the compact, sport-specific stats line shown on a Journal activity
+   * card (e.g. distance + pace). Falls back to duration when no distance or
+   * speed is available (e.g. strength training).
+   */
+  formatJournalStats(activity: JournalStatsActivity): string {
+    const parts: string[] = [];
+    if (activity.distance > 0) {
+      parts.push(this.formatDistance(activity.distance));
+    }
+    if (activity.averageSpeed > 0) {
+      parts.push(this.formatSpeed(activity.averageSpeed));
+    }
+    if (parts.length === 0) {
+      parts.push(formatElapsed(activity.movingTime));
+    }
+    return parts.join(" · ");
   }
 
   // ── Display labels & units ──────────────────────────────────
@@ -175,8 +213,24 @@ class CyclingSportConfig extends SportConfig {
   }
 
   override readonly category = "cycling" as const;
+  override readonly color = "var(--sport-cycling)";
   override readonly hasPowerMetrics = true;
   override readonly lapMetricStreamType = "watts";
+
+  /** Cycling cards show distance + normalized power (falling back to average power, then speed). */
+  override formatJournalStats(activity: JournalStatsActivity): string {
+    const parts: string[] = [];
+    if (activity.distance > 0) {
+      parts.push(this.formatDistance(activity.distance));
+    }
+    const watts = activity.weightedAverageWatts ?? activity.averageWatts;
+    if (watts != null) {
+      parts.push(`${Math.round(watts)} W`);
+    } else if (activity.averageSpeed > 0) {
+      parts.push(this.formatSpeed(activity.averageSpeed));
+    }
+    return parts.join(" · ");
+  }
 
   override readonly tssLabel = "TSS";
   override readonly tssSettingsHint =
@@ -211,6 +265,7 @@ class RunSportConfig extends SportConfig {
   override readonly heroThirdStat: "elevation" | "pace" = "pace";
 
   override readonly category = "running" as const;
+  override readonly color = "var(--sport-running)";
   override readonly hasPaceTSS = true;
 
   override readonly tssLabel = "rTSS";
@@ -269,6 +324,7 @@ class SwimSportConfig extends SportConfig {
   override readonly heroThirdStat: "elevation" | "pace" = "pace";
 
   override readonly category = "swimming" as const;
+  override readonly color = "var(--sport-swimming)";
   override readonly hasPaceTSS = true;
 
   override readonly tssLabel = "sTSS";

@@ -29,5 +29,8 @@ export function useActivitiesQuery(options?: UseActivitiesQueryOptions) {
     allTypes: result.data?.allTypes,
     allWorkoutTypes: result.data?.allWorkoutTypes,
     isLoading: result.isLoading,
+    isError: result.isError,
+    error: result.error,
+    refetch: result.refetch,
   };
 }

@@ -3,6 +3,7 @@ import * as React from "react";
 import {
   BarChart3Icon,
   BikeIcon,
+  CalendarDaysIcon,
   CalendarIcon,
   EllipsisIcon,
   ListIcon,
@@ -155,6 +156,13 @@ export function NavBar() {
           <TooltipIfMenuCollapsed label="Activities">
             <NavBarLink icon={ListIcon} label="Activities" href="/activities" />
           </TooltipIfMenuCollapsed>
+          <TooltipIfMenuCollapsed label="Journal">
+            <NavBarLink
+              icon={CalendarDaysIcon}
+              label="Journal"
+              href="/journal"
+            />
+          </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label="Heatmap">
             <NavBarLink icon={MapIcon} label="Heatmap" href="/heatmap" />
           </TooltipIfMenuCollapsed>
@@ -261,6 +269,14 @@ export function MobileBottomBar() {
       {moreOpen && (
         <div className="bg-popover border-border fixed right-2 bottom-16 z-50 rounded-xl border p-1 shadow-lg md:hidden">
           <Link
+            href="/records"
+            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
+            onClick={() => setMoreOpen(false)}
+          >
+            <TrophyIcon className="size-4" />
+            Personal bests
+          </Link>
+          <Link
             href="/periods"
             className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
             onClick={() => setMoreOpen(false)}
@@ -330,16 +346,16 @@ export function MobileBottomBar() {
       {/* Bottom tab bar */}
       <nav className="bg-sidebar border-sidebar-border fixed right-0 bottom-0 left-0 z-30 flex h-14 items-stretch border-t md:hidden">
         <MobileTabLink icon={ListIcon} label="Activities" href="/activities" />
+        <MobileTabLink
+          icon={CalendarDaysIcon}
+          label="Journal"
+          href="/journal"
+        />
         <MobileTabLink icon={MapIcon} label="Heatmap" href="/heatmap" />
         <MobileTabLink
           icon={BarChart3Icon}
           label="Statistics"
           href="/statistics"
-        />
-        <MobileTabLink
-          icon={TrophyIcon}
-          label="Personal bests"
-          href="/records"
         />
         <button
           className={cn(
