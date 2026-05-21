@@ -125,7 +125,7 @@ function DashboardMasterDetail({ stats, onDelete }: PeriodsDashboardProps) {
             <Button
               variant="outline"
               size="sm"
-              render={<Link href={`/periods/${selected.period.id}`} />}
+              render={<Link href={`/time-periods/${selected.period.id}`} />}
             >
               Open period
               <ArrowRightIcon className="size-4" />

@@ -204,7 +204,7 @@ export function PeriodSummaryCard({
       <div className="border-border flex items-start justify-between gap-2 border-b p-4">
         <div className="min-w-0">
           <Link
-            href={`/periods/${row.period.id}`}
+            href={`/time-periods/${row.period.id}`}
             className="text-foreground block truncate text-lg font-semibold after:absolute after:inset-0"
           >
             {row.period.name}

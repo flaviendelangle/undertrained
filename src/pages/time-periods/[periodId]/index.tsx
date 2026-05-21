@@ -100,7 +100,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
       <PageTitle title={period.name} />
       <Toolbar>
         <Link
-          href="/periods"
+          href="/time-periods"
           className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 items-center justify-center rounded-lg transition-colors"
         >
           <ArrowLeftIcon className="size-4" />
@@ -196,7 +196,7 @@ function DeletePeriodButton({
   const deleteMutation = trpc.timePeriods.delete.useMutation({
     onSuccess: () => {
       void utils.timePeriods.invalidate();
-      void router.push("/periods");
+      void router.push("/time-periods");
     },
   });
 

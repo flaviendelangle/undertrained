@@ -42,15 +42,15 @@ export const LoggedInLayout = (props: LoggedInLayoutProps) => {
       <ExplorerTilesProvider>
         <RiderSettingsProvider>
           <DismissedHintsProvider>
-          <ErgModeProvider>
-            <div className="flex h-screen">
-              <NavBar />
-              <main className="flex flex-1 flex-col overflow-hidden pb-14 md:pb-0">
-                {children}
-              </main>
-              <MobileBottomBar />
-            </div>
-          </ErgModeProvider>
+            <ErgModeProvider>
+              <div className="flex h-screen">
+                <NavBar />
+                <main className="flex flex-1 flex-col overflow-hidden pb-14 md:pb-0">
+                  {children}
+                </main>
+                <MobileBottomBar />
+              </div>
+            </ErgModeProvider>
           </DismissedHintsProvider>
         </RiderSettingsProvider>
       </ExplorerTilesProvider>

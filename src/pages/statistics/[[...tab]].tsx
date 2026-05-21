@@ -2,7 +2,6 @@ import * as React from "react";
 
 import { BarChart3Icon } from "lucide-react";
 import nextDynamic from "next/dynamic";
-import { useRouter } from "next/router";
 
 import { PageIntro } from "~/components/primitives/PageIntro";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
@@ -38,19 +37,6 @@ const EddingtonChart = nextDynamic(
 );
 
 const StatisticsPage: NextPageWithLayout = () => {
-  const router = useRouter();
-
-  // Redirect old /statistics/periods to /periods
-  React.useEffect(() => {
-    if (!router.isReady) return;
-    const rawTab = Array.isArray(router.query.tab)
-      ? router.query.tab[0]
-      : undefined;
-    if (rawTab === "periods") {
-      void router.replace("/periods");
-    }
-  }, [router]);
-
   return (
     <>
       <Toolbar>
@@ -58,7 +44,7 @@ const StatisticsPage: NextPageWithLayout = () => {
         <span className="font-semibold">Statistics</span>
       </Toolbar>
 
-      <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-3 sm:p-4 max-sm:px-0">
+      <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-3 max-sm:px-0 sm:p-4">
         <div className="flex w-full max-w-5xl flex-col gap-4">
           <PageIntro hintId="intro-statistics-charts">
             Training volume and intensity trends over time. Configure your rider

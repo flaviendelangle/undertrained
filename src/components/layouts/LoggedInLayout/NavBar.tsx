@@ -177,21 +177,21 @@ export function NavBar() {
             <NavBarLink
               icon={TrophyIcon}
               label="Personal bests"
-              href="/records"
+              href="/personal-bests"
             />
           </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label="Time Periods">
             <NavBarLink
               icon={CalendarIcon}
               label="Time Periods"
-              href="/periods"
+              href="/time-periods"
             />
           </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label="Live Training">
             <NavBarLink
               icon={PlayCircleIcon}
               label="Live Training"
-              href="/training-1"
+              href="/live-training"
             />
           </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label="Toolbox">
@@ -269,7 +269,7 @@ export function MobileBottomBar() {
       {moreOpen && (
         <div className="bg-popover border-border fixed right-2 bottom-16 z-50 rounded-xl border p-1 shadow-lg md:hidden">
           <Link
-            href="/records"
+            href="/personal-bests"
             className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
             onClick={() => setMoreOpen(false)}
           >
@@ -277,7 +277,7 @@ export function MobileBottomBar() {
             Personal bests
           </Link>
           <Link
-            href="/periods"
+            href="/time-periods"
             className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
             onClick={() => setMoreOpen(false)}
           >
@@ -304,7 +304,7 @@ export function MobileBottomBar() {
             Settings
           </Link>
           <Link
-            href="/training-1"
+            href="/live-training"
             className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
             onClick={() => setMoreOpen(false)}
           >

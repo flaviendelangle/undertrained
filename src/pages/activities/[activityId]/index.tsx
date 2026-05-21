@@ -40,7 +40,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   const router = useRouter();
   const backHref =
     router.query.from === "period" && router.query.periodId
-      ? `/periods/${String(router.query.periodId)}`
+      ? `/time-periods/${String(router.query.periodId)}`
       : router.query.from === "journal"
         ? "/journal"
         : "/activities";
