@@ -1,11 +1,40 @@
 import { useEffect, useState } from "react";
+import type { RefObject } from "react";
 
 import {
   useAxesTooltip,
+  useChartsLayerContainerRef,
   useDrawingArea,
-  useMouseTracker,
-  useSvgRef,
 } from "@mui/x-charts-pro";
+
+/**
+ * Tracks the pointer position (in viewport coordinates) over the chart container.
+ */
+function useMouseTracker(elementRef: RefObject<Element | null>) {
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+
+    const handleMove = (event: Event) => {
+      const { clientX, clientY } = event as PointerEvent;
+      setPosition({ x: clientX, y: clientY });
+    };
+    const handleLeave = () => setPosition(null);
+
+    element.addEventListener("pointermove", handleMove);
+    element.addEventListener("pointerleave", handleLeave);
+    return () => {
+      element.removeEventListener("pointermove", handleMove);
+      element.removeEventListener("pointerleave", handleLeave);
+    };
+  }, [elementRef]);
+
+  return position;
+}
 
 /**
  * Shared chart tooltip using the app's popover design tokens.
@@ -13,16 +42,16 @@ import {
  */
 export function ChartTooltip() {
   const tooltipData = useAxesTooltip();
-  const mousePosition = useMouseTracker();
   const drawingArea = useDrawingArea();
-  const svgRef = useSvgRef();
+  const containerRef = useChartsLayerContainerRef();
+  const mousePosition = useMouseTracker(containerRef);
 
   const [svgTop, setSvgTop] = useState(0);
   useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    setSvgTop(svg.getBoundingClientRect().top);
-  }, [svgRef, mousePosition]);
+    const container = containerRef.current;
+    if (!container) return;
+    setSvgTop(container.getBoundingClientRect().top);
+  }, [containerRef, mousePosition]);
 
   if (!tooltipData || !mousePosition) return null;
 

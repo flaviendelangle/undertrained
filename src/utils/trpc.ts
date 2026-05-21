@@ -19,7 +19,7 @@ function isUnauthorized(error: unknown): boolean {
 
 function handleUnauthorized() {
   if (typeof window !== "undefined") {
-    signOut({ callbackUrl: "/login" });
+    void signOut({ callbackUrl: "/login" });
   }
 }
 

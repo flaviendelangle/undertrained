@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import type { Activity } from "@server/db/types";
+import type { ListActivity } from "@server/db/types";
 
 export interface EddingtonDataPoint {
   n: number;
@@ -19,7 +19,7 @@ export interface EddingtonResult {
  * @param distanceDivisor - meters per unit (1000 for km steps, 100 for 100m steps)
  */
 export function useEddingtonData(
-  activities: Omit<Activity, "mapPolyline">[] | undefined,
+  activities: Omit<ListActivity, "mapPolyline">[] | undefined,
   distanceDivisor: number,
 ): EddingtonResult | null {
   return React.useMemo(() => {

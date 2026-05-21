@@ -2,13 +2,13 @@ import * as React from "react";
 
 import { isAfter } from "date-fns";
 
-import type { Activity } from "@server/db/types";
+import type { ListActivity } from "@server/db/types";
 
 import { startOf } from "~/utils/dateUtils";
 
 import { SlicePrecision } from "./useTimeSlices";
 
-type ActivityWithoutMap = Omit<Activity, "mapPolyline">;
+type ActivityWithoutMap = Omit<ListActivity, "mapPolyline">;
 
 export const useGroupActivitiesByTimeSlice = ({
   slices,

@@ -2,7 +2,7 @@ import * as React from "react";
 
 import {
   BarPlot,
-  ChartContainerPro,
+  ChartsContainerPro,
   ChartsXAxis,
   ChartsYAxis,
   LinePlot,
@@ -116,7 +116,7 @@ export function PowerHrChart(props: PowerHrChartProps) {
 
   return (
     <ChartThemeProvider>
-      <ChartContainerPro
+      <ChartsContainerPro
         series={series}
         xAxis={[
           {
@@ -150,7 +150,7 @@ export function PowerHrChart(props: PowerHrChartProps) {
         <ChartsXAxis axisId="x" />
         <ChartsYAxis axisId="power" />
         <ChartsYAxis axisId="hr" />
-      </ChartContainerPro>
+      </ChartsContainerPro>
     </ChartThemeProvider>
   );
 }

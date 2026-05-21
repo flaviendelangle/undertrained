@@ -43,12 +43,12 @@ export function RiderSettingsProvider({
   const utils = trpc.useUtils();
   const saveSettings = trpc.riderSettings.save.useMutation({
     onSuccess: () => {
-      utils.riderSettings.get.invalidate();
+      void utils.riderSettings.get.invalidate();
       // Scores are recomputed in the background — invalidate dependent queries
       // so they refetch once recomputation finishes.
-      utils.activities.list.invalidate();
-      utils.analytics.getPowerCurve.invalidate();
-      utils.analytics.getPowerCurveYears.invalidate();
+      void utils.activities.list.invalidate();
+      void utils.analytics.getPowerCurve.invalidate();
+      void utils.analytics.getPowerCurveYears.invalidate();
     },
   });
 

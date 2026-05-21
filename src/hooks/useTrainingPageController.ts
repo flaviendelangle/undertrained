@@ -1,3 +1,5 @@
+import { useTimeout } from "@base-ui/utils/useTimeout";
+import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAntHeartRate } from "~/hooks/useAntHeartRate";
@@ -47,31 +49,23 @@ export function useTrainingPageController() {
   // Live speed derived from the simulator (updated in the recording interval)
   const [currentSpeedMs, setCurrentSpeedMs] = useState(0);
 
-  // Refs for volatile data so the recording interval callback stays stable
-  const hrDataRef = useRef(hr.data);
-  const trainerDataRef = useRef(trainer.data);
-  const riderSettingsRef = useRef(riderSettings);
-  const elapsedRef = useRef(session.elapsedSeconds);
-  const ergEnabledRef = useRef(ergMode.ergEnabled);
-  const targetPowerRef = useRef(ergMode.targetPower);
-  const sessionRef = useRef(session);
-
-  // Keep refs in sync after each render
-  useEffect(() => {
-    hrDataRef.current = hr.data;
-    trainerDataRef.current = trainer.data;
-    riderSettingsRef.current = riderSettings;
-    elapsedRef.current = session.elapsedSeconds;
-    ergEnabledRef.current = ergMode.ergEnabled;
-    targetPowerRef.current = ergMode.targetPower;
-    sessionRef.current = session;
-  });
+  // Refs for volatile data so the recording interval callback stays stable.
+  // `useValueAsRef` keeps each `.current` in sync with the latest render value.
+  const hrDataRef = useValueAsRef(hr.data);
+  const trainerDataRef = useValueAsRef(trainer.data);
+  const riderSettingsRef = useValueAsRef(riderSettings);
+  const elapsedRef = useValueAsRef(session.elapsedSeconds);
+  const ergEnabledRef = useValueAsRef(ergMode.ergEnabled);
+  const targetPowerRef = useValueAsRef(ergMode.targetPower);
+  const sessionRef = useValueAsRef(session);
 
   // Speed simulator with inertia
   const speedSimRef = useRef(new SpeedSimulator());
 
   // Auto-start: detect sustained power while idle
-  const autoStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoStartTimeout = useTimeout();
+  // Debounces sending the ERG target power to the trainer
+  const ergSyncTimeout = useTimeout();
 
   // Recording interval
   const recordingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -114,7 +108,17 @@ export function useTrainingPageController() {
 
       setChartData([...getDataPoints()]);
     }, 1000);
-  }, [addDataPoint, getDataPoints, stopRecording]);
+  }, [
+    addDataPoint,
+    getDataPoints,
+    stopRecording,
+    elapsedRef,
+    ergEnabledRef,
+    hrDataRef,
+    riderSettingsRef,
+    targetPowerRef,
+    trainerDataRef,
+  ]);
 
   // Start/stop recording when session state changes
   useEffect(() => {
@@ -145,37 +149,39 @@ export function useTrainingPageController() {
   // Send target power to trainer when ERG is enabled and target changes
   useEffect(() => {
     if (!ergMode.ergEnabled || !trainer.supportsControl) return;
-    const timer = setTimeout(() => {
+    ergSyncTimeout.start(200, () => {
       setTargetPower(ergMode.targetPower).catch((err) => {
         console.error("[ERG] Failed to set target power:", err);
       });
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [ergMode.ergEnabled, ergMode.targetPower, trainer.supportsControl, setTargetPower]);
+    });
+    return ergSyncTimeout.clear;
+  }, [
+    ergSyncTimeout,
+    ergMode.ergEnabled,
+    ergMode.targetPower,
+    trainer.supportsControl,
+    setTargetPower,
+  ]);
 
   // Auto-start when power is detected while idle
   useEffect(() => {
     const power = trainer.data?.power ?? null;
     if (session.state !== "idle" || power == null || power <= 0) {
-      if (autoStartTimerRef.current) {
-        clearTimeout(autoStartTimerRef.current);
-        autoStartTimerRef.current = null;
-      }
+      autoStartTimeout.clear();
       return;
     }
 
-    if (!autoStartTimerRef.current) {
-      autoStartTimerRef.current = setTimeout(() => {
-        autoStartTimerRef.current = null;
+    if (!autoStartTimeout.isStarted()) {
+      autoStartTimeout.start(2000, () => {
         if (sessionRef.current.state === "idle") {
           recorder.clear();
           setChartData([]);
           speedSimRef.current.reset();
           sessionRef.current.start();
         }
-      }, 2000);
+      });
     }
-  }, [trainer.data?.power, session.state, recorder]);
+  }, [trainer.data?.power, session.state, recorder, sessionRef, autoStartTimeout]);
 
   // Current live values
   const currentPower = trainer.data?.power ?? null;

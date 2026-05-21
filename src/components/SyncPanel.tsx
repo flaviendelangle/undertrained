@@ -369,14 +369,14 @@ export function SyncPanel() {
   React.useEffect(() => {
     if (isInProgress) {
       wasSyncingRef.current = true;
-      utils.activities.list.invalidate();
+      void utils.activities.list.invalidate();
     } else if (wasSyncingRef.current) {
       wasSyncingRef.current = false;
-      utils.activities.list.invalidate();
-      utils.activities.get.invalidate();
-      utils.analytics.getPowerCurve.invalidate();
-      utils.analytics.getPowerCurveYears.invalidate();
-      utils.timePeriods.getStats.invalidate();
+      void utils.activities.list.invalidate();
+      void utils.activities.get.invalidate();
+      void utils.analytics.getPowerCurve.invalidate();
+      void utils.analytics.getPowerCurveYears.invalidate();
+      void utils.timePeriods.getStats.invalidate();
     }
   }, [syncJob, isInProgress, utils]);
 
@@ -404,6 +404,7 @@ export function SyncPanel() {
     <>
       <Popover>
         <PopoverTrigger
+          nativeButton={false}
           render={
             <div className="relative">
               {neverSynced && (

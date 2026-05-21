@@ -11,7 +11,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 
-import type { Activity } from "@server/db/types";
+import type { ListActivity } from "@server/db/types";
 
 import { useExplorerTiles } from "~/hooks/useExplorerTiles";
 import { useExplorerTilesToggle } from "~/hooks/useExplorerTilesToggle";
@@ -68,7 +68,7 @@ export default function Map(props: MapProps) {
   const { showExplorerTiles } = useExplorerTilesToggle();
 
   const [selectedActivity, setSelectedActivity] = React.useState<{
-    activity: Activity;
+    activity: ListActivity;
     position: { x: number; y: number };
   } | null>(null);
 
@@ -78,7 +78,7 @@ export default function Map(props: MapProps) {
     const result: {
       id: string;
       polyline: [number, number][];
-      activity: Activity;
+      activity: ListActivity;
     }[] = [];
     for (const activity of activities) {
       if (activity.mapPolyline) {
@@ -133,7 +133,7 @@ export default function Map(props: MapProps) {
                     click: (e) => {
                       const { clientX, clientY } = e.originalEvent;
                       setSelectedActivity({
-                        activity: (entry as { activity: Activity }).activity,
+                        activity: (entry as { activity: ListActivity }).activity,
                         position: { x: clientX, y: clientY },
                       });
                     },
@@ -179,7 +179,7 @@ export default function Map(props: MapProps) {
 }
 
 interface MapProps {
-  activities: Activity[] | null;
+  activities: ListActivity[] | null;
   enableExplorerTiles?: boolean;
   highlightPosition?: [number, number] | null;
   routePositions?: [number, number][] | null;

@@ -47,7 +47,7 @@ export function tileToBounds(
 
 type TileKey = string;
 
-function tileKey(tx: number, ty: number): TileKey {
+export function tileKey(tx: number, ty: number): TileKey {
   return `${tx},${ty}`;
 }
 
@@ -388,4 +388,97 @@ export function computeExplorerTiles(
       clusterCount: components.length,
     },
   };
+}
+
+// --- Spatial index for fast viewport queries ---
+
+/**
+ * Number of bits to shift a tile coordinate to get its super-cell coordinate.
+ * Each super-cell groups a (2^shift) x (2^shift) block of zoom-14 tiles
+ * (64 x 64 here), so a viewport query iterates only the buckets it overlaps
+ * instead of scanning every tile.
+ */
+export const SUPER_CELL_SHIFT = 6;
+
+/** An inclusive tile-coordinate rectangle, in zoom-14 tile units. */
+export interface TileRange {
+  minTx: number;
+  maxTx: number;
+  minTy: number;
+  maxTy: number;
+}
+
+/** Tiles bucketed by super-cell for O(visible) viewport queries. */
+export interface TileIndex {
+  buckets: Map<string, ClassifiedTile[]>;
+  shift: number;
+}
+
+/** Group tiles into a super-cell bucket grid for fast viewport queries. */
+export function buildTileIndex(
+  tiles: ClassifiedTile[],
+  shift: number = SUPER_CELL_SHIFT,
+): TileIndex {
+  const buckets = new Map<string, ClassifiedTile[]>();
+  for (const tile of tiles) {
+    const key = tileKey(tile.tx >> shift, tile.ty >> shift);
+    const bucket = buckets.get(key);
+    if (bucket) {
+      bucket.push(tile);
+    } else {
+      buckets.set(key, [tile]);
+    }
+  }
+  return { buckets, shift };
+}
+
+/** Whether a tile falls inside an inclusive tile range. */
+export function isTileInRange(
+  tx: number,
+  ty: number,
+  range: TileRange,
+): boolean {
+  return (
+    tx >= range.minTx &&
+    tx <= range.maxTx &&
+    ty >= range.minTy &&
+    ty <= range.maxTy
+  );
+}
+
+/**
+ * Invoke `cb` for every indexed tile inside `range`. Iterates only the
+ * super-cells the range overlaps, except when the range spans more super-cells
+ * than the index contains (zoomed far out) — then it walks every bucket
+ * directly, which is never worse than a full scan.
+ */
+export function forEachVisibleTile(
+  index: TileIndex,
+  range: TileRange,
+  cb: (tile: ClassifiedTile) => void,
+): void {
+  const { buckets, shift } = index;
+  const minSx = range.minTx >> shift;
+  const maxSx = range.maxTx >> shift;
+  const minSy = range.minTy >> shift;
+  const maxSy = range.maxTy >> shift;
+  const spanCount = (maxSx - minSx + 1) * (maxSy - minSy + 1);
+
+  const visit = (bucket: ClassifiedTile[]) => {
+    for (const tile of bucket) {
+      if (isTileInRange(tile.tx, tile.ty, range)) cb(tile);
+    }
+  };
+
+  if (spanCount >= buckets.size) {
+    for (const bucket of buckets.values()) visit(bucket);
+    return;
+  }
+
+  for (let sx = minSx; sx <= maxSx; sx++) {
+    for (let sy = minSy; sy <= maxSy; sy++) {
+      const bucket = buckets.get(tileKey(sx, sy));
+      if (bucket) visit(bucket);
+    }
+  }
 }

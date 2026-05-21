@@ -38,7 +38,7 @@ const ActivityPage: NextPageWithLayout = () => {
 function ActivityPageContent({ stravaId }: { stravaId: number }) {
   const router = useRouter();
   const backHref = router.query.from === "period" && router.query.periodId
-    ? `/periods/${router.query.periodId}`
+    ? `/periods/${String(router.query.periodId)}`
     : "/activities";
 
   const [hoverPosition, setHoverPosition] = React.useState<

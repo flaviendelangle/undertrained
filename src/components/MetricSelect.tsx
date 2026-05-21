@@ -1,4 +1,4 @@
-import type { Activity } from "@server/db/types";
+import type { ListActivity } from "@server/db/types";
 
 import type { LoadAlgorithmPreferences } from "~/utils/getActivityLoad";
 import { getActivityLoad } from "~/utils/getActivityLoad";
@@ -61,7 +61,7 @@ export interface MetricConfig {
   label: string;
   unit: string;
   getValue: (
-    activity: Omit<Activity, "mapPolyline">,
+    activity: Omit<ListActivity, "mapPolyline">,
     context?: MetricContext,
   ) => number;
 }

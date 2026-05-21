@@ -19,6 +19,34 @@ function writeToStorage(ids: Set<string>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
 }
 
+// Back the dismissed-hints set with an external store so it can be read
+// SSR-safely via useSyncExternalStore (no setState-in-effect for hydration).
+const EMPTY_SET: ReadonlySet<string> = new Set();
+let snapshot: ReadonlySet<string> | null = null;
+const listeners = new Set<() => void>();
+
+function getSnapshot(): ReadonlySet<string> {
+  snapshot ??= readFromStorage();
+  return snapshot;
+}
+
+function getServerSnapshot(): ReadonlySet<string> {
+  return EMPTY_SET;
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function updateSnapshot(next: Set<string>) {
+  snapshot = next;
+  writeToStorage(next);
+  listeners.forEach((listener) => listener());
+}
+
 interface DismissedHintsContextValue {
   isDismissed: (id: string) => boolean;
   dismiss: (id: string) => void;
@@ -27,8 +55,12 @@ interface DismissedHintsContextValue {
 
 const DismissedHintsContext = React.createContext<DismissedHintsContextValue>({
   isDismissed: () => false,
-  dismiss: () => {},
-  resetAll: () => {},
+  dismiss: () => {
+    /* no-op default; real implementation provided by the provider */
+  },
+  resetAll: () => {
+    /* no-op default; real implementation provided by the provider */
+  },
 });
 
 export function DismissedHintsProvider({
@@ -36,12 +68,11 @@ export function DismissedHintsProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
-
-  // Hydrate from localStorage after mount (SSR-safe)
-  React.useEffect(() => {
-    setDismissed(readFromStorage());
-  }, []);
+  const dismissed = React.useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot,
+  );
 
   const isDismissed = React.useCallback(
     (id: string) => dismissed.has(id),
@@ -49,17 +80,13 @@ export function DismissedHintsProvider({
   );
 
   const dismiss = React.useCallback((id: string) => {
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      writeToStorage(next);
-      return next;
-    });
+    const next = new Set(getSnapshot());
+    next.add(id);
+    updateSnapshot(next);
   }, []);
 
   const resetAll = React.useCallback(() => {
-    setDismissed(new Set());
-    writeToStorage(new Set());
+    updateSnapshot(new Set());
   }, []);
 
   const value = React.useMemo(

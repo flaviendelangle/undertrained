@@ -29,15 +29,14 @@ export function generateFitFile(
   // Record messages (one per second)
   for (const point of dataPoints) {
     const recordTime = new Date(point.timestamp);
-    const record: Record<string, number | undefined> = {
+    const record = {
       timestamp: writer.time(recordTime),
+      distance: point.distance,
+      ...(point.heartRate != null && { heart_rate: point.heartRate }),
+      ...(point.power != null && { power: point.power }),
+      ...(point.cadence != null && { cadence: Math.round(point.cadence) }),
+      ...(point.speed != null && { speed: point.speed }),
     };
-
-    if (point.heartRate != null) record.heart_rate = point.heartRate;
-    if (point.power != null) record.power = point.power;
-    if (point.cadence != null) record.cadence = Math.round(point.cadence);
-    if (point.speed != null) record.speed = point.speed;
-    record.distance = point.distance;
 
     writer.writeMessage("record", record);
   }
@@ -53,51 +52,54 @@ export function generateFitFile(
   });
 
   // Lap message
-  const lapRecord: Record<string, number | string | undefined> = {
+  const lapRecord = {
     timestamp: writer.time(endTime),
     start_time: writer.time(startTime),
     total_elapsed_time: summary.elapsedSeconds,
     total_timer_time: summary.elapsedSeconds,
     total_distance: summary.totalDistance,
-    message_index: 0,
+    message_index: { value: 0 },
+    ...(summary.avgPower != null && { avg_power: summary.avgPower }),
+    ...(summary.maxPower != null && { max_power: summary.maxPower }),
+    ...(summary.avgHeartRate != null && {
+      avg_heart_rate: summary.avgHeartRate,
+    }),
+    ...(summary.maxHeartRate != null && {
+      max_heart_rate: summary.maxHeartRate,
+    }),
+    ...(summary.avgCadence != null && { avg_cadence: summary.avgCadence }),
+    ...(summary.maxCadence != null && { max_cadence: summary.maxCadence }),
   };
-  if (summary.avgPower != null) lapRecord.avg_power = summary.avgPower;
-  if (summary.maxPower != null) lapRecord.max_power = summary.maxPower;
-  if (summary.avgHeartRate != null)
-    lapRecord.avg_heart_rate = summary.avgHeartRate;
-  if (summary.maxHeartRate != null)
-    lapRecord.max_heart_rate = summary.maxHeartRate;
-  if (summary.avgCadence != null) lapRecord.avg_cadence = summary.avgCadence;
-  if (summary.maxCadence != null) lapRecord.max_cadence = summary.maxCadence;
   writer.writeMessage("lap", lapRecord);
 
   // Session message
-  const sessionRecord: Record<string, number | string | undefined> = {
+  const sessionRecord = {
     timestamp: writer.time(endTime),
     start_time: writer.time(startTime),
     total_elapsed_time: summary.elapsedSeconds,
     total_timer_time: summary.elapsedSeconds,
     total_distance: summary.totalDistance,
-    sport: "cycling",
-    sub_sport: "indoor_cycling",
-    message_index: 0,
+    sport: "cycling" as const,
+    sub_sport: "indoor_cycling" as const,
+    message_index: { value: 0 },
     first_lap_index: 0,
     num_laps: 1,
+    ...(summary.avgPower != null && { avg_power: summary.avgPower }),
+    ...(summary.maxPower != null && { max_power: summary.maxPower }),
+    ...(summary.normalizedPower != null && {
+      normalized_power: summary.normalizedPower,
+    }),
+    ...(summary.avgHeartRate != null && {
+      avg_heart_rate: summary.avgHeartRate,
+    }),
+    ...(summary.maxHeartRate != null && {
+      max_heart_rate: summary.maxHeartRate,
+    }),
+    ...(summary.avgCadence != null && { avg_cadence: summary.avgCadence }),
+    ...(summary.maxCadence != null && { max_cadence: summary.maxCadence }),
+    ...(summary.avgSpeed != null && { avg_speed: summary.avgSpeed }),
+    ...(summary.maxSpeed != null && { max_speed: summary.maxSpeed }),
   };
-  if (summary.avgPower != null) sessionRecord.avg_power = summary.avgPower;
-  if (summary.maxPower != null) sessionRecord.max_power = summary.maxPower;
-  if (summary.normalizedPower != null)
-    sessionRecord.normalized_power = summary.normalizedPower;
-  if (summary.avgHeartRate != null)
-    sessionRecord.avg_heart_rate = summary.avgHeartRate;
-  if (summary.maxHeartRate != null)
-    sessionRecord.max_heart_rate = summary.maxHeartRate;
-  if (summary.avgCadence != null)
-    sessionRecord.avg_cadence = summary.avgCadence;
-  if (summary.maxCadence != null)
-    sessionRecord.max_cadence = summary.maxCadence;
-  if (summary.avgSpeed != null) sessionRecord.avg_speed = summary.avgSpeed;
-  if (summary.maxSpeed != null) sessionRecord.max_speed = summary.maxSpeed;
   writer.writeMessage("session", sessionRecord);
 
   // Activity message

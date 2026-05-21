@@ -101,7 +101,7 @@ function releaseStick(): void {
   stickRefCount--;
   if (stickRefCount <= 0) {
     log("All sensors disconnected, closing stick");
-    sharedStick?.close();
+    void sharedStick?.close();
     sharedStick = null;
     stickReady = false;
     stickReadyPromise = null;

@@ -2,10 +2,10 @@ import * as React from "react";
 
 import { isAfter, isBefore } from "date-fns";
 
-import type { Activity } from "@server/db/types";
+import type { ListActivity } from "@server/db/types";
 
 export const useActivitiesTimeBoundaries = (
-  activities?: Omit<Activity, "mapPolyline">[],
+  activities?: Omit<ListActivity, "mapPolyline">[],
 ) =>
   React.useMemo(() => {
     let oldestActivityDate: Date | null = null;

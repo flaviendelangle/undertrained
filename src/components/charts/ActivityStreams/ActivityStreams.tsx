@@ -1,3 +1,4 @@
+import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 import * as React from "react";
 
 import { FeatureHint } from "~/components/primitives/FeatureHint";
@@ -71,8 +72,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
     stravaId,
   });
   const fetchStreams = trpc.activityStreams.fetchStreams.useMutation();
-  const fetchStreamsRef = React.useRef(fetchStreams);
-  fetchStreamsRef.current = fetchStreams;
+  const fetchStreamsRef = useValueAsRef(fetchStreams);
   const [isFetching, setIsFetching] = React.useState(false);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
   const hasFetched = React.useRef(false);
@@ -88,7 +88,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
         .catch((err: unknown) => setFetchError(String(err)))
         .finally(() => setIsFetching(false));
     }
-  }, [streamsData, athleteId, stravaId]);
+  }, [streamsData, athleteId, stravaId, fetchStreamsRef]);
 
   const latlngData = React.useMemo(() => {
     if (!streamsData) return null;
@@ -117,7 +117,9 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
   const parsedStreams = React.useMemo(() => {
     if (!streamsData) return null;
 
-    const distanceStream = streamsData.find((s) => s.type === "distance");
+    const streamsByType = new Map(streamsData.map((s) => [s.type, s]));
+
+    const distanceStream = streamsByType.get("distance");
     const distanceData = distanceStream
       ? parseStreamData(distanceStream.data)
       : null;
@@ -127,7 +129,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
       : STREAM_DEFS;
 
     const parsed = defs.map((def) => {
-      const stream = streamsData.find((element) => element.type === def.type);
+      const stream = streamsByType.get(def.type);
       if (!stream) return null;
 
       const yData = parseStreamData(stream.data);

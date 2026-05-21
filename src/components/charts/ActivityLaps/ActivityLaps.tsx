@@ -1,7 +1,7 @@
 import * as React from "react";
 
 import {
-  ChartContainerPro,
+  ChartsContainerPro,
   ChartsGrid,
   ChartsXAxis,
   ChartsYAxis,
@@ -163,7 +163,7 @@ export default function ActivityLaps(props: ActivityLapsProps) {
           </FeatureHint>
         </div>
         <div className="relative min-h-0 flex-1">
-          <ChartContainerPro
+          <ChartsContainerPro
             series={[]}
             margin={
               isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
@@ -198,7 +198,7 @@ export default function ActivityLaps(props: ActivityLapsProps) {
               axisId={Y_AXIS_ID}
               label={isMobile ? undefined : valueLabel}
             />
-          </ChartContainerPro>
+          </ChartsContainerPro>
           {hover && <LapTooltip hover={hover} />}
         </div>
       </div>

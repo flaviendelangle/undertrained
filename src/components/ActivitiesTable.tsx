@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
 import Link from "next/link";
 
-import type { Activity } from "@server/db/types";
+import type { ListActivity } from "@server/db/types";
 import {
   type Row,
   type RowData,
@@ -31,7 +31,7 @@ import { formatActivityType, formatDuration } from "~/utils/format";
 import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
 import { getSportConfig } from "~/utils/sportConfig";
 
-type ActivityWithoutMap = Omit<Activity, "mapPolyline"> & { load: number | null };
+type ActivityWithoutMap = Omit<ListActivity, "mapPolyline"> & { load: number | null };
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

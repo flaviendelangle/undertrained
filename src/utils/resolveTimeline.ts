@@ -12,7 +12,8 @@ export function resolveTimeline<T extends object>(
   const result = { ...initialValues } as T;
   for (const change of changes) {
     if (change.date > targetDate) break;
-    for (const key of Object.keys(initialValues) as (keyof T)[]) {
+    for (const key of Object.keys(change) as (keyof T | "date")[]) {
+      if (key === "date") continue;
       if (change[key] !== undefined) {
         result[key] = change[key] as T[keyof T];
       }

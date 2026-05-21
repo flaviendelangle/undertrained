@@ -37,9 +37,12 @@ export function useFitnessData(): UseFitnessDataResult {
     return computeFitnessSeries(activitiesQuery.data, preferences);
   }, [activitiesQuery.data, preferences]);
 
-  return {
-    series,
-    current: series.length > 0 ? series[series.length - 1] : null,
-    isLoading: activitiesQuery.isLoading,
-  };
+  return React.useMemo(
+    () => ({
+      series,
+      current: series.length > 0 ? series[series.length - 1] : null,
+      isLoading: activitiesQuery.isLoading,
+    }),
+    [series, activitiesQuery.isLoading],
+  );
 }

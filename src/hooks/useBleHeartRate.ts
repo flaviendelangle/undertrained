@@ -54,7 +54,7 @@ export function useBleHeartRate() {
   useEffect(() => {
     const connection = connectionRef.current;
     return () => {
-      connection.disconnect();
+      void connection.disconnect();
     };
   }, []);
 

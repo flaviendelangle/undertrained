@@ -14,6 +14,7 @@ import {
   SettingsIcon,
   ShieldCheckIcon,
   SunIcon,
+  TrophyIcon,
   WrenchIcon,
   XIcon,
 } from "lucide-react";
@@ -164,6 +165,13 @@ export function NavBar() {
               href="/statistics"
             />
           </TooltipIfMenuCollapsed>
+          <TooltipIfMenuCollapsed label="Personal bests">
+            <NavBarLink
+              icon={TrophyIcon}
+              label="Personal bests"
+              href="/records"
+            />
+          </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label="Periods">
             <NavBarLink
               icon={CalendarIcon}
@@ -252,6 +260,14 @@ export function MobileBottomBar() {
       )}
       {moreOpen && (
         <div className="bg-popover border-border fixed right-2 bottom-16 z-50 rounded-xl border p-1 shadow-lg md:hidden">
+          <Link
+            href="/records"
+            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
+            onClick={() => setMoreOpen(false)}
+          >
+            <TrophyIcon className="size-4" />
+            Personal bests
+          </Link>
           <Link
             href="/periods"
             className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"

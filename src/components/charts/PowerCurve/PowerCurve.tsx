@@ -193,7 +193,7 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
       return {
         xData: [] as number[],
         series: [] as PowerCurveSeriesData[],
-        activityMetadata: {} as ActivityMetadataMap,
+        activityMetadata: {},
       };
     }
 
@@ -351,7 +351,7 @@ function AggregatedPowerCurve({ activityTypes, workoutTypes: workoutTypesProp, d
       return {
         xData: [] as number[],
         series: [] as PowerCurveSeriesData[],
-        activityMetadata: {} as ActivityMetadataMap,
+        activityMetadata: {},
       };
     }
 

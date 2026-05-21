@@ -1,3 +1,4 @@
+import { useTimeout } from "@base-ui/utils/useTimeout";
 import { useState } from "react";
 
 import { useAthleteId } from "~/hooks/useAthleteId";
@@ -27,6 +28,8 @@ export function ExportPanel(props: ExportPanelProps) {
   >("idle");
   const [activityId, setActivityId] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Cancels the pending poll delay if the component unmounts mid-upload.
+  const pollTimeout = useTimeout();
 
   const handleDownloadFit = () => {
     const buffer = generateFitFile(dataPoints, summary);
@@ -64,7 +67,9 @@ export function ExportPanel(props: ExportPanelProps) {
       const uploadId = result.uploadId;
       let attempts = 0;
       while (attempts < MAX_UPLOAD_POLL_ATTEMPTS) {
-        await new Promise((r) => setTimeout(r, UPLOAD_POLL_INTERVAL_MS));
+        await new Promise<void>((resolve) =>
+          pollTimeout.start(UPLOAD_POLL_INTERVAL_MS, resolve),
+        );
         const status = await checkStatusAction.mutateAsync({
           athleteId,
           uploadId,

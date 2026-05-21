@@ -51,10 +51,23 @@ export const activitiesRouter = router({
         .where(and(eq(activities.athlete, input.athleteId), isNotNull(activities.workoutType)))
         .then((rows) => rows.map((r) => r.workoutType!).sort((a, b) => a - b));
 
+      // Omit the heavy jsonb columns (and mapPolyline unless requested) from the
+      // list projection — none of the list consumers read them, so shipping them
+      // wastes Postgres deserialization, wire, and client parsing on every load.
+      // Use `activities.get` when those columns are needed.
+      const {
+        powerBests: _powerBests,
+        heartrateBests: _heartrateBests,
+        speedEfforts: _speedEfforts,
+        laps: _laps,
+        mapPolyline: _mapPolyline,
+        ...leanColumns
+      } = getTableColumns(activities);
+
       if (input.includeMap) {
         const [filtered, allTypes, allWorkoutTypes] = await Promise.all([
           ctx.db
-            .select()
+            .select({ ...leanColumns, mapPolyline: activities.mapPolyline })
             .from(activities)
             .where(and(...conditions))
             .orderBy(desc(activities.startDate)),
@@ -64,13 +77,9 @@ export const activitiesRouter = router({
         return { activities: filtered, allTypes, allWorkoutTypes };
       }
 
-      // Exclude mapPolyline at query level when not needed
-      const { mapPolyline: _mapPolyline, ...columnsWithoutMap } =
-        getTableColumns(activities);
-
       const [filtered, allTypes, allWorkoutTypes] = await Promise.all([
         ctx.db
-          .select(columnsWithoutMap)
+          .select(leanColumns)
           .from(activities)
           .where(and(...conditions))
           .orderBy(desc(activities.startDate)),

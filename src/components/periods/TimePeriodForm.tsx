@@ -41,7 +41,11 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
     sportTypes: period?.sportTypes ?? [],
   }));
 
-  React.useEffect(() => {
+  // Re-sync the form when editing a different period (during render rather than
+  // in an effect, to avoid an extra render pass).
+  const [prevPeriod, setPrevPeriod] = React.useState(period);
+  if (period !== prevPeriod) {
+    setPrevPeriod(period);
     if (period) {
       setForm({
         name: period.name,
@@ -50,11 +54,12 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
         sportTypes: period.sportTypes ?? [],
       });
     }
-  }, [period]);
+  }
 
   const createMutation = trpc.timePeriods.create.useMutation({
     onSuccess: () => {
-      utils.timePeriods.invalidate();
+      // Fire-and-forget: refresh the lists without blocking the form reset/close.
+      void utils.timePeriods.invalidate();
       setForm({ name: "", startDate: "", endDate: "", sportTypes: [] });
       onSuccess?.();
     },
@@ -62,8 +67,9 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
 
   const updateMutation = trpc.timePeriods.update.useMutation({
     onSuccess: () => {
-      utils.timePeriods.invalidate();
-      utils.activities.list.invalidate();
+      // Fire-and-forget: refresh the lists without blocking the form close.
+      void utils.timePeriods.invalidate();
+      void utils.activities.list.invalidate();
       onSuccess?.();
     },
   });
@@ -175,7 +181,11 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
           }
         >
           {period ? (
-            isSubmitting ? "Saving..." : "Update"
+            isSubmitting ? (
+              "Saving..."
+            ) : (
+              "Update"
+            )
           ) : (
             <>
               <PlusIcon className="size-4" />

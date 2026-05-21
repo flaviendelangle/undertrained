@@ -136,7 +136,11 @@ function TimePeriodDialog({
     sportTypes: [],
   });
 
-  React.useEffect(() => {
+  // Populate the form when the dialog opens or targets a different period
+  // (during render rather than in an effect, to avoid an extra render pass).
+  const [prevState, setPrevState] = React.useState({ open, period });
+  if (prevState.open !== open || prevState.period !== period) {
+    setPrevState({ open, period });
     if (open && period) {
       setForm({
         name: period.name,
@@ -147,17 +151,17 @@ function TimePeriodDialog({
     } else if (open) {
       setForm({ name: "", startDate: "", endDate: "", sportTypes: [] });
     }
-  }, [open, period]);
+  }
 
   const createMutation = trpc.timePeriods.create.useMutation({
     onSuccess: () => {
-      utils.timePeriods.invalidate();
+      void utils.timePeriods.invalidate();
       setOpen(false);
     },
   });
   const updateMutation = trpc.timePeriods.update.useMutation({
     onSuccess: () => {
-      utils.timePeriods.invalidate();
+      void utils.timePeriods.invalidate();
       setOpen(false);
     },
   });

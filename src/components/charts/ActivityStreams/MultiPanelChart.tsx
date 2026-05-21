@@ -75,6 +75,14 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   const [zoomDomain, setZoomDomain] = React.useState<[number, number] | null>(
     null,
   );
+  // Reset the zoom when the x-axis unit changes (time↔distance) or a different
+  // activity's streams load, so a stale domain is never applied. Done during
+  // render (rather than in an effect) so the reset domain is used immediately.
+  const [zoomResetKey, setZoomResetKey] = React.useState({ xAxisMode, streams });
+  if (zoomResetKey.xAxisMode !== xAxisMode || zoomResetKey.streams !== streams) {
+    setZoomResetKey({ xAxisMode, streams });
+    setZoomDomain(null);
+  }
   // Drag selection, in pixel-x within the drawing area.
   const [dragStart, setDragStart] = React.useState<number | null>(null);
   const [dragCurrent, setDragCurrent] = React.useState<number | null>(null);
@@ -154,12 +162,6 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     () => scaleLinear().domain(domain).range([0, drawingWidth]),
     [domain, drawingWidth],
   );
-
-  // Reset the zoom when the x-axis unit changes (time↔distance) or a different
-  // activity's streams load, so a stale domain is never applied.
-  React.useEffect(() => {
-    setZoomDomain(null);
-  }, [xAxisMode, streams]);
 
   // Y-scales per panel
   const yScales = React.useMemo(

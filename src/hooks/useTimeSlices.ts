@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { isAfter, isBefore } from "date-fns";
 
-import type { Activity } from "@server/db/types";
+import type { ListActivity } from "@server/db/types";
 
 import { addUnit, endOf, startOf } from "~/utils/dateUtils";
 
@@ -16,7 +16,7 @@ export const useTimeSlices = ({
   minDate,
 }: {
   precision: SlicePrecision;
-  activities: Omit<Activity, "mapPolyline">[] | undefined;
+  activities: Omit<ListActivity, "mapPolyline">[] | undefined;
   minDate?: Date | null;
 }) => {
   const boundaries = useActivitiesTimeBoundaries(activities);

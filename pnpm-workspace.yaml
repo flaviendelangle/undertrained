@@ -1,3 +1,7 @@
+# Ignore any package version published less than 24h ago, as a safeguard
+# against compromised releases that get yanked shortly after publishing.
+minimumReleaseAge: 1440
+
 onlyBuiltDependencies:
   - esbuild
   - sharp

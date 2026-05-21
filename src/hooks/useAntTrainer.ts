@@ -38,7 +38,7 @@ export function useAntTrainer() {
   useEffect(() => {
     const connection = connectionRef.current;
     return () => {
-      connection.disconnect();
+      void connection.disconnect();
     };
   }, []);
 
