@@ -140,7 +140,7 @@ export default function ActivitiesTimeline() {
 
   return (
     <ChartThemeProvider>
-      <div className="bg-card flex h-96 w-full flex-col rounded-md">
+      <div className="bg-card flex h-96 w-full flex-col rounded-sm">
         <div className="border-border flex items-center gap-2 border-b p-4">
           <h3 className="shrink-0 text-lg font-semibold">Activities Timeline</h3>
 

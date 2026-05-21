@@ -63,6 +63,14 @@
     opacity: 0;
   }
 }
+@keyframes indeterminate-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
 
 @utility animate-breathe {
   animation: breathe 3s ease-in-out infinite;
@@ -72,6 +80,9 @@
 }
 @utility animate-ripple {
   animation: ripple 1.5s ease-out infinite;
+}
+@utility animate-indeterminate-progress {
+  animation: indeterminate-progress 1.2s ease-in-out infinite;
 }
 
 @theme inline {

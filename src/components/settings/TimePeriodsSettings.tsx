@@ -32,9 +32,9 @@ export function TimePeriodsSettings() {
   });
 
   return (
-    <div className="flex flex-1 flex-col items-center overflow-y-auto p-4 sm:p-6">
+    <div className="flex flex-1 flex-col items-center overflow-y-auto p-4 sm:p-6 max-sm:px-0">
       <div className="flex w-full max-w-5xl flex-col gap-4 sm:gap-6">
-      <section className="border-border bg-card rounded-xl border p-5">
+      <section className="border-border bg-card rounded-sm border max-sm:border-0 p-5">
         <CardTitle
           className="mb-4"
           tooltip="Time periods let you define custom date ranges (e.g. a training block or race season) to quickly filter activities and view aggregated statistics for that period."

@@ -328,7 +328,7 @@ function ZoneCalculatorInner({
   return (
     <>
       {/* Input Card */}
-      <div className="bg-card rounded-xl border p-4 md:p-6">
+      <div className="bg-card rounded-sm border max-sm:border-0 p-4 md:p-6">
         {/* Tab toggle */}
         <div className="mb-4 flex flex-wrap gap-1.5">
           <Button
@@ -513,7 +513,7 @@ function PowerZonesTable({
   const showWkg = weightKg != null && weightKg > 0;
 
   return (
-    <div className="bg-card rounded-xl border">
+    <div className="bg-card rounded-sm border max-sm:border-0">
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
         <h2 className="text-foreground text-lg font-semibold">
           Power Zones (Coggan)
@@ -593,7 +593,7 @@ function HrZonesTable({
   const hrReserve = maxHr - restingHr;
 
   return (
-    <div className="bg-card rounded-xl border">
+    <div className="bg-card rounded-sm border max-sm:border-0">
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
         <h2 className="text-foreground text-lg font-semibold">
           Heart Rate Zones (Karvonen)
@@ -651,7 +651,7 @@ function RunningPaceZonesTable({ vdot }: { vdot: number }) {
   const zones = React.useMemo(() => computeRunningZones(vdot), [vdot]);
 
   return (
-    <div className="bg-card rounded-xl border">
+    <div className="bg-card rounded-sm border max-sm:border-0">
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
         <h2 className="text-foreground text-lg font-semibold">
           Running Pace Zones (Daniels)

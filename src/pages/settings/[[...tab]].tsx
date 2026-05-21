@@ -55,9 +55,9 @@ const SettingsPage: NextPageWithLayout = () => {
         <span className="font-semibold">Settings</span>
       </Toolbar>
 
-      <div className="flex flex-1 flex-col items-center overflow-y-auto p-4 sm:p-6">
+      <div className="flex flex-1 flex-col items-center overflow-y-auto p-4 sm:p-6 max-sm:px-0">
         <div className="flex w-full max-w-5xl flex-col gap-4 sm:gap-6">
-          <section className="border-border bg-card rounded-xl border p-5">
+          <section className="border-border bg-card rounded-sm border max-sm:border-0 p-5">
             <ChangePointsTimeline
               timeline={timeline}
               onTimelineChange={setTimeline}
@@ -65,14 +65,14 @@ const SettingsPage: NextPageWithLayout = () => {
             />
           </section>
 
-          <section className="border-border bg-card rounded-xl border p-5">
+          <section className="border-border bg-card rounded-sm border max-sm:border-0 p-5">
             <EquipmentFields
               timeline={timeline}
               setTimeline={setTimeline}
             />
           </section>
 
-          <section className="border-border bg-card rounded-xl border p-5">
+          <section className="border-border bg-card rounded-sm border max-sm:border-0 p-5">
             <CardTitle
               tooltip="TSS uses power data (most accurate for cycling with a power meter). HRSS uses heart rate (works for any sport with an HR monitor). rTSS/sTSS use pace (good for running/swimming without power)."
               description="Choose which training load metric to display for each sport category."
@@ -86,7 +86,7 @@ const SettingsPage: NextPageWithLayout = () => {
             />
           </section>
 
-          <section className="border-border bg-card rounded-xl border p-5">
+          <section className="border-border bg-card rounded-sm border max-sm:border-0 p-5">
             <CardTitle
               description="Manage app preferences and onboarding hints."
             >

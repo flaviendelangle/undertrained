@@ -138,7 +138,7 @@ export function GearCalculator() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       {/* Input Card */}
-      <div className="bg-card rounded-xl border p-4 md:p-6">
+      <div className="bg-card rounded-sm border max-sm:border-0 p-4 md:p-6">
         <div className="flex flex-col gap-5">
           {/* Chainrings */}
           <div>
@@ -238,7 +238,7 @@ export function GearCalculator() {
 
       {/* View tabs + Table */}
       {rings.length > 0 && cogs.length > 0 && (
-        <div className="bg-card rounded-xl border">
+        <div className="bg-card rounded-sm border max-sm:border-0">
           <div className="flex items-center gap-1.5 px-4 pt-4 md:px-6 md:pt-6">
             <Button
               variant={viewTab === "ratio" ? "default" : "outline"}

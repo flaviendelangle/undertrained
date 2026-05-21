@@ -58,7 +58,7 @@ const StatisticsPage: NextPageWithLayout = () => {
         <span className="font-semibold">Statistics</span>
       </Toolbar>
 
-      <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-3 sm:p-4">
+      <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-3 sm:p-4 max-sm:px-0">
         <div className="flex w-full max-w-5xl flex-col gap-4">
           <PageIntro hintId="intro-statistics-charts">
             Training volume and intensity trends over time. Configure your rider

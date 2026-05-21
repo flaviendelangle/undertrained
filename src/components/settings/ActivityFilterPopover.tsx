@@ -10,7 +10,14 @@ import { useActivityFilter } from "~/hooks/useActivityFilter";
 
 import { ActivityFilterPanel } from "./ActivityFilterPanel";
 
-export function ActivityFilterPopover() {
+export function ActivityFilterPopover({
+  search,
+  onSearchChange,
+}: {
+  /** When provided, a text search field is shown inside the filter panel. */
+  search?: string;
+  onSearchChange?: (value: string) => void;
+} = {}) {
   const { activeFilterCount } = useActivityFilter();
 
   return (
@@ -33,7 +40,7 @@ export function ActivityFilterPopover() {
         }
       />
       <PopoverContent align="start" className="w-72 p-3">
-        <ActivityFilterPanel />
+        <ActivityFilterPanel search={search} onSearchChange={onSearchChange} />
       </PopoverContent>
     </Popover>
   );

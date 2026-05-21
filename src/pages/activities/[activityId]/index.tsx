@@ -184,7 +184,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             </button>
           </div>
         )}
-        <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+        <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-4 p-4 sm:gap-6 sm:p-6 max-sm:px-0">
           <ActivityStats activity={activity} />
           <ActivityStreams
             stravaId={activity.stravaId}
@@ -220,8 +220,8 @@ function ActivityPageSkeleton() {
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="bg-secondary h-[50vh] min-h-80 max-h-[600px] w-full animate-pulse" />
-        <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-          <div className="border-border bg-card rounded-xl border p-5">
+        <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-4 p-4 sm:gap-6 sm:p-6 max-sm:px-0">
+          <div className="border-border bg-card rounded-sm border max-sm:border-0 p-5">
             <div className="bg-accent mb-4 h-7 w-36 animate-pulse rounded" />
             <div className="border-border mb-4 grid grid-cols-3 gap-2.5 border-b pb-4">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -247,8 +247,8 @@ function ActivityPageSkeleton() {
               ))}
             </div>
           </div>
-          <div className="bg-card h-64 animate-pulse rounded-xl" />
-          <div className="bg-secondary h-96 animate-pulse rounded-xl" />
+          <div className="bg-card h-64 animate-pulse rounded-sm" />
+          <div className="bg-secondary h-96 animate-pulse rounded-sm" />
         </div>
       </div>
     </>

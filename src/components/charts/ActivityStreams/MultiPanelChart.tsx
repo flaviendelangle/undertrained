@@ -3,6 +3,7 @@ import * as React from "react";
 import { bisector } from "d3-array";
 import { scaleLinear } from "d3-scale";
 
+import { useIsMobile } from "~/hooks/useIsMobile";
 import { useChartTokens } from "~/lib/chartTokens";
 import { formatElapsed } from "~/utils/format";
 import type { SportConfig } from "~/utils/sportConfig";
@@ -67,6 +68,9 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     onHoverIndexChange,
   } = props;
   const tokens = useChartTokens();
+  // On small (touch) screens the hover readout in the right gutter is unusable,
+  // so we drop it and reclaim that width for the plot.
+  const isMobile = useIsMobile();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const svgRef = React.useRef<SVGSVGElement>(null);
   const [width, setWidth] = React.useState(0);
@@ -139,7 +143,10 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     return result;
   }, [streams]);
 
-  const drawingWidth = Math.max(0, width - MARGIN.left - MARGIN.right);
+  // Keep a little right padding for the last x-axis tick label; drop the wider
+  // hover-readout gutter on mobile.
+  const marginRight = isMobile ? 16 : MARGIN.right;
+  const drawingWidth = Math.max(0, width - MARGIN.left - marginRight);
   const drawingHeight =
     panels.length > 0
       ? panels[panels.length - 1].top + panels[panels.length - 1].height
@@ -466,28 +473,33 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
               {`avg ${formatStreamValue(panel.stream.stats.avg, panel.stream.config.unit, sportConfig)}`}
             </text>
 
-            {/* Live value at the hovered x (right gutter, fixed row per panel) */}
-            <text
-              x={drawingWidth + MARGIN.right - 4}
-              y={panel.height / 2}
-              textAnchor="end"
-              dominantBaseline="middle"
-              fontSize={12}
-              fontWeight={hoverIndex !== null ? 600 : 400}
-              fill={
-                hoverIndex !== null && panel.stream.yData[hoverIndex] !== undefined
-                  ? panel.stream.config.color
-                  : tokens.axisLabel
-              }
-            >
-              {hoverIndex !== null && panel.stream.yData[hoverIndex] !== undefined
-                ? formatStreamValue(
-                    panel.stream.yData[hoverIndex],
-                    panel.stream.config.unit,
-                    sportConfig,
-                  )
-                : "—"}
-            </text>
+            {/* Live value at the hovered x (right gutter, fixed row per panel).
+                Hidden on mobile where hovering isn't possible. */}
+            {!isMobile && (
+              <text
+                x={drawingWidth + MARGIN.right - 4}
+                y={panel.height / 2}
+                textAnchor="end"
+                dominantBaseline="middle"
+                fontSize={12}
+                fontWeight={hoverIndex !== null ? 600 : 400}
+                fill={
+                  hoverIndex !== null &&
+                  panel.stream.yData[hoverIndex] !== undefined
+                    ? panel.stream.config.color
+                    : tokens.axisLabel
+                }
+              >
+                {hoverIndex !== null &&
+                panel.stream.yData[hoverIndex] !== undefined
+                  ? formatStreamValue(
+                      panel.stream.yData[hoverIndex],
+                      panel.stream.config.unit,
+                      sportConfig,
+                    )
+                  : "—"}
+              </text>
+            )}
           </g>
         ))}
 

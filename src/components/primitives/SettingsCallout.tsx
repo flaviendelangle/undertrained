@@ -24,7 +24,7 @@ export function SettingsCallout({
   return (
     <div
       className={cn(
-        "bg-card border-border relative flex items-start gap-2.5 rounded-lg border border-l-4 border-l-primary/40 px-3 py-2.5",
+        "bg-card border-border relative flex items-start gap-2.5 rounded-sm border border-l-4 border-l-primary/40 px-3 py-2.5",
         className,
       )}
     >

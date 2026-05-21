@@ -222,7 +222,7 @@ export function RacePredictor() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       {/* Input Card */}
-      <div className="bg-card rounded-xl border p-4 md:p-6">
+      <div className="bg-card rounded-sm border max-sm:border-0 p-4 md:p-6">
         <div className="flex flex-col gap-6">
           <RaceInputFields
             label="Race 1"
@@ -291,7 +291,7 @@ export function RacePredictor() {
 
       {/* Predictions Table */}
       {model && (
-        <div className="bg-card rounded-xl border">
+        <div className="bg-card rounded-sm border max-sm:border-0">
           <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
             <h2 className="text-foreground text-lg font-semibold">
               Predicted Race Times

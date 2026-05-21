@@ -172,10 +172,10 @@ export function NavBar() {
               href="/records"
             />
           </TooltipIfMenuCollapsed>
-          <TooltipIfMenuCollapsed label="Periods">
+          <TooltipIfMenuCollapsed label="Time Periods">
             <NavBarLink
               icon={CalendarIcon}
-              label="Periods"
+              label="Time Periods"
               href="/periods"
             />
           </TooltipIfMenuCollapsed>
@@ -261,20 +261,20 @@ export function MobileBottomBar() {
       {moreOpen && (
         <div className="bg-popover border-border fixed right-2 bottom-16 z-50 rounded-xl border p-1 shadow-lg md:hidden">
           <Link
-            href="/records"
-            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-            onClick={() => setMoreOpen(false)}
-          >
-            <TrophyIcon className="size-4" />
-            Personal bests
-          </Link>
-          <Link
             href="/periods"
             className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
             onClick={() => setMoreOpen(false)}
           >
             <CalendarIcon className="size-4" />
-            Periods
+            Time Periods
+          </Link>
+          <Link
+            href="/toolbox"
+            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
+            onClick={() => setMoreOpen(false)}
+          >
+            <WrenchIcon className="size-4" />
+            Toolbox
           </Link>
           <Link
             href="/settings"
@@ -288,20 +288,20 @@ export function MobileBottomBar() {
             Settings
           </Link>
           <Link
+            href="/training-1"
+            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
+            onClick={() => setMoreOpen(false)}
+          >
+            <PlayCircleIcon className="size-4" />
+            Live Training
+          </Link>
+          <Link
             href="/privacy"
             className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
             onClick={() => setMoreOpen(false)}
           >
             <ShieldCheckIcon className="size-4" />
             Privacy
-          </Link>
-          <Link
-            href="/toolbox"
-            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-            onClick={() => setMoreOpen(false)}
-          >
-            <WrenchIcon className="size-4" />
-            Toolbox
           </Link>
           <button
             className="text-foreground hover:bg-accent flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
@@ -337,9 +337,9 @@ export function MobileBottomBar() {
           href="/statistics"
         />
         <MobileTabLink
-          icon={PlayCircleIcon}
-          label="Training"
-          href="/training-1"
+          icon={TrophyIcon}
+          label="Personal bests"
+          href="/records"
         />
         <button
           className={cn(

@@ -215,7 +215,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 
   if (fetchError) {
     return (
-      <div className="bg-card rounded-md p-4 text-red-400">
+      <div className="bg-card rounded-sm p-4 text-red-400">
         Failed to load streams: {fetchError}
       </div>
     );
@@ -223,7 +223,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 
   if (isFetching || streamsData === undefined || streamsData === null) {
     return (
-      <div className="bg-card text-muted-foreground rounded-md p-4">
+      <div className="bg-card text-muted-foreground rounded-sm p-4">
         Loading stream data...
       </div>
     );
@@ -231,14 +231,14 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 
   if (streams.length === 0) {
     return (
-      <div className="bg-card text-muted-foreground rounded-md p-4">
+      <div className="bg-card text-muted-foreground rounded-sm p-4">
         No stream data available for this activity.
       </div>
     );
   }
 
   return (
-    <div className="bg-card flex flex-col rounded-md">
+    <div className="bg-card flex flex-col rounded-sm">
       <div className="border-border flex items-center gap-2 border-b p-4">
         <h3 className="text-lg font-semibold">Time Series</h3>
         <FeatureHint hintId="hint-activity-streams" title="Time Series">

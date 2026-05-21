@@ -210,7 +210,7 @@ export function DangerZone({
   }
 
   return (
-    <section className="border-destructive/30 bg-card rounded-xl border p-5">
+    <section className="border-destructive/30 bg-card rounded-sm border max-sm:border-0 p-5">
       {content}
     </section>
   );

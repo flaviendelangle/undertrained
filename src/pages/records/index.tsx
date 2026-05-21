@@ -19,7 +19,7 @@ const RecordsPage: NextPageWithLayout = () => {
         <span className="font-semibold">Personal bests</span>
       </Toolbar>
 
-      <div className="flex flex-1 flex-col overflow-y-auto p-3 sm:p-6">
+      <div className="flex flex-1 flex-col overflow-y-auto p-3 sm:p-6 max-sm:px-0">
         <div className="mx-auto w-full max-w-6xl">
           <Records />
         </div>

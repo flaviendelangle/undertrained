@@ -1,4 +1,4 @@
-import { GridIcon } from "lucide-react";
+import { GridIcon, MapIcon } from "lucide-react";
 
 import { ActivitiesMap } from "~/components/ActivitiesMap";
 import { PageIntro } from "~/components/primitives/PageIntro";
@@ -31,10 +31,16 @@ function ExplorerTilesToggleButton() {
 const HeatmapPage: NextPageWithLayout = () => {
   return (
     <>
-      <Toolbar>
-        <ActivityFilterPopover />
-        <div className="bg-border mx-1 h-4 w-px" />
-        <ExplorerTilesToggleButton />
+      <Toolbar
+        actions={
+          <>
+            <ActivityFilterPopover />
+            <ExplorerTilesToggleButton />
+          </>
+        }
+      >
+        <MapIcon className="size-4" />
+        <span className="font-semibold">Heatmap</span>
       </Toolbar>
       <div className="relative flex-1 overflow-hidden">
         <ActivitiesMap />

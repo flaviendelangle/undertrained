@@ -70,7 +70,7 @@ export default function EddingtonChart() {
   if (!eddington || eddington.data.length === 0) {
     return (
       <ChartThemeProvider>
-        <div className="bg-card flex h-96 w-full flex-col rounded-md">
+        <div className="bg-card flex h-96 w-full flex-col rounded-sm">
           {header}
           <div className="text-muted-foreground flex flex-1 items-center justify-center">
             No data available
@@ -107,7 +107,7 @@ export default function EddingtonChart() {
 
   return (
     <ChartThemeProvider>
-      <div className="bg-card flex h-96 w-full flex-col rounded-md">
+      <div className="bg-card flex h-96 w-full flex-col rounded-sm">
         {header}
         <div className="min-h-0 flex-1">
           <BarChartPro

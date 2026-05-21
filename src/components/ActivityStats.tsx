@@ -292,7 +292,7 @@ export const ActivityStats = React.memo(function ActivityStats({
       ];
 
   return (
-    <div className="border-border bg-card rounded-xl border p-5">
+    <div className="border-border bg-card rounded-sm border max-sm:border-0 p-5">
       <CardTitle className="mb-4">Activity Details</CardTitle>
 
       {/* Hero Row */}

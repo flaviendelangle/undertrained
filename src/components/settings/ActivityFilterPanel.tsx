@@ -1,3 +1,5 @@
+import { SearchIcon, XIcon } from "lucide-react";
+
 import { Button } from "~/components/ui/button";
 import {
   Select,
@@ -24,7 +26,14 @@ const WORKOUT_TYPE_GROUPS: { label: string; types: number[] }[] = [
   { label: "Weight Training", types: [30] },
 ];
 
-export function ActivityFilterPanel() {
+export function ActivityFilterPanel({
+  search,
+  onSearchChange,
+}: {
+  /** When provided, a text search field is shown at the top of the panel. */
+  search?: string;
+  onSearchChange?: (value: string) => void;
+} = {}) {
   const { allTypes: activityTypes, allWorkoutTypes: workoutTypes } = useActivitiesQuery();
   const filter = useActivityFilter();
   const athleteId = useAthleteId();
@@ -35,6 +44,33 @@ export function ActivityFilterPanel() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Search */}
+      {onSearchChange && (
+        <div>
+          <div className="text-muted-foreground mb-2 text-xs font-medium">
+            Search
+          </div>
+          <div className="border-border focus-within:ring-ring relative flex items-center rounded-md border focus-within:ring-1">
+            <SearchIcon className="text-muted-foreground pointer-events-none absolute left-2.5 size-3.5" />
+            <input
+              type="text"
+              placeholder="Search activities..."
+              value={search ?? ""}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="placeholder:text-muted-foreground h-8 w-full rounded-md bg-transparent py-1 pr-7 pl-8 text-sm outline-none"
+            />
+            {search && (
+              <button
+                onClick={() => onSearchChange("")}
+                className="text-muted-foreground hover:text-foreground absolute right-1.5 flex size-4 items-center justify-center"
+              >
+                <XIcon className="size-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Time period */}
       {periods && periods.length > 0 && (
         <div>

@@ -270,7 +270,7 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
   }
 
   return (
-    <div className="bg-card flex h-96 w-full flex-col rounded-md">
+    <div className="bg-card flex h-96 w-full flex-col rounded-sm">
       <Toolbar
         ranges={ranges}
         onAddPreset={addRange}
@@ -403,7 +403,7 @@ function AggregatedPowerCurve({ activityTypes, workoutTypes: workoutTypesProp, d
 
   if (xData.length === 0) {
     return (
-      <div className="bg-card flex h-96 w-full flex-col rounded-md">
+      <div className="bg-card flex h-96 w-full flex-col rounded-sm">
         <Toolbar
           ranges={ranges}
           onAddPreset={addRange}
@@ -424,7 +424,7 @@ function AggregatedPowerCurve({ activityTypes, workoutTypes: workoutTypesProp, d
   }
 
   return (
-    <div className="bg-card flex h-96 w-full flex-col rounded-md">
+    <div className="bg-card flex h-96 w-full flex-col rounded-sm">
       <Toolbar
         ranges={ranges}
         onAddPreset={addRange}
@@ -696,7 +696,7 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
 
 function EmptyChart() {
   return (
-    <div className="bg-card flex h-96 w-full flex-col rounded-md">
+    <div className="bg-card flex h-96 w-full flex-col rounded-sm">
       <div className="border-border flex items-center gap-2 border-b p-4">
         <h3 className="shrink-0 text-lg font-semibold">Cycling Power Curve</h3>
       </div>

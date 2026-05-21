@@ -29,6 +29,7 @@ const TILE_ATTRIBUTION =
 
 interface FitBoundsProps {
   polylines: { id: string; polyline: [number, number][] }[];
+  onFitted?: () => void;
 }
 
 function DismissOnMapMove({ onDismiss }: { onDismiss: () => void }) {
@@ -40,7 +41,7 @@ function DismissOnMapMove({ onDismiss }: { onDismiss: () => void }) {
 }
 
 function FitBounds(props: FitBoundsProps) {
-  const { polylines } = props;
+  const { polylines, onFitted } = props;
   const map = useMap();
 
   React.useEffect(() => {
@@ -51,9 +52,12 @@ function FitBounds(props: FitBoundsProps) {
       }
     }
     if (allPositions.length > 0) {
-      map.fitBounds(allPositions);
+      // No animation: the loading overlay hides the jump, and the final view's
+      // tiles start loading immediately so we can reveal a fully-drawn map.
+      map.fitBounds(allPositions, { animate: false });
     }
-  }, [polylines, map]);
+    onFitted?.();
+  }, [polylines, map, onFitted]);
 
   return null;
 }
@@ -62,10 +66,37 @@ export default function Map(props: MapProps) {
   const {
     activities,
     enableExplorerTiles = false,
+    fitMode = "all",
     highlightPosition,
+    onReady,
     routePositions,
   } = props;
   const { showExplorerTiles } = useExplorerTilesToggle();
+
+  // The map is "ready" once the view has been fitted to the routes AND the
+  // tiles for that view have finished loading. We track both signals and fire
+  // `onReady` once, so the caller can drop its loading overlay without flicker.
+  const fittedRef = React.useRef(false);
+  const tilesLoadedRef = React.useRef(false);
+  const readyFiredRef = React.useRef(false);
+  const fireReadyIfDone = React.useCallback(() => {
+    if (
+      fittedRef.current &&
+      tilesLoadedRef.current &&
+      !readyFiredRef.current
+    ) {
+      readyFiredRef.current = true;
+      onReady?.();
+    }
+  }, [onReady]);
+  const handleFitted = React.useCallback(() => {
+    fittedRef.current = true;
+    fireReadyIfDone();
+  }, [fireReadyIfDone]);
+  const handleTilesLoaded = React.useCallback(() => {
+    tilesLoadedRef.current = true;
+    fireReadyIfDone();
+  }, [fireReadyIfDone]);
 
   const [selectedActivity, setSelectedActivity] = React.useState<{
     activity: ListActivity;
@@ -99,6 +130,22 @@ export default function Map(props: MapProps) {
     return decodedActivityPolylines ?? [];
   }, [decodedActivityPolylines, routePositions]);
 
+  // Which polylines drive the initial zoom/position. "all" fits every route;
+  // "last" fits only the most recent activity so it's fully visible.
+  const fitPolylines = React.useMemo(() => {
+    if (fitMode !== "last") {
+      return polylines;
+    }
+    let latest: NonNullable<typeof decodedActivityPolylines>[number] | null =
+      null;
+    for (const entry of decodedActivityPolylines ?? []) {
+      if (latest == null || entry.activity.startDate > latest.activity.startDate) {
+        latest = entry;
+      }
+    }
+    return latest ? [latest] : polylines;
+  }, [fitMode, polylines, decodedActivityPolylines]);
+
   const explorerPolylines = React.useMemo(
     () => decodedActivityPolylines?.map((p) => p.polyline) ?? [],
     [decodedActivityPolylines],
@@ -114,7 +161,11 @@ export default function Map(props: MapProps) {
         attributionControl={false}
       >
         <AttributionControl position="bottomleft" prefix="Leaflet" />
-        <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
+        <TileLayer
+          url={TILE_URL}
+          attribution={TILE_ATTRIBUTION}
+          eventHandlers={{ load: handleTilesLoaded }}
+        />
         {enableExplorerTiles && (
           <ExplorerTilesLayer
             tilesData={explorerTilesData}
@@ -159,7 +210,7 @@ export default function Map(props: MapProps) {
             onDismiss={() => setSelectedActivity(null)}
           />
         )}
-        <FitBounds polylines={polylines} />
+        <FitBounds polylines={fitPolylines} onFitted={handleFitted} />
       </MapContainer>
       {enableExplorerTiles && (
         <ExplorerTilesStats
@@ -181,6 +232,13 @@ export default function Map(props: MapProps) {
 interface MapProps {
   activities: ListActivity[] | null;
   enableExplorerTiles?: boolean;
+  /**
+   * Controls the initial zoom/position. "all" (default) fits the whole map to
+   * every activity; "last" fits it to the most recent activity only.
+   */
+  fitMode?: "all" | "last";
   highlightPosition?: [number, number] | null;
+  /** Called once the view is fitted and its tiles have finished loading. */
+  onReady?: () => void;
   routePositions?: [number, number][] | null;
 }

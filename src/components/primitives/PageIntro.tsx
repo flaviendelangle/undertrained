@@ -19,7 +19,7 @@ export function PageIntro({ hintId, children, className }: PageIntroProps) {
   return (
     <div
       className={cn(
-        "bg-card border-border relative flex items-start gap-3 rounded-xl border border-l-4 border-l-primary/40 p-4",
+        "bg-card border-border relative flex items-start gap-3 rounded-sm border border-l-4 border-l-primary/40 p-4",
         className,
       )}
     >

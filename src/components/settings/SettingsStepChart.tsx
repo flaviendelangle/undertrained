@@ -142,7 +142,7 @@ export function SettingsStepChart({ timeline }: SettingsStepChartProps) {
         ))}
       </div>
       <ChartThemeProvider>
-        <div className="bg-card h-64 w-full rounded-md">
+        <div className="bg-card h-64 w-full rounded-sm">
           <LineChart
             xAxis={[
               {

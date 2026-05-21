@@ -88,7 +88,7 @@ export function PaceCalculator() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       {/* Converter Widget */}
-      <div className="bg-card rounded-xl border p-4 md:p-6">
+      <div className="bg-card rounded-sm border max-sm:border-0 p-4 md:p-6">
         {/* Mode toggle */}
         <div className="mb-4 flex gap-1.5">
           <Button
@@ -217,7 +217,7 @@ export function PaceCalculator() {
       </div>
 
       {/* Reference Table */}
-      <div className="bg-card rounded-xl border">
+      <div className="bg-card rounded-sm border max-sm:border-0">
         <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
           <h2 className="text-foreground text-lg font-semibold">
             Pace Reference Table

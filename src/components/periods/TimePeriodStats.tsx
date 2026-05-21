@@ -1,6 +1,12 @@
-import { Clock, ListIcon, Mountain, Route, Timer, TrendingUp } from "lucide-react";
+import {
+  Clock,
+  ListIcon,
+  Mountain,
+  Route,
+  Timer,
+  TrendingUp,
+} from "lucide-react";
 
-import { CardTitle } from "~/components/primitives/CardTitle";
 import { StatCard } from "~/components/primitives/StatCard";
 import { StatSection } from "~/components/primitives/StatSection";
 import { formatHumanDuration } from "~/utils/format";
@@ -30,9 +36,7 @@ export function TimePeriodStats(props: TimePeriodStatsProps) {
       : "0m 0s";
 
   return (
-    <div className="border-border bg-card rounded-xl border p-5">
-      <CardTitle className="mb-4">Period Summary</CardTitle>
-
+    <div className="border-border bg-card rounded-sm border p-5 max-sm:border-0">
       {/* Hero Row */}
       <div className="border-border mb-4 grid grid-cols-2 gap-2.5 border-b pb-4 md:grid-cols-4">
         <StatCard

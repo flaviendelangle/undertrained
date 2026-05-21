@@ -21,7 +21,7 @@ export function PeriodStatsTable() {
 
   if (!stats || stats.length === 0) {
     return (
-      <div className="border-border bg-card rounded-xl border p-8 text-center">
+      <div className="border-border bg-card rounded-sm border max-sm:border-0 p-8 text-center">
         <p className="text-muted-foreground text-sm">
           No time periods defined.{" "}
           <Link href="/settings/periods" className="text-primary underline">
@@ -34,7 +34,7 @@ export function PeriodStatsTable() {
   }
 
   return (
-    <div className="border-border bg-card rounded-xl border">
+    <div className="border-border bg-card rounded-sm border max-sm:border-0">
       <Table>
         <TableHeader>
           <TableRow>

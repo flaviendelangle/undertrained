@@ -46,8 +46,9 @@ export function Records() {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Controls */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+      {/* Controls — restore the gutter the page drops on mobile (cards below
+          stay edge-to-edge, but these aren't cards). */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 max-sm:px-3">
         {sportControl.items.length > 0 && (
           <ControlGroup label="Sport">
             <SegmentedToggle
@@ -114,7 +115,7 @@ export function Records() {
             </Link>
           )}
 
-          <div className="bg-card rounded-lg">
+          <div className="bg-card rounded-sm">
             <Table>
               <TableHeader>
                 <TableRow>

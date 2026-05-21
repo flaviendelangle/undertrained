@@ -55,7 +55,7 @@ const LoginPage: NextPageWithLayout = () => {
 
         <Link
           href="/toolbox"
-          className="border-border bg-card/50 hover:bg-card group/card w-full max-w-md rounded-xl border p-4 transition-colors"
+          className="border-border bg-card/50 hover:bg-card group/card w-full max-w-md rounded-sm border p-4 transition-colors"
         >
           <div className="mb-3 flex items-center justify-between">
             <span className="text-foreground text-sm font-semibold">Toolbox</span>
