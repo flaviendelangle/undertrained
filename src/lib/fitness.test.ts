@@ -4,8 +4,10 @@ import type { LoadAlgorithmPreferences } from "~/utils/getActivityLoad";
 
 import {
   classifyForm,
+  classifyWeeklyLoad,
   computeFitnessSeries,
   FORM_ZONES,
+  WEEKLY_VERDICT_THRESHOLDS,
   type FitnessActivity,
 } from "./fitness";
 
@@ -115,5 +117,57 @@ describe("classifyForm", () => {
     }
     expect(FORM_ZONES[0].min).toBe(-Infinity);
     expect(FORM_ZONES[FORM_ZONES.length - 1].max).toBe(Infinity);
+  });
+});
+
+describe("classifyWeeklyLoad", () => {
+  const t = WEEKLY_VERDICT_THRESHOLDS;
+
+  it("calls a healthy positive ramp productive", () => {
+    expect(classifyWeeklyLoad({ ctlRamp: 4, tsb: -5, acwr: 1.1 }).key).toBe(
+      "productive",
+    );
+  });
+
+  it("flags a steep ramp as overreaching", () => {
+    expect(
+      classifyWeeklyLoad({ ctlRamp: t.overreachingRamp + 1, tsb: 0, acwr: 1.6 })
+        .key,
+    ).toBe("overreaching");
+  });
+
+  it("forces overreaching when Form is deep in the high-risk zone, even on a flat ramp", () => {
+    expect(
+      classifyWeeklyLoad({ ctlRamp: 0, tsb: t.highRiskTsb - 5, acwr: 1 }).key,
+    ).toBe("overreaching");
+  });
+
+  it("calls a falling ramp detraining / undertrained", () => {
+    expect(
+      classifyWeeklyLoad({ ctlRamp: t.detrainingRamp - 1, tsb: 10, acwr: 0.9 })
+        .key,
+    ).toBe("detraining");
+  });
+
+  it("treats a flat ramp with a low ACWR as undertrained", () => {
+    expect(
+      classifyWeeklyLoad({
+        ctlRamp: 0,
+        tsb: 5,
+        acwr: t.undertrainedAcwr - 0.1,
+      }).key,
+    ).toBe("detraining");
+  });
+
+  it("calls a flat ramp with normal load maintaining", () => {
+    expect(classifyWeeklyLoad({ ctlRamp: 0, tsb: 0, acwr: 1 }).key).toBe(
+      "maintaining",
+    );
+  });
+
+  it("does not require an ACWR to render a verdict", () => {
+    expect(classifyWeeklyLoad({ ctlRamp: 3, tsb: 0, acwr: null }).key).toBe(
+      "productive",
+    );
   });
 });

@@ -34,6 +34,7 @@ import {
   fetchDetailedActivity,
   fetchStreamsFromStrava,
   getAccessToken,
+  getActivityDetailFields,
   getBestEffortModels,
   getLapModels,
   getModelFromStravaActivity,
@@ -43,7 +44,7 @@ const PAGE_SIZE = 50;
 const BATCH_SIZE = 50;
 const STREAM_FETCH_CONCURRENCY = 3;
 const MAX_STREAM_FETCH_ATTEMPTS = 3;
-const MAX_BEST_EFFORT_FETCH_ATTEMPTS = 3;
+const MAX_DETAIL_FETCH_ATTEMPTS = 3;
 
 /** Strava activity types treated as runs (which expose best efforts). */
 const RUN_TYPES = getActivityTypesByCategory("running");
@@ -229,6 +230,7 @@ async function syncActivitiesPhase(
           elapsedTime: sql`excluded.elapsed_time`,
           mapPolyline: sql`excluded.map_polyline`,
           workoutType: sql`excluded.workout_type`,
+          commute: sql`excluded.commute`,
           ...(options.detectUpdates
             ? {
                 areStreamsLoaded: sql`CASE
@@ -240,8 +242,9 @@ async function syncActivitiesPhase(
                   THEN false
                   ELSE activities.are_streams_loaded
                 END`,
-                // A corrected/cropped activity → re-fetch Strava's recomputed best efforts.
-                areBestEffortsLoaded: sql`CASE
+                // A corrected/cropped activity → re-fetch the detailed activity
+                // (Strava's recomputed best efforts, laps, and edited fields).
+                areDetailsLoaded: sql`CASE
                   WHEN activities.distance != excluded.distance
                     OR activities.moving_time != excluded.moving_time
                     OR activities.elapsed_time != excluded.elapsed_time
@@ -286,23 +289,20 @@ async function syncActivitiesPhase(
 
 /**
  * SQL predicate: an activity still needs a per-activity Strava fetch — either
- * its streams aren't loaded, or it's a run whose best efforts aren't loaded.
- * Both are bounded by their retry-attempt caps.
+ * its streams aren't loaded, or its detailed activity (laps, description, RPE,
+ * private note for all types; best efforts for runs) hasn't been fetched. Both
+ * are bounded by their retry-attempt caps.
  */
 function needsDetailFetch() {
   const streamsPending = and(
     eq(activities.areStreamsLoaded, false),
     lt(activities.streamFetchAttempts, MAX_STREAM_FETCH_ATTEMPTS),
   );
-  if (RUN_TYPES.length === 0) return streamsPending;
-  return or(
-    streamsPending,
-    and(
-      inArray(activities.type, RUN_TYPES),
-      eq(activities.areBestEffortsLoaded, false),
-      lt(activities.bestEffortFetchAttempts, MAX_BEST_EFFORT_FETCH_ATTEMPTS),
-    ),
+  const detailsPending = and(
+    eq(activities.areDetailsLoaded, false),
+    lt(activities.detailFetchAttempts, MAX_DETAIL_FETCH_ATTEMPTS),
   );
+  return or(streamsPending, detailsPending);
 }
 
 // ── Phase 2: Fetch per-activity data from Strava ──────────────────────
@@ -342,7 +342,7 @@ async function syncActivityDetailsPhase(
         stravaId: activities.stravaId,
         type: activities.type,
         areStreamsLoaded: activities.areStreamsLoaded,
-        areBestEffortsLoaded: activities.areBestEffortsLoaded,
+        areDetailsLoaded: activities.areDetailsLoaded,
       })
       .from(activities)
       .where(and(eq(activities.athlete, athleteId), needsDetailFetch()))
@@ -389,33 +389,37 @@ async function syncActivityDetailsPhase(
           }
         }
 
-        // Best efforts (runs only) — reuses the detailed activity GET.
-        if (RUN_TYPES.includes(activity.type) && !activity.areBestEffortsLoaded) {
+        // Detailed activity (all types) — laps, description, RPE, private note,
+        // plus best efforts for runs. One GET returns all of it.
+        if (!activity.areDetailsLoaded) {
           try {
             const detailed = await callStrava(() =>
               fetchDetailedActivity(accessToken, activity.stravaId),
             );
-            await storeBestEfforts(db, activity.id, detailed);
-            // Laps live on the same DetailedActivity — store them for free.
-            await storeLaps(db, activity.id, detailed);
+            if (RUN_TYPES.includes(activity.type)) {
+              await storeBestEfforts(db, activity.id, detailed);
+            }
+            // Laps + description/RPE/notes ride along on the same fetch, and this
+            // also flips the are-details-loaded flag.
+            await storeActivityDetails(db, activity.id, detailed);
             progressed = true;
           } catch (e) {
             if (isStravaNotFound(e)) {
               // Activity no longer accessible — stop retrying it.
               await db
                 .update(activities)
-                .set({ areBestEffortsLoaded: true, bestEffortFetchAttempts: 0 })
+                .set({ areDetailsLoaded: true, detailFetchAttempts: 0 })
                 .where(eq(activities.id, activity.id));
               progressed = true;
             } else {
               console.error(
-                `[syncActivityDetailsPhase] best efforts failed for ${activity.stravaId}:`,
+                `[syncActivityDetailsPhase] details failed for ${activity.stravaId}:`,
                 e,
               );
               await db
                 .update(activities)
                 .set({
-                  bestEffortFetchAttempts: sql`${activities.bestEffortFetchAttempts} + 1`,
+                  detailFetchAttempts: sql`${activities.detailFetchAttempts} + 1`,
                 })
                 .where(eq(activities.id, activity.id));
             }
@@ -553,11 +557,11 @@ export async function storeStreams(
 }
 
 /**
- * Replaces the stored best efforts for an activity with the ones from a freshly
- * fetched DetailedActivity, then marks the activity as loaded. Idempotent
- * (delete-then-insert) so re-syncs of corrected activities stay consistent.
- * An empty `best_efforts` array still marks the activity loaded (so manual /
- * treadmill runs aren't retried forever).
+ * Replaces the stored best efforts (runs only) for an activity with the ones
+ * from a freshly fetched DetailedActivity. Idempotent (delete-then-insert) so
+ * re-syncs of corrected activities stay consistent. Does NOT flip the
+ * are-details-loaded flag — that belongs to {@link storeActivityDetails}, which
+ * runs for every activity type.
  */
 export async function storeBestEfforts(
   db: Database,
@@ -572,28 +576,28 @@ export async function storeBestEfforts(
     if (models.length > 0) {
       await tx.insert(bestEfforts).values(models);
     }
-
-    await tx
-      .update(activities)
-      .set({ areBestEffortsLoaded: true, bestEffortFetchAttempts: 0 })
-      .where(eq(activities.id, activityId));
   });
 }
 
 /**
- * Persists the laps of a freshly fetched DetailedActivity onto the activity row.
- * Free wherever the detailed activity is already in hand (run sync, webhook
- * create, per-activity reload). No "loaded" flag — the chart simply renders laps
- * only when more than one is present.
+ * Persists the per-activity fields that only exist on the DetailedActivity —
+ * laps, description, RPE, and private note — onto the activity row, and marks
+ * the activity's details as loaded. Free wherever the detailed activity is
+ * already in hand (sync phase 2, webhook create, per-activity reload).
  */
-export async function storeLaps(
+export async function storeActivityDetails(
   db: Database,
   activityId: number,
-  detailed: Pick<DetailedActivity, "laps">,
+  detailed: DetailedActivity,
 ) {
   await db
     .update(activities)
-    .set({ laps: getLapModels(detailed) })
+    .set({
+      laps: getLapModels(detailed),
+      ...getActivityDetailFields(detailed),
+      areDetailsLoaded: true,
+      detailFetchAttempts: 0,
+    })
     .where(eq(activities.id, activityId));
 }
 

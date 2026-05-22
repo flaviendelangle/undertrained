@@ -74,6 +74,66 @@ export function classifyForm(tsb: number): FormZone {
   );
 }
 
+/** A week-level training-load verdict, used for the Journal summary chip. */
+export interface WeeklyVerdict {
+  key: "detraining" | "maintaining" | "productive" | "overreaching";
+  /** Short label shown on the chip. "Undertrained" leans into the product name. */
+  label: string;
+  /** Solid hex for text / chip accent. */
+  color: string;
+}
+
+/**
+ * Boundaries for {@link classifyWeeklyLoad}, expressed in CTL points gained or
+ * lost across the week (Fitness ramp). Kept here so they're tunable in one place
+ * and exercised directly by unit tests.
+ */
+export const WEEKLY_VERDICT_THRESHOLDS = {
+  /** Weekly CTL change at/below this reads as losing fitness. */
+  detrainingRamp: -1,
+  /** Weekly CTL change at/above this (but below overreaching) is productive building. */
+  productiveRamp: 1,
+  /** Weekly CTL change above this is ramping too fast. */
+  overreachingRamp: 8,
+  /** End-of-week Form (TSB) at/below this (the highRisk zone) forces overreaching. */
+  highRiskTsb: -30,
+  /** Acute:chronic workload ratio below this corroborates a detraining week. */
+  undertrainedAcwr: 0.8,
+} as const;
+
+const WEEKLY_VERDICTS: Record<WeeklyVerdict["key"], WeeklyVerdict> = {
+  detraining: { key: "detraining", label: "Undertrained", color: "#f59e0b" },
+  maintaining: { key: "maintaining", label: "Maintaining", color: "#9ca3af" },
+  productive: { key: "productive", label: "Productive", color: "#22c55e" },
+  overreaching: { key: "overreaching", label: "Overreaching", color: "#ef4444" },
+};
+
+/**
+ * Judge a week's training from its Fitness ramp (weekly CTL change), end-of-week
+ * Form (TSB) and acute:chronic workload ratio. Ramp drives the verdict; a deeply
+ * fatigued TSB forces "overreaching" and a low ACWR corroborates "undertrained".
+ */
+export function classifyWeeklyLoad(input: {
+  ctlRamp: number;
+  tsb: number;
+  acwr: number | null;
+}): WeeklyVerdict {
+  const t = WEEKLY_VERDICT_THRESHOLDS;
+  if (input.ctlRamp > t.overreachingRamp || input.tsb <= t.highRiskTsb) {
+    return WEEKLY_VERDICTS.overreaching;
+  }
+  if (input.ctlRamp >= t.productiveRamp) {
+    return WEEKLY_VERDICTS.productive;
+  }
+  if (
+    input.ctlRamp <= t.detrainingRamp ||
+    (input.acwr != null && input.acwr < t.undertrainedAcwr)
+  ) {
+    return WEEKLY_VERDICTS.detraining;
+  }
+  return WEEKLY_VERDICTS.maintaining;
+}
+
 const DAY_KEY_LENGTH = 10; // "yyyy-MM-dd"
 
 /**

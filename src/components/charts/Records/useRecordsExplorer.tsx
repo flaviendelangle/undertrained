@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { CYCLING_POWER_DURATIONS as DURATIONS } from "~/utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCES } from "~/utils/cyclingRecordDistances";
 import { formatElapsed } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
@@ -12,26 +13,6 @@ export type Sport = "cycling" | "running";
 
 const RideIcon = getSportConfig("Ride").icon;
 const RunIcon = getSportConfig("Run").icon;
-
-/** Cycling power durations (seconds) offered in the picker — mirrors Strava's set. */
-const DURATIONS: { seconds: number; label: string }[] = [
-  { seconds: 5, label: "5 s" },
-  { seconds: 15, label: "15 s" },
-  { seconds: 30, label: "30 s" },
-  { seconds: 60, label: "1 min" },
-  { seconds: 120, label: "2 min" },
-  { seconds: 180, label: "3 min" },
-  { seconds: 300, label: "5 min" },
-  { seconds: 480, label: "8 min" },
-  { seconds: 600, label: "10 min" },
-  { seconds: 900, label: "15 min" },
-  { seconds: 1200, label: "20 min" },
-  { seconds: 1800, label: "30 min" },
-  { seconds: 2700, label: "45 min" },
-  { seconds: 3600, label: "1 h" },
-  { seconds: 7200, label: "2 h" },
-  { seconds: 10800, label: "3 h" },
-];
 
 type CyclingMetric = "power" | "speed" | "elevation" | "heartrate";
 const CYCLING_METRIC_LABELS: Record<CyclingMetric, string> = {

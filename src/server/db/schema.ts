@@ -79,6 +79,14 @@ export const activities = pgTable(
     hrss: real("hrss"),
     tss: real("tss"),
     workoutType: integer("workout_type"),
+    // Whether the activity is a commute (Strava's summary `commute` flag).
+    // Powers the "hide commutes" filter. `workout_type` already encodes race (1/11).
+    commute: boolean("commute").notNull().default(false),
+    // Detail-only fields fetched from the DetailedActivity (/activities/{id}).
+    // `perceivedExertion` is Strava's RPE (1-10); `privateNote` is athlete-only.
+    description: text("description"),
+    perceivedExertion: real("perceived_exertion"),
+    privateNote: text("private_note"),
     powerBests: jsonb("power_bests").$type<Record<number, number>>(),
     // Fastest time (seconds) to cover each standard distance (meters), computed
     // from distance/time streams — Strava doesn't expose cycling best efforts.
@@ -91,10 +99,12 @@ export const activities = pgTable(
     // Lap (interval) splits derived from the DetailedActivity `laps` array — no
     // extra Strava request. Null = never captured (rendered only when length > 1).
     laps: jsonb("laps").$type<StoredLap[]>(),
-    areBestEffortsLoaded: boolean("are_best_efforts_loaded")
-      .notNull()
-      .default(false),
-    bestEffortFetchAttempts: integer("best_effort_fetch_attempts")
+    // Whether the DetailedActivity (/activities/{id}) has been fetched and its
+    // fields stored — laps, description, RPE, private note for every activity,
+    // plus best efforts for runs. (Legacy column name predates the generalization
+    // from runs-only best efforts to all-activity detail fetching.)
+    areDetailsLoaded: boolean("are_best_efforts_loaded").notNull().default(false),
+    detailFetchAttempts: integer("best_effort_fetch_attempts")
       .notNull()
       .default(0),
   },
@@ -108,7 +118,7 @@ export const activities = pgTable(
     ),
     index("activities_athlete_best_efforts_idx").on(
       t.athlete,
-      t.areBestEffortsLoaded,
+      t.areDetailsLoaded,
     ),
   ],
 );

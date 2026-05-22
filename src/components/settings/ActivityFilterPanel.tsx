@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { Switch } from "~/components/ui/switch";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useActivityFilter } from "~/hooks/useActivityFilter";
 import { useAthleteId } from "~/hooks/useAthleteId";
@@ -187,6 +188,18 @@ export function ActivityFilterPanel({
           </div>
         </div>
       )}
+
+      {/* Hide commutes */}
+      <label className="flex cursor-pointer items-center justify-between">
+        <span className="text-muted-foreground text-xs font-medium">
+          Hide commutes
+        </span>
+        <Switch
+          size="sm"
+          checked={filter.hideCommutes}
+          onCheckedChange={filter.setHideCommutes}
+        />
+      </label>
 
       {/* Clear all */}
       {filter.activeFilterCount > 0 && (

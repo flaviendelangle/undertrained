@@ -13,12 +13,18 @@ export type Activity = InferSelectModel<typeof activities>;
 
 /**
  * Shape returned by `activities.list`. The heavy jsonb columns
- * (powerBests, heartrateBests, speedEfforts, laps) are omitted from the list
- * projection for performance — use `activities.get` when those are needed.
+ * (powerBests, heartrateBests, speedEfforts, laps) plus the long text fields
+ * (description, privateNote) are omitted from the list projection for
+ * performance — use `activities.get` when those are needed.
  */
 export type ListActivity = Omit<
   Activity,
-  "powerBests" | "heartrateBests" | "speedEfforts" | "laps"
+  | "powerBests"
+  | "heartrateBests"
+  | "speedEfforts"
+  | "laps"
+  | "description"
+  | "privateNote"
 >;
 export type ActivityStream = InferSelectModel<typeof activityStreams>;
 export type RiderSettingsRow = InferSelectModel<typeof riderSettings>;

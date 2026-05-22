@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import {
+  Activity as ActivityIcon,
   Clock,
   Flame,
   Gauge,
@@ -342,6 +343,15 @@ export const ActivityStats = React.memo(function ActivityStats({
             {energyCadenceStats.map((stat) => (
               <StatCard key={stat.label} {...stat} />
             ))}
+          </StatSection>
+        )}
+
+        {activity.perceivedExertion != null && (
+          <StatSection icon={ActivityIcon} title="Perceived Exertion">
+            <StatCard
+              label="RPE"
+              value={`${activity.perceivedExertion} / 10`}
+            />
           </StatSection>
         )}
 

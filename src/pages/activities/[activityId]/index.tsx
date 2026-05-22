@@ -114,8 +114,12 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   }
 
   const hasMap = !!activity.mapPolyline;
+  // Strava encodes "race" in workout_type: 1 = run race, 11 = ride race.
+  const isRace = activity.workoutType === 1 || activity.workoutType === 11;
+  const hasNotes = !!activity.description || !!activity.privateNote;
   const hasPower =
-    activity.averageWatts != null &&
+    activity.powerBests != null &&
+    Object.keys(activity.powerBests).length > 0 &&
     (activity.type === "Ride" || activity.type === "VirtualRide");
 
   return (
@@ -135,6 +139,16 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
           })}
           {formatActivityType(activity.type)}
         </span>
+        {isRace && (
+          <span className="bg-primary text-primary-foreground inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-xs font-medium uppercase">
+            Race
+          </span>
+        )}
+        {activity.commute && (
+          <span className="bg-accent text-muted-foreground inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-xs font-medium uppercase">
+            Commute
+          </span>
+        )}
         <span className="text-muted-foreground hidden shrink-0 text-sm sm:inline">
           {new Date(activity.startDateLocal).toLocaleDateString(undefined, {
             weekday: "long",
@@ -191,6 +205,30 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
         )}
         <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-4 p-4 sm:gap-6 sm:p-6 max-sm:px-0">
           <ActivityStats activity={activity} />
+          {hasNotes && (
+            <div className="border-border bg-card flex flex-col gap-4 rounded-sm border p-5 max-sm:border-0">
+              {activity.description && (
+                <div>
+                  <div className="text-muted-foreground mb-1 text-xs font-medium">
+                    Description
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">
+                    {activity.description}
+                  </p>
+                </div>
+              )}
+              {activity.privateNote && (
+                <div>
+                  <div className="text-muted-foreground mb-1 text-xs font-medium">
+                    Private note
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">
+                    {activity.privateNote}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
           <ActivityStreams
             stravaId={activity.stravaId}
             onHoverPositionChange={setHoverPosition}

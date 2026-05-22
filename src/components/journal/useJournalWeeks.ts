@@ -6,6 +6,12 @@ import { enGB } from "date-fns/locale/en-GB";
 import type { ListActivity } from "@server/db/types";
 
 import { useActivitiesTimeBoundaries } from "~/hooks/useActivitiesTimeBoundaries";
+import {
+  classifyWeeklyLoad,
+  computeFitnessSeries,
+  type FitnessPoint,
+  type WeeklyVerdict,
+} from "~/lib/fitness";
 import { addUnit, startOf } from "~/utils/dateUtils";
 import {
   getActivityLoad,
@@ -49,6 +55,12 @@ export interface JournalWeek {
    * carry month context on every viewport.
    */
   monthStart: string | null;
+  /**
+   * Training verdict for the week (Undertrained → Overreaching), derived from
+   * the Fitness ramp, end-of-week Form and load trend. `null` for the earliest
+   * weeks, where there isn't enough warmed-up history to judge.
+   */
+  verdict: WeeklyVerdict | null;
 }
 
 /** Derived weeks plus the shared scale used to tint the daily-load heatmap. */
@@ -60,6 +72,11 @@ export interface JournalWeeksResult {
    * still shows contrast. `0` when there is nothing to scale.
    */
   dayLoadScale: number;
+  /**
+   * The most recent Fitness point (today's CTL / ATL / Form), or `null` when
+   * there are no activities. Powers the "today's Form" readout in the header.
+   */
+  currentForm: FitnessPoint | null;
 }
 
 const DAY_KEY = "yyyy-MM-dd";
@@ -147,10 +164,33 @@ export function useJournalWeeks(
     return map;
   }, [activities, loadByStravaId]);
 
+  // Performance Management Chart (Fitness / Fatigue / Form) for the same
+  // activities, keyed by local calendar day so weeks can read their boundary
+  // CTL/TSB. Shares the load model with the rest of the app via `fitness.ts`.
+  const fitnessByDay = React.useMemo(() => {
+    const series = computeFitnessSeries(activities ?? [], loadPreferences);
+    const map = new Map<string, FitnessPoint>();
+    for (const point of series) {
+      map.set(format(point.date, DAY_KEY), point);
+    }
+    return { map, last: series.length > 0 ? series[series.length - 1] : null };
+  }, [activities, loadPreferences]);
+
   return React.useMemo(() => {
     if (boundaries.oldest == null) {
-      return { weeks: [], dayLoadScale: 0 };
+      return { weeks: [], dayLoadScale: 0, currentForm: null };
     }
+
+    // CTL/TSB carried into a day; for days past the series end (e.g. the rest
+    // of the current week) fall back to the latest point, before it to 0.
+    const fitnessFor = (date: Date): FitnessPoint | null => {
+      const point = fitnessByDay.map.get(format(date, DAY_KEY));
+      if (point) {
+        return point;
+      }
+      const last = fitnessByDay.last;
+      return last != null && date.getTime() > last.date.getTime() ? last : null;
+    };
 
     const firstWeekStart = startOf(boundaries.oldest, "week");
     const weeks: JournalWeek[] = [];
@@ -189,6 +229,7 @@ export function useJournalWeeks(
         totalLoad,
         loadTrend: null,
         monthStart: null,
+        verdict: null,
       });
 
       weekStart = addUnit(weekStart, -1, "week");
@@ -206,6 +247,20 @@ export function useJournalWeeks(
       }
       const baseline = count > 0 ? sum / count : 0;
       weeks[i].loadTrend = baseline > 1 ? weeks[i].totalLoad / baseline : null;
+
+      // Only judge weeks with a full trailing window behind them, so the
+      // Fitness warm-up period (where CTL ramps up from 0) isn't mislabelled.
+      if (i + TREND_WINDOW < weeks.length) {
+        const endForm = fitnessFor(weeks[i].weekEnd);
+        const startForm = fitnessFor(addDays(weeks[i].weekStart, -1));
+        if (endForm != null) {
+          weeks[i].verdict = classifyWeeklyLoad({
+            ctlRamp: endForm.ctl - (startForm?.ctl ?? 0),
+            tsb: endForm.tsb,
+            acwr: weeks[i].loadTrend,
+          });
+        }
+      }
 
       const older = weeks[i + 1];
       if (older == null || !isSameMonth(weeks[i].weekStart, older.weekStart)) {
@@ -228,6 +283,10 @@ export function useJournalWeeks(
       }
     }
 
-    return { weeks, dayLoadScale: percentile90(nonEmptyDayLoads) };
-  }, [boundaries.oldest, activitiesByDay, loadByStravaId]);
+    return {
+      weeks,
+      dayLoadScale: percentile90(nonEmptyDayLoads),
+      currentForm: fitnessByDay.last,
+    };
+  }, [boundaries.oldest, activitiesByDay, loadByStravaId, fitnessByDay]);
 }

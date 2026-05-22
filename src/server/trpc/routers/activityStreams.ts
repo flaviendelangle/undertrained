@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
+import { getSportConfig } from "../../../utils/sportConfig";
 import type { Database } from "../../db";
 import { activities, activityStreams, riderSettings } from "../../db/schema";
 import {
@@ -14,7 +15,8 @@ import {
 } from "../../lib/strava";
 import {
   computeActivityScoresInternal,
-  storeLaps,
+  storeActivityDetails,
+  storeBestEfforts,
   storeStreams,
 } from "../../lib/sync";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
@@ -173,8 +175,12 @@ export const activityStreamsRouter = router({
         })
         .where(eq(activities.id, activity.id));
 
-      // Laps come from the detailed activity we already fetched above — free.
-      await storeLaps(ctx.db, activity.id, rawActivity);
+      // Laps + description/RPE/private note come from the detailed activity we
+      // already fetched above — free. Refresh run best efforts too.
+      if (getSportConfig(rawActivity.type).category === "running") {
+        await storeBestEfforts(ctx.db, activity.id, rawActivity);
+      }
+      await storeActivityDetails(ctx.db, activity.id, rawActivity);
 
       await storeAndRecomputeScores(
         ctx.db,

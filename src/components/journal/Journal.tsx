@@ -14,12 +14,14 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
+import { usePersonalRecords } from "~/hooks/usePersonalRecords";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import { classifyForm } from "~/lib/fitness";
 import { cn } from "~/lib/utils";
 import { startOf } from "~/utils/dateUtils";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
-import { TIER_STYLE } from "./JournalDayCell";
+import { JournalRecordsContext, TIER_STYLE } from "./JournalDayCell";
 import {
   JOURNAL_GRID_COLS,
   JournalWeekRow,
@@ -64,6 +66,7 @@ function HeaderCell({
 export function Journal() {
   const { data: activities, isLoading, isError } = useActivitiesQuery();
   const { timeline } = useRiderSettingsTimeline();
+  const records = usePersonalRecords();
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   const loadPreferences = React.useMemo(
@@ -71,7 +74,14 @@ export function Journal() {
     [timeline],
   );
 
-  const { weeks, dayLoadScale } = useJournalWeeks(activities, loadPreferences);
+  const { weeks, dayLoadScale, currentForm } = useJournalWeeks(
+    activities,
+    loadPreferences,
+  );
+
+  // Today's Form (TSB) and its zone, for the header readout.
+  const formZone =
+    currentForm != null ? classifyForm(currentForm.tsb) : null;
 
   const rowVirtualizer = useVirtualizer({
     count: weeks.length,
@@ -129,16 +139,40 @@ export function Journal() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="text-muted-foreground border-border flex items-center justify-end gap-3 border-b px-3 py-1.5 text-[11px]">
-        <span className="font-medium">Daily load</span>
-        {LOAD_LEGEND.map(({ bar, label }) => (
-          <span key={label} className="flex items-center gap-1">
-            <span className={cn("h-2.5 w-0.75 rounded-full", bar)} />
-            {label}
+      <div className="text-muted-foreground border-border flex items-center justify-between gap-3 border-b px-3 py-1.5 text-[11px]">
+        {formZone != null && currentForm != null ? (
+          <span
+            className="flex items-center gap-1.5 font-medium"
+            title={`Today's Form (TSB): ${currentForm.tsb > 0 ? "+" : ""}${Math.round(currentForm.tsb)} — ${formZone.label}`}
+          >
+            <span className="uppercase">Form</span>
+            <span
+              className="inline-flex items-center gap-1 rounded px-1.5 py-px tabular-nums"
+              style={{
+                color: formZone.color,
+                backgroundColor: `${formZone.color}22`,
+              }}
+            >
+              {currentForm.tsb > 0 ? "+" : ""}
+              {Math.round(currentForm.tsb)}
+              <span className="not-italic">· {formZone.label}</span>
+            </span>
           </span>
-        ))}
+        ) : (
+          <span />
+        )}
+        <span className="flex items-center gap-3">
+          <span className="font-medium">Daily load</span>
+          {LOAD_LEGEND.map(({ bar, label }) => (
+            <span key={label} className="flex items-center gap-1">
+              <span className={cn("h-2.5 w-0.75 rounded-full", bar)} />
+              {label}
+            </span>
+          ))}
+        </span>
       </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
+        <JournalRecordsContext.Provider value={records}>
         <div className="min-w-150 md:min-w-194" role="grid">
           <div
             role="row"
@@ -227,6 +261,7 @@ export function Journal() {
             </div>
           )}
         </div>
+        </JournalRecordsContext.Provider>
       </div>
     </div>
   );

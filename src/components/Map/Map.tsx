@@ -54,7 +54,13 @@ function FitBounds(props: FitBoundsProps) {
     if (allPositions.length > 0) {
       // No animation: the loading overlay hides the jump, and the final view's
       // tiles start loading immediately so we can reveal a fully-drawn map.
-      map.fitBounds(allPositions, { animate: false });
+      // Pad the fit so the route never sits flush against the edges — extra at
+      // the bottom keeps it clear of the attribution bar ("Leaflet | Map …").
+      map.fitBounds(allPositions, {
+        animate: false,
+        paddingTopLeft: [8, 8],
+        paddingBottomRight: [8, 24],
+      });
     }
     onFitted?.();
   }, [polylines, map, onFitted]);
@@ -65,11 +71,13 @@ function FitBounds(props: FitBoundsProps) {
 export default function Map(props: MapProps) {
   const {
     activities,
+    dragging = true,
     enableExplorerTiles = false,
     fitMode = "all",
     highlightPosition,
     onReady,
     routePositions,
+    zoomControl = true,
   } = props;
   const { showExplorerTiles } = useExplorerTilesToggle();
 
@@ -146,6 +154,11 @@ export default function Map(props: MapProps) {
     return latest ? [latest] : polylines;
   }, [fitMode, polylines, decodedActivityPolylines]);
 
+  // Clicking a route opens a tooltip identifying which activity it belongs to.
+  // That's only meaningful when several routes are drawn together (e.g. the
+  // heatmap); with a single activity there's nothing to disambiguate.
+  const enableActivityClick = (decodedActivityPolylines?.length ?? 0) > 1;
+
   const explorerPolylines = React.useMemo(
     () => decodedActivityPolylines?.map((p) => p.polyline) ?? [],
     [decodedActivityPolylines],
@@ -159,6 +172,8 @@ export default function Map(props: MapProps) {
         zoom={14}
         className="z-0 h-full w-full"
         attributionControl={false}
+        dragging={dragging}
+        zoomControl={zoomControl}
       >
         <AttributionControl position="bottomleft" prefix="Leaflet" />
         <TileLayer
@@ -177,9 +192,11 @@ export default function Map(props: MapProps) {
             key={entry.id}
             positions={entry.polyline}
             color="red"
-            pathOptions={{ className: "cursor-pointer" }}
+            pathOptions={{
+              className: enableActivityClick ? "cursor-pointer" : undefined,
+            }}
             eventHandlers={
-              "activity" in entry
+              enableActivityClick && "activity" in entry
                 ? {
                     click: (e) => {
                       const { clientX, clientY } = e.originalEvent;
@@ -231,6 +248,8 @@ export default function Map(props: MapProps) {
 
 interface MapProps {
   activities: ListActivity[] | null;
+  /** Whether the user can pan the map by dragging. Defaults to `true`. */
+  dragging?: boolean;
   enableExplorerTiles?: boolean;
   /**
    * Controls the initial zoom/position. "all" (default) fits the whole map to
@@ -241,4 +260,6 @@ interface MapProps {
   /** Called once the view is fitted and its tiles have finished loading. */
   onReady?: () => void;
   routePositions?: [number, number][] | null;
+  /** Whether to show Leaflet's zoom +/- buttons. Defaults to `true`. */
+  zoomControl?: boolean;
 }

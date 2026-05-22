@@ -13,6 +13,7 @@ export const activitiesRouter = router({
         workoutTypes: z.array(z.number()).optional(),
         includeMap: z.boolean().optional(),
         timePeriodId: z.number().optional(),
+        hideCommutes: z.boolean().optional(),
       }),
     )
     .use(validateAthleteOwnership)
@@ -30,6 +31,9 @@ export const activitiesRouter = router({
       }
       if (input.workoutTypes && input.workoutTypes.length > 0) {
         conditions.push(inArray(activities.workoutType, input.workoutTypes));
+      }
+      if (input.hideCommutes) {
+        conditions.push(eq(activities.commute, false));
       }
       if (periodDateFrom) {
         conditions.push(gte(activities.startDate, periodDateFrom));
@@ -61,6 +65,8 @@ export const activitiesRouter = router({
         speedEfforts: _speedEfforts,
         laps: _laps,
         mapPolyline: _mapPolyline,
+        description: _description,
+        privateNote: _privateNote,
         ...leanColumns
       } = getTableColumns(activities);
 
@@ -108,5 +114,24 @@ export const activitiesRouter = router({
           ),
         })) ?? null
       );
+    }),
+
+  // Lazily fetch a single activity's encoded route, used by the Journal hover
+  // preview card. Selects only the `mapPolyline` column so hovering chips never
+  // pulls the heavy jsonb blobs that `get` returns.
+  getMapPolyline: protectedProcedure
+    .input(z.object({ stravaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const row = await ctx.db
+        .select({ mapPolyline: activities.mapPolyline })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.stravaId, input.stravaId),
+            eq(activities.athlete, ctx.session.athleteId),
+          ),
+        )
+        .limit(1);
+      return { mapPolyline: row[0]?.mapPolyline ?? null };
     }),
 });

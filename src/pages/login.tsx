@@ -15,7 +15,7 @@ const LoginPage: NextPageWithLayout = () => {
   const session = useSession();
 
   if (session.data?.user) {
-    router.replace("/activities");
+    router.replace("/journal");
   }
 
   if (session.status === "loading") {
@@ -42,7 +42,7 @@ const LoginPage: NextPageWithLayout = () => {
 
         <button
           className="group relative transition-transform hover:scale-105 active:scale-100"
-          onClick={() => signIn("strava", { callbackUrl: "/activities" })}
+          onClick={() => signIn("strava", { callbackUrl: "/journal" })}
         >
           <div className="absolute -inset-1 rounded-lg bg-[#FC4C02]/20 opacity-0 blur-md transition-opacity group-hover:opacity-100" />
           <Image

@@ -148,7 +148,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
         )}
         <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
           <TimePeriodStats {...data} />
-          <div className="border-border bg-card flex h-[28rem] flex-col overflow-hidden rounded-xl border">
+          <div className="border-border bg-background flex h-[28rem] flex-col overflow-hidden rounded-xl border">
             <div className="border-border border-b p-4">
               <CardTitle>Activities</CardTitle>
             </div>

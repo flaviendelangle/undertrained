@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { format } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
+import { FlagIcon, MedalIcon } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -13,10 +14,26 @@ import { cn } from "~/lib/utils";
 import { formatActivityType } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
+import { ActivityPreviewCard } from "./ActivityPreviewCard";
 import type { JournalActivity, JournalDay } from "./useJournalWeeks";
 
 /** Activity chips shown before collapsing the rest into a "+N more" badge. */
 const MAX_VISIBLE_ACTIVITIES = 3;
+
+/**
+ * Strava `workoutType` values that mark an activity as a race. Strava encodes
+ * this per sport: `1` for runs, `11` for rides.
+ */
+const RACE_WORKOUT_TYPES = new Set([1, 11]);
+
+/**
+ * Map of `stravaId → all-time record labels` for the loaded athlete, provided by
+ * the Journal so chips can badge PRs without prop-drilling through the memoized
+ * week rows. Empty by default (no records / still loading).
+ */
+export const JournalRecordsContext = React.createContext<Map<number, string[]>>(
+  new Map(),
+);
 
 const LOCALE_OPTIONS = { locale: enGB };
 
@@ -60,27 +77,51 @@ function ActivityChip({ activity }: { activity: JournalActivity }) {
   const Icon = config.icon;
   const stats = config.formatJournalStats(activity);
 
+  const records = React.useContext(JournalRecordsContext);
+  const activityRecords = records.get(activity.stravaId);
+  const isRace =
+    activity.workoutType != null && RACE_WORKOUT_TYPES.has(activity.workoutType);
+  const isPr = activityRecords != null && activityRecords.length > 0;
+
   return (
-    <Link
-      href={`/activities/${activity.stravaId}?from=journal`}
-      title={activity.name}
-      className="flex min-w-0 flex-col gap-0.5 rounded px-1 py-0.5 leading-tight transition-colors hover:brightness-95 dark:hover:brightness-110"
-      style={{
-        backgroundColor: `color-mix(in oklab, ${config.color} 16%, transparent)`,
-      }}
-    >
-      <span className="flex min-w-0 items-center gap-1">
-        <Icon className="size-3 shrink-0" style={{ color: config.color }} />
-        <span className="text-foreground truncate text-xs font-medium">
-          {activity.name || formatActivityType(activity.type)}
+    <ActivityPreviewCard activity={activity} records={activityRecords}>
+      <Link
+        href={`/activities/${activity.stravaId}?from=journal`}
+        aria-label={isRace ? `Race: ${activity.name}` : activity.name}
+        className={cn(
+          "flex min-w-0 flex-col gap-0.5 rounded px-1 py-0.5 leading-tight transition-colors hover:brightness-95 dark:hover:brightness-110",
+          // Races get a gold ring so they stand out from training days.
+          isRace && "ring-1 ring-amber-400/80 ring-inset",
+        )}
+        style={{
+          backgroundColor: `color-mix(in oklab, ${config.color} 16%, transparent)`,
+        }}
+      >
+        <span className="flex min-w-0 items-center gap-1">
+          <Icon className="size-3 shrink-0" style={{ color: config.color }} />
+          <span className="text-foreground truncate text-xs font-medium">
+            {activity.name || formatActivityType(activity.type)}
+          </span>
+          {isRace && (
+            <FlagIcon
+              className="size-3 shrink-0 text-amber-500"
+              aria-label="Race"
+            />
+          )}
+          {isPr && (
+            <MedalIcon
+              className="size-3 shrink-0 text-amber-500"
+              aria-label={`Personal record: ${activityRecords?.join(", ")}`}
+            />
+          )}
         </span>
-      </span>
-      {stats && (
-        <span className="text-muted-foreground truncate text-[11px] tabular-nums">
-          {stats}
-        </span>
-      )}
-    </Link>
+        {stats && (
+          <span className="text-muted-foreground truncate text-[11px] tabular-nums">
+            {stats}
+          </span>
+        )}
+      </Link>
+    </ActivityPreviewCard>
   );
 }
 

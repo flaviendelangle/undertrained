@@ -14,7 +14,7 @@ export default {
     return [
       {
         source: "/",
-        destination: "/activities",
+        destination: "/journal",
         permanent: false,
       },
     ];

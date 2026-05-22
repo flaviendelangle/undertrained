@@ -12,8 +12,8 @@ import {
 } from "./strava";
 import {
   computeActivityScoresInternal,
+  storeActivityDetails,
   storeBestEfforts,
-  storeLaps,
   storeStreams,
   syncAthleteStats,
 } from "./sync";
@@ -142,12 +142,12 @@ async function handleActivityCreate(
     }
   }
 
-  // Store laps for all activity types — they ride along on the detailed activity
-  // we already fetched, so this costs no extra request.
+  // Store laps + description/RPE/private note for all activity types — they ride
+  // along on the detailed activity we already fetched, so no extra request.
   try {
-    await storeLaps(db, activityId, rawActivity);
+    await storeActivityDetails(db, activityId, rawActivity);
   } catch (err) {
-    console.error(`[webhook] Failed to store laps for ${stravaActivityId}:`, err);
+    console.error(`[webhook] Failed to store details for ${stravaActivityId}:`, err);
   }
 
   // Refresh the athlete's curated all-time stats (cheap, keeps Records fresh)
@@ -214,50 +214,122 @@ async function handleActivityUpdate(
     return;
   }
 
-  const patch: Partial<{
-    name: string;
-    type: string;
-    areBestEffortsLoaded: boolean;
-  }> = {};
-  if (updates.title) patch.name = updates.title;
-  // Type change can flip an activity into/out of "run" → re-fetch best efforts on next sync.
-  if (updates.type) {
-    patch.type = updates.type;
-    patch.areBestEffortsLoaded = false;
+  // Strava's update payload only flags *which* kinds of fields changed (title,
+  // type, …) — never the new values of commute/workout_type/description/RPE/
+  // private note. So re-fetch the full detailed activity and refresh everything,
+  // matching what a manual sync stores. One extra GET per edit; edits are rare.
+  const accessToken = await getAccessToken(db, athleteId);
+  let rawActivity;
+  try {
+    rawActivity = await strava.activities.get({
+      access_token: accessToken,
+      id: String(stravaActivityId),
+    });
+  } catch (err) {
+    console.error(
+      `[webhook] Failed to re-fetch activity ${stravaActivityId} on update:`,
+      err,
+    );
+    return;
+  }
+  if (!rawActivity) {
+    console.warn(
+      `[webhook] Activity ${stravaActivityId} not found on Strava during update`,
+    );
+    return;
   }
 
-  if (Object.keys(patch).length > 0) {
-    await db
-      .update(activities)
-      .set(patch)
-      .where(eq(activities.stravaId, stravaActivityId));
-    console.log(`[webhook] Activity ${stravaActivityId} updated:`, patch);
-  }
+  const model = getModelFromStravaActivity(rawActivity, athleteId);
 
-  // If type changed, recompute scores (TSS/powerBests depend on activity type)
-  if (updates.type) {
+  // Refresh all summary metadata (incl. commute + workoutType, which power the
+  // hide-commutes filter and the race tag).
+  await db
+    .update(activities)
+    .set({
+      type: model.type,
+      name: model.name,
+      startDate: model.startDate,
+      startDateLocal: model.startDateLocal,
+      distance: model.distance,
+      totalElevationGain: model.totalElevationGain,
+      averageSpeed: model.averageSpeed,
+      averageWatts: model.averageWatts,
+      averageCadence: model.averageCadence,
+      averageHeartrate: model.averageHeartrate,
+      maxHeartrate: model.maxHeartrate,
+      maxSpeed: model.maxSpeed,
+      maxWatts: model.maxWatts,
+      weightedAverageWatts: model.weightedAverageWatts,
+      kilojoules: model.kilojoules,
+      calories: model.calories,
+      movingTime: model.movingTime,
+      elapsedTime: model.elapsedTime,
+      mapPolyline: model.mapPolyline,
+      workoutType: model.workoutType,
+      commute: model.commute,
+    })
+    .where(eq(activities.id, existing.id));
+
+  // A crop/recompute on Strava changes the streams → re-pull them so derived
+  // records stay accurate. Pure metadata edits leave the streams untouched.
+  const metricsChanged =
+    existing.distance !== model.distance ||
+    existing.movingTime !== model.movingTime ||
+    existing.elapsedTime !== model.elapsedTime ||
+    existing.weightedAverageWatts !== (model.weightedAverageWatts ?? null);
+  if (metricsChanged) {
     try {
-      const settingsDoc =
-        (await db.query.riderSettings.findFirst({
-          where: eq(riderSettings.athlete, athleteId),
-        })) ?? null;
-      const updatedActivity = await db.query.activities.findFirst({
-        where: eq(activities.stravaId, stravaActivityId),
-      });
-      if (updatedActivity) {
-        await computeActivityScoresInternal(
-          db,
-          updatedActivity,
-          settingsDoc,
-        );
-      }
+      const streams = await fetchStreamsFromStrava(accessToken, stravaActivityId);
+      await storeStreams(db, existing.id, streams);
     } catch (err) {
       console.error(
-        `[webhook] Failed to recompute scores for ${stravaActivityId}:`,
+        `[webhook] Failed to refresh streams for ${stravaActivityId} on update:`,
         err,
       );
     }
   }
+
+  // Refresh run best efforts and the detail-only fields (description/RPE/private
+  // note/laps) from the activity we already re-fetched.
+  if (getSportConfig(rawActivity.type).category === "running") {
+    try {
+      await storeBestEfforts(db, existing.id, rawActivity);
+    } catch (err) {
+      console.error(
+        `[webhook] Failed to refresh best efforts for ${stravaActivityId}:`,
+        err,
+      );
+    }
+  }
+  try {
+    await storeActivityDetails(db, existing.id, rawActivity);
+  } catch (err) {
+    console.error(
+      `[webhook] Failed to refresh details for ${stravaActivityId}:`,
+      err,
+    );
+  }
+
+  // Recompute scores — type/metrics changes affect TSS, power bests, etc.
+  try {
+    const settingsDoc =
+      (await db.query.riderSettings.findFirst({
+        where: eq(riderSettings.athlete, athleteId),
+      })) ?? null;
+    const updatedActivity = await db.query.activities.findFirst({
+      where: eq(activities.id, existing.id),
+    });
+    if (updatedActivity) {
+      await computeActivityScoresInternal(db, updatedActivity, settingsDoc);
+    }
+  } catch (err) {
+    console.error(
+      `[webhook] Failed to recompute scores for ${stravaActivityId}:`,
+      err,
+    );
+  }
+
+  console.log(`[webhook] Activity ${stravaActivityId} refreshed from Strava`);
 }
 
 // ── Activity Delete ─────────────────────────────────────────────────────

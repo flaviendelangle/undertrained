@@ -2,7 +2,6 @@ import * as React from "react";
 
 import { format, isSameMonth } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
-import { TrendingDownIcon, TrendingUpIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 
@@ -17,12 +16,6 @@ export const JOURNAL_GRID_COLS =
   "grid-cols-[3rem_repeat(7,minmax(0,1fr))_5rem] md:grid-cols-[7rem_repeat(7,minmax(0,1fr))_7rem]";
 
 const LOCALE_OPTIONS = { locale: enGB };
-
-/**
- * A week's load is treated as "flat" (no arrow) when it sits within ±15% of the
- * trailing average, so normal week-to-week wobble doesn't read as a trend.
- */
-const TREND_FLAT_BAND = 0.15;
 
 /** Compact non-wrapping duration for weekly totals, e.g. "12h58". */
 function formatWeeklyTotal(totalSeconds: number): string {
@@ -42,23 +35,33 @@ function formatWeekRange(weekStart: Date, weekEnd: Date): string {
   return `${start} – ${format(weekEnd, "d MMM", LOCALE_OPTIONS)}`;
 }
 
-function LoadTrend({ trend }: { trend: number }) {
-  const deltaPct = Math.round((trend - 1) * 100);
-  if (Math.abs(trend - 1) < TREND_FLAT_BAND) {
+/**
+ * The week's training verdict (Undertrained → Overreaching), as a colour-dotted
+ * chip. The trailing-average delta that feeds the under/over edges is kept in
+ * the tooltip so the calendar stays uncluttered.
+ */
+function VerdictChip({ week }: { week: JournalWeek }) {
+  if (week.verdict == null) {
     return null;
   }
-  const up = trend > 1;
-  const Icon = up ? TrendingUpIcon : TrendingDownIcon;
+  const deltaPct =
+    week.loadTrend != null ? Math.round((week.loadTrend - 1) * 100) : null;
+  const tooltip =
+    deltaPct != null
+      ? `${week.verdict.label} · ${deltaPct > 0 ? "+" : ""}${deltaPct}% vs. trailing 4-week average`
+      : week.verdict.label;
   return (
     <span
-      className={cn(
-        "flex items-center gap-0.5 text-[11px] font-medium tabular-nums",
-        up ? "text-destructive" : "text-muted-foreground",
-      )}
-      title={`${deltaPct > 0 ? "+" : ""}${deltaPct}% vs. trailing 4-week average`}
+      className="flex min-w-0 items-center gap-1 text-[11px] font-medium"
+      style={{ color: week.verdict.color }}
+      title={tooltip}
     >
-      <Icon className="size-3 shrink-0" />
-      {Math.abs(deltaPct)}%
+      <span
+        aria-hidden
+        className="size-1.5 shrink-0 rounded-full"
+        style={{ backgroundColor: week.verdict.color }}
+      />
+      <span className="truncate">{week.verdict.label}</span>
     </span>
   );
 }
@@ -69,15 +72,13 @@ function WeekSummary({ week }: { week: JournalWeek }) {
       <div className="text-foreground text-sm font-semibold tabular-nums">
         {formatWeeklyTotal(week.totalSeconds)}
       </div>
-      <div className="text-muted-foreground flex items-center gap-1 text-xs whitespace-nowrap">
-        <span className="whitespace-nowrap">
-          <span className="text-foreground font-medium tabular-nums">
-            {Math.round(week.totalLoad)}
-          </span>{" "}
-          load
-        </span>
-        {week.loadTrend != null && <LoadTrend trend={week.loadTrend} />}
+      <div className="text-muted-foreground text-xs whitespace-nowrap">
+        <span className="text-foreground font-medium tabular-nums">
+          {Math.round(week.totalLoad)}
+        </span>{" "}
+        load
       </div>
+      <VerdictChip week={week} />
     </div>
   );
 }

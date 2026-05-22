@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { activities, timePeriods } from "../../db/schema";
@@ -154,7 +154,7 @@ export const timePeriodsRouter = router({
         .select()
         .from(timePeriods)
         .where(eq(timePeriods.athlete, input.athleteId))
-        .orderBy(timePeriods.startDate);
+        .orderBy(desc(timePeriods.startDate));
 
       if (periods.length === 0) return [];
 

@@ -146,7 +146,26 @@ export function getModelFromStravaActivity(
     movingTime: activity.moving_time,
     elapsedTime: activity.elapsed_time,
     workoutType: activity.workout_type ?? undefined,
+    commute: activity.commute ?? false,
     mapPolyline: activity.map?.summary_polyline ?? undefined,
+  };
+}
+
+/**
+ * Extracts the fields that only live on the full DetailedActivity (not the
+ * summary returned by `listActivities`). `perceived_exertion` (RPE) and
+ * `private_note` are absent from the strava-v3 type, so we read them through a
+ * loosened shape — same approach `getLapModels` uses for lap power.
+ */
+export function getActivityDetailFields(detailed: DetailedActivity) {
+  const loose = detailed as DetailedActivity & {
+    perceived_exertion?: number | null;
+    private_note?: string | null;
+  };
+  return {
+    description: detailed.description ?? null,
+    perceivedExertion: loose.perceived_exertion ?? null,
+    privateNote: loose.private_note ?? null,
   };
 }
 

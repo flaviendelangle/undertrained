@@ -153,15 +153,15 @@ export function NavBar() {
             </button>
           </TooltipIfMenuCollapsed>
 
-          <TooltipIfMenuCollapsed label="Activities">
-            <NavBarLink icon={ListIcon} label="Activities" href="/activities" />
-          </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label="Journal">
             <NavBarLink
               icon={CalendarDaysIcon}
               label="Journal"
               href="/journal"
             />
+          </TooltipIfMenuCollapsed>
+          <TooltipIfMenuCollapsed label="Activities">
+            <NavBarLink icon={ListIcon} label="Activities" href="/activities" />
           </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label="Heatmap">
             <NavBarLink icon={MapIcon} label="Heatmap" href="/heatmap" />
@@ -345,12 +345,12 @@ export function MobileBottomBar() {
 
       {/* Bottom tab bar */}
       <nav className="bg-sidebar border-sidebar-border fixed right-0 bottom-0 left-0 z-30 flex h-14 items-stretch border-t md:hidden">
-        <MobileTabLink icon={ListIcon} label="Activities" href="/activities" />
         <MobileTabLink
           icon={CalendarDaysIcon}
           label="Journal"
           href="/journal"
         />
+        <MobileTabLink icon={ListIcon} label="Activities" href="/activities" />
         <MobileTabLink icon={MapIcon} label="Heatmap" href="/heatmap" />
         <MobileTabLink
           icon={BarChart3Icon}

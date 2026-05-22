@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "../../db";
+import { CYCLING_POWER_DURATIONS } from "../../../utils/cyclingPowerDurations";
 import { getActivityTypesByCategory } from "../../../utils/sportConfig";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
@@ -119,6 +120,93 @@ export const recordsRouter = router({
           distance: Number(r.distance),
         })),
       };
+    }),
+
+  /**
+   * Activities that hold an all-time #1 record in a curated, headline set —
+   * used to badge 🏅 chips in the Journal. Returns one entry per record-holding
+   * activity with the labels of every record it owns. Keeps the heavy `_bests`
+   * jsonb on the server: `activities.list` deliberately omits those columns.
+   */
+  getRecordHolders: protectedProcedure
+    .input(z.object({ athleteId: z.number() }))
+    .use(validateAthleteOwnership)
+    .query(async ({ ctx, input }) => {
+      const cycling = sql`AND a.type IN (${typeList(CYCLING_TYPES)})`;
+      const running = sql`AND a.type IN (${typeList(RUNNING_TYPES)})`;
+      const nonVirtualCycling = sql`AND a.type IN (${typeList(NON_VIRTUAL_CYCLING_TYPES)})`;
+
+      // Each category's all-time leader (LIMIT 1), tagged with a display label.
+      const single = (
+        valueExpr: SQL,
+        order: SQL,
+        label: string,
+        extra?: SQL,
+      ) =>
+        topActivities(ctx.db, {
+          athleteId: input.athleteId,
+          valueExpr,
+          order,
+          extra,
+          limit: 1,
+        }).then((rows) => ({ label, stravaId: rows[0]?.activityStravaId }));
+
+      const [powerLeaders, misc, runEffortRows] = await Promise.all([
+        Promise.all(
+          CYCLING_POWER_DURATIONS.map((d) =>
+            single(
+              sql`(a.power_bests ->> ${String(d.seconds)})::int`,
+              sql`DESC`,
+              `${d.label} power`,
+              cycling,
+            ),
+          ),
+        ),
+        Promise.all([
+          single(sql`a.distance`, sql`DESC`, "Longest ride", cycling),
+          single(sql`a.distance`, sql`DESC`, "Longest run", running),
+          single(
+            sql`a.biggest_climb`,
+            sql`DESC`,
+            "Biggest climb",
+            sql`${nonVirtualCycling} AND a.biggest_climb > 0`,
+          ),
+        ]),
+        // Fastest run per Strava best-effort distance label (e.g. "5k").
+        ctx.db.execute<{ name: string; strava_id: string }>(sql`
+          SELECT DISTINCT ON (be.name) be.name, a.strava_id
+          FROM best_efforts be
+          JOIN activities a ON a.id = be.activity_id
+          WHERE a.athlete = ${input.athleteId}
+          ORDER BY be.name, be.elapsed_time ASC
+        `),
+      ]);
+
+      // Accumulate every record onto its holding activity.
+      const byStravaId = new Map<number, string[]>();
+      const add = (stravaId: number | undefined, label: string) => {
+        if (stravaId == null) {
+          return;
+        }
+        const labels = byStravaId.get(stravaId);
+        if (labels) {
+          labels.push(label);
+        } else {
+          byStravaId.set(stravaId, [label]);
+        }
+      };
+
+      for (const leader of [...powerLeaders, ...misc]) {
+        add(leader.stravaId, leader.label);
+      }
+      for (const row of runEffortRows) {
+        add(Number(row.strava_id), String(row.name));
+      }
+
+      return Array.from(byStravaId, ([stravaId, records]) => ({
+        stravaId,
+        records,
+      }));
     }),
 
   /**
