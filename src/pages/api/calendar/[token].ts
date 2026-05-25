@@ -1,11 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
-import { addDays, addSeconds, format, parseISO, subDays } from "date-fns";
+import { addDays, addSeconds, format, subDays } from "date-fns";
 import { and, eq, gte, lte } from "drizzle-orm";
 
 import { db } from "@server/db";
 import { athletes, plannedTrainings } from "@server/db/schema";
 import type { PlannedTraining } from "@server/db/types";
+import { env } from "@server/env";
 
 // How much of the schedule the feed exposes, matching TrainingPeaks' window.
 const HISTORY_DAYS = 5;
@@ -35,14 +36,51 @@ function foldLine(line: string): string {
   return chunks.join("\r\n");
 }
 
-/** Floating local calendar time, e.g. "20260525T090000" (no timezone, no Z). */
-function toFloating(date: Date): string {
-  return format(date, "yyyyMMdd'T'HHmmss");
-}
-
 /** UTC timestamp, e.g. "20260522T123456Z". */
 function toUtcStamp(date: Date): string {
   return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+/** Milliseconds `timeZone` is ahead of UTC at the given absolute instant. */
+function tzOffsetMs(utcMs: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(utcMs));
+  const f = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value);
+  const asUtc = Date.UTC(
+    f("year"),
+    f("month") - 1,
+    f("day"),
+    f("hour"),
+    f("minute"),
+    f("second"),
+  );
+  return asUtc - utcMs;
+}
+
+/**
+ * Resolve a floating wall-clock datetime (e.g. "2026-05-25T07:00:00", no offset)
+ * to the absolute UTC instant it denotes in `timeZone`. DST-aware via `Intl` —
+ * the second pass corrects the offset when the first guess lands on the far side
+ * of a DST transition. Stored plan times are floating, so this anchors them to
+ * the athlete's zone rather than letting the calendar guess (Google assumes UTC).
+ */
+function zonedWallClockToUtc(floating: string, timeZone: string): Date {
+  const [datePart, timePart = "00:00:00"] = floating.split("T");
+  const [y, mo, d] = datePart.split("-").map(Number);
+  const [h, mi, s] = timePart.slice(0, 8).split(":").map(Number);
+  const wallAsUtc = Date.UTC(y, mo - 1, d, h, mi, s || 0);
+  let utc = wallAsUtc - tzOffsetMs(wallAsUtc, timeZone);
+  utc = wallAsUtc - tzOffsetMs(utc, timeZone);
+  return new Date(utc);
 }
 
 function formatDuration(seconds: number): string {
@@ -52,7 +90,7 @@ function formatDuration(seconds: number): string {
 }
 
 function buildEvent(row: PlannedTraining, dtstamp: string): string {
-  const start = parseISO(row.plannedDate);
+  const start = zonedWallClockToUtc(row.plannedDate, env.CALENDAR_TIMEZONE);
   const end = addSeconds(start, row.durationSeconds);
   const description = `${row.sportType} · ${formatDuration(row.durationSeconds)}`;
   const lines = [
@@ -60,8 +98,9 @@ function buildEvent(row: PlannedTraining, dtstamp: string): string {
     // Stable UID so a calendar updates the event in place rather than duplicating.
     `UID:planned-${row.id}@undertrained`,
     `DTSTAMP:${dtstamp}`,
-    `DTSTART:${toFloating(start)}`,
-    `DTEND:${toFloating(end)}`,
+    // Absolute UTC instants (Z) — universally honored, unlike floating times.
+    `DTSTART:${toUtcStamp(start)}`,
+    `DTEND:${toUtcStamp(end)}`,
     foldLine(`SUMMARY:${escapeText(row.title)}`),
     foldLine(`DESCRIPTION:${escapeText(description)}`),
     "END:VEVENT",
@@ -103,7 +142,9 @@ export default async function handler(
     .where(
       and(
         eq(plannedTrainings.athlete, athlete.id),
-        eq(plannedTrainings.status, "planned"),
+        // Both "planned" and "completed" — once a plan is linked to a Strava
+        // activity it should stay on the calendar (same UID, updated in place),
+        // not vanish.
         gte(plannedTrainings.plannedDate, from),
         lte(plannedTrainings.plannedDate, to),
       ),

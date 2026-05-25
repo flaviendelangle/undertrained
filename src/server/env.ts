@@ -13,6 +13,24 @@ const envSchema = z.object({
   // absolute iCal subscription URL shown to athletes. Falls back to the request
   // origin when unset.
   APP_URL: z.string().url().optional(),
+  // IANA timezone the planned-training iCal feed anchors event times to. Stored
+  // plan times are floating wall-clock (no offset); the feed converts them to
+  // absolute UTC instants in this zone so subscribed calendars (Google included,
+  // which treats floating times as UTC) show them at the intended local time.
+  CALENDAR_TIMEZONE: z
+    .string()
+    .refine(
+      (tz) => {
+        try {
+          new Intl.DateTimeFormat("en-US", { timeZone: tz });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      "CALENDAR_TIMEZONE must be a valid IANA timezone (e.g. Europe/Paris)",
+    )
+    .default("Europe/Paris"),
 });
 
 export const env = envSchema.parse(process.env);
