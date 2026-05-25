@@ -43,20 +43,68 @@ interface CassettePreset {
 
 const CASSETTE_PRESETS: CassettePreset[] = [
   // 11-speed
-  { label: "11-28 (11s)", speeds: 11, cogs: [11, 12, 13, 14, 15, 17, 19, 21, 23, 25, 28] },
-  { label: "11-30 (11s)", speeds: 11, cogs: [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30] },
-  { label: "11-32 (11s)", speeds: 11, cogs: [11, 12, 13, 14, 16, 18, 20, 22, 25, 28, 32] },
-  { label: "11-34 (11s)", speeds: 11, cogs: [11, 12, 13, 14, 16, 18, 20, 23, 26, 30, 34] },
+  {
+    label: "11-28 (11s)",
+    speeds: 11,
+    cogs: [11, 12, 13, 14, 15, 17, 19, 21, 23, 25, 28],
+  },
+  {
+    label: "11-30 (11s)",
+    speeds: 11,
+    cogs: [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30],
+  },
+  {
+    label: "11-32 (11s)",
+    speeds: 11,
+    cogs: [11, 12, 13, 14, 16, 18, 20, 22, 25, 28, 32],
+  },
+  {
+    label: "11-34 (11s)",
+    speeds: 11,
+    cogs: [11, 12, 13, 14, 16, 18, 20, 23, 26, 30, 34],
+  },
   // 12-speed
-  { label: "11-30 (12s)", speeds: 12, cogs: [11, 12, 13, 14, 15, 16, 17, 19, 21, 24, 27, 30] },
-  { label: "11-32 (12s)", speeds: 12, cogs: [11, 12, 13, 14, 15, 16, 17, 19, 21, 24, 28, 32] },
-  { label: "11-34 (12s)", speeds: 12, cogs: [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34] },
-  { label: "10-33 (12s)", speeds: 12, cogs: [10, 11, 12, 13, 14, 15, 17, 19, 21, 24, 28, 33] },
-  { label: "10-36 (12s)", speeds: 12, cogs: [10, 11, 12, 13, 14, 16, 18, 21, 24, 28, 32, 36] },
+  {
+    label: "11-30 (12s)",
+    speeds: 12,
+    cogs: [11, 12, 13, 14, 15, 16, 17, 19, 21, 24, 27, 30],
+  },
+  {
+    label: "11-32 (12s)",
+    speeds: 12,
+    cogs: [11, 12, 13, 14, 15, 16, 17, 19, 21, 24, 28, 32],
+  },
+  {
+    label: "11-34 (12s)",
+    speeds: 12,
+    cogs: [11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34],
+  },
+  {
+    label: "10-33 (12s)",
+    speeds: 12,
+    cogs: [10, 11, 12, 13, 14, 15, 17, 19, 21, 24, 28, 33],
+  },
+  {
+    label: "10-36 (12s)",
+    speeds: 12,
+    cogs: [10, 11, 12, 13, 14, 16, 18, 21, 24, 28, 32, 36],
+  },
   // 10-speed
-  { label: "11-28 (10s)", speeds: 10, cogs: [11, 12, 13, 14, 15, 17, 19, 21, 24, 28] },
-  { label: "11-32 (10s)", speeds: 10, cogs: [11, 12, 14, 16, 18, 20, 22, 25, 28, 32] },
-  { label: "12-25 (10s)", speeds: 10, cogs: [12, 13, 14, 15, 16, 17, 18, 19, 21, 25] },
+  {
+    label: "11-28 (10s)",
+    speeds: 10,
+    cogs: [11, 12, 13, 14, 15, 17, 19, 21, 24, 28],
+  },
+  {
+    label: "11-32 (10s)",
+    speeds: 10,
+    cogs: [11, 12, 14, 16, 18, 20, 22, 25, 28, 32],
+  },
+  {
+    label: "12-25 (10s)",
+    speeds: 10,
+    cogs: [12, 13, 14, 15, 16, 17, 18, 19, 21, 25],
+  },
 ];
 
 const CHAINRING_PRESETS = [
@@ -92,7 +140,8 @@ type ViewTab = "ratio" | "speed" | "development";
 // ── Color scale ──
 
 function ratioColor(ratio: number, minRatio: number, maxRatio: number): string {
-  const t = maxRatio === minRatio ? 0.5 : (ratio - minRatio) / (maxRatio - minRatio);
+  const t =
+    maxRatio === minRatio ? 0.5 : (ratio - minRatio) / (maxRatio - minRatio);
   // green (easy) → yellow → red (hard)
   const hue = (1 - t) * 120; // 120=green, 0=red
   return `hsl(${hue}, 70%, 42%)`;
@@ -102,7 +151,9 @@ function ratioColor(ratio: number, minRatio: number, maxRatio: number): string {
 
 export function GearCalculator() {
   const [ringsInput, setRingsInput] = React.useState("52/36");
-  const [cogsInput, setCogsInput] = React.useState("11,12,13,14,16,18,20,22,25,28,32");
+  const [cogsInput, setCogsInput] = React.useState(
+    "11,12,13,14,16,18,20,22,25,28,32",
+  );
   const [wheelPreset, setWheelPreset] = React.useState("700×25c");
   const [cadence, setCadence] = React.useState<number | null>(90);
   const [viewTab, setViewTab] = React.useState<ViewTab>("ratio");
@@ -110,7 +161,8 @@ export function GearCalculator() {
   const rings = React.useMemo(() => parseRings(ringsInput), [ringsInput]);
   const cogs = React.useMemo(() => parseCogs(cogsInput), [cogsInput]);
 
-  const wheel = WHEEL_PRESETS.find((w) => w.label === wheelPreset) ?? WHEEL_PRESETS[1];
+  const wheel =
+    WHEEL_PRESETS.find((w) => w.label === wheelPreset) ?? WHEEL_PRESETS[1];
   const circumference = wheelCircumferenceM(wheel.rimMm, wheel.tireMm);
 
   // All ratios for color scale
@@ -136,9 +188,9 @@ export function GearCalculator() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="divide-border border-border flex w-full flex-col divide-y border-b md:mx-auto md:max-w-4xl md:gap-6 md:divide-y-0 md:border-0">
       {/* Input Card */}
-      <div className="bg-card rounded-sm border max-sm:border-0 p-4 md:p-6">
+      <div className="md:border-border md:bg-card p-4 md:rounded-sm md:border md:p-6">
         <div className="flex flex-col gap-5">
           {/* Chainrings */}
           <div>
@@ -157,7 +209,9 @@ export function GearCalculator() {
                 <Button
                   key={p.label}
                   variant={
-                    rings.join("/") === p.rings.join("/") ? "default" : "outline"
+                    rings.join("/") === p.rings.join("/")
+                      ? "default"
+                      : "outline"
                   }
                   size="xs"
                   onClick={() => applyChainringPreset(p)}
@@ -238,7 +292,7 @@ export function GearCalculator() {
 
       {/* View tabs + Table */}
       {rings.length > 0 && cogs.length > 0 && (
-        <div className="bg-card rounded-sm border max-sm:border-0">
+        <div className="md:border-border md:bg-card md:rounded-sm md:border">
           <div className="flex items-center gap-1.5 px-4 pt-4 md:px-6 md:pt-6">
             <Button
               variant={viewTab === "ratio" ? "default" : "outline"}
@@ -265,8 +319,7 @@ export function GearCalculator() {
           <div className="px-4 pt-1 pb-2 md:px-6">
             <p className="text-muted-foreground text-sm">
               {viewTab === "ratio" && "Chainring teeth ÷ cog teeth"}
-              {viewTab === "speed" &&
-                `Speed (km/h) at ${cadence ?? 90} rpm`}
+              {viewTab === "speed" && `Speed (km/h) at ${cadence ?? 90} rpm`}
               {viewTab === "development" &&
                 "Distance per pedal revolution (meters)"}
             </p>

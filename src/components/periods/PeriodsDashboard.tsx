@@ -33,12 +33,14 @@ export function PeriodsDashboard({ stats, onDelete }: PeriodsDashboardProps) {
       {/* Desktop: master–detail. */}
       <DashboardMasterDetail stats={stats} onDelete={onDelete} />
 
-      {/* Mobile: a simple list of cards that link to the full period page. */}
-      <div className="flex flex-col gap-4 lg:hidden">
-        <div className="flex items-center justify-end max-sm:px-3">
+      {/* Below desktop: cards that link to each period's page. On phone they go
+          full-bleed (edge-to-edge, hairline dividers) to match the Statistics
+          page; from `sm` up the existing 2-column card grid is unchanged. */}
+      <div className="flex flex-col lg:hidden">
+        <div className="flex items-center justify-end px-3 pb-3 sm:px-0 sm:pb-4">
           <NewPeriodButton />
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="divide-border border-border flex flex-col divide-y border-y sm:grid sm:grid-cols-2 sm:gap-4 sm:divide-y-0 sm:border-0">
           {stats.map((row) => (
             <PeriodSummaryCard
               key={row.period.id}
@@ -70,12 +72,19 @@ function DashboardMasterDetail({ stats, onDelete }: PeriodsDashboardProps) {
           {stats.map((row) => {
             const active = row.period.id === selected?.period.id;
             return (
-              <button
+              <div
                 key={row.period.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedId(row.period.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedId(row.period.id);
+                  }
+                }}
                 className={cn(
-                  "group border-border hover:bg-muted/50 flex flex-col items-start gap-1 border-b border-l-2 px-4 py-3 text-left transition-colors last:border-b-0",
+                  "group border-border hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1 border-b border-l-2 px-4 py-3 text-left transition-colors last:border-b-0",
                   active
                     ? "border-l-primary bg-muted/60"
                     : "border-l-transparent",
@@ -98,7 +107,7 @@ function DashboardMasterDetail({ stats, onDelete }: PeriodsDashboardProps) {
                 <span className="text-muted-foreground text-xs">
                   {formatPeriodRange(row.period.startDate, row.period.endDate)}
                 </span>
-              </button>
+              </div>
             );
           })}
         </div>

@@ -14,19 +14,19 @@ import {
 
 import { Button } from "~/components/ui/button";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogClose,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "~/components/ui/responsive-dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -211,21 +211,21 @@ function ReloadAllConfirmDialog(props: {
   onConfirm: () => void;
 }) {
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Reload all activities?</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={props.open} onOpenChange={props.onOpenChange}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Reload all activities?</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             This will delete all your synced activities and streams, then
             re-download everything from Strava. This is a very heavy operation
             that uses significant API quota and may take a long time depending
             on your activity history.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogFooter>
+          <ResponsiveDialogClose render={<Button variant="outline" />}>
             Cancel
-          </DialogClose>
+          </ResponsiveDialogClose>
           <Button
             variant="destructive"
             onClick={() => {
@@ -235,9 +235,9 @@ function ReloadAllConfirmDialog(props: {
           >
             Reload all
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
 

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, isNotNull, lte } from "drizzle-orm";
 import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
@@ -54,6 +54,29 @@ export const plannedTrainingsRouter = router({
         .from(plannedTrainings)
         .where(and(...conditions))
         .orderBy(asc(plannedTrainings.plannedDate));
+    }),
+
+  /**
+   * Internal `activities.id`s already reconciled with a (completed) plan. Lets
+   * the "mark done" picker hide activities that are spoken for, so an activity
+   * is never linked to two plans.
+   */
+  linkedActivityIds: protectedProcedure
+    .input(z.object({ athleteId: z.number() }))
+    .use(validateAthleteOwnership)
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.db
+        .select({ id: plannedTrainings.linkedActivityId })
+        .from(plannedTrainings)
+        .where(
+          and(
+            eq(plannedTrainings.athlete, input.athleteId),
+            isNotNull(plannedTrainings.linkedActivityId),
+          ),
+        );
+      return rows
+        .map((r) => r.id)
+        .filter((id): id is number => id != null);
     }),
 
   create: protectedProcedure

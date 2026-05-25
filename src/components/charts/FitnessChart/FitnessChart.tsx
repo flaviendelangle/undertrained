@@ -2,12 +2,17 @@ import * as React from "react";
 
 import { format } from "date-fns";
 
-import { ChartsReferenceLine, LineChartPro, type ZoomData } from "@mui/x-charts-pro";
+import {
+  ChartsReferenceLine,
+  LineChartPro,
+  type ZoomData,
+} from "@mui/x-charts-pro";
 
+import { ChartCard } from "~/components/ui/chart-card";
 import { useFitnessData } from "~/hooks/useFitnessData";
 import { useIsMobile } from "~/hooks/useIsMobile";
-import { classifyForm } from "~/lib/fitness";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
+import { classifyForm } from "~/lib/fitness";
 
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { ChartTooltip } from "../ChartTooltip";
@@ -64,7 +69,13 @@ export default function FitnessChart() {
     if (count <= DEFAULT_ZOOM_DAYS) {
       return [{ axisId: TIME_AXIS_ID, start: 0, end: 100 }];
     }
-    return [{ axisId: TIME_AXIS_ID, start: ((count - DEFAULT_ZOOM_DAYS) / count) * 100, end: 100 }];
+    return [
+      {
+        axisId: TIME_AXIS_ID,
+        start: ((count - DEFAULT_ZOOM_DAYS) / count) * 100,
+        end: 100,
+      },
+    ];
   }, [xData.length]);
 
   // Cap the maximum zoom-in so the tightest window is ~3 months — zooming
@@ -89,92 +100,95 @@ export default function FitnessChart() {
   // reference line can hide alongside it when toggled off via the legend.
   const [fitnessHidden, setFitnessHidden] = React.useState(false);
 
-  const yAxisWidth = isMobile ? AXIS_SIZE.mobile.width : AXIS_SIZE.desktop.width;
-  const xAxisHeight = isMobile ? AXIS_SIZE.mobile.height : AXIS_SIZE.desktop.height;
+  const yAxisWidth = isMobile
+    ? AXIS_SIZE.mobile.width
+    : AXIS_SIZE.desktop.width;
+  const xAxisHeight = isMobile
+    ? AXIS_SIZE.mobile.height
+    : AXIS_SIZE.desktop.height;
   const todayDate = series.length > 0 ? series[series.length - 1].date : null;
 
   return (
     <ChartThemeProvider>
-      <div className="bg-card flex h-96 w-full flex-col rounded-sm">
-        <div className="border-border flex items-center gap-3 border-b p-4">
-          <h3 className="shrink-0 text-lg font-semibold">Fitness</h3>
-        </div>
-
-        <div className="flex min-h-0 flex-1">
-          <div className="min-h-0 flex-1">
-            {series.length === 0 ? (
-              <EmptyState isLoading={isLoading} />
-            ) : (
-              <LineChartPro
-                zoomData={zoomData}
-                onZoomChange={setZoomData}
-                xAxis={[
-                  {
-                    id: TIME_AXIS_ID,
-                    scaleType: "point",
-                    data: xData,
-                    // One tick per month keeps the daily series readable; the
-                    // tooltip still shows the exact day on hover.
-                    tickInterval: (value: Date) => value.getDate() === 1,
-                    valueFormatter: (value: Date, ctx) =>
-                      ctx?.location === "tick"
-                        ? format(value, "MMM yyyy")
-                        : format(value, "d MMM yyyy"),
-                    tickLabelStyle: { fontSize: 11 },
-                    zoom: { filterMode: "keep", minSpan: minZoomSpan },
-                    height: xAxisHeight,
-                  },
-                ]}
-                yAxis={[
-                  {
-                    id: LOAD_AXIS_ID,
-                    position: "left",
-                    min: 0,
-                    width: yAxisWidth,
-                    valueFormatter: (v: number) => Math.round(v).toString(),
-                  },
-                ]}
-                series={seriesConfig}
-                margin={CHART_MARGINS.standard}
-                grid={{ horizontal: true }}
-                slots={{ tooltip: ChartTooltip }}
-                slotProps={{ legend: { toggleVisibilityOnClick: true } }}
-                onHiddenItemsChange={(hiddenItems) =>
-                  setFitnessHidden(hiddenItems.some((item) => item.seriesId === "ctl"))
-                }
-              >
-                {targetFitness > 0 && !fitnessHidden && (
-                  <ChartsReferenceLine
-                    axisId={LOAD_AXIS_ID}
-                    y={targetFitness}
-                    lineStyle={{
-                      stroke: fitnessColor,
-                      strokeDasharray: "4 4",
-                      strokeOpacity: 0.6,
-                    }}
-                  />
-                )}
-                {todayDate && (
-                  <ChartsReferenceLine
-                    axisId={TIME_AXIS_ID}
-                    x={todayDate}
-                    lineStyle={{ stroke: tokens.gridStrong.hex, strokeWidth: 1.5 }}
-                  />
-                )}
-              </LineChartPro>
-            )}
-          </div>
-
-          {/* Right-side readout (today's values). */}
-          {current && (
-            <Readout
-              current={current}
-              fitnessColor={fitnessColor}
-              fatigueColor={fatigueColor}
-            />
+      <ChartCard title="Fitness" bodyClassName="flex">
+        <div className="min-h-0 flex-1">
+          {series.length === 0 ? (
+            <EmptyState isLoading={isLoading} />
+          ) : (
+            <LineChartPro
+              zoomData={zoomData}
+              onZoomChange={setZoomData}
+              xAxis={[
+                {
+                  id: TIME_AXIS_ID,
+                  scaleType: "point",
+                  data: xData,
+                  // One tick per month keeps the daily series readable; the
+                  // tooltip still shows the exact day on hover.
+                  tickInterval: (value: Date) => value.getDate() === 1,
+                  valueFormatter: (value: Date, ctx) =>
+                    ctx?.location === "tick"
+                      ? format(value, "MMM yyyy")
+                      : format(value, "d MMM yyyy"),
+                  tickLabelStyle: { fontSize: 11 },
+                  zoom: { filterMode: "keep", minSpan: minZoomSpan },
+                  height: xAxisHeight,
+                },
+              ]}
+              yAxis={[
+                {
+                  id: LOAD_AXIS_ID,
+                  position: "left",
+                  min: 0,
+                  width: yAxisWidth,
+                  valueFormatter: (v: number) => Math.round(v).toString(),
+                },
+              ]}
+              series={seriesConfig}
+              margin={CHART_MARGINS.standard}
+              grid={{ horizontal: true }}
+              slots={{ tooltip: ChartTooltip }}
+              slotProps={{ legend: { toggleVisibilityOnClick: true } }}
+              onHiddenItemsChange={(hiddenItems) =>
+                setFitnessHidden(
+                  hiddenItems.some((item) => item.seriesId === "ctl"),
+                )
+              }
+            >
+              {targetFitness > 0 && !fitnessHidden && (
+                <ChartsReferenceLine
+                  axisId={LOAD_AXIS_ID}
+                  y={targetFitness}
+                  lineStyle={{
+                    stroke: fitnessColor,
+                    strokeDasharray: "4 4",
+                    strokeOpacity: 0.6,
+                  }}
+                />
+              )}
+              {todayDate && (
+                <ChartsReferenceLine
+                  axisId={TIME_AXIS_ID}
+                  x={todayDate}
+                  lineStyle={{
+                    stroke: tokens.gridStrong.hex,
+                    strokeWidth: 1.5,
+                  }}
+                />
+              )}
+            </LineChartPro>
           )}
         </div>
-      </div>
+
+        {/* Right-side readout (today's values). */}
+        {current && (
+          <Readout
+            current={current}
+            fitnessColor={fitnessColor}
+            fatigueColor={fatigueColor}
+          />
+        )}
+      </ChartCard>
     </ChartThemeProvider>
   );
 }
@@ -191,15 +205,26 @@ function Readout({
   const zone = classifyForm(current.tsb);
   return (
     <div className="hidden w-36 shrink-0 flex-col justify-center gap-4 border-l px-4 sm:flex">
-      <Stat label="Fitness" value={Math.round(current.ctl)} color={fitnessColor} />
-      <Stat label="Fatigue" value={Math.round(current.atl)} color={fatigueColor} />
+      <Stat
+        label="Fitness"
+        value={Math.round(current.ctl)}
+        color={fitnessColor}
+      />
+      <Stat
+        label="Fatigue"
+        value={Math.round(current.atl)}
+        color={fatigueColor}
+      />
       <div className="flex flex-col gap-0.5">
         <span className="text-muted-foreground text-xs">Form</span>
         <span className="text-2xl font-semibold" style={{ color: zone.color }}>
           {current.tsb > 0 ? "+" : ""}
           {Math.round(current.tsb)}
         </span>
-        <span className="text-[10px] leading-tight" style={{ color: zone.color }}>
+        <span
+          className="text-[10px] leading-tight"
+          style={{ color: zone.color }}
+        >
           {zone.label}
         </span>
       </div>
@@ -219,7 +244,10 @@ function Stat({
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-muted-foreground text-xs">{label}</span>
-      <span className="text-xl font-semibold" style={color ? { color } : undefined}>
+      <span
+        className="text-xl font-semibold"
+        style={color ? { color } : undefined}
+      >
         {value}
       </span>
     </div>

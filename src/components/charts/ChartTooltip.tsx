@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import type { RefObject } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import {
   useAxesTooltip,
@@ -36,11 +36,46 @@ function useMouseTracker(elementRef: RefObject<Element | null>) {
   return position;
 }
 
+interface ChartTooltipTotalConfig {
+  /**
+   * Formats the summed total. Pass the same formatter used by the series so
+   * units/durations match the per-row values.
+   */
+  formatTotal?: (value: number) => string;
+}
+
+// The MUI tooltip slot only accepts a zero-prop component, so the opt-in
+// "Total" config is threaded through context rather than props. Charts that
+// want a total wrap their chart in <ChartTooltipTotalProvider>.
+const ChartTooltipTotalContext = createContext<ChartTooltipTotalConfig | null>(
+  null,
+);
+
+/**
+ * Opt a chart's {@link ChartTooltip} into showing a "Total" row that sums the
+ * visible series values for the hovered slice. Only meaningful for stacked
+ * charts where that sum is the height of the stack (e.g. Activities Timeline).
+ */
+export function ChartTooltipTotalProvider({
+  formatTotal,
+  children,
+}: ChartTooltipTotalConfig & { children: ReactNode }) {
+  return (
+    <ChartTooltipTotalContext.Provider value={{ formatTotal }}>
+      {children}
+    </ChartTooltipTotalContext.Provider>
+  );
+}
+
 /**
  * Shared chart tooltip using the app's popover design tokens.
- * Use as `slots={{ tooltip: ChartTooltip }}` on any MUI x-chart.
+ * Use as `slots={{ tooltip: ChartTooltip }}` on any MUI x-chart. Wrap the chart
+ * in {@link ChartTooltipTotalProvider} to additionally show a "Total" row.
  */
 export function ChartTooltip() {
+  const totalConfig = useContext(ChartTooltipTotalContext);
+  const showTotal = totalConfig != null;
+  const formatTotal = totalConfig?.formatTotal;
   const tooltipData = useAxesTooltip();
   const drawingArea = useDrawingArea();
   const containerRef = useChartsLayerContainerRef();
@@ -63,7 +98,8 @@ export function ChartTooltip() {
   // otherwise its left edge to the right of the cursor. This also keeps it from
   // overflowing the chart edges.
   const GAP = 12;
-  const drawingCenterX = svgOrigin.left + drawingArea.left + drawingArea.width / 2;
+  const drawingCenterX =
+    svgOrigin.left + drawingArea.left + drawingArea.width / 2;
   const isPastMidpoint = mousePosition.x > drawingCenterX;
 
   return (
@@ -82,38 +118,68 @@ export function ChartTooltip() {
         style={{ pointerEvents: "none" }}
       >
         {tooltipData.map(
-          ({ axisId, axisFormattedValue, seriesItems, mainAxis }) => (
-            <div key={axisId}>
-              {!mainAxis.hideTooltip && (
-                <p className="text-muted-foreground mb-1 text-xs">
-                  {axisFormattedValue}
-                </p>
-              )}
-              <div className="flex flex-col gap-1">
-                {seriesItems.map(
-                  ({ seriesId, color, value, formattedValue, formattedLabel }) => {
-                    // Hide series with no contribution for this slice (e.g. a
-                    // sport not done that week) so the tooltip only lists what's
-                    // actually in the stack instead of a long row of zeros.
-                    if (!value || formattedValue == null) return null;
-                    return (
-                      <div
-                        key={seriesId}
-                        className="flex items-center gap-2 text-sm whitespace-nowrap"
-                      >
-                        <span
-                          className="inline-block size-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: color }}
-                        />
-                        <span>{formattedLabel}</span>
-                        <span className="font-medium">{formattedValue}</span>
-                      </div>
-                    );
-                  },
+          ({ axisId, axisFormattedValue, seriesItems, mainAxis }) => {
+            // Sum the visible (non-null) series values for the "Total" row. Done
+            // on the raw values rather than re-parsing the formatted strings so
+            // units/durations stay intact.
+            const total = showTotal
+              ? seriesItems.reduce(
+                  (acc, { value }) =>
+                    acc + (typeof value === "number" ? value : 0),
+                  0,
+                )
+              : 0;
+            return (
+              <div key={axisId}>
+                {!mainAxis.hideTooltip && (
+                  <p className="text-muted-foreground mb-1 text-xs">
+                    {axisFormattedValue}
+                  </p>
                 )}
+                <div className="flex flex-col gap-1">
+                  {seriesItems.map(
+                    ({
+                      seriesId,
+                      color,
+                      value,
+                      formattedValue,
+                      formattedLabel,
+                    }) => {
+                      // Hide series with no contribution for this slice (e.g. a
+                      // sport not done that week) so the tooltip only lists what's
+                      // actually in the stack instead of a long row of zeros.
+                      if (!value || formattedValue == null) return null;
+                      return (
+                        <div
+                          key={seriesId}
+                          className="flex items-center gap-2 text-sm whitespace-nowrap"
+                        >
+                          <span
+                            className="inline-block size-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span>{formattedLabel}</span>
+                          <span className="font-medium">{formattedValue}</span>
+                        </div>
+                      );
+                    },
+                  )}
+                  {showTotal && total > 0 && (
+                    <div className="border-border mt-1 flex items-center gap-2 border-t pt-1 text-sm whitespace-nowrap">
+                      {/* Spacer matching the series dot so labels line up. */}
+                      <span className="inline-block size-2 shrink-0" />
+                      <span>Total</span>
+                      <span className="font-medium">
+                        {formatTotal
+                          ? formatTotal(total)
+                          : total.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ),
+            );
+          },
         )}
       </div>
     </div>

@@ -4,13 +4,13 @@ import { CalendarPlusIcon, CheckIcon, CopyIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import {
-  Popover,
-  PopoverContent,
-  PopoverDescription,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from "~/components/ui/responsive-dialog";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { trpc } from "~/utils/trpc";
 
@@ -45,8 +45,8 @@ export function CalendarFeedButton() {
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
+    <ResponsiveDialog open={open} onOpenChange={setOpen}>
+      <ResponsiveDialogTrigger
         render={
           <Button size="xs" variant="outline">
             <CalendarPlusIcon />
@@ -54,14 +54,14 @@ export function CalendarFeedButton() {
           </Button>
         }
       />
-      <PopoverContent align="end" className="w-80">
-        <PopoverHeader>
-          <PopoverTitle>Calendar subscription</PopoverTitle>
-          <PopoverDescription>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Calendar subscription</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             Add this secret URL to Google, Apple or Outlook calendar to see your
             planned trainings. It refreshes automatically.
-          </PopoverDescription>
-        </PopoverHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <div className="flex items-center gap-2">
           <input
             readOnly
@@ -79,7 +79,7 @@ export function CalendarFeedButton() {
             {copied ? <CheckIcon /> : <CopyIcon />}
           </Button>
         </div>
-      </PopoverContent>
-    </Popover>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

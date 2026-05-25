@@ -1,27 +1,33 @@
 import * as React from "react";
 
-import { format } from "date-fns";
+import { format, isSameWeek } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
 
 import type { PlannedTraining } from "@server/db/types";
 
 import { Button } from "~/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+  Combobox,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxGroupLabel,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+} from "~/components/ui/combobox";
 import { Label } from "~/components/ui/label";
 import { NumberField } from "~/components/ui/number-field";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "~/components/ui/responsive-dialog";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { formatActivityType } from "~/utils/format";
@@ -51,6 +57,100 @@ function SportOption({ sportType }: { sportType: string }) {
       <Icon className="size-4 shrink-0" style={{ color: config.color }} />
       {formatActivityType(sportType)}
     </span>
+  );
+}
+
+/** Group shape consumed by the sport Combobox. */
+interface SportGroup {
+  value: string;
+  items: string[];
+}
+
+/**
+ * Sport picker built on the searchable Combobox. The athlete's four most
+ * recently practised sports are surfaced in a "Favorite sports" group ahead of
+ * the rest, derived from their activity history.
+ */
+function SportPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  // Empty options => unfiltered, all-time history, regardless of the global
+  // activity filter the rest of the app applies.
+  const { data: activities } = useActivitiesQuery({});
+
+  const groups = React.useMemo<SportGroup[]>(() => {
+    const latestByType = new Map<string, string>();
+    for (const activity of activities ?? []) {
+      if (!PLANNABLE_SPORT_TYPES.includes(activity.type)) {
+        continue;
+      }
+      const previous = latestByType.get(activity.type);
+      // startDateLocal is a fixed-format ISO string, so lexical compare = chrono.
+      if (previous == null || activity.startDateLocal > previous) {
+        latestByType.set(activity.type, activity.startDateLocal);
+      }
+    }
+    const byLabel = (a: string, b: string) =>
+      formatActivityType(a).localeCompare(formatActivityType(b));
+
+    // Pick the four most recent by recency, then present them alphabetically.
+    const favorites = [...latestByType.entries()]
+      .sort(([, a], [, b]) => (a < b ? 1 : -1))
+      .slice(0, 4)
+      .map(([type]) => type)
+      .sort(byLabel);
+
+    const result: SportGroup[] = [];
+    if (favorites.length > 0) {
+      result.push({ value: "Favorite sports", items: favorites });
+    }
+    const rest = PLANNABLE_SPORT_TYPES.filter(
+      (t) => !favorites.includes(t),
+    ).sort(byLabel);
+    if (rest.length > 0) {
+      result.push({
+        value: favorites.length > 0 ? "Other sports" : "Sports",
+        items: rest,
+      });
+    }
+    return result;
+  }, [activities]);
+
+  return (
+    <Combobox
+      items={groups}
+      value={value}
+      onValueChange={(next) => next && onChange(next)}
+      itemToStringLabel={formatActivityType}
+    >
+      <ComboboxTrigger className="w-full">
+        <ComboboxValue>
+          {(selected: string) => <SportOption sportType={selected} />}
+        </ComboboxValue>
+      </ComboboxTrigger>
+      <ComboboxContent>
+        <ComboboxInput placeholder="Search sports…" />
+        <ComboboxEmpty>No sport found.</ComboboxEmpty>
+        <ComboboxList>
+          {(group: SportGroup) => (
+            <ComboboxGroup key={group.value} items={group.items}>
+              <ComboboxGroupLabel>{group.value}</ComboboxGroupLabel>
+              <ComboboxCollection>
+                {(sportType: string) => (
+                  <ComboboxItem key={sportType} value={sportType}>
+                    <SportOption sportType={sportType} />
+                  </ComboboxItem>
+                )}
+              </ComboboxCollection>
+            </ComboboxGroup>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   );
 }
 
@@ -156,23 +256,7 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
 
       <div className="flex flex-col gap-1.5">
         <Label>Sport</Label>
-        <Select
-          value={sportType}
-          onValueChange={(value) => value && setSportType(value)}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue>
-              {(value) => <SportOption sportType={String(value)} />}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {PLANNABLE_SPORT_TYPES.map((type) => (
-              <SelectItem key={type} value={type}>
-                <SportOption sportType={type} />
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SportPicker value={sportType} onChange={setSportType} />
       </div>
 
       <div className="flex gap-3">
@@ -216,12 +300,12 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
         />
       )}
 
-      <DialogFooter>
+      <ResponsiveDialogFooter>
         {isEdit && existing && (
           <Button
             type="button"
             variant="destructive"
-            className="mr-auto"
+            className="w-full sm:mr-auto sm:w-auto"
             disabled={pending}
             onClick={() => deleteMut.mutate({ athleteId, id: existing.id })}
           >
@@ -234,9 +318,39 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
         <Button type="submit" disabled={pending}>
           {isEdit ? "Save" : "Create"}
         </Button>
-      </DialogFooter>
+      </ResponsiveDialogFooter>
     </form>
   );
+}
+
+/** Minimal activity shape the mark-done picker needs to label an option. */
+interface MarkDoneActivity {
+  type: string;
+  name: string;
+  startDateLocal: string;
+}
+
+/** Coloured sport icon + date · name for a mark-done option / value. */
+function ActivityOption({ activity }: { activity: MarkDoneActivity }) {
+  const config = getSportConfig(activity.type);
+  const Icon = config.icon;
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <Icon className="size-4 shrink-0" style={{ color: config.color }} />
+      <span className="truncate">
+        {format(new Date(activity.startDateLocal), "EEE d MMM", {
+          locale: enGB,
+        })}{" "}
+        · {activity.name || formatActivityType(activity.type)}
+      </span>
+    </span>
+  );
+}
+
+/** Group shape consumed by the mark-done Combobox (items are stravaId strings). */
+interface ActivityGroup {
+  value: string;
+  items: string[];
 }
 
 function MarkDoneSection({
@@ -248,85 +362,119 @@ function MarkDoneSection({
   training: PlannedTraining;
   markDoneMut: ReturnType<typeof trpc.plannedTrainings.markDone.useMutation>;
 }) {
-  const { data: activities } = useActivitiesQuery();
+  // Empty options => unfiltered, all-time history, so the global Journal filter
+  // can't hide an activity that's a valid match for this plan.
+  const { data: activities } = useActivitiesQuery({});
+  // Internal activity ids already linked to a (completed) plan — never offered.
+  const { data: linkedActivityIds } =
+    trpc.plannedTrainings.linkedActivityIds.useQuery({ athleteId });
   const [selectedStravaId, setSelectedStravaId] = React.useState<string>("");
 
-  // Candidate activities are those on the planned day or the day either side,
-  // so a session logged just after midnight (or shifted by a TZ) still matches.
-  const candidates = React.useMemo(() => {
-    const target = new Date(`${dayKey(training.plannedDate)}T00:00:00`);
-    return (activities ?? []).filter((a) => {
-      const diffDays = Math.abs(
-        (new Date(`${a.startDateLocal.slice(0, 10)}T00:00:00`).getTime() -
-          target.getTime()) /
-          86_400_000,
-      );
-      return diffDays <= 1;
-    });
-  }, [activities, training.plannedDate]);
+  // Candidates share the plan's sport category and fall in its week, split into
+  // "Perfect matches" (same calendar day) and "Other matches" (same week, other
+  // day). Anything outside those criteria, or already linked, is dropped.
+  const { groups, byStravaId } = React.useMemo(() => {
+    const linked = new Set(linkedActivityIds ?? []);
+    const plannedCategory = getSportConfig(training.sportType).category;
+    const plannedDay = dayKey(training.plannedDate);
+    const plannedDate = new Date(`${plannedDay}T00:00:00`);
+
+    const perfect: string[] = [];
+    const other: string[] = [];
+    const map = new Map<string, MarkDoneActivity>();
+
+    for (const a of activities ?? []) {
+      if (linked.has(a.id)) {
+        continue;
+      }
+      if (getSportConfig(a.type).category !== plannedCategory) {
+        continue;
+      }
+      const activityDay = a.startDateLocal.slice(0, 10);
+      const stravaId = String(a.stravaId);
+      if (activityDay === plannedDay) {
+        perfect.push(stravaId);
+        map.set(stravaId, a);
+      } else if (
+        isSameWeek(new Date(`${activityDay}T00:00:00`), plannedDate, {
+          locale: enGB,
+        })
+      ) {
+        other.push(stravaId);
+        map.set(stravaId, a);
+      }
+    }
+
+    const result: ActivityGroup[] = [];
+    if (perfect.length > 0) {
+      result.push({ value: "Perfect matches", items: perfect });
+    }
+    if (other.length > 0) {
+      result.push({ value: "Other matches", items: other });
+    }
+    return { groups: result, byStravaId: map };
+  }, [activities, linkedActivityIds, training.sportType, training.plannedDate]);
 
   return (
     <div className="border-border flex flex-col gap-2 border-t pt-4">
       <Label>Mark done — link a Strava activity</Label>
-      {candidates.length === 0 ? (
+      {groups.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          No activities found near this day yet.
+          No matching activity found this week yet.
         </p>
       ) : (
-        <div className="flex items-center gap-2">
-          <Select
-            value={selectedStravaId}
-            onValueChange={(value) => setSelectedStravaId(value ?? "")}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Combobox
+            items={groups}
+            value={selectedStravaId || null}
+            onValueChange={(next) => setSelectedStravaId(next ?? "")}
+            itemToStringLabel={(id: string) => {
+              const a = byStravaId.get(id);
+              return a
+                ? `${format(new Date(a.startDateLocal), "EEE d MMM", {
+                    locale: enGB,
+                  })} ${a.name} ${formatActivityType(a.type)}`
+                : "";
+            }}
           >
-            <SelectTrigger className="w-full">
-              <SelectValue>
-                {(value) => {
-                  const selected = candidates.find(
-                    (a) => String(a.stravaId) === value,
-                  );
-                  if (!selected) {
-                    return "Choose an activity…";
-                  }
-                  const Icon = getSportConfig(selected.type).icon;
-                  return (
-                    <span className="flex min-w-0 items-center gap-2">
-                      <Icon
-                        className="size-4 shrink-0"
-                        style={{ color: getSportConfig(selected.type).color }}
-                      />
-                      <span className="truncate">
-                        {format(new Date(selected.startDateLocal), "EEE d MMM", {
-                          locale: enGB,
-                        })}{" "}
-                        · {selected.name || formatActivityType(selected.type)}
-                      </span>
-                    </span>
+            <ComboboxTrigger className="w-full">
+              <ComboboxValue>
+                {(selected: string) => {
+                  const a = selected ? byStravaId.get(selected) : null;
+                  return a ? (
+                    <ActivityOption activity={a} />
+                  ) : (
+                    "Choose an activity…"
                   );
                 }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {candidates.map((a) => {
-                const Icon = getSportConfig(a.type).icon;
-                return (
-                  <SelectItem key={a.stravaId} value={String(a.stravaId)}>
-                    <Icon
-                      className="size-4 shrink-0"
-                      style={{ color: getSportConfig(a.type).color }}
-                    />
-                    <span className="truncate">
-                      {format(new Date(a.startDateLocal), "EEE d MMM", {
-                        locale: enGB,
-                      })}{" "}
-                      · {a.name || formatActivityType(a.type)}
-                    </span>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
+              </ComboboxValue>
+            </ComboboxTrigger>
+            <ComboboxContent>
+              <ComboboxInput placeholder="Search activities…" />
+              <ComboboxEmpty>No activity found.</ComboboxEmpty>
+              <ComboboxList>
+                {(group: ActivityGroup) => (
+                  <ComboboxGroup key={group.value} items={group.items}>
+                    <ComboboxGroupLabel>{group.value}</ComboboxGroupLabel>
+                    <ComboboxCollection>
+                      {(id: string) => {
+                        const a = byStravaId.get(id);
+                        return (
+                          <ComboboxItem key={id} value={id}>
+                            {a && <ActivityOption activity={a} />}
+                          </ComboboxItem>
+                        );
+                      }}
+                    </ComboboxCollection>
+                  </ComboboxGroup>
+                )}
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
           <Button
             type="button"
+            variant="secondary"
+            className="w-full sm:w-auto"
             disabled={!selectedStravaId || markDoneMut.isPending}
             onClick={() =>
               markDoneMut.mutate({
@@ -360,13 +508,13 @@ export function PlannedTrainingDialog({
   const open = state != null && athleteId != null;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
+    <ResponsiveDialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>
             {state?.mode === "edit" ? "Edit planned training" : "Plan a training"}
-          </DialogTitle>
-        </DialogHeader>
+          </ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
         {open && (
           <PlannedTrainingForm
             // Remount with fresh initial state whenever the target changes.
@@ -376,7 +524,7 @@ export function PlannedTrainingDialog({
             onClose={onClose}
           />
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

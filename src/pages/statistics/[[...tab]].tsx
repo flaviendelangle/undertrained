@@ -6,6 +6,7 @@ import nextDynamic from "next/dynamic";
 import { LoadingOverlay } from "~/components/primitives/LoadingOverlay";
 import { PageIntro } from "~/components/primitives/PageIntro";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
+import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useInitialLoadComplete } from "~/hooks/useInitialLoadComplete";
 import type { NextPageWithLayout } from "~/pages/_app";
@@ -81,18 +82,29 @@ const StatisticsPage: NextPageWithLayout = () => {
       </Toolbar>
 
       <div className="relative flex flex-1 flex-col overflow-hidden">
-        <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-3 max-sm:px-0 sm:p-4">
-          <div className="flex w-full max-w-5xl flex-col gap-4">
+        {/* Mobile (< md): charts go full-bleed, flush under the toolbar and
+            separated by hairline dividers. Desktop (md+): the familiar centered
+            column of boxed cards with gaps. `md` matches useIsMobile. */}
+        <div className="flex flex-1 flex-col overflow-y-auto pb-3 md:items-center md:gap-4 md:p-4">
+          {/* `empty:hidden` collapses the intro (and its padding) once the hint
+              is dismissed, so the first chart sits flush under the toolbar. */}
+          <div className="px-3 pt-3 empty:hidden md:w-full md:max-w-5xl md:px-0 md:pt-0">
             <PageIntro hintId="intro-statistics-charts">
               Training volume and intensity trends over time. Configure your
               rider settings to see training load data in the charts.
             </PageIntro>
-            <FitnessChart />
-            <ActivitiesTimeline />
-            <ActivitiesCumulativeTimeline />
-            <PowerCurve activityTypes={getActivityTypesByCategory("cycling")} />
-            <EddingtonChart />
           </div>
+          <ChartCardSurfaceProvider surface="responsive">
+            <div className="divide-border border-border flex flex-col divide-y border-b md:w-full md:max-w-5xl md:gap-4 md:divide-y-0 md:border-0">
+              <FitnessChart />
+              <ActivitiesTimeline />
+              <ActivitiesCumulativeTimeline />
+              <PowerCurve
+                activityTypes={getActivityTypesByCategory("cycling")}
+              />
+              <EddingtonChart />
+            </div>
+          </ChartCardSurfaceProvider>
         </div>
         <LoadingOverlay hidden={ready} />
       </div>

@@ -5,11 +5,11 @@ import { BarChart3Icon, PlusIcon } from "lucide-react";
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { Button } from "~/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "~/components/ui/responsive-dialog";
 import { cn } from "~/lib/utils";
 import type {
   RiderSettingsChangePoint,
@@ -241,14 +241,17 @@ export function ChangePointsTimeline({
         })}
       </div>
 
-      <Dialog open={timelineDialogOpen} onOpenChange={setTimelineDialogOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Settings Timeline</DialogTitle>
-          </DialogHeader>
+      <ResponsiveDialog
+        open={timelineDialogOpen}
+        onOpenChange={setTimelineDialogOpen}
+      >
+        <ResponsiveDialogContent className="sm:max-w-3xl">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Settings Timeline</ResponsiveDialogTitle>
+          </ResponsiveDialogHeader>
           <SettingsStepChart timeline={timeline} />
-        </DialogContent>
-      </Dialog>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
 
       <ChangePointDialog
         key={editingBaseline ? "baseline" : (editingPoint?.id ?? "new")}

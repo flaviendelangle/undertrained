@@ -18,15 +18,15 @@ import { CardTitle } from "~/components/primitives/CardTitle";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { Button } from "~/components/ui/button";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "~/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogClose,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from "~/components/ui/responsive-dialog";
 
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useTypedParams } from "~/hooks/useTypedParams";
@@ -205,26 +205,26 @@ function DeletePeriodButton({
       <p className="text-muted-foreground text-sm">
         Permanently delete this period and remove it from your list.
       </p>
-      <Dialog>
-        <DialogTrigger
+      <ResponsiveDialog>
+        <ResponsiveDialogTrigger
           render={
             <Button variant="destructive" size="sm" />
           }
         >
           Delete
-        </DialogTrigger>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>Delete &ldquo;{period.name}&rdquo;?</DialogTitle>
-            <DialogDescription>
+        </ResponsiveDialogTrigger>
+        <ResponsiveDialogContent showCloseButton={false}>
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Delete &ldquo;{period.name}&rdquo;?</ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
               This action cannot be undone. The period will be permanently
               deleted.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
+          <ResponsiveDialogFooter>
+            <ResponsiveDialogClose render={<Button variant="outline" />}>
               Cancel
-            </DialogClose>
+            </ResponsiveDialogClose>
             <Button
               variant="destructive"
               disabled={deleteMutation.isPending}
@@ -235,9 +235,9 @@ function DeletePeriodButton({
             >
               {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ResponsiveDialogFooter>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </div>
   );
 }

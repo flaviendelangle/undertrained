@@ -375,6 +375,21 @@ const SPORT_CONFIGS: Record<string, SportConfig> = {
 
 const DEFAULT_CONFIG = new SportConfig();
 
+/**
+ * Per-category display metadata (label, theme colour, representative icon) for
+ * grouped summaries — e.g. the per-sport breakdown in the Journal week card.
+ * Mirrors the `color` each {@link SportConfig} subclass already exposes.
+ */
+export const SPORT_CATEGORY_META: Record<
+  SportCategory,
+  { label: string; color: string; icon: LucideIcon }
+> = {
+  cycling: { label: "Cycling", color: "var(--sport-cycling)", icon: Bike },
+  running: { label: "Running", color: "var(--sport-running)", icon: Footprints },
+  swimming: { label: "Swimming", color: "var(--sport-swimming)", icon: Waves },
+  other: { label: "Other", color: "var(--sport-other)", icon: Activity },
+};
+
 /** Strava activity-type strings offered when planning a training, in display order. */
 export const PLANNABLE_SPORT_TYPES = Object.keys(SPORT_CONFIGS);
 

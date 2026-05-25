@@ -18,15 +18,15 @@ import { TimePeriodForm } from "~/components/periods/TimePeriodForm";
 import { StatCard } from "~/components/primitives/StatCard";
 import { Button } from "~/components/ui/button";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "~/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogClose,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from "~/components/ui/responsive-dialog";
 import { cn } from "~/lib/utils";
 import { formatActivityType, formatHumanDuration } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
@@ -115,18 +115,20 @@ export function NewPeriodButton({
   const [open, setOpen] = React.useState(false);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size={size} variant={variant} />}>
+    <ResponsiveDialog open={open} onOpenChange={setOpen}>
+      <ResponsiveDialogTrigger
+        render={<Button size={size} variant={variant} />}
+      >
         <PlusIcon className="size-4" />
         {label}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>New time period</DialogTitle>
-        </DialogHeader>
+      </ResponsiveDialogTrigger>
+      <ResponsiveDialogContent className="sm:max-w-lg">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>New time period</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
         <TimePeriodForm onSuccess={() => setOpen(false)} />
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
 
@@ -141,8 +143,8 @@ export function DeletePeriodButton({
   className?: string;
 }) {
   return (
-    <Dialog>
-      <DialogTrigger
+    <ResponsiveDialog>
+      <ResponsiveDialogTrigger
         render={
           <Button
             variant="ghost"
@@ -161,36 +163,39 @@ export function DeletePeriodButton({
         }
       >
         <TrashIcon className="size-3.5" />
-      </DialogTrigger>
-      <DialogContent showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>Delete &ldquo;{name}&rdquo;?</DialogTitle>
-          <DialogDescription>
+      </ResponsiveDialogTrigger>
+      <ResponsiveDialogContent showCloseButton={false}>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>
+            Delete &ldquo;{name}&rdquo;?
+          </ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             This action cannot be undone. The period will be permanently
             deleted.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogFooter>
+          <ResponsiveDialogClose render={<Button variant="outline" />}>
             Cancel
-          </DialogClose>
-          <DialogClose
+          </ResponsiveDialogClose>
+          <ResponsiveDialogClose
             render={<Button variant="destructive" />}
             onClick={onDelete}
           >
             Delete
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </ResponsiveDialogClose>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
 
 /**
  * A clickable summary card for one period — name, range, sports and a 2×2 stat
- * grid. The whole card links to the period's detail page. Styled to match the
- * Statistics page cards (`bg-card`, `rounded-sm`, header split by a border).
- * Used by the Dashboard's mobile layout.
+ * grid. The whole card links to the period's detail page. Used by the
+ * Dashboard's below-desktop layout: full-bleed on phone (the page-level hairline
+ * dividers separate cards), then a boxed card (`bg-card`, `rounded-sm`, header
+ * split by a border) from `sm` up to match the Statistics page.
  */
 export function PeriodSummaryCard({
   row,
@@ -200,8 +205,8 @@ export function PeriodSummaryCard({
   onDelete: (id: number) => void;
 }) {
   return (
-    <div className="bg-card relative flex flex-col rounded-sm">
-      <div className="border-border flex items-start justify-between gap-2 border-b p-4">
+    <div className="sm:bg-card relative flex flex-col sm:rounded-sm">
+      <div className="border-border flex items-start justify-between gap-2 p-4 sm:border-b">
         <div className="min-w-0">
           <Link
             href={`/time-periods/${row.period.id}`}

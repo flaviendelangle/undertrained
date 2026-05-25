@@ -5,15 +5,22 @@ import { SlidersHorizontalIcon } from "lucide-react";
 import { BarChartPro, type ZoomData } from "@mui/x-charts-pro";
 
 import { Button } from "~/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { ChartCard } from "~/components/ui/chart-card";
+import {
+  ResponsivePopover,
+  ResponsivePopoverContent,
+  ResponsivePopoverHeader,
+  ResponsivePopoverTitle,
+  ResponsivePopoverTrigger,
+} from "~/components/ui/responsive-popover";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useGroupActivitiesByTimeSlice } from "~/hooks/useGroupActivitiesByTimeSlice";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { SlicePrecision, useTimeSlices } from "~/hooks/useTimeSlices";
 import {
-  CHART_MARGINS,
   AXIS_SIZE,
+  CHART_MARGINS,
   formatCompact,
   useChartTokens,
 } from "~/lib/chartTokens";
@@ -21,10 +28,10 @@ import { formatSlice } from "~/utils/dateUtils";
 import { formatActivityType } from "~/utils/format";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
-import { METRICS, MetricSelect, type MetricContext } from "../../MetricSelect";
+import { METRICS, type MetricContext, MetricSelect } from "../../MetricSelect";
 import { PrecisionSelect } from "../../PrecisionSelect";
 import { ChartThemeProvider } from "../ChartThemeProvider";
-import { ChartTooltip } from "../ChartTooltip";
+import { ChartTooltip, ChartTooltipTotalProvider } from "../ChartTooltip";
 import { SportFilterPopover, SportTypeFilter } from "../SportTypeFilter";
 
 const TIME_AXIS_ID = "time";
@@ -77,7 +84,11 @@ export default function ActivitiesTimeline() {
       return [{ axisId: TIME_AXIS_ID, start: 0, end: 100 }];
     }
     return [
-      { axisId: TIME_AXIS_ID, start: ((count - DEFAULT_ZOOM_STEPS) / count) * 100, end: 100 },
+      {
+        axisId: TIME_AXIS_ID,
+        start: ((count - DEFAULT_ZOOM_STEPS) / count) * 100,
+        end: 100,
+      },
     ];
   }, [xAxisData]);
 
@@ -119,8 +130,12 @@ export default function ActivitiesTimeline() {
       if (metricConfig?.unit === "h") {
         return formatHoursMinutes(value);
       }
-      const formatted = value.toLocaleString(undefined, { maximumFractionDigits: 1 });
-      return metricConfig?.unit ? `${formatted} ${metricConfig.unit}` : formatted;
+      const formatted = value.toLocaleString(undefined, {
+        maximumFractionDigits: 1,
+      });
+      return metricConfig?.unit
+        ? `${formatted} ${metricConfig.unit}`
+        : formatted;
     },
     [metricConfig],
   );
@@ -148,60 +163,77 @@ export default function ActivitiesTimeline() {
       valueFormatter: formatValue,
       stack: "total",
     }));
-  }, [groupedActivities, metricConfig, metricContext, activitiesQuery.data, formatValue]);
+  }, [
+    groupedActivities,
+    metricConfig,
+    metricContext,
+    activitiesQuery.data,
+    formatValue,
+  ]);
 
-  return (
-    <ChartThemeProvider>
-      <div className="bg-card flex h-96 w-full flex-col rounded-sm">
-        <div className="border-border flex items-center gap-2 border-b p-4">
-          <h3 className="shrink-0 text-lg font-semibold">Activities Timeline</h3>
+  const actions = (
+    <>
+      {/* Desktop: inline controls */}
+      <div className="hidden items-center gap-2 sm:flex">
+        <MetricSelect value={metric} onValueChange={setMetric} />
+        <PrecisionSelect value={precision} onValueChange={setPrecision} />
+      </div>
 
-          {/* Desktop: inline controls */}
-          <div className="hidden items-center gap-2 sm:flex">
+      <div className="flex-1" />
+
+      {/* Mobile: all controls in popover (drawer on mobile) */}
+      <ResponsivePopover>
+        <ResponsivePopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground sm:hidden"
+            >
+              <SlidersHorizontalIcon className="size-4" />
+            </Button>
+          }
+        />
+        <ResponsivePopoverContent
+          align="end"
+          className="flex flex-col gap-3 sm:w-56"
+        >
+          <ResponsivePopoverHeader>
+            <ResponsivePopoverTitle>Display options</ResponsivePopoverTitle>
+          </ResponsivePopoverHeader>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-muted-foreground text-xs font-medium">
+              Metric
+            </span>
             <MetricSelect value={metric} onValueChange={setMetric} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-muted-foreground text-xs font-medium">
+              Precision
+            </span>
             <PrecisionSelect value={precision} onValueChange={setPrecision} />
           </div>
-
-          <div className="flex-1" />
-
-          {/* Mobile: all controls in popover */}
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground sm:hidden"
-                >
-                  <SlidersHorizontalIcon className="size-4" />
-                </Button>
-              }
-            />
-            <PopoverContent align="end" className="flex w-56 flex-col gap-3 sm:hidden">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-muted-foreground text-xs font-medium">Metric</span>
-                <MetricSelect value={metric} onValueChange={setMetric} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-muted-foreground text-xs font-medium">Precision</span>
-                <PrecisionSelect value={precision} onValueChange={setPrecision} />
-              </div>
-              <SportTypeFilter
-                allTypes={activitiesQuery.allTypes}
-                selectedTypes={selectedTypes}
-                setSelectedTypes={setSelectedTypes}
-              />
-            </PopoverContent>
-          </Popover>
-
-          {/* Desktop: sport filter */}
-          <SportFilterPopover
+          <SportTypeFilter
             allTypes={activitiesQuery.allTypes}
             selectedTypes={selectedTypes}
             setSelectedTypes={setSelectedTypes}
           />
-        </div>
-        <div className="min-h-0 flex-1">
+        </ResponsivePopoverContent>
+      </ResponsivePopover>
+
+      {/* Desktop: sport filter */}
+      <SportFilterPopover
+        allTypes={activitiesQuery.allTypes}
+        selectedTypes={selectedTypes}
+        setSelectedTypes={setSelectedTypes}
+      />
+    </>
+  );
+
+  return (
+    <ChartThemeProvider>
+      <ChartCard title="Activities Timeline" actions={actions}>
+        <ChartTooltipTotalProvider formatTotal={formatValue}>
           <BarChartPro
             zoomData={zoomData}
             onZoomChange={setZoomData}
@@ -212,7 +244,9 @@ export default function ActivitiesTimeline() {
                 data: xAxisData,
                 valueFormatter: (value: Date) => formatSlice(value, precision),
                 zoom: { filterMode: "discard", minSpan: minZoomSpan },
-                height: isMobile ? AXIS_SIZE.mobile.height : AXIS_SIZE.desktop.height,
+                height: isMobile
+                  ? AXIS_SIZE.mobile.height
+                  : AXIS_SIZE.desktop.height,
               },
             ]}
             yAxis={[
@@ -224,18 +258,22 @@ export default function ActivitiesTimeline() {
                     ? `${formatted} ${metricConfig.unit}`
                     : formatted;
                 },
-                width: isMobile ? AXIS_SIZE.mobile.width : AXIS_SIZE.desktop.width,
+                width: isMobile
+                  ? AXIS_SIZE.mobile.width
+                  : AXIS_SIZE.desktop.width,
               },
             ]}
             series={series}
             colors={tokens.palette}
             grid={{ horizontal: true }}
-            margin={isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard}
+            margin={
+              isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
+            }
             hideLegend={isMobile}
             slots={{ tooltip: ChartTooltip }}
           />
-        </div>
-      </div>
+        </ChartTooltipTotalProvider>
+      </ChartCard>
     </ChartThemeProvider>
   );
 }

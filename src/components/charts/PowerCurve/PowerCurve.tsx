@@ -5,13 +5,16 @@ import { SlidersHorizontalIcon, X } from "lucide-react";
 
 import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { Button } from "~/components/ui/button";
+import { ChartCard } from "~/components/ui/chart-card";
 import { Label } from "~/components/ui/label";
-import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+  ResponsivePopover,
+  ResponsivePopoverContent,
+  ResponsivePopoverHeader,
+  ResponsivePopoverTitle,
+  ResponsivePopoverTrigger,
+} from "~/components/ui/responsive-popover";
+import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import {
   Select,
   SelectContent,
@@ -26,8 +29,8 @@ import { useChartTokens } from "~/lib/chartTokens";
 import { trpc } from "~/utils/trpc";
 
 import {
-  PowerCurveWebGLChart,
   type PowerCurveMode,
+  PowerCurveWebGLChart,
 } from "./PowerCurveWebGLChart";
 import type { ActivityInfo, PowerCurveSeriesData } from "./types";
 
@@ -118,7 +121,13 @@ const PowerCurve = React.memo(function PowerCurve({
     return <SingleActivityPowerCurve stravaId={stravaId} />;
   }
 
-  return <AggregatedPowerCurve activityTypes={activityTypes} workoutTypes={workoutTypes} defaultRanges={defaultRanges} />;
+  return (
+    <AggregatedPowerCurve
+      activityTypes={activityTypes}
+      workoutTypes={workoutTypes}
+      defaultRanges={defaultRanges}
+    />
+  );
 });
 
 export default PowerCurve;
@@ -126,7 +135,10 @@ export default PowerCurve;
 // --- Single activity mode ---
 
 const ACTIVITY_RANGE_ID = "activity";
-const ACTIVITY_RANGE: DateRange = { id: ACTIVITY_RANGE_ID, label: "This Activity" };
+const ACTIVITY_RANGE: DateRange = {
+  id: ACTIVITY_RANGE_ID,
+  label: "This Activity",
+};
 const SINGLE_ACTIVITY_TYPES = ["Ride", "VirtualRide"];
 const SINGLE_ACTIVITY_LOCKED_IDS = new Set([ACTIVITY_RANGE_ID]);
 
@@ -209,7 +221,9 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
       const color = tokens.palette[i % tokens.palette.length];
 
       if (range.id === ACTIVITY_RANGE_ID) {
-        const byDuration = new Map(activityData.map((d) => [d.duration, d.watts]));
+        const byDuration = new Map(
+          activityData.map((d) => [d.duration, d.watts]),
+        );
         return {
           id: range.id,
           yData: durations.map((d) => byDuration.get(d) ?? null),
@@ -256,12 +270,21 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
       };
     });
 
-    return { xData: durations, series: chartSeries, activityMetadata: metadata };
+    return {
+      xData: durations,
+      series: chartSeries,
+      activityMetadata: metadata,
+    };
   }, [activity, queries, ranges, tokens.palette, resolveForDate]);
 
   const hint = (
-    <FeatureHint hintId="hint-activity-power-curve" title="Power Curve" side="right">
-      Your best sustained power efforts at each duration. Add date ranges to compare this activity against your historical bests and spot improvements.
+    <FeatureHint
+      hintId="hint-activity-power-curve"
+      title="Power Curve"
+      side="right"
+    >
+      Your best sustained power efforts at each duration. Add date ranges to
+      compare this activity against your historical bests and spot improvements.
     </FeatureHint>
   );
 
@@ -270,38 +293,57 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
   }
 
   return (
-    <div className="bg-card flex h-96 w-full flex-col rounded-sm">
-      <Toolbar
-        ranges={ranges}
-        onAddPreset={addRange}
-        onAddCustom={addRange}
-        onRemove={removeRange}
-        lockedRangeIds={SINGLE_ACTIVITY_LOCKED_IDS}
-        athleteId={athleteId}
-        activityTypes={SINGLE_ACTIVITY_TYPES}
-        workoutTypes={undefined}
+    <ChartCard
+      title={POWER_CURVE_TITLE}
+      actions={
+        <Toolbar
+          ranges={ranges}
+          onAddPreset={addRange}
+          onAddCustom={addRange}
+          onRemove={removeRange}
+          lockedRangeIds={SINGLE_ACTIVITY_LOCKED_IDS}
+          athleteId={athleteId}
+          activityTypes={SINGLE_ACTIVITY_TYPES}
+          workoutTypes={undefined}
+          mode={mode}
+          onModeChange={setMode}
+          showCustomRange={false}
+          hint={hint}
+        />
+      }
+    >
+      <PowerCurveWebGLChart
+        xData={xData}
+        series={series}
+        activityMetadata={activityMetadata}
         mode={mode}
-        onModeChange={setMode}
-        showCustomRange={false}
-        hint={hint}
       />
-      <div className="min-h-0 flex-1">
-        <PowerCurveWebGLChart xData={xData} series={series} activityMetadata={activityMetadata} mode={mode} />
-      </div>
-    </div>
+    </ChartCard>
   );
 }
 
 // --- Aggregated mode with multi-range support ---
 
-function AggregatedPowerCurve({ activityTypes, workoutTypes: workoutTypesProp, defaultRanges }: { activityTypes?: string[]; workoutTypes?: number[]; defaultRanges?: PowerCurveDateRange[] }) {
+function AggregatedPowerCurve({
+  activityTypes,
+  workoutTypes: workoutTypesProp,
+  defaultRanges,
+}: {
+  activityTypes?: string[];
+  workoutTypes?: number[];
+  defaultRanges?: PowerCurveDateRange[];
+}) {
   const tokens = useChartTokens();
   const athleteId = useAthleteId();
   const filter = useActivityFilter();
-  const workoutTypes = workoutTypesProp ?? (filter.workoutTypes.length > 0 ? filter.workoutTypes : undefined);
-  const [ranges, setRanges] = React.useState<DateRange[]>(defaultRanges ?? DEFAULT_RANGES);
+  const workoutTypes =
+    workoutTypesProp ??
+    (filter.workoutTypes.length > 0 ? filter.workoutTypes : undefined);
+  const [ranges, setRanges] = React.useState<DateRange[]>(
+    defaultRanges ?? DEFAULT_RANGES,
+  );
   const lockedRangeIds = React.useMemo(
-    () => defaultRanges ? new Set(defaultRanges.map((r) => r.id)) : undefined,
+    () => (defaultRanges ? new Set(defaultRanges.map((r) => r.id)) : undefined),
     [defaultRanges],
   );
   const [mode, setMode] = React.useState<PowerCurveMode>("watts");
@@ -401,46 +443,40 @@ function AggregatedPowerCurve({ activityTypes, workoutTypes: workoutTypesProp, d
     };
   }, [queries, ranges, tokens.palette, resolveForDate]);
 
+  const toolbar = (
+    <Toolbar
+      ranges={ranges}
+      onAddPreset={addRange}
+      onAddCustom={addRange}
+      onRemove={removeRange}
+      lockedRangeIds={lockedRangeIds}
+      athleteId={athleteId}
+      activityTypes={activityTypes}
+      workoutTypes={workoutTypes}
+      mode={mode}
+      onModeChange={setMode}
+    />
+  );
+
   if (xData.length === 0) {
     return (
-      <div className="bg-card flex h-96 w-full flex-col rounded-sm">
-        <Toolbar
-          ranges={ranges}
-          onAddPreset={addRange}
-          onAddCustom={addRange}
-          onRemove={removeRange}
-          lockedRangeIds={lockedRangeIds}
-          athleteId={athleteId}
-          activityTypes={activityTypes}
-          workoutTypes={workoutTypes}
-          mode={mode}
-          onModeChange={setMode}
-        />
-        <div className="text-muted-foreground flex flex-1 items-center justify-center">
+      <ChartCard title={POWER_CURVE_TITLE} actions={toolbar}>
+        <div className="text-muted-foreground flex h-full items-center justify-center">
           No power data available
         </div>
-      </div>
+      </ChartCard>
     );
   }
 
   return (
-    <div className="bg-card flex h-96 w-full flex-col rounded-sm">
-      <Toolbar
-        ranges={ranges}
-        onAddPreset={addRange}
-        onAddCustom={addRange}
-        onRemove={removeRange}
-        lockedRangeIds={lockedRangeIds}
-        athleteId={athleteId}
-        activityTypes={activityTypes}
-        workoutTypes={workoutTypes}
+    <ChartCard title={POWER_CURVE_TITLE} actions={toolbar}>
+      <PowerCurveWebGLChart
+        xData={xData}
+        series={series}
+        activityMetadata={activityMetadata}
         mode={mode}
-        onModeChange={setMode}
       />
-      <div className="min-h-0 flex-1">
-        <PowerCurveWebGLChart xData={xData} series={series} activityMetadata={activityMetadata} mode={mode} />
-      </div>
-    </div>
+    </ChartCard>
   );
 }
 
@@ -458,7 +494,13 @@ function ModeToggle({
   mode: PowerCurveMode;
   onModeChange: (mode: PowerCurveMode) => void;
 }) {
-  return <SegmentedToggle value={mode} onChange={onModeChange} options={MODE_OPTIONS} />;
+  return (
+    <SegmentedToggle
+      value={mode}
+      onChange={onModeChange}
+      options={MODE_OPTIONS}
+    />
+  );
 }
 
 // --- Toolbar ---
@@ -514,8 +556,7 @@ function Toolbar({
   );
 
   return (
-    <div className="border-border flex items-center gap-2 border-b p-4">
-      <h3 className="shrink-0 text-lg font-semibold">Cycling Power Curve</h3>
+    <>
       {hint}
 
       {/* Desktop: range controls inline */}
@@ -526,9 +567,9 @@ function Toolbar({
 
       <div className="flex-1" />
 
-      {/* Mobile: range controls in popover */}
-      <Popover>
-        <PopoverTrigger
+      {/* Mobile: range controls in popover (drawer on mobile) */}
+      <ResponsivePopover>
+        <ResponsivePopoverTrigger
           render={
             <Button
               variant="ghost"
@@ -539,15 +580,20 @@ function Toolbar({
             </Button>
           }
         />
-        <PopoverContent align="end" className="flex flex-col gap-2 sm:hidden">
+        <ResponsivePopoverContent align="end" className="flex flex-col gap-2">
+          <ResponsivePopoverHeader>
+            <ResponsivePopoverTitle>Date ranges</ResponsivePopoverTitle>
+          </ResponsivePopoverHeader>
           {rangeControls}
-        </PopoverContent>
-      </Popover>
+        </ResponsivePopoverContent>
+      </ResponsivePopover>
 
       <ModeToggle mode={mode} onModeChange={onModeChange} />
-    </div>
+    </>
   );
 }
+
+const POWER_CURVE_TITLE = "Cycling Power Curve";
 
 function RangeChip({
   range,
@@ -651,8 +697,8 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
+    <ResponsivePopover open={open} onOpenChange={setOpen}>
+      <ResponsivePopoverTrigger
         render={
           <Button
             variant="outline"
@@ -663,7 +709,10 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
           </Button>
         }
       />
-      <PopoverContent align="start" className="w-64">
+      <ResponsivePopoverContent align="start" className="sm:w-64">
+        <ResponsivePopoverHeader>
+          <ResponsivePopoverTitle>Custom range</ResponsivePopoverTitle>
+        </ResponsivePopoverHeader>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label>From</Label>
@@ -687,8 +736,8 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
             Add range
           </Button>
         </div>
-      </PopoverContent>
-    </Popover>
+      </ResponsivePopoverContent>
+    </ResponsivePopover>
   );
 }
 
@@ -696,13 +745,10 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
 
 function EmptyChart() {
   return (
-    <div className="bg-card flex h-96 w-full flex-col rounded-sm">
-      <div className="border-border flex items-center gap-2 border-b p-4">
-        <h3 className="shrink-0 text-lg font-semibold">Cycling Power Curve</h3>
-      </div>
-      <div className="text-muted-foreground flex flex-1 items-center justify-center">
+    <ChartCard title={POWER_CURVE_TITLE}>
+      <div className="text-muted-foreground flex h-full items-center justify-center">
         No power data available
       </div>
-    </div>
+    </ChartCard>
   );
 }

@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { ArrowLeftIcon, Maximize2, Minimize2 } from "lucide-react";
+import { ArrowLeftIcon, FlagIcon, Maximize2, Minimize2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
@@ -140,7 +140,8 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
           {formatActivityType(activity.type)}
         </span>
         {isRace && (
-          <span className="bg-primary text-primary-foreground inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-xs font-medium uppercase">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium uppercase ring-1 ring-amber-400/80 ring-inset text-amber-500">
+            <FlagIcon className="size-3" />
             Race
           </span>
         )}

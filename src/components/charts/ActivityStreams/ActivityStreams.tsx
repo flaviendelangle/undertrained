@@ -49,6 +49,13 @@ const STREAM_DEFS: StreamDef[] = [
     area: false,
   },
   { type: "altitude", title: "Altitude", unit: "m", colorIndex: 4, area: true },
+  {
+    type: "temp",
+    title: "Temperature",
+    unit: "°C",
+    colorIndex: 5,
+    area: false,
+  },
 ];
 
 function parseStreamData(data: string): number[] | null {
@@ -242,9 +249,9 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
       <div className="border-border flex items-center gap-2 border-b p-4">
         <h3 className="text-lg font-semibold">Time Series</h3>
         <FeatureHint hintId="hint-activity-streams" title="Time Series">
-          Heart rate, power, cadence, speed, and altitude plotted over time or
-          distance. Hover to see all metrics at a specific point. Toggle the
-          X-axis between time and distance.
+          Heart rate, power, cadence, speed, altitude, and temperature plotted
+          over time or distance. Hover to see all metrics at a specific point.
+          Toggle the X-axis between time and distance.
         </FeatureHint>
         <div className="flex-1" />
         {xAxisOptions.length > 1 && (

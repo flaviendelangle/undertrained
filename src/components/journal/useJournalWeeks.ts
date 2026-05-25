@@ -17,8 +17,19 @@ import {
   getActivityLoad,
   type LoadAlgorithmPreferences,
 } from "~/utils/getActivityLoad";
+import { getSportConfig, type SportCategory } from "~/utils/sportConfig";
 
 export type JournalActivity = Omit<ListActivity, "mapPolyline">;
+
+/** Per-category duration/load totals within a single week. */
+export interface WeekSportStat {
+  /** Broad sport category these activities belong to. */
+  category: SportCategory;
+  /** Combined moving time of the category's activities, in seconds. */
+  totalSeconds: number;
+  /** Combined training load of the category's activities. */
+  totalLoad: number;
+}
 
 export interface JournalDay {
   /** Local midnight of this calendar day. */
@@ -51,6 +62,16 @@ export interface JournalWeek {
   plannedSeconds: number;
   /** Total training load of the week. */
   totalLoad: number;
+  /**
+   * Per-category duration/load totals for the week, heaviest load first, with
+   * empty categories dropped. Powers the per-sport breakdown in the summary card.
+   */
+  sportBreakdown: WeekSportStat[];
+  /**
+   * The previous (older) week's 7 daily loads, Monday → Sunday, used to draw the
+   * cumulative comparison line in the summary card. `null` for the oldest week.
+   */
+  previousWeekDailyLoad: number[] | null;
   /**
    * Ratio of this week's load to the mean load of the trailing 4 weeks, or
    * `null` when there isn't enough history (or the baseline is ~0) to compare.
@@ -238,6 +259,11 @@ export function useJournalWeeks(
       let totalSeconds = 0;
       let plannedSeconds = 0;
       let totalLoad = 0;
+      // Per-category duration/load tallies for this week's breakdown.
+      const byCategory = new Map<
+        SportCategory,
+        { totalSeconds: number; totalLoad: number }
+      >();
 
       for (let i = 0; i < 7; i += 1) {
         const date = addDays(weekStart, i);
@@ -246,8 +272,20 @@ export function useJournalWeeks(
         const dayPlanned = plannedByDay.get(dayKey) ?? [];
         let dayLoad = 0;
         for (const activity of dayActivities) {
+          const load = loadByStravaId.get(activity.stravaId) ?? 0;
           totalSeconds += activity.movingTime;
-          dayLoad += loadByStravaId.get(activity.stravaId) ?? 0;
+          dayLoad += load;
+          const category = getSportConfig(activity.type).category;
+          const tally = byCategory.get(category);
+          if (tally) {
+            tally.totalSeconds += activity.movingTime;
+            tally.totalLoad += load;
+          } else {
+            byCategory.set(category, {
+              totalSeconds: activity.movingTime,
+              totalLoad: load,
+            });
+          }
         }
         for (const planned of dayPlanned) {
           plannedSeconds += planned.durationSeconds;
@@ -264,6 +302,11 @@ export function useJournalWeeks(
         weekActivities.push(...dayActivities);
       }
 
+      const sportBreakdown: WeekSportStat[] = Array.from(
+        byCategory,
+        ([category, tally]) => ({ category, ...tally }),
+      ).sort((a, b) => b.totalLoad - a.totalLoad);
+
       weeks.push({
         weekStart,
         weekEnd: addDays(weekStart, 6),
@@ -272,6 +315,8 @@ export function useJournalWeeks(
         totalSeconds,
         plannedSeconds,
         totalLoad,
+        sportBreakdown,
+        previousWeekDailyLoad: null,
         loadTrend: null,
         monthStart: null,
         verdict: null,
@@ -287,6 +332,11 @@ export function useJournalWeeks(
       // The future week holds only plans, not done work — leave it unjudged.
       const isFutureWeek =
         weeks[i].weekStart.getTime() > currentWeekStart.getTime();
+
+      // Weeks are newest-first, so `i + 1` is the immediately older ("last")
+      // week — its daily loads back the cumulative comparison line.
+      weeks[i].previousWeekDailyLoad =
+        weeks[i + 1]?.days.map((d) => d.totalLoad) ?? null;
 
       let sum = 0;
       let count = 0;

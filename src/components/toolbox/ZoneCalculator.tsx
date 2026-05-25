@@ -3,8 +3,6 @@ import * as React from "react";
 import { InfoIcon, PlusIcon, XIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
 
-import { Button } from "~/components/ui/button";
-import { NumberField } from "~/components/ui/number-field";
 import {
   ToolboxTable,
   ToolboxTableBody,
@@ -14,6 +12,8 @@ import {
   ToolboxTableHeaderRow,
   ToolboxTableRow,
 } from "~/components/toolbox/ToolboxTable";
+import { Button } from "~/components/ui/button";
+import { NumberField } from "~/components/ui/number-field";
 import {
   Tooltip,
   TooltipContent,
@@ -35,7 +35,10 @@ type Tab = "power" | "heart-rate" | "running-pace";
 
 type ReferenceType = "marathon" | "half-marathon" | "10k" | "5k" | "vma";
 
-const RACE_DISTANCES: Record<Exclude<ReferenceType, "vma">, { label: string; meters: number }> = {
+const RACE_DISTANCES: Record<
+  Exclude<ReferenceType, "vma">,
+  { label: string; meters: number }
+> = {
   marathon: { label: "Marathon", meters: 42195 },
   "half-marathon": { label: "Half Marathon", meters: 21097.5 },
   "10k": { label: "10K", meters: 10000 },
@@ -80,7 +83,7 @@ export function ZoneCalculator() {
   const isLoggedIn = status === "authenticated";
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="divide-border border-border flex w-full flex-col divide-y border-b md:mx-auto md:max-w-3xl md:gap-6 md:divide-y-0 md:border-0">
       {isLoggedIn ? <ZoneCalculatorLoggedIn /> : <ZoneCalculatorAnonymous />}
     </div>
   );
@@ -328,7 +331,7 @@ function ZoneCalculatorInner({
   return (
     <>
       {/* Input Card */}
-      <div className="bg-card rounded-sm border max-sm:border-0 p-4 md:p-6">
+      <div className="md:border-border md:bg-card p-4 md:rounded-sm md:border md:p-6">
         {/* Tab toggle */}
         <div className="mb-4 flex flex-wrap gap-1.5">
           <Button
@@ -479,7 +482,8 @@ function ZoneCalculatorInner({
                   </span>
                   {vdot2 != null && vdot1 != null && (
                     <span>
-                      {" "}(average of {vdot1.toFixed(1)} and {vdot2.toFixed(1)})
+                      {" "}
+                      (average of {vdot1.toFixed(1)} and {vdot2.toFixed(1)})
                     </span>
                   )}
                 </div>
@@ -513,16 +517,14 @@ function PowerZonesTable({
   const showWkg = weightKg != null && weightKg > 0;
 
   return (
-    <div className="bg-card rounded-sm border max-sm:border-0">
+    <div className="md:border-border md:bg-card md:rounded-sm md:border">
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
         <h2 className="text-foreground text-lg font-semibold">
           Power Zones (Coggan)
         </h2>
         <p className="text-muted-foreground text-sm">
           Based on FTP of {ftp}W
-          {showWkg && (
-            <> — {(ftp / weightKg).toFixed(2)} W/kg</>
-          )}
+          {showWkg && <> — {(ftp / weightKg).toFixed(2)} W/kg</>}
         </p>
       </div>
       <ToolboxTable>
@@ -593,7 +595,7 @@ function HrZonesTable({
   const hrReserve = maxHr - restingHr;
 
   return (
-    <div className="bg-card rounded-sm border max-sm:border-0">
+    <div className="md:border-border md:bg-card md:rounded-sm md:border">
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
         <h2 className="text-foreground text-lg font-semibold">
           Heart Rate Zones (Karvonen)
@@ -651,7 +653,7 @@ function RunningPaceZonesTable({ vdot }: { vdot: number }) {
   const zones = React.useMemo(() => computeRunningZones(vdot), [vdot]);
 
   return (
-    <div className="bg-card rounded-sm border max-sm:border-0">
+    <div className="md:border-border md:bg-card md:rounded-sm md:border">
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
         <h2 className="text-foreground text-lg font-semibold">
           Running Pace Zones (Daniels)

@@ -1,10 +1,8 @@
 import * as React from "react";
 
-import { InfoIcon } from "lucide-react";
-
 import { BarChartPro } from "@mui/x-charts-pro";
 
-import { Tooltip } from "~/components/primitives/Tooltip";
+import { ChartCard } from "~/components/ui/chart-card";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useEddingtonData } from "~/hooks/useEddingtonData";
@@ -38,6 +36,8 @@ const TAB_OPTIONS: { value: TabKey; label: React.ReactNode }[] = [
 
 const DISTANCE_DIVISOR = 1000;
 const UNIT_LABEL = "Distance";
+const INFO =
+  "Your Eddington number E is the largest number such that you have cycled at least E km on E different days. Each bar shows how many days you rode at least that distance.";
 
 export default function EddingtonChart() {
   const [activeTab, setActiveTab] = React.useState<TabKey>("riding");
@@ -54,14 +54,8 @@ export default function EddingtonChart() {
 
   const eddington = useEddingtonData(data?.activities, DISTANCE_DIVISOR);
 
-  const header = (
-    <div className="border-border flex items-center gap-2 border-b p-4">
-      <h3 className="shrink-0 text-lg font-semibold">Eddington Number</h3>
-      <Tooltip label="Your Eddington number E is the largest number such that you have cycled at least E km on E different days. Each bar shows how many days you rode at least that distance.">
-        <button className="text-muted-foreground hover:text-foreground">
-          <InfoIcon className="size-3.5" />
-        </button>
-      </Tooltip>
+  const actions = (
+    <>
       {eddington && eddington.eddingtonNumber > 0 && (
         <span className="rounded bg-orange-500/20 px-2 py-0.5 text-xs font-semibold text-orange-400">
           E = {eddington.eddingtonNumber}
@@ -74,18 +68,17 @@ export default function EddingtonChart() {
           options={TAB_OPTIONS}
         />
       </div>
-    </div>
+    </>
   );
 
   if (!eddington || eddington.data.length === 0) {
     return (
       <ChartThemeProvider>
-        <div className="bg-card flex h-96 w-full flex-col rounded-sm">
-          {header}
-          <div className="text-muted-foreground flex flex-1 items-center justify-center">
+        <ChartCard title="Eddington Number" info={INFO} actions={actions}>
+          <div className="text-muted-foreground flex h-full items-center justify-center">
             No data available
           </div>
-        </div>
+        </ChartCard>
       </ChartThemeProvider>
     );
   }
@@ -117,57 +110,54 @@ export default function EddingtonChart() {
 
   return (
     <ChartThemeProvider>
-      <div className="bg-card flex h-96 w-full flex-col rounded-sm">
-        {header}
-        <div className="min-h-0 flex-1">
-          <BarChartPro
-            key={activeTab}
-            initialZoom={initialZoom}
-            xAxis={[
-              {
-                id: "distance",
-                scaleType: "band",
-                data: xAxisData,
-                label: isMobile ? undefined : UNIT_LABEL,
-                height: isMobile
-                  ? AXIS_SIZE.mobile.height
-                  : AXIS_SIZE.desktop.height,
-                valueFormatter: (value: number) => `${value}`,
-                zoom: { filterMode: "discard" },
-                colorMap: {
-                  type: "ordinal",
-                  values: xAxisData,
-                  colors: barColors,
-                },
+      <ChartCard title="Eddington Number" info={INFO} actions={actions}>
+        <BarChartPro
+          key={activeTab}
+          initialZoom={initialZoom}
+          xAxis={[
+            {
+              id: "distance",
+              scaleType: "band",
+              data: xAxisData,
+              label: isMobile ? undefined : UNIT_LABEL,
+              height: isMobile
+                ? AXIS_SIZE.mobile.height
+                : AXIS_SIZE.desktop.height,
+              valueFormatter: (value: number) => `${value}`,
+              zoom: { filterMode: "discard" },
+              colorMap: {
+                type: "ordinal",
+                values: xAxisData,
+                colors: barColors,
               },
-            ]}
-            yAxis={[
-              {
-                label: isMobile ? undefined : "Days",
-                valueFormatter: (value: number) =>
-                  isMobile
-                    ? formatCompact(value)
-                    : Math.round(value).toLocaleString(),
-                width: isMobile
-                  ? AXIS_SIZE.mobile.width
-                  : AXIS_SIZE.desktop.width,
-              },
-            ]}
-            series={[
-              {
-                data: yAxisData,
-                label: "Days",
-              },
-            ]}
-            grid={{ horizontal: true }}
-            margin={
-              isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
-            }
-            hideLegend
-            slots={{ tooltip: ChartTooltip }}
-          />
-        </div>
-      </div>
+            },
+          ]}
+          yAxis={[
+            {
+              label: isMobile ? undefined : "Days",
+              valueFormatter: (value: number) =>
+                isMobile
+                  ? formatCompact(value)
+                  : Math.round(value).toLocaleString(),
+              width: isMobile
+                ? AXIS_SIZE.mobile.width
+                : AXIS_SIZE.desktop.width,
+            },
+          ]}
+          series={[
+            {
+              data: yAxisData,
+              label: "Days",
+            },
+          ]}
+          grid={{ horizontal: true }}
+          margin={
+            isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
+          }
+          hideLegend
+          slots={{ tooltip: ChartTooltip }}
+        />
+      </ChartCard>
     </ChartThemeProvider>
   );
 }

@@ -1,6 +1,12 @@
 import * as React from "react";
 
-import { ActivityIcon, CogIcon, GaugeIcon, TrendingUpIcon, TimerIcon } from "lucide-react";
+import {
+  ActivityIcon,
+  CogIcon,
+  GaugeIcon,
+  TimerIcon,
+  TrendingUpIcon,
+} from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -8,9 +14,9 @@ import { useRouter } from "next/router";
 import { LoggedInLayout } from "~/components/layouts/LoggedInLayout";
 import { SharedLayout } from "~/components/layouts/SharedLayout";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
+import { GearCalculator } from "~/components/toolbox/GearCalculator";
 import { PaceCalculator } from "~/components/toolbox/PaceCalculator";
 import { RacePredictor } from "~/components/toolbox/RacePredictor";
-import { GearCalculator } from "~/components/toolbox/GearCalculator";
 import { ZoneCalculator } from "~/components/toolbox/ZoneCalculator";
 import { Button } from "~/components/ui/button";
 import {
@@ -33,8 +39,12 @@ type ToolId = (typeof TOOLS)[number]["id"];
 
 const ToolboxPage: NextPageWithLayout = () => {
   const router = useRouter();
-  const rawTab = Array.isArray(router.query.tab) ? router.query.tab[0] : undefined;
-  const activeTool = TOOLS.some((t) => t.id === rawTab) ? (rawTab as ToolId) : undefined;
+  const rawTab = Array.isArray(router.query.tab)
+    ? router.query.tab[0]
+    : undefined;
+  const activeTool = TOOLS.some((t) => t.id === rawTab)
+    ? (rawTab as ToolId)
+    : undefined;
   const { status } = useSession();
 
   React.useEffect(() => {
@@ -117,8 +127,9 @@ const ToolboxPage: NextPageWithLayout = () => {
           })}
         </div>
       </Toolbar>
-      <div className="flex flex-1 flex-col overflow-auto p-4 max-sm:px-0">
-
+      {/* Mobile (< md): the tool goes full-bleed, flush under the toolbar.
+          Desktop (md+): padded, matching the Statistics page. */}
+      <div className="flex flex-1 flex-col overflow-auto pb-4 md:p-4">
         {activeTool === "pace-calculator" && <PaceCalculator />}
         {activeTool === "race-predictor" && <RacePredictor />}
         {activeTool === "zone-calculator" && <ZoneCalculator />}

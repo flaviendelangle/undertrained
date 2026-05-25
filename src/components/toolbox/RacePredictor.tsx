@@ -74,7 +74,9 @@ function computeModel(
       const b = DEFAULT_RIEGEL_EXPONENT;
       const a = race1Sec / Math.pow(race1Km, b);
       return {
-        a, b, personalized: false,
+        a,
+        b,
+        personalized: false,
         warning: "Both races have the same distance. Using default formula.",
       };
     }
@@ -86,8 +88,11 @@ function computeModel(
       const bFallback = DEFAULT_RIEGEL_EXPONENT;
       const a = race1Sec / Math.pow(race1Km, bFallback);
       return {
-        a, b: bFallback, personalized: false,
-        warning: "The two results seem inconsistent. Using default formula instead.",
+        a,
+        b: bFallback,
+        personalized: false,
+        warning:
+          "The two results seem inconsistent. Using default formula instead.",
       };
     }
 
@@ -104,7 +109,6 @@ function computeModel(
 function predictTime(model: { a: number; b: number }, km: number): number {
   return model.a * Math.pow(km, model.b);
 }
-
 
 function RaceInputFields({
   label,
@@ -220,15 +224,11 @@ export function RacePredictor() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="divide-border border-border flex w-full flex-col divide-y border-b md:mx-auto md:max-w-3xl md:gap-6 md:divide-y-0 md:border-0">
       {/* Input Card */}
-      <div className="bg-card rounded-sm border max-sm:border-0 p-4 md:p-6">
+      <div className="md:border-border md:bg-card p-4 md:rounded-sm md:border md:p-6">
         <div className="flex flex-col gap-6">
-          <RaceInputFields
-            label="Race 1"
-            value={race1}
-            onChange={setRace1}
-          />
+          <RaceInputFields label="Race 1" value={race1} onChange={setRace1} />
 
           {useSecondRace ? (
             <div className="border-border border-t pt-6">
@@ -280,8 +280,8 @@ export function RacePredictor() {
                 </>
               ) : (
                 <>
-                  Using Riegel&apos;s default fatigue factor (1.06). Add a second
-                  race for a personalized model.
+                  Using Riegel&apos;s default fatigue factor (1.06). Add a
+                  second race for a personalized model.
                 </>
               )}
             </div>
@@ -291,7 +291,7 @@ export function RacePredictor() {
 
       {/* Predictions Table */}
       {model && (
-        <div className="bg-card rounded-sm border max-sm:border-0">
+        <div className="md:border-border md:bg-card md:rounded-sm md:border">
           <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
             <h2 className="text-foreground text-lg font-semibold">
               Predicted Race Times
@@ -315,8 +315,7 @@ export function RacePredictor() {
                 const predicted = predictTime(model, d.km);
                 const pacePerKm = predicted / d.km;
                 const isInput =
-                  (race1Km != null &&
-                    Math.abs(d.km - race1Km) < 0.01) ||
+                  (race1Km != null && Math.abs(d.km - race1Km) < 0.01) ||
                   (model.personalized &&
                     race2Km != null &&
                     Math.abs(d.km - race2Km) < 0.01);

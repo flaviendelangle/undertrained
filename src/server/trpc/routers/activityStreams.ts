@@ -29,6 +29,7 @@ const USABLE_TYPES = new Set([
   "altitude",
   "distance",
   "latlng",
+  "temp",
 ]);
 
 /** Store streams and recompute scores for an activity. */

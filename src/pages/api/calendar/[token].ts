@@ -151,13 +151,16 @@ export default async function handler(
     );
 
   const dtstamp = toUtcStamp(now);
+  const calName = athlete.name
+    ? `Undertrained — ${athlete.name}'s Planned Training`
+    : "Undertrained — Planned Training";
   const calendar = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//undertrained//Planned Training//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "X-WR-CALNAME:Undertrained — Planned Training",
+    foldLine(`X-WR-CALNAME:${escapeText(calName)}`),
     "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
     "X-PUBLISHED-TTL:PT1H",
     ...rows.map((row) => buildEvent(row, dtstamp)),

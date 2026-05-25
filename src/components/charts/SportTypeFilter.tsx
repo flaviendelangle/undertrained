@@ -4,10 +4,10 @@ import { FilterIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+  ResponsivePopover,
+  ResponsivePopoverContent,
+  ResponsivePopoverTrigger,
+} from "~/components/ui/responsive-popover";
 import { cn } from "~/lib/utils";
 import { formatActivityType } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
@@ -66,11 +66,11 @@ export function SportTypeFilter({
   );
 }
 
-/** Desktop-only sport filter: a popover trigger wrapping {@link SportTypeFilter}. */
+/** Desktop sport filter: a popover trigger wrapping {@link SportTypeFilter}. */
 export function SportFilterPopover(props: SportTypeFilterProps) {
   return (
-    <Popover>
-      <PopoverTrigger
+    <ResponsivePopover>
+      <ResponsivePopoverTrigger
         render={
           <Button
             variant="ghost"
@@ -87,9 +87,9 @@ export function SportFilterPopover(props: SportTypeFilterProps) {
           </Button>
         }
       />
-      <PopoverContent align="end" className="w-56 p-3">
+      <ResponsivePopoverContent align="end" className="sm:w-56 sm:p-3">
         <SportTypeFilter {...props} />
-      </PopoverContent>
-    </Popover>
+      </ResponsivePopoverContent>
+    </ResponsivePopover>
   );
 }

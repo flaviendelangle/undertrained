@@ -42,9 +42,12 @@ const SettingsPage: NextPageWithLayout = () => {
         <span className="font-semibold">Settings</span>
       </Toolbar>
 
-      <div className="flex flex-1 flex-col items-center overflow-y-auto p-4 max-sm:px-0 sm:p-6">
-        <div className="flex w-full max-w-5xl flex-col gap-4 sm:gap-6">
-          <section className="border-border bg-card rounded-sm border p-5 max-sm:border-0">
+      {/* Mobile (< md): full-bleed sections separated by hairline dividers,
+          flush under the toolbar — matches the Statistics page. Desktop (md+):
+          the centered column of boxed cards. */}
+      <div className="flex flex-1 flex-col overflow-y-auto pb-4 md:items-center md:p-6">
+        <div className="divide-border border-border flex w-full flex-col divide-y border-b md:max-w-5xl md:gap-6 md:divide-y-0 md:border-0">
+          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
             <ChangePointsTimeline
               timeline={timeline}
               onTimelineChange={setTimeline}
@@ -52,11 +55,11 @@ const SettingsPage: NextPageWithLayout = () => {
             />
           </section>
 
-          <section className="border-border bg-card rounded-sm border p-5 max-sm:border-0">
+          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
             <EquipmentFields timeline={timeline} setTimeline={setTimeline} />
           </section>
 
-          <section className="border-border bg-card rounded-sm border p-5 max-sm:border-0">
+          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
             <CardTitle
               tooltip="TSS uses power data (most accurate for cycling with a power meter). HRSS uses heart rate (works for any sport with an HR monitor). rTSS/sTSS use pace (good for running/swimming without power)."
               description="Choose which training load metric to display for each sport category."
@@ -70,7 +73,7 @@ const SettingsPage: NextPageWithLayout = () => {
             />
           </section>
 
-          <section className="border-border bg-card rounded-sm border p-5 max-sm:border-0">
+          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
             <CardTitle description="Manage app preferences and onboarding hints.">
               Preferences
             </CardTitle>

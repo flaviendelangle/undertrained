@@ -2,10 +2,10 @@ import { FilterIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogTrigger,
+} from "~/components/ui/responsive-dialog";
 import { useActivityFilter } from "~/hooks/useActivityFilter";
 
 import { ActivityFilterPanel } from "./ActivityFilterPanel";
@@ -21,8 +21,8 @@ export function ActivityFilterPopover({
   const { activeFilterCount } = useActivityFilter();
 
   return (
-    <Popover>
-      <PopoverTrigger
+    <ResponsiveDialog>
+      <ResponsiveDialogTrigger
         render={
           <Button
             variant="ghost"
@@ -39,9 +39,9 @@ export function ActivityFilterPopover({
           </Button>
         }
       />
-      <PopoverContent align="start" className="w-72 p-3">
+      <ResponsiveDialogContent className="sm:max-w-sm">
         <ActivityFilterPanel search={search} onSearchChange={onSearchChange} />
-      </PopoverContent>
-    </Popover>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

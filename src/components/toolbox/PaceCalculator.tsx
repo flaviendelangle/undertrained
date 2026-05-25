@@ -41,7 +41,8 @@ export function PaceCalculator() {
   const [mode, setMode] = React.useState<Mode>("pace-to-duration");
 
   // Distance selection
-  const [selectedDistance, setSelectedDistance] = React.useState<string>("Marathon");
+  const [selectedDistance, setSelectedDistance] =
+    React.useState<string>("Marathon");
   const [customKm, setCustomKm] = React.useState<number | null>(15);
 
   // Pace inputs (for pace-to-duration mode)
@@ -50,13 +51,17 @@ export function PaceCalculator() {
 
   // Duration inputs (for duration-to-pace mode)
   const [durationHours, setDurationHours] = React.useState<number | null>(3);
-  const [durationMinutes, setDurationMinutes] = React.useState<number | null>(30);
-  const [durationSeconds, setDurationSeconds] = React.useState<number | null>(0);
+  const [durationMinutes, setDurationMinutes] = React.useState<number | null>(
+    30,
+  );
+  const [durationSeconds, setDurationSeconds] = React.useState<number | null>(
+    0,
+  );
 
   const distanceKm =
     selectedDistance === "Custom"
       ? customKm
-      : DISTANCES.find((d) => d.label === selectedDistance)?.km ?? null;
+      : (DISTANCES.find((d) => d.label === selectedDistance)?.km ?? null);
 
   const computedResult = React.useMemo(() => {
     if (distanceKm == null || distanceKm <= 0) return null;
@@ -86,9 +91,9 @@ export function PaceCalculator() {
   ]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="divide-border border-border flex w-full flex-col divide-y border-b md:mx-auto md:max-w-3xl md:gap-6 md:divide-y-0 md:border-0">
       {/* Converter Widget */}
-      <div className="bg-card rounded-sm border max-sm:border-0 p-4 md:p-6">
+      <div className="md:border-border md:bg-card p-4 md:rounded-sm md:border md:p-6">
         {/* Mode toggle */}
         <div className="mb-4 flex gap-1.5">
           <Button
@@ -217,7 +222,7 @@ export function PaceCalculator() {
       </div>
 
       {/* Reference Table */}
-      <div className="bg-card rounded-sm border max-sm:border-0">
+      <div className="md:border-border md:bg-card md:rounded-sm md:border">
         <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
           <h2 className="text-foreground text-lg font-semibold">
             Pace Reference Table
@@ -238,9 +243,7 @@ export function PaceCalculator() {
           <ToolboxTableBody>
             {paceRows.map((row) => (
               <ToolboxTableRow key={row.paceSeconds}>
-                <ToolboxTableCell first>
-                  {row.paceLabel}
-                </ToolboxTableCell>
+                <ToolboxTableCell first>{row.paceLabel}</ToolboxTableCell>
                 {DISTANCES.map((d) => (
                   <ToolboxTableCell
                     key={d.label}

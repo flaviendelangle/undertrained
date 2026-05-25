@@ -3,7 +3,7 @@ import * as React from "react";
 import { bisector } from "d3-array";
 import { scaleLinear, scaleLog } from "d3-scale";
 
-import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
+import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import {
   WebGLChartRenderer,
   type PanelRenderData,
@@ -17,15 +17,17 @@ import type { PowerCurveSeriesData, ActivityInfo } from "./types";
 
 // --- Constants ---
 
-// Match the horizontal inset of the standard MUI charts on the page (e.g.
-// Year-over-Year Progress) so the plot area lines up with the card edges the
-// same way: left = y-axis width + chart margin, right = chart margin. Top and
-// bottom stay this chart's own axis spacing.
+// This chart's y-axis labels are short — at most 4 digits of watts ("9999 W")
+// or a small W/kg value ("12 W/kg") — drawn right-aligned 8px before the plot
+// area, so they need far less room than the standard MUI y-axis width. Keep the
+// right margin in step with the standard charts; tighten the left so the plot
+// starts closer to the card edge instead of leaving dead space before the
+// labels.
 const MARGIN = {
   top: 16,
   right: CHART_MARGINS.standard.right,
   bottom: 36,
-  left: AXIS_SIZE.desktop.width + CHART_MARGINS.standard.left,
+  left: 46,
 };
 const LINE_HALF_WIDTH = 0.75;
 

@@ -1,8 +1,9 @@
 import type { SQL } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "../../db";
+import { riderSettings } from "../../db/schema";
 import { CYCLING_POWER_DURATIONS } from "../../../utils/cyclingPowerDurations";
 import { getActivityTypesByCategory } from "../../../utils/sportConfig";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
@@ -328,20 +329,41 @@ export const recordsRouter = router({
 
   /**
    * Longest-activity leaderboard (running or cycling): activities ranked by
-   * their total distance (meters) or moving time (seconds), longest first.
-   * Includes indoor/virtual activities.
+   * their total distance (meters), moving time (seconds), or training load,
+   * longest first. Includes indoor/virtual activities.
+   *
+   * For `load`, the ranking mirrors {@link getActivityLoad}: it uses the
+   * athlete's preferred per-sport algorithm (the sport-specific score TSS/rTSS
+   * lives in `tss`, heart-rate score in `hrss`) and falls back to the other
+   * score when the preferred one is missing.
    */
   getLongestActivityLeaderboard: protectedProcedure
     .input(
       leaderboardInput.extend({
         sport: z.enum(["cycling", "running"]),
-        measure: z.enum(["distance", "duration"]),
+        measure: z.enum(["distance", "duration", "load"]),
       }),
     )
     .use(validateAthleteOwnership)
-    .query(({ ctx, input }) => {
-      const valueExpr =
-        input.measure === "distance" ? sql`a.distance` : sql`a.moving_time`;
+    .query(async ({ ctx, input }) => {
+      let valueExpr: SQL;
+      if (input.measure === "distance") {
+        valueExpr = sql`a.distance`;
+      } else if (input.measure === "duration") {
+        valueExpr = sql`a.moving_time`;
+      } else {
+        const settings = await ctx.db.query.riderSettings.findFirst({
+          where: eq(riderSettings.athlete, input.athleteId),
+        });
+        const algorithm =
+          input.sport === "cycling"
+            ? settings?.cyclingLoadAlgorithm
+            : settings?.runningLoadAlgorithm;
+        valueExpr =
+          algorithm === "hrss"
+            ? sql`COALESCE(a.hrss, a.tss)`
+            : sql`COALESCE(a.tss, a.hrss)`;
+      }
       return topActivities(ctx.db, {
         athleteId: input.athleteId,
         valueExpr,

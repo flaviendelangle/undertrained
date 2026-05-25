@@ -24,7 +24,7 @@ import { startOf } from "~/utils/dateUtils";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
 import { CalendarFeedButton } from "./CalendarFeedButton";
-import { JournalRecordsContext, TIER_STYLE } from "./JournalDayCell";
+import { JournalRecordsContext } from "./JournalDayCell";
 import { JournalPlannerContext } from "./journalPlanner";
 import {
   JOURNAL_GRID_COLS,
@@ -39,13 +39,6 @@ import { useJournalWeeks } from "./useJournalWeeks";
 
 const VIRTUALIZER_OVERSCAN = 6;
 const SKELETON_ROW_COUNT = 8;
-
-// Load zones, easiest → hardest, for the heatmap legend.
-const LOAD_LEGEND = [
-  TIER_STYLE.easy,
-  TIER_STYLE.moderate,
-  TIER_STYLE.hard,
-] as const;
 
 // Monday → Sunday short labels, derived once via a known Monday (1 Jan 2024).
 const DAY_NAMES = Array.from({ length: 7 }, (_, i) =>
@@ -191,13 +184,6 @@ export function Journal() {
           <span />
         )}
         <span className="flex items-center gap-3">
-          <span className="font-medium">Daily load</span>
-          {LOAD_LEGEND.map(({ bar, label }) => (
-            <span key={label} className="flex items-center gap-1">
-              <span className={cn("h-2.5 w-0.75 rounded-full", bar)} />
-              {label}
-            </span>
-          ))}
           <CalendarFeedButton />
           <Button
             size="xs"
@@ -252,7 +238,9 @@ export function Journal() {
             {DAY_NAMES.map((name) => (
               <HeaderCell key={name}>{name}</HeaderCell>
             ))}
-            <HeaderCell>Summary</HeaderCell>
+            <HeaderCell className="bg-accent sticky right-0 z-20">
+              Summary
+            </HeaderCell>
           </div>
 
           {isError ? (

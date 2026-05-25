@@ -63,14 +63,7 @@ export function Records() {
           </ControlGroup>
         )}
         <ControlGroup label="Metric">
-          <SegmentedToggle
-            value={String(metricControl.selected ?? "")}
-            onChange={(v) => metricControl.onSelect(v)}
-            options={metricControl.items.map((it) => ({
-              value: String(it.key),
-              label: it.label,
-            }))}
-          />
+          <ParamSelect control={metricControl} />
         </ControlGroup>
         {paramControl && (
           <ControlGroup label={paramLabel}>
@@ -156,10 +149,10 @@ export function Records() {
                           {e.sub ?? "—"}
                         </TableCell>
                       )}
-                      <TableCell className="min-w-52 max-w-none sm:min-w-0 sm:max-w-0">
+                      <TableCell className="min-w-52 max-w-none sm:w-full sm:min-w-0 sm:max-w-0 sm:truncate">
                         <Link
                           href={`/activities/${e.stravaId}`}
-                          className="text-foreground hover:text-primary block font-medium sm:truncate"
+                          className="text-foreground hover:text-primary font-medium"
                         >
                           {e.name}
                         </Link>

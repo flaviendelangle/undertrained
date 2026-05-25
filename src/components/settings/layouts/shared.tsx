@@ -2,17 +2,17 @@ import * as React from "react";
 
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "~/components/ui/dialog";
 import { Label } from "~/components/ui/label";
 import { NumberField } from "~/components/ui/number-field";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from "~/components/ui/responsive-dialog";
 import {
   Select,
   SelectContent,
@@ -61,36 +61,36 @@ export function EquipmentFields({
         </CardTitle>
       )}
       <div className={className ?? "grid grid-cols-1 gap-5 sm:grid-cols-3"}>
-      <div className="flex flex-col gap-2">
-        <Label>Bike weight (kg)</Label>
-        <NumberField
-          value={timeline.bikeWeightKg}
-          onValueChange={(v) => updateStatic("bikeWeightKg", v)}
-          min={0}
-          step={0.5}
-          smallStep={0.1}
-        />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label>CdA (drag coefficient x area)</Label>
-        <NumberField
-          value={timeline.cdA}
-          onValueChange={(v) => updateStatic("cdA", v)}
-          min={0}
-          step={0.01}
-          smallStep={0.001}
-        />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label>Crr (rolling resistance)</Label>
-        <NumberField
-          value={timeline.crr}
-          onValueChange={(v) => updateStatic("crr", v)}
-          min={0}
-          step={0.001}
-          smallStep={0.0001}
-        />
-      </div>
+        <div className="flex flex-col gap-2">
+          <Label>Bike weight (kg)</Label>
+          <NumberField
+            value={timeline.bikeWeightKg}
+            onValueChange={(v) => updateStatic("bikeWeightKg", v)}
+            min={0}
+            step={0.5}
+            smallStep={0.1}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label>CdA (drag coefficient x area)</Label>
+          <NumberField
+            value={timeline.cdA}
+            onValueChange={(v) => updateStatic("cdA", v)}
+            min={0}
+            step={0.01}
+            smallStep={0.001}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label>Crr (rolling resistance)</Label>
+          <NumberField
+            value={timeline.crr}
+            onValueChange={(v) => updateStatic("crr", v)}
+            min={0}
+            step={0.001}
+            smallStep={0.0001}
+          />
+        </div>
       </div>
     </div>
   );
@@ -117,11 +117,14 @@ export function LoadAlgorithmFields({
   return (
     <div
       className={
-        className ?? `grid grid-cols-1 gap-5 sm:grid-cols-${LOAD_ALGORITHM_CONFIGS.length}`
+        className ??
+        `grid grid-cols-1 gap-5 sm:grid-cols-${LOAD_ALGORITHM_CONFIGS.length}`
       }
     >
       {LOAD_ALGORITHM_CONFIGS.map((config) => {
-        const currentValue = (timeline as unknown as Record<string, string>)[config.key];
+        const currentValue = (timeline as unknown as Record<string, string>)[
+          config.key
+        ];
         return (
           <div key={config.key} className="flex flex-col gap-2">
             <Label>{config.label}</Label>
@@ -173,19 +176,22 @@ export function DangerZone({
         Permanently delete all your activities, streams, settings, and log out.
         This cannot be undone.
       </p>
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogTrigger render={<Button variant="destructive" />}>
+      <ResponsiveDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+      >
+        <ResponsiveDialogTrigger render={<Button variant="destructive" />}>
           Delete all my data
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete all data?</DialogTitle>
-            <DialogDescription>
-              This will permanently delete all your activities, settings, and log
-              you out. This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
+        </ResponsiveDialogTrigger>
+        <ResponsiveDialogContent>
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Delete all data?</ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
+              This will permanently delete all your activities, settings, and
+              log you out. This action cannot be undone.
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
+          <ResponsiveDialogFooter>
             <Button
               variant="outline"
               onClick={() => setDeleteDialogOpen(false)}
@@ -199,9 +205,9 @@ export function DangerZone({
             >
               {deleting ? "Deleting..." : "Delete everything"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ResponsiveDialogFooter>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </>
   );
 
@@ -210,7 +216,7 @@ export function DangerZone({
   }
 
   return (
-    <section className="border-destructive/30 bg-card rounded-sm border max-sm:border-0 p-5">
+    <section className="md:border-destructive/30 md:bg-card p-5 md:rounded-sm md:border">
       {content}
     </section>
   );

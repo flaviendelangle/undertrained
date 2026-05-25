@@ -5,12 +5,12 @@ import { format } from "date-fns";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "~/components/ui/responsive-dialog";
 import { Label } from "~/components/ui/label";
 import { NumberField } from "~/components/ui/number-field";
 import {
@@ -223,24 +223,24 @@ export function ChangePointDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>
             {isBaseline
               ? "Edit Baseline Values"
               : existingPoint
                 ? "Edit Change Point"
                 : "Add Change Point"}
-          </DialogTitle>
-        </DialogHeader>
+          </ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSave();
           }}
         >
-          <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
+          <div className="flex flex-col gap-4">
             {!isBaseline && (
               <div className="flex flex-col gap-1.5">
                 <Label>Date</Label>
@@ -276,7 +276,7 @@ export function ChangePointDialog({
               </div>
             ))}
           </div>
-          <DialogFooter>
+          <ResponsiveDialogFooter>
             {!isBaseline && existingPoint && onDelete && (
               <Button
                 type="button"
@@ -285,7 +285,7 @@ export function ChangePointDialog({
                   onDelete();
                   onOpenChange(false);
                 }}
-                className="mr-auto"
+                className="sm:mr-auto"
               >
                 Delete
               </Button>
@@ -299,9 +299,9 @@ export function ChangePointDialog({
             >
               Save
             </Button>
-          </DialogFooter>
+          </ResponsiveDialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
