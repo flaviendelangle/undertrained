@@ -38,6 +38,7 @@ export function Records() {
     paramLabel,
     entries,
     isLoading,
+    isRefreshing,
     emptyMessage,
   } = useRecordsExplorer();
 
@@ -83,11 +84,17 @@ export function Records() {
       ) : entries.length === 0 ? (
         <RecordsEmptyState message={emptyMessage} />
       ) : (
-        <div className="flex flex-col gap-4">
+        <div
+          className={cn(
+            "flex flex-col gap-4 transition-opacity",
+            // Dim the previous table while the new selection loads.
+            isRefreshing && "pointer-events-none opacity-50",
+          )}
+        >
           {best && (
             <Link
               href={`/activities/${best.stravaId}`}
-              className="bg-muted/40 hover:bg-muted/70 flex flex-col gap-3 rounded-xl px-5 py-4 transition-colors sm:flex-row sm:items-center sm:gap-4"
+              className="bg-muted/40 hover:bg-muted/70 flex min-h-22 flex-col justify-center gap-3 rounded-xl px-5 py-4 transition-colors sm:flex-row sm:items-center sm:gap-4"
             >
               <div className="flex items-center gap-4">
                 <span className="bg-amber-500/20 text-amber-500 flex size-10 shrink-0 items-center justify-center rounded-full text-base font-bold">
@@ -130,7 +137,7 @@ export function Records() {
                 {entries.map((e, i) => {
                   const rank = i + 1;
                   return (
-                    <TableRow key={e.stravaId}>
+                    <TableRow key={e.stravaId} className="h-12">
                       <TableCell className="text-center">
                         <span
                           className={cn(

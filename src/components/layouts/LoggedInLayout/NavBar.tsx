@@ -26,6 +26,7 @@ import { usePathname } from "next/navigation";
 import { Tooltip, TooltipProps } from "~/components/primitives/Tooltip";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useTheme } from "~/hooks/useTheme";
+import { isLiveTrainingEnabled } from "~/lib/features";
 import { cn } from "~/lib/utils";
 
 import { NavBarContext } from "./NavBarContext";
@@ -187,13 +188,15 @@ export function NavBar() {
               href="/time-periods"
             />
           </TooltipIfMenuCollapsed>
-          <TooltipIfMenuCollapsed label="Live Training">
-            <NavBarLink
-              icon={PlayCircleIcon}
-              label="Live Training"
-              href="/live-training"
-            />
-          </TooltipIfMenuCollapsed>
+          {isLiveTrainingEnabled && (
+            <TooltipIfMenuCollapsed label="Live Training">
+              <NavBarLink
+                icon={PlayCircleIcon}
+                label="Live Training"
+                href="/live-training"
+              />
+            </TooltipIfMenuCollapsed>
+          )}
           <TooltipIfMenuCollapsed label="Toolbox">
             <NavBarLink icon={WrenchIcon} label="Toolbox" href="/toolbox" />
           </TooltipIfMenuCollapsed>
@@ -303,14 +306,16 @@ export function MobileBottomBar() {
             </span>
             Settings
           </Link>
-          <Link
-            href="/live-training"
-            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-            onClick={() => setMoreOpen(false)}
-          >
-            <PlayCircleIcon className="size-4" />
-            Live Training
-          </Link>
+          {isLiveTrainingEnabled && (
+            <Link
+              href="/live-training"
+              className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
+              onClick={() => setMoreOpen(false)}
+            >
+              <PlayCircleIcon className="size-4" />
+              Live Training
+            </Link>
+          )}
           <Link
             href="/privacy"
             className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"

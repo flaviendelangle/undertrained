@@ -5,6 +5,7 @@ import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "next-themes";
 import type { AppContext, AppProps, AppType } from "next/app";
 import NextApp from "next/app";
+import Head from "next/head";
 import { CookiesProvider } from "react-cookie";
 
 import { LicenseInfo } from "@mui/x-license";
@@ -39,6 +40,9 @@ const App = (({
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem nonce={nonce}>
+      <Head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      </Head>
       <CookiesProvider>
         <SessionProvider session={session}>
           <TooltipProvider>

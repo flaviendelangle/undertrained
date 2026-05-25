@@ -15,6 +15,8 @@ import { formatActivityType } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 import { ActivityPreviewCard } from "./ActivityPreviewCard";
+import { useJournalPlanner } from "./journalPlanner";
+import { PlannedTrainingChip } from "./PlannedTrainingChip";
 import type { JournalActivity, JournalDay } from "./useJournalWeeks";
 
 /** Activity chips shown before collapsing the rest into a "+N more" badge. */
@@ -134,6 +136,7 @@ export function JournalDayCell({
 }) {
   const visible = day.activities.slice(0, MAX_VISIBLE_ACTIVITIES);
   const hiddenCount = day.activities.length - visible.length;
+  const planner = useJournalPlanner();
 
   // Encode the day's load as a discrete zone shown on the cell's left edge, so
   // the calendar reads as a training-intensity map without ambiguity.
@@ -143,7 +146,9 @@ export function JournalDayCell({
     <div
       role="gridcell"
       aria-current={day.isToday ? "date" : undefined}
-      className="border-border relative flex min-w-0 flex-col gap-0.5 overflow-hidden border-l px-1 py-1 first:border-l-0"
+      // Double-click an empty part of the cell to plan a training on this day.
+      onDoubleClick={() => planner?.onCreatePlanned(day.date)}
+      className="border-border relative flex min-w-0 cursor-default flex-col gap-0.5 overflow-hidden border-l px-1 py-1 first:border-l-0"
     >
       {tier !== "none" && (
         <span
@@ -155,18 +160,29 @@ export function JournalDayCell({
           )}
         />
       )}
-      <span
-        aria-label={format(day.date, "EEEE d MMMM", LOCALE_OPTIONS)}
-        className={cn(
-          "text-muted-foreground px-1 text-[11px] leading-none font-medium",
-          day.isToday &&
-            "bg-primary text-primary-foreground w-fit rounded-full px-1.5 py-0.5",
-        )}
-      >
-        {format(day.date, "d")}
-      </span>
+      {/* Fixed-height, centered row so today's pill doesn't grow the header and
+          push this cell's chips out of alignment with the rest of the week. */}
+      <div className="flex h-5 items-center">
+        <span
+          aria-label={format(day.date, "EEEE d MMMM", LOCALE_OPTIONS)}
+          className={cn(
+            "text-muted-foreground px-1 text-[11px] leading-none font-medium",
+            day.isToday &&
+              "bg-primary text-primary-foreground rounded-full px-1.5 py-0.5",
+          )}
+        >
+          {format(day.date, "d")}
+        </span>
+      </div>
 
-      <div className="flex min-h-0 flex-col gap-0.5">
+      <div
+        className="flex min-h-0 flex-col gap-0.5"
+        // Double-clicking existing content shouldn't also open the planner.
+        onDoubleClick={(e) => e.stopPropagation()}
+      >
+        {day.plannedTrainings.map((training) => (
+          <PlannedTrainingChip key={training.id} training={training} />
+        ))}
         {visible.map((activity) => (
           <ActivityChip key={activity.stravaId} activity={activity} />
         ))}

@@ -2,6 +2,7 @@ import { CalendarDaysIcon } from "lucide-react";
 import nextDynamic from "next/dynamic";
 
 import { SyncPanel } from "~/components/SyncPanel";
+import { ActivityFilterPopover } from "~/components/settings/ActivityFilterPopover";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import type { NextPageWithLayout } from "~/pages/_app";
 
@@ -13,7 +14,14 @@ const Journal = nextDynamic(
 const JournalPage: NextPageWithLayout = () => {
   return (
     <>
-      <Toolbar actions={<SyncPanel />}>
+      <Toolbar
+        actions={
+          <>
+            <ActivityFilterPopover />
+            <SyncPanel />
+          </>
+        }
+      >
         <CalendarDaysIcon className="size-4" />
         <span className="font-semibold">Journal</span>
       </Toolbar>

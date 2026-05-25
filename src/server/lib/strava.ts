@@ -120,6 +120,57 @@ async function refreshToken(
   return data.access_token;
 }
 
+/**
+ * Strava `workout_type` marking an activity as a structured workout ("training").
+ * Strava encodes this per sport — runs use `3`, rides use `12`. Returns
+ * `undefined` for sports without a "workout" value, leaving the field untouched.
+ */
+export function workoutTypeForSport(sportType: string): number | undefined {
+  switch (sportType) {
+    case "Run":
+    case "VirtualRun":
+      return 3;
+    case "Ride":
+    case "VirtualRide":
+      return 12;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Pushes edits to an existing activity back to Strava (PUT /activities/{id}).
+ * Used when a planned training is marked done: the linked activity is renamed to
+ * the plan's title and flagged as a workout. The `strava-v3` lib only wraps
+ * reads, so we issue the raw fetch ourselves (same shape as the OAuth refresh).
+ * Throws on a non-2xx response so callers can abort before mutating local state.
+ */
+export async function updateActivityOnStrava(
+  accessToken: string,
+  stravaId: number,
+  fields: { name?: string; workout_type?: number },
+): Promise<void> {
+  const response = await fetch(
+    `https://www.strava.com/api/v3/activities/${stravaId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(fields),
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+
+  if (!response.ok) {
+    throw new TRPCError({
+      code: "BAD_GATEWAY",
+      message: `Strava activity update failed (${response.status} ${response.statusText}).`,
+    });
+  }
+}
+
 export function getModelFromStravaActivity(
   activity: StravaActivity,
   athleteId: number,

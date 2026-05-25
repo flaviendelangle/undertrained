@@ -80,7 +80,13 @@ export function formatSlice(date: Date, precision: SlicePrecision): string {
     case "month":
       return format(date, "MMM yyyy", LOCALE_OPTIONS);
     case "week":
-      return format(date, "d MMM yyyy", LOCALE_OPTIONS);
+      // e.g. "W1 2025" — week number plus its week-numbering year (`Y`, not
+      // `yyyy`), so a week straddling the new year keeps the year that matches
+      // its week number rather than the calendar year of its start day.
+      return format(date, "'W'w Y", {
+        ...LOCALE_OPTIONS,
+        useAdditionalWeekYearTokens: true,
+      });
   }
 }
 

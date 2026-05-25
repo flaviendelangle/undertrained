@@ -32,6 +32,11 @@ export const syncJobModeEnum = pgEnum("sync_job_mode", [
   "recompute_scores",
 ]);
 
+export const plannedTrainingStatusEnum = pgEnum("planned_training_status", [
+  "planned",
+  "completed",
+]);
+
 // ── Tables ─────────────────────────────────────────────────────────────
 
 export const athletes = pgTable(
@@ -43,8 +48,14 @@ export const athletes = pgTable(
     refreshToken: text("refresh_token").notNull().default(""),
     tokenExpiresAt: integer("token_expires_at").notNull().default(0),
     name: text("name"),
+    // Secret, unguessable token authenticating the athlete's iCal subscription
+    // feed (`/api/calendar/{token}.ics`). Generated lazily, revocable.
+    calendarToken: text("calendar_token"),
   },
-  (t) => [uniqueIndex("athletes_strava_id_idx").on(t.stravaAthleteId)],
+  (t) => [
+    uniqueIndex("athletes_strava_id_idx").on(t.stravaAthleteId),
+    uniqueIndex("athletes_calendar_token_idx").on(t.calendarToken),
+  ],
 );
 
 export const activities = pgTable(
@@ -264,4 +275,39 @@ export const syncJobs = pgTable(
     startedAt: bigint("started_at", { mode: "number" }).notNull(),
   },
   (t) => [uniqueIndex("sync_jobs_athlete_idx").on(t.athlete)],
+);
+
+/**
+ * A training session the athlete plans ahead of time. Rendered in the Journal's
+ * future weeks and exposed to 3rd-party calendars via the iCal feed. Once marked
+ * done it links to the real Strava `activities` row and drops out of both views.
+ */
+export const plannedTrainings = pgTable(
+  "planned_trainings",
+  {
+    id: serial("id").primaryKey(),
+    athlete: integer("athlete")
+      .notNull()
+      .references(() => athletes.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    // Floating local ISO datetime (no timezone), mirroring `activities.startDateLocal`.
+    // Bucketed onto a Journal day via `plannedDate.slice(0, 10)`.
+    plannedDate: text("planned_date").notNull(),
+    durationSeconds: integer("duration_seconds").notNull(),
+    // Strava activity-type string (e.g. "Ride", "Run", "Swim"), understood by
+    // `getSportConfig`. Plain text (no enum) to stay open for new sports.
+    sportType: text("sport_type").notNull(),
+    status: plannedTrainingStatusEnum("status").notNull().default("planned"),
+    // Set when marked done; the Strava activity this plan was reconciled with.
+    linkedActivityId: integer("linked_activity_id").references(
+      () => activities.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    index("planned_trainings_athlete_idx").on(t.athlete),
+    index("planned_trainings_athlete_date_idx").on(t.athlete, t.plannedDate),
+  ],
 );

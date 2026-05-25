@@ -81,6 +81,18 @@ export default function ActivitiesTimeline() {
     ];
   }, [xAxisData]);
 
+  // Cap the maximum zoom-in so the tightest window matches the 12-slice
+  // default. Without this, x-charts' default minSpan (10%) is wider than the
+  // default zoom span on large datasets, which clamps (and breaks) the initial
+  // view.
+  const minZoomSpan = React.useMemo(() => {
+    const count = xAxisData.length;
+    if (count <= DEFAULT_ZOOM_STEPS) {
+      return 100;
+    }
+    return Math.min(100, (DEFAULT_ZOOM_STEPS / count) * 100);
+  }, [xAxisData.length]);
+
   const [zoomData, setZoomData] = React.useState<ZoomData[]>(defaultZoom);
 
   // Reset to the 12-week default once data is available, and again whenever the
@@ -199,7 +211,7 @@ export default function ActivitiesTimeline() {
                 scaleType: "band",
                 data: xAxisData,
                 valueFormatter: (value: Date) => formatSlice(value, precision),
-                zoom: { filterMode: "discard" },
+                zoom: { filterMode: "discard", minSpan: minZoomSpan },
                 height: isMobile ? AXIS_SIZE.mobile.height : AXIS_SIZE.desktop.height,
               },
             ]}

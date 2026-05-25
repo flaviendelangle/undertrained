@@ -3,7 +3,7 @@ import * as React from "react";
 import { bisector } from "d3-array";
 import { scaleLinear, scaleLog } from "d3-scale";
 
-import { useChartTokens } from "~/lib/chartTokens";
+import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import {
   WebGLChartRenderer,
   type PanelRenderData,
@@ -17,7 +17,16 @@ import type { PowerCurveSeriesData, ActivityInfo } from "./types";
 
 // --- Constants ---
 
-const MARGIN = { top: 16, right: 16, bottom: 36, left: 56 };
+// Match the horizontal inset of the standard MUI charts on the page (e.g.
+// Year-over-Year Progress) so the plot area lines up with the card edges the
+// same way: left = y-axis width + chart margin, right = chart margin. Top and
+// bottom stay this chart's own axis spacing.
+const MARGIN = {
+  top: 16,
+  right: CHART_MARGINS.standard.right,
+  bottom: 36,
+  left: AXIS_SIZE.desktop.width + CHART_MARGINS.standard.left,
+};
 const LINE_HALF_WIDTH = 0.75;
 
 /** Well-known reference durations for X-axis tick marks. */
@@ -57,19 +66,23 @@ export function PowerCurveWebGLChart({
   const gridCtxRef = React.useRef<CanvasRenderingContext2D | null>(null);
   const gridCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const [width, setWidth] = React.useState(0);
+  const [height, setHeight] = React.useState(0);
   const [hoverIndex, setHoverIndex] = React.useState<number | null>(null);
   const [hoverClientX, setHoverClientX] = React.useState<number | null>(null);
   const [frozen, setFrozen] = React.useState(false);
   const rafRef = React.useRef<number>(0);
   const [renderer, setRenderer] = React.useState<WebGLChartRenderer | null>(null);
 
-  // Track container width
+  // Track container size — the chart fills the available space (like the MUI
+  // charts on the page) rather than using a fixed height, so the bottom margin
+  // reserves a consistent gap below the x-axis labels.
   React.useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setWidth(entry.contentRect.width);
+        setHeight(entry.contentRect.height);
       }
     });
     observer.observe(el);
@@ -102,10 +115,12 @@ export function PowerCurveWebGLChart({
     };
   }, [renderer]);
 
-  // Dimensions
+  // Dimensions — fill the container; derive the plot height so the top/bottom
+  // margins (axis labels + padding) sit inside the card the same way the MUI
+  // charts do.
   const drawingWidth = Math.max(0, width - MARGIN.left - MARGIN.right);
-  const drawingHeight = 280;
-  const totalHeight = drawingHeight + MARGIN.top + MARGIN.bottom;
+  const totalHeight = height;
+  const drawingHeight = Math.max(0, totalHeight - MARGIN.top - MARGIN.bottom);
 
   // Compute Y values based on mode
   const seriesValues = React.useMemo(() => {
@@ -372,7 +387,7 @@ export function PowerCurveWebGLChart({
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  if (width === 0 || xData.length < 2) {
+  if (width === 0 || drawingHeight <= 0 || xData.length < 2) {
     return (
       <div ref={containerRef} className="h-full w-full" style={{ minHeight: 200 }} />
     );

@@ -9,6 +9,10 @@ const envSchema = z.object({
     .string()
     .min(1, "STRAVA_WEBHOOK_VERIFY_TOKEN is required"),
   STRAVA_WEBHOOK_CALLBACK_URL: z.string().url().optional(),
+  // Public origin of the app (e.g. https://undertrained.app), used to build the
+  // absolute iCal subscription URL shown to athletes. Falls back to the request
+  // origin when unset.
+  APP_URL: z.string().url().optional(),
 });
 
 export const env = envSchema.parse(process.env);

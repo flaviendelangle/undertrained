@@ -3,8 +3,9 @@ import * as React from "react";
 import { addDays, addMonths, endOfMonth, format, startOfMonth } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, PlusIcon } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,18 +16,25 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { usePersonalRecords } from "~/hooks/usePersonalRecords";
+import { usePlannedTrainings } from "~/hooks/usePlannedTrainings";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { classifyForm } from "~/lib/fitness";
 import { cn } from "~/lib/utils";
 import { startOf } from "~/utils/dateUtils";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
+import { CalendarFeedButton } from "./CalendarFeedButton";
 import { JournalRecordsContext, TIER_STYLE } from "./JournalDayCell";
+import { JournalPlannerContext } from "./journalPlanner";
 import {
   JOURNAL_GRID_COLS,
   JournalWeekRow,
   ROW_HEIGHT,
 } from "./JournalWeekRow";
+import {
+  PlannedTrainingDialog,
+  type PlannerDialogState,
+} from "./PlannedTrainingDialog";
 import { useJournalWeeks } from "./useJournalWeeks";
 
 const VIRTUALIZER_OVERSCAN = 6;
@@ -65,6 +73,7 @@ function HeaderCell({
 
 export function Journal() {
   const { data: activities, isLoading, isError } = useActivitiesQuery();
+  const { data: plannedTrainings } = usePlannedTrainings();
   const { timeline } = useRiderSettingsTimeline();
   const records = usePersonalRecords();
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -77,6 +86,25 @@ export function Journal() {
   const { weeks, dayLoadScale, currentForm } = useJournalWeeks(
     activities,
     loadPreferences,
+    plannedTrainings,
+  );
+
+  // Planner dialog state, exposed to day cells via context so the memoized week
+  // rows aren't broken by prop-drilling.
+  const [dialogState, setDialogState] =
+    React.useState<PlannerDialogState>(null);
+  const onCreatePlanned = React.useCallback(
+    (date: Date) => setDialogState({ mode: "create", date }),
+    [],
+  );
+  const onEditPlanned = React.useCallback(
+    (training: NonNullable<typeof plannedTrainings>[number]) =>
+      setDialogState({ mode: "edit", training }),
+    [],
+  );
+  const plannerValue = React.useMemo(
+    () => ({ onCreatePlanned, onEditPlanned }),
+    [onCreatePlanned, onEditPlanned],
   );
 
   // Today's Form (TSB) and its zone, for the header readout.
@@ -138,6 +166,7 @@ export function Journal() {
   };
 
   return (
+    <JournalPlannerContext.Provider value={plannerValue}>
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="text-muted-foreground border-border flex items-center justify-between gap-3 border-b px-3 py-1.5 text-[11px]">
         {formZone != null && currentForm != null ? (
@@ -169,6 +198,15 @@ export function Journal() {
               {label}
             </span>
           ))}
+          <CalendarFeedButton />
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => onCreatePlanned(new Date())}
+          >
+            <PlusIcon />
+            Plan
+          </Button>
         </span>
       </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
@@ -263,6 +301,11 @@ export function Journal() {
         </div>
         </JournalRecordsContext.Provider>
       </div>
+      <PlannedTrainingDialog
+        state={dialogState}
+        onClose={() => setDialogState(null)}
+      />
     </div>
+    </JournalPlannerContext.Provider>
   );
 }

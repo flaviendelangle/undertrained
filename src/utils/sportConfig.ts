@@ -375,6 +375,9 @@ const SPORT_CONFIGS: Record<string, SportConfig> = {
 
 const DEFAULT_CONFIG = new SportConfig();
 
+/** Strava activity-type strings offered when planning a training, in display order. */
+export const PLANNABLE_SPORT_TYPES = Object.keys(SPORT_CONFIGS);
+
 /** Look up the sport configuration for a given Strava activity type. */
 export function getSportConfig(activityType: string): SportConfig {
   return SPORT_CONFIGS[activityType] ?? DEFAULT_CONFIG;

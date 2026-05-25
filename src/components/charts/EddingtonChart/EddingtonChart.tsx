@@ -1,14 +1,20 @@
 import * as React from "react";
 
-import { BarChartPro } from "@mui/x-charts-pro";
 import { InfoIcon } from "lucide-react";
+
+import { BarChartPro } from "@mui/x-charts-pro";
 
 import { Tooltip } from "~/components/primitives/Tooltip";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useEddingtonData } from "~/hooks/useEddingtonData";
 import { useIsMobile } from "~/hooks/useIsMobile";
-import { CHART_MARGINS, AXIS_SIZE, formatCompact, useChartTokens } from "~/lib/chartTokens";
+import {
+  AXIS_SIZE,
+  CHART_MARGINS,
+  formatCompact,
+  useChartTokens,
+} from "~/lib/chartTokens";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
@@ -31,7 +37,7 @@ const TAB_OPTIONS: { value: TabKey; label: React.ReactNode }[] = [
 ];
 
 const DISTANCE_DIVISOR = 1000;
-const UNIT_LABEL = "km";
+const UNIT_LABEL = "Distance";
 
 export default function EddingtonChart() {
   const [activeTab, setActiveTab] = React.useState<TabKey>("riding");
@@ -62,7 +68,11 @@ export default function EddingtonChart() {
         </span>
       )}
       <div className="ml-auto">
-        <SegmentedToggle value={activeTab} onChange={setActiveTab} options={TAB_OPTIONS} />
+        <SegmentedToggle
+          value={activeTab}
+          onChange={setActiveTab}
+          options={TAB_OPTIONS}
+        />
       </div>
     </div>
   );
@@ -119,7 +129,9 @@ export default function EddingtonChart() {
                 scaleType: "band",
                 data: xAxisData,
                 label: isMobile ? undefined : UNIT_LABEL,
-                height: isMobile ? AXIS_SIZE.mobile.height : AXIS_SIZE.desktop.height,
+                height: isMobile
+                  ? AXIS_SIZE.mobile.height
+                  : AXIS_SIZE.desktop.height,
                 valueFormatter: (value: number) => `${value}`,
                 zoom: { filterMode: "discard" },
                 colorMap: {
@@ -136,7 +148,9 @@ export default function EddingtonChart() {
                   isMobile
                     ? formatCompact(value)
                     : Math.round(value).toLocaleString(),
-                width: isMobile ? AXIS_SIZE.mobile.width : AXIS_SIZE.desktop.width,
+                width: isMobile
+                  ? AXIS_SIZE.mobile.width
+                  : AXIS_SIZE.desktop.width,
               },
             ]}
             series={[
@@ -146,7 +160,9 @@ export default function EddingtonChart() {
               },
             ]}
             grid={{ horizontal: true }}
-            margin={isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard}
+            margin={
+              isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
+            }
             hideLegend
             slots={{ tooltip: ChartTooltip }}
           />

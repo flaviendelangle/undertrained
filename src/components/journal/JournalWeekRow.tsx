@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { format, isSameMonth } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
+import { CalendarClockIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 
@@ -67,11 +68,38 @@ function VerdictChip({ week }: { week: JournalWeek }) {
 }
 
 function WeekSummary({ week }: { week: JournalWeek }) {
+  const hasActual = week.totalSeconds > 0;
+  const hasPlanned = week.plannedSeconds > 0;
+  // An upcoming (or otherwise activity-free) week with plans: the planned total
+  // becomes the headline, in the muted "to-do" language of the planned chips.
+  const plannedOnly = !hasActual && hasPlanned;
+
+  if (plannedOnly) {
+    return (
+      <div className="border-border bg-muted/40 flex flex-col justify-center gap-0.5 border-l px-2">
+        <div className="text-muted-foreground flex items-center gap-1 text-sm font-semibold tabular-nums">
+          <CalendarClockIcon className="size-3.5 shrink-0" aria-hidden />
+          {formatWeeklyTotal(week.plannedSeconds)}
+        </div>
+        <div className="text-muted-foreground/70 text-[11px]">planned</div>
+      </div>
+    );
+  }
+
   return (
     <div className="border-border bg-muted/40 flex flex-col justify-center gap-1 border-l px-2">
       <div className="text-foreground text-sm font-semibold tabular-nums">
         {formatWeeklyTotal(week.totalSeconds)}
       </div>
+      {hasPlanned && (
+        <div
+          className="text-muted-foreground flex items-center gap-1 text-[11px] tabular-nums"
+          title={`${formatWeeklyTotal(week.plannedSeconds)} of training still planned this week`}
+        >
+          <CalendarClockIcon className="size-3 shrink-0" aria-hidden />+
+          {formatWeeklyTotal(week.plannedSeconds)} planned
+        </div>
+      )}
       <div className="text-muted-foreground text-xs whitespace-nowrap">
         <span className="text-foreground font-medium tabular-nums">
           {Math.round(week.totalLoad)}

@@ -8,9 +8,7 @@ interface DocumentProps {
 export default function Document({ nonce }: DocumentProps) {
   return (
     <Html suppressHydrationWarning>
-      <Head nonce={nonce}>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      </Head>
+      <Head nonce={nonce} />
       <body>
         <Main />
         <NextScript nonce={nonce} />

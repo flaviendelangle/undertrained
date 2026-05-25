@@ -3,7 +3,7 @@ import * as React from "react";
 import { addDays, format, isSameMonth, isToday } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
 
-import type { ListActivity } from "@server/db/types";
+import type { ListActivity, PlannedTraining } from "@server/db/types";
 
 import { useActivitiesTimeBoundaries } from "~/hooks/useActivitiesTimeBoundaries";
 import {
@@ -27,6 +27,8 @@ export interface JournalDay {
   isToday: boolean;
   /** Activities that took place on this local day. */
   activities: JournalActivity[];
+  /** Still-planned trainings scheduled on this local day (not yet done). */
+  plannedTrainings: PlannedTraining[];
   /** Sum of the activities' training load, precomputed for the heatmap. */
   totalLoad: number;
 }
@@ -40,8 +42,13 @@ export interface JournalWeek {
   days: JournalDay[];
   /** All activities in the week, used for the summary column. */
   activities: JournalActivity[];
-  /** Total moving time of the week in seconds. */
+  /** Total moving time of the week in seconds (completed activities only). */
   totalSeconds: number;
+  /**
+   * Combined duration of the week's still-planned trainings (not yet linked to
+   * an activity), in seconds. `0` once everything planned has been done.
+   */
+  plannedSeconds: number;
   /** Total training load of the week. */
   totalLoad: number;
   /**
@@ -125,8 +132,25 @@ function percentile90(values: number[]): number {
 export function useJournalWeeks(
   activities: JournalActivity[] | undefined,
   loadPreferences: LoadAlgorithmPreferences,
+  plannedTrainings?: PlannedTraining[],
 ): JournalWeeksResult {
   const boundaries = useActivitiesTimeBoundaries(activities);
+
+  // Bucket planned trainings onto their local calendar day, same key scheme as
+  // activities (the date portion of the stored floating-local datetime).
+  const plannedByDay = React.useMemo(() => {
+    const map = new Map<string, PlannedTraining[]>();
+    for (const planned of plannedTrainings ?? []) {
+      const key = planned.plannedDate.slice(0, 10);
+      const bucket = map.get(key);
+      if (bucket) {
+        bucket.push(planned);
+      } else {
+        map.set(key, [planned]);
+      }
+    }
+    return map;
+  }, [plannedTrainings]);
 
   // Resolve each activity's load exactly once; reused by the day sort, the day
   // and week totals, and the heatmap scale below.
@@ -177,7 +201,16 @@ export function useJournalWeeks(
   }, [activities, loadPreferences]);
 
   return React.useMemo(() => {
-    if (boundaries.oldest == null) {
+    // The grid spans back to the earliest activity *or* planned training, so a
+    // user with only plans (and no activities yet) still gets rows to work with.
+    let oldest = boundaries.oldest;
+    for (const key of plannedByDay.keys()) {
+      const date = new Date(key);
+      if (oldest == null || date.getTime() < oldest.getTime()) {
+        oldest = date;
+      }
+    }
+    if (oldest == null) {
       return { weeks: [], dayLoadScale: 0, currentForm: null };
     }
 
@@ -192,29 +225,40 @@ export function useJournalWeeks(
       return last != null && date.getTime() > last.date.getTime() ? last : null;
     };
 
-    const firstWeekStart = startOf(boundaries.oldest, "week");
+    const firstWeekStart = startOf(oldest, "week");
     const weeks: JournalWeek[] = [];
 
-    let weekStart = startOf(new Date(), "week");
+    // Start one week in the future so the Journal renders the upcoming week,
+    // giving an empty canvas to plan into (double-click a cell / "+ Plan").
+    const currentWeekStart = startOf(new Date(), "week");
+    let weekStart = startOf(addUnit(new Date(), 1, "week"), "week");
     while (weekStart.getTime() >= firstWeekStart.getTime()) {
       const days: JournalDay[] = [];
       const weekActivities: JournalActivity[] = [];
       let totalSeconds = 0;
+      let plannedSeconds = 0;
       let totalLoad = 0;
 
       for (let i = 0; i < 7; i += 1) {
         const date = addDays(weekStart, i);
-        const dayActivities = activitiesByDay.get(format(date, DAY_KEY)) ?? [];
+        const dayKey = format(date, DAY_KEY);
+        const dayActivities = activitiesByDay.get(dayKey) ?? [];
+        const dayPlanned = plannedByDay.get(dayKey) ?? [];
         let dayLoad = 0;
         for (const activity of dayActivities) {
           totalSeconds += activity.movingTime;
           dayLoad += loadByStravaId.get(activity.stravaId) ?? 0;
+        }
+        for (const planned of dayPlanned) {
+          plannedSeconds += planned.durationSeconds;
         }
         totalLoad += dayLoad;
         days.push({
           date,
           isToday: isToday(date),
           activities: dayActivities,
+          // Plans don't count toward training load — they aren't done yet.
+          plannedTrainings: dayPlanned,
           totalLoad: dayLoad,
         });
         weekActivities.push(...dayActivities);
@@ -226,6 +270,7 @@ export function useJournalWeeks(
         days,
         activities: weekActivities,
         totalSeconds,
+        plannedSeconds,
         totalLoad,
         loadTrend: null,
         monthStart: null,
@@ -239,6 +284,10 @@ export function useJournalWeeks(
     // entries at `i + 1 … i + TREND_WINDOW`. Also flag month openings by
     // comparing each week to the next (older) one.
     for (let i = 0; i < weeks.length; i += 1) {
+      // The future week holds only plans, not done work — leave it unjudged.
+      const isFutureWeek =
+        weeks[i].weekStart.getTime() > currentWeekStart.getTime();
+
       let sum = 0;
       let count = 0;
       for (let j = i + 1; j <= i + TREND_WINDOW && j < weeks.length; j += 1) {
@@ -246,11 +295,12 @@ export function useJournalWeeks(
         count += 1;
       }
       const baseline = count > 0 ? sum / count : 0;
-      weeks[i].loadTrend = baseline > 1 ? weeks[i].totalLoad / baseline : null;
+      weeks[i].loadTrend =
+        !isFutureWeek && baseline > 1 ? weeks[i].totalLoad / baseline : null;
 
       // Only judge weeks with a full trailing window behind them, so the
       // Fitness warm-up period (where CTL ramps up from 0) isn't mislabelled.
-      if (i + TREND_WINDOW < weeks.length) {
+      if (!isFutureWeek && i + TREND_WINDOW < weeks.length) {
         const endForm = fitnessFor(weeks[i].weekEnd);
         const startForm = fitnessFor(addDays(weeks[i].weekStart, -1));
         if (endForm != null) {
@@ -288,5 +338,11 @@ export function useJournalWeeks(
       dayLoadScale: percentile90(nonEmptyDayLoads),
       currentForm: fitnessByDay.last,
     };
-  }, [boundaries.oldest, activitiesByDay, loadByStravaId, fitnessByDay]);
+  }, [
+    boundaries.oldest,
+    activitiesByDay,
+    plannedByDay,
+    loadByStravaId,
+    fitnessByDay,
+  ]);
 }

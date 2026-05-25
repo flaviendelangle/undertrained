@@ -2,10 +2,23 @@
 import { NextConfig } from "next";
 
 /**
+ * Feature flags.
+ *
+ * Live Training (the indoor trainer recording page) is opt-in: it stays hidden
+ * unless LIVE_TRAINING_ENABLED=true is set in the environment. Leaving it unset
+ * — as on the VPS — keeps the feature off. The resolved value is exposed to the
+ * client as NEXT_PUBLIC_LIVE_TRAINING_ENABLED via the `env` key below.
+ */
+const liveTrainingEnabled = process.env.LIVE_TRAINING_ENABLED === "true";
+
+/**
  * @see https://nextjs.org/docs/api-reference/next.config.js/introduction
  */
 export default {
   output: "standalone",
+  env: {
+    NEXT_PUBLIC_LIVE_TRAINING_ENABLED: String(liveTrainingEnabled),
+  },
   /** We run typechecking as a separate task in CI */
   typescript: {
     ignoreBuildErrors: true,

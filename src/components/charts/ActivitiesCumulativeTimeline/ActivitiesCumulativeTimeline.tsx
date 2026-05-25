@@ -213,6 +213,7 @@ export default function ActivitiesCumulativeTimeline() {
             grid={{ horizontal: true }}
             margin={isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard}
             hideLegend={isMobile}
+            skipAnimation
             slots={{ tooltip: ChartTooltip }}
             slotProps={{ legend: { toggleVisibilityOnClick: true } }}
             hiddenItems={hiddenItems}

@@ -1,5 +1,7 @@
 import * as React from "react";
 
+import { keepPreviousData } from "@tanstack/react-query";
+
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { CYCLING_POWER_DURATIONS as DURATIONS } from "~/utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCES } from "~/utils/cyclingRecordDistances";
@@ -14,18 +16,20 @@ export type Sport = "cycling" | "running";
 const RideIcon = getSportConfig("Ride").icon;
 const RunIcon = getSportConfig("Run").icon;
 
-type CyclingMetric = "power" | "speed" | "elevation" | "heartrate";
+type CyclingMetric = "power" | "speed" | "elevation" | "heartrate" | "longest";
 const CYCLING_METRIC_LABELS: Record<CyclingMetric, string> = {
   power: "Power",
   speed: "Speed",
   elevation: "Elevation",
   heartrate: "Heart rate",
+  longest: "Longest activity",
 };
 
-type RunningMetric = "pace" | "heartrate";
+type RunningMetric = "pace" | "heartrate" | "longest";
 const RUNNING_METRIC_LABELS: Record<RunningMetric, string> = {
   pace: "Pace",
   heartrate: "Heart rate",
+  longest: "Longest activity",
 };
 
 const ELEVATION_KINDS = [
@@ -33,6 +37,12 @@ const ELEVATION_KINDS = [
   { key: "total" as const, label: "Total elevation" },
 ];
 type ElevationKind = (typeof ELEVATION_KINDS)[number]["key"];
+
+const LONGEST_MEASURES = [
+  { key: "distance" as const, label: "Distance" },
+  { key: "duration" as const, label: "Duration" },
+];
+type LongestMeasure = (typeof LONGEST_MEASURES)[number]["key"];
 
 /** One normalised leaderboard row, ready to render regardless of metric. */
 export interface Entry {
@@ -82,7 +92,10 @@ export interface RecordsExplorer {
   metricLabel: string;
   /** Normalised, already-formatted leaderboard rows. */
   entries: Entry[];
+  /** True only on first load, when there are no rows to show yet (render a skeleton). */
   isLoading: boolean;
+  /** True while newer data loads with previous rows still on screen (dim them). */
+  isRefreshing: boolean;
   emptyMessage: string;
 }
 
@@ -117,6 +130,8 @@ export function useRecordsExplorer(): RecordsExplorer {
   const [speedDistance, setSpeedDistance] = React.useState(40000); // speed: 40 km
   const [elevationKind, setElevationKind] =
     React.useState<ElevationKind>("total");
+  const [longestMeasure, setLongestMeasure] =
+    React.useState<LongestMeasure>("distance");
   const [distanceName, setDistanceName] = React.useState<string | null>(null);
 
   // Adjust dependent state when `options` load (during render rather than in an
@@ -131,24 +146,34 @@ export function useRecordsExplorer(): RecordsExplorer {
     // Default the running distance to 10 km (or the first available) once options load.
     if (distanceName == null && options && options.runDistances.length > 0) {
       const has10k = options.runDistances.some((d) => d.name === "10K");
-      console.log(options.runDistances);
       setDistanceName(has10k ? "10K" : options.runDistances[0].name);
     }
   }
 
   const isCycling = sport === "cycling";
+  // `placeholderData: keepPreviousData` keeps the previous result on screen while a
+  // new key (e.g. another duration) loads, so switching a param within one metric
+  // never blanks the table. Switching metric/sport activates a *different* query
+  // hook, which keepPreviousData can't bridge — the display guard below handles that.
   const powerQuery = trpc.records.getCyclingPowerLeaderboard.useQuery(
     { athleteId: athleteId!, duration },
-    { enabled: athleteId != null && isCycling && cyclingMetric === "power" },
+    {
+      enabled: athleteId != null && isCycling && cyclingMetric === "power",
+      placeholderData: keepPreviousData,
+    },
   );
   const speedQuery = trpc.records.getCyclingSpeedLeaderboard.useQuery(
     { athleteId: athleteId!, distance: speedDistance },
-    { enabled: athleteId != null && isCycling && cyclingMetric === "speed" },
+    {
+      enabled: athleteId != null && isCycling && cyclingMetric === "speed",
+      placeholderData: keepPreviousData,
+    },
   );
   const elevationQuery = trpc.records.getCyclingElevationLeaderboard.useQuery(
     { athleteId: athleteId!, kind: elevationKind },
     {
       enabled: athleteId != null && isCycling && cyclingMetric === "elevation",
+      placeholderData: keepPreviousData,
     },
   );
   const runningQuery = trpc.records.getRunEffortLeaderboard.useQuery(
@@ -159,6 +184,7 @@ export function useRecordsExplorer(): RecordsExplorer {
         !isCycling &&
         runningMetric === "pace" &&
         distanceName != null,
+      placeholderData: keepPreviousData,
     },
   );
   const heartrateActive =
@@ -166,24 +192,54 @@ export function useRecordsExplorer(): RecordsExplorer {
     (!isCycling && runningMetric === "heartrate");
   const heartrateQuery = trpc.records.getHeartrateLeaderboard.useQuery(
     { athleteId: athleteId!, sport, duration },
-    { enabled: athleteId != null && heartrateActive },
+    {
+      enabled: athleteId != null && heartrateActive,
+      placeholderData: keepPreviousData,
+    },
+  );
+  const longestActive =
+    (isCycling && cyclingMetric === "longest") ||
+    (!isCycling && runningMetric === "longest");
+  const longestQuery = trpc.records.getLongestActivityLeaderboard.useQuery(
+    { athleteId: athleteId!, sport, measure: longestMeasure },
+    {
+      enabled: athleteId != null && longestActive,
+      placeholderData: keepPreviousData,
+    },
   );
 
-  // Normalise whichever query is active into a single list to render.
-  let isLoading = false;
-  let entries: Entry[] = [];
+  // Normalise whichever query is active into a single list to render. `active` is the
+  // query backing the current selection; `freshEntries` are its rows mapped to {@link Entry}.
+  let active: {
+    data: unknown;
+    isFetching: boolean;
+    isPlaceholderData: boolean;
+  } = powerQuery;
+  let freshEntries: Entry[] = [];
   let emptyMessage = "No records for this selection yet.";
 
   if (heartrateActive) {
-    isLoading = heartrateQuery.isLoading;
+    active = heartrateQuery;
     emptyMessage = "No heart-rate records for this duration yet.";
-    entries = (heartrateQuery.data ?? []).map((r) =>
+    freshEntries = (heartrateQuery.data ?? []).map((r) =>
       toEntry(r, `${r.value} bpm`),
     );
+  } else if (longestActive) {
+    active = longestQuery;
+    emptyMessage = "No activities for this selection yet.";
+    const config = getSportConfig(isCycling ? "Ride" : "Run");
+    freshEntries = (longestQuery.data ?? []).map((r) =>
+      toEntry(
+        r,
+        longestMeasure === "distance"
+          ? config.formatPreciseDistance(r.value)
+          : formatElapsed(r.value),
+      ),
+    );
   } else if (!isCycling) {
-    isLoading = runningQuery.isLoading;
+    active = runningQuery;
     emptyMessage = "No best efforts for this distance yet.";
-    entries = (runningQuery.data ?? []).map((r) =>
+    freshEntries = (runningQuery.data ?? []).map((r) =>
       toEntry(
         r,
         formatElapsed(r.elapsedTime),
@@ -196,11 +252,13 @@ export function useRecordsExplorer(): RecordsExplorer {
         ? "No records computed yet — run a sync (or recompute scores) to build them from your rides."
         : "No records for this selection yet.";
     if (cyclingMetric === "power") {
-      isLoading = powerQuery.isLoading;
-      entries = (powerQuery.data ?? []).map((r) => toEntry(r, `${r.value} W`));
+      active = powerQuery;
+      freshEntries = (powerQuery.data ?? []).map((r) =>
+        toEntry(r, `${r.value} W`),
+      );
     } else if (cyclingMetric === "speed") {
-      isLoading = speedQuery.isLoading;
-      entries = (speedQuery.data ?? []).map((r) =>
+      active = speedQuery;
+      freshEntries = (speedQuery.data ?? []).map((r) =>
         toEntry(
           r,
           formatElapsed(r.value),
@@ -208,12 +266,35 @@ export function useRecordsExplorer(): RecordsExplorer {
         ),
       );
     } else {
-      isLoading = elevationQuery.isLoading;
-      entries = (elevationQuery.data ?? []).map((r) =>
+      active = elevationQuery;
+      freshEntries = (elevationQuery.data ?? []).map((r) =>
         toEntry(r, `${Math.round(r.value)} m`),
       );
     }
   }
+
+  // Keep the last settled rows on screen so metric/sport switches (which swap to a
+  // different query hook, defeating keepPreviousData) don't flash an empty table.
+  // `isPlaceholderData` means we're showing the *previous* key's rows, which for
+  // speed/running would be mis-formatted against the new param — treat those as stale
+  // too and fall back to the remembered list instead.
+  const hasFreshData = active.data !== undefined && !active.isPlaceholderData;
+  // Remember the last settled rows (keyed on the query's stable `data` reference) so a
+  // metric/sport switch keeps showing them instead of flashing an empty table. Updated
+  // during render via the same prev-state pattern as the options sync above; it
+  // converges because once stored, `active.data === shown.data`.
+  const [shown, setShown] = React.useState<{ data: unknown; entries: Entry[] }>({
+    data: undefined,
+    entries: [],
+  });
+  if (hasFreshData && active.data !== shown.data) {
+    setShown({ data: active.data, entries: freshEntries });
+  }
+  const entries = hasFreshData ? freshEntries : shown.entries;
+  // Skeleton only on the very first load, when there's genuinely nothing to show yet.
+  const isLoading = !hasFreshData && entries.length === 0 && active.isFetching;
+  // Old rows still on screen while newer data loads — used to dim the table.
+  const isRefreshing = active.isFetching && entries.length > 0;
 
   const sportControl: RecordControl<Sport> = {
     items: sportItems,
@@ -249,6 +330,13 @@ export function useRecordsExplorer(): RecordsExplorer {
       items: DURATIONS.map((d) => ({ key: d.seconds, label: d.label })),
       selected: duration,
       onSelect: (v) => setDuration(Number(v)),
+    };
+  } else if (longestActive) {
+    paramLabel = "Measure";
+    paramControl = {
+      items: LONGEST_MEASURES.map((m) => ({ key: m.key, label: m.label })),
+      selected: longestMeasure,
+      onSelect: (v) => setLongestMeasure(v as LongestMeasure),
     };
   } else if (!isCycling) {
     paramLabel = "Distance";
@@ -294,6 +382,7 @@ export function useRecordsExplorer(): RecordsExplorer {
     metricLabel,
     entries,
     isLoading,
+    isRefreshing,
     emptyMessage,
   };
 }

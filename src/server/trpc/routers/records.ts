@@ -325,4 +325,31 @@ export const recordsRouter = router({
         distance: Number(r.distance),
       }));
     }),
+
+  /**
+   * Longest-activity leaderboard (running or cycling): activities ranked by
+   * their total distance (meters) or moving time (seconds), longest first.
+   * Includes indoor/virtual activities.
+   */
+  getLongestActivityLeaderboard: protectedProcedure
+    .input(
+      leaderboardInput.extend({
+        sport: z.enum(["cycling", "running"]),
+        measure: z.enum(["distance", "duration"]),
+      }),
+    )
+    .use(validateAthleteOwnership)
+    .query(({ ctx, input }) => {
+      const valueExpr =
+        input.measure === "distance" ? sql`a.distance` : sql`a.moving_time`;
+      return topActivities(ctx.db, {
+        athleteId: input.athleteId,
+        valueExpr,
+        order: sql`DESC`,
+        extra: sql`AND a.type IN (${typeList(
+          input.sport === "cycling" ? CYCLING_TYPES : RUNNING_TYPES,
+        )}) AND ${valueExpr} > 0`,
+        limit: input.limit,
+      });
+    }),
 });

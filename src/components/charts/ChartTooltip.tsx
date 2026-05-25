@@ -46,22 +46,33 @@ export function ChartTooltip() {
   const containerRef = useChartsLayerContainerRef();
   const mousePosition = useMouseTracker(containerRef);
 
-  const [svgTop, setSvgTop] = useState(0);
+  const [svgOrigin, setSvgOrigin] = useState({ top: 0, left: 0 });
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    setSvgTop(container.getBoundingClientRect().top);
+    const rect = container.getBoundingClientRect();
+    setSvgOrigin({ top: rect.top, left: rect.left });
   }, [containerRef, mousePosition]);
 
   if (!tooltipData || !mousePosition) return null;
+
+  // Offset the tooltip to the side of the cursor (rather than centering it on
+  // the cursor) so the hovered bar/column stays visible. Flip to whichever side
+  // has more room: when the cursor is past the drawing area's horizontal
+  // midpoint we anchor the tooltip's right edge to the left of the cursor,
+  // otherwise its left edge to the right of the cursor. This also keeps it from
+  // overflowing the chart edges.
+  const GAP = 12;
+  const drawingCenterX = svgOrigin.left + drawingArea.left + drawingArea.width / 2;
+  const isPastMidpoint = mousePosition.x > drawingCenterX;
 
   return (
     <div
       style={{
         position: "fixed",
-        left: mousePosition.x,
-        top: svgTop + drawingArea.top,
-        transform: "translateX(-50%)",
+        left: isPastMidpoint ? mousePosition.x - GAP : mousePosition.x + GAP,
+        top: svgOrigin.top + drawingArea.top,
+        transform: isPastMidpoint ? "translateX(-100%)" : undefined,
         pointerEvents: "none",
         zIndex: 1,
       }}
@@ -80,8 +91,11 @@ export function ChartTooltip() {
               )}
               <div className="flex flex-col gap-1">
                 {seriesItems.map(
-                  ({ seriesId, color, formattedValue, formattedLabel }) => {
-                    if (formattedValue == null) return null;
+                  ({ seriesId, color, value, formattedValue, formattedLabel }) => {
+                    // Hide series with no contribution for this slice (e.g. a
+                    // sport not done that week) so the tooltip only lists what's
+                    // actually in the stack instead of a long row of zeros.
+                    if (!value || formattedValue == null) return null;
                     return (
                       <div
                         key={seriesId}

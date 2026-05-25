@@ -1,6 +1,8 @@
 import * as React from "react";
 import { useEffect, useRef } from "react";
 
+import type { GetServerSideProps } from "next";
+
 import { SettingsCallout } from "~/components/primitives/SettingsCallout";
 import { BrowserCompatibilityBanner } from "~/components/liveTraining/BrowserCompatibilityBanner";
 import { HudConnectionWizard } from "~/components/liveTraining/hud/HudConnectionWizard";
@@ -9,6 +11,16 @@ import { HudPauseOverlay } from "~/components/liveTraining/hud/HudPauseOverlay";
 import { HudPostTraining } from "~/components/liveTraining/hud/HudPostTraining";
 import { HudWaitingScreen } from "~/components/liveTraining/hud/HudWaitingScreen";
 import { useTrainingPageController } from "~/hooks/useTrainingPageController";
+import { isLiveTrainingEnabled } from "~/lib/features";
+
+// Live Training is opt-in (see next.config.ts). When it's disabled the route
+// is hidden entirely — a direct visit gets a real 404 rather than the page.
+export const getServerSideProps: GetServerSideProps = async () => {
+  if (!isLiveTrainingEnabled) {
+    return { notFound: true };
+  }
+  return { props: {} };
+};
 
 type Phase = "connection" | "waiting" | "main" | "paused" | "post";
 
