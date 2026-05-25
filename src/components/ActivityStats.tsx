@@ -1,4 +1,5 @@
 import * as React from "react";
+import type { ReactNode } from "react";
 
 import {
   Activity as ActivityIcon,
@@ -13,7 +14,6 @@ import {
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
 
 import type { Activity } from "@server/db/types";
 
@@ -112,7 +112,10 @@ export const ActivityStats = React.memo(function ActivityStats({
           ]
         : []),
     ...(() => {
-      const loadResult = getActivityLoad(activity, getLoadPreferences(timeline));
+      const loadResult = getActivityLoad(
+        activity,
+        getLoadPreferences(timeline),
+      );
       return loadResult.value != null
         ? [
             {
@@ -293,7 +296,7 @@ export const ActivityStats = React.memo(function ActivityStats({
       ];
 
   return (
-    <div className="border-border bg-card rounded-sm border max-sm:border-0 p-5">
+    <div className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
       <CardTitle className="mb-4">Activity Details</CardTitle>
 
       {/* Hero Row */}
@@ -356,10 +359,7 @@ export const ActivityStats = React.memo(function ActivityStats({
         )}
 
         {trainingLoadStats.length > 0 && (
-          <StatSection
-            icon={TrendingUp}
-            title="Training Load Details"
-          >
+          <StatSection icon={TrendingUp} title="Training Load Details">
             {!hasSettings && (
               <SettingsCallout
                 hintId="callout-activity-load"

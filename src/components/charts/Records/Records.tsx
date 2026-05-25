@@ -2,6 +2,7 @@ import * as React from "react";
 
 import Link from "next/link";
 
+import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import {
   Select,
   SelectContent,
@@ -9,7 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import {
   Table,
   TableBody,
@@ -87,10 +87,10 @@ export function Records() {
           {best && (
             <Link
               href={`/activities/${best.stravaId}`}
-              className="bg-muted/40 hover:bg-muted/70 flex min-h-22 flex-col justify-center gap-3 rounded-xl px-5 py-4 transition-colors sm:flex-row sm:items-center sm:gap-4"
+              className="bg-muted/40 hover:bg-muted/70 flex min-h-22 flex-col justify-center gap-3 px-5 py-4 transition-colors sm:flex-row sm:items-center sm:gap-4 sm:rounded-xl"
             >
               <div className="flex items-center gap-4">
-                <span className="bg-amber-500/20 text-amber-500 flex size-10 shrink-0 items-center justify-center rounded-full text-base font-bold">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-base font-bold text-amber-500">
                   1
                 </span>
                 <div className="flex flex-col">
@@ -115,7 +115,7 @@ export function Records() {
             </Link>
           )}
 
-          <div className="bg-card rounded-sm">
+          <div className="sm:bg-card sm:rounded-sm">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -149,7 +149,7 @@ export function Records() {
                           {e.sub ?? "—"}
                         </TableCell>
                       )}
-                      <TableCell className="min-w-52 max-w-none sm:w-full sm:min-w-0 sm:max-w-0 sm:truncate">
+                      <TableCell className="max-w-none min-w-52 sm:w-full sm:max-w-0 sm:min-w-0 sm:truncate">
                         <Link
                           href={`/activities/${e.stravaId}`}
                           className="text-foreground hover:text-primary font-medium"

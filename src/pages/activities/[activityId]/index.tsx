@@ -5,14 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 
 import { ActivityActionsMenu } from "~/components/ActivityActionsMenu";
-import { PageTitle } from "~/components/PageTitle";
 import { ActivityMap } from "~/components/ActivityMap";
 import { ActivityStats } from "~/components/ActivityStats";
 import { ElevationProfile } from "~/components/ElevationProfile";
+import { PageTitle } from "~/components/PageTitle";
 import { ActivityLaps } from "~/components/charts/ActivityLaps";
 import { ActivityStreams } from "~/components/charts/ActivityStreams";
 import { PowerCurve } from "~/components/charts/PowerCurve";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
+import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
 import { useTypedParams } from "~/hooks/useTypedParams";
 import { NextPageWithLayout } from "~/pages/_app";
 import { formatActivityType } from "~/utils/format";
@@ -140,7 +141,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
           {formatActivityType(activity.type)}
         </span>
         {isRace && (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium uppercase ring-1 ring-amber-400/80 ring-inset text-amber-500">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-amber-500 uppercase ring-1 ring-amber-400/80 ring-inset">
             <FlagIcon className="size-3" />
             Race
           </span>
@@ -171,7 +172,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
               />
               <button
                 onClick={() => setMapExpanded(false)}
-                className="bg-background/80 hover:bg-background text-foreground absolute right-3 top-3 z-20 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
+                className="bg-background/80 hover:bg-background text-foreground absolute top-3 right-3 z-20 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
                 title="Collapse map"
               >
                 <Minimize2 className="size-4" />
@@ -188,7 +189,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
           </div>
         )}
         {hasMap && !mapExpanded && (
-          <div className="relative h-[50vh] min-h-80 max-h-[600px] w-full">
+          <div className="relative h-[50vh] max-h-[600px] min-h-80 w-full">
             <ActivityMap
               activity={activity}
               highlightPosition={hoverPosition}
@@ -197,52 +198,56 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             <div className="from-background pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t to-transparent" />
             <button
               onClick={() => setMapExpanded(true)}
-              className="bg-background/80 hover:bg-background text-foreground absolute right-3 top-3 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
+              className="bg-background/80 hover:bg-background text-foreground absolute top-3 right-3 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
               title="Expand map"
             >
               <Maximize2 className="size-4" />
             </button>
           </div>
         )}
-        <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-4 p-4 sm:gap-6 sm:p-6 max-sm:px-0">
-          <ActivityStats activity={activity} />
-          {hasNotes && (
-            <div className="border-border bg-card flex flex-col gap-4 rounded-sm border p-5 max-sm:border-0">
-              {activity.description && (
-                <div>
-                  <div className="text-muted-foreground mb-1 text-xs font-medium">
-                    Description
+        {/* Below the map: full-bleed cards on mobile (hairline dividers), then
+            boxed cards centered on desktop — matching the Statistics page. */}
+        <ChartCardSurfaceProvider surface="responsive">
+          <div className="divide-border border-border flex w-full flex-col divide-y border-b md:mx-auto md:max-w-7xl md:gap-6 md:divide-y-0 md:border-0 md:p-6">
+            <ActivityStats activity={activity} />
+            {hasNotes && (
+              <div className="md:border-border md:bg-card flex flex-col gap-4 p-5 md:rounded-sm md:border">
+                {activity.description && (
+                  <div>
+                    <div className="text-muted-foreground mb-1 text-xs font-medium">
+                      Description
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap">
+                      {activity.description}
+                    </p>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap">
-                    {activity.description}
-                  </p>
-                </div>
-              )}
-              {activity.privateNote && (
-                <div>
-                  <div className="text-muted-foreground mb-1 text-xs font-medium">
-                    Private note
+                )}
+                {activity.privateNote && (
+                  <div>
+                    <div className="text-muted-foreground mb-1 text-xs font-medium">
+                      Private note
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap">
+                      {activity.privateNote}
+                    </p>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap">
-                    {activity.privateNote}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-          <ActivityStreams
-            stravaId={activity.stravaId}
-            onHoverPositionChange={setHoverPosition}
-            hiddenStreams={hiddenStreams}
-          />
-          <ActivityLaps
-            activityType={activity.type}
-            startDate={activity.startDate}
-            laps={activity.laps}
-            streams={streamsData}
-          />
-          {hasPower && <PowerCurve stravaId={activity.stravaId} />}
-        </div>
+                )}
+              </div>
+            )}
+            <ActivityStreams
+              stravaId={activity.stravaId}
+              onHoverPositionChange={setHoverPosition}
+              hiddenStreams={hiddenStreams}
+            />
+            <ActivityLaps
+              activityType={activity.type}
+              startDate={activity.startDate}
+              laps={activity.laps}
+              streams={streamsData}
+            />
+            {hasPower && <PowerCurve stravaId={activity.stravaId} />}
+          </div>
+        </ChartCardSurfaceProvider>
       </div>
     </>
   );
@@ -263,9 +268,9 @@ function ActivityPageSkeleton() {
       </Toolbar>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="bg-secondary h-[50vh] min-h-80 max-h-[600px] w-full animate-pulse" />
-        <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-4 p-4 sm:gap-6 sm:p-6 max-sm:px-0">
-          <div className="border-border bg-card rounded-sm border max-sm:border-0 p-5">
+        <div className="bg-secondary h-[50vh] max-h-[600px] min-h-80 w-full animate-pulse" />
+        <div className="divide-border border-border flex w-full flex-col divide-y border-b md:mx-auto md:max-w-7xl md:gap-6 md:divide-y-0 md:border-0 md:p-6">
+          <div className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
             <div className="bg-accent mb-4 h-7 w-36 animate-pulse rounded" />
             <div className="border-border mb-4 grid grid-cols-3 gap-2.5 border-b pb-4">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -291,8 +296,8 @@ function ActivityPageSkeleton() {
               ))}
             </div>
           </div>
-          <div className="bg-card h-64 animate-pulse rounded-sm" />
-          <div className="bg-secondary h-96 animate-pulse rounded-sm" />
+          <div className="bg-card h-64 animate-pulse md:rounded-sm" />
+          <div className="bg-secondary h-96 animate-pulse md:rounded-sm" />
         </div>
       </div>
     </>

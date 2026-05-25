@@ -13,7 +13,11 @@ import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
-import { findHeartRateZone, findPowerZone, type RiderSettings } from "~/sensors/types";
+import {
+  type RiderSettings,
+  findHeartRateZone,
+  findPowerZone,
+} from "~/sensors/types";
 import { formatElapsed } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
@@ -143,17 +147,31 @@ export default function ActivityLaps(props: ActivityLapsProps) {
   // Nothing to plot when no lap carries the primary metric (e.g. powerless ride).
   if (totalDuration <= 0 || maxValue <= 0) return null;
 
-  const valueLabel = usePower ? "Power" : isRunning ? "GAP" : sportConfig.speedLabel;
+  const valueLabel = usePower
+    ? "Power"
+    : isRunning
+      ? "GAP"
+      : sportConfig.speedLabel;
 
   return (
     <ChartThemeProvider>
-      <div className="bg-card flex h-96 w-full flex-col rounded-sm">
-        <div className="border-border flex items-center gap-2 border-b p-4">
+      <div className="md:bg-card flex h-96 w-full flex-col md:rounded-sm">
+        <div className="border-border flex items-center gap-2 p-4 md:border-b">
           <h3 className="text-lg font-semibold">Laps</h3>
           <FeatureHint hintId="hint-activity-laps" title="Laps">
             Each lap (interval) as a bar — width is its duration, height its
-            average {usePower ? "power" : isRunning ? "grade-adjusted pace (GAP)" : "pace"}
-            {isRunning ? ", colored by intervals.icu pace zone" : usePower ? ", colored by power zone" : ""}.
+            average{" "}
+            {usePower
+              ? "power"
+              : isRunning
+                ? "grade-adjusted pace (GAP)"
+                : "pace"}
+            {isRunning
+              ? ", colored by intervals.icu pace zone"
+              : usePower
+                ? ", colored by power zone"
+                : ""}
+            .
             {usePower
               ? " From your FTP."
               : isRunning
@@ -187,13 +205,18 @@ export default function ActivityLaps(props: ActivityLapsProps) {
                 min: 0,
                 max: maxValue * 1.08,
                 valueFormatter: (v: number) => formatValue(v),
-                width: isMobile ? AXIS_SIZE.mobile.width : AXIS_SIZE.desktop.width,
+                width: isMobile
+                  ? AXIS_SIZE.mobile.width
+                  : AXIS_SIZE.desktop.width,
               },
             ]}
           >
             <ChartsGrid horizontal />
             <LapBars bars={bars} onHover={setHover} />
-            <ChartsXAxis axisId={X_AXIS_ID} label={isMobile ? undefined : "Time"} />
+            <ChartsXAxis
+              axisId={X_AXIS_ID}
+              label={isMobile ? undefined : "Time"}
+            />
             <ChartsYAxis
               axisId={Y_AXIS_ID}
               label={isMobile ? undefined : valueLabel}
@@ -291,8 +314,11 @@ function resolveLapZone(opts: {
     return findRunningPaceZone(value, settings.runThresholdPace);
   }
   if (averageHeartrate != null && settings.maxHr > 0) {
-    return findHeartRateZone(averageHeartrate, settings.maxHr, settings.restingHr)
-      .zone;
+    return findHeartRateZone(
+      averageHeartrate,
+      settings.maxHr,
+      settings.restingHr,
+    ).zone;
   }
   return null;
 }

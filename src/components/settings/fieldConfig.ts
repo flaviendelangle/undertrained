@@ -82,3 +82,18 @@ export function formatPace(
   const { minutes, seconds } = speedToPace(speed, paceUnit);
   return `${minutes}:${String(seconds).padStart(2, "0")} ${paceUnit}`;
 }
+
+/**
+ * Format a field value for display, handling pace fields (min:sec) and
+ * appending the unit for plain numbers. Returns "—" for null.
+ */
+export function formatFieldValue(
+  config: RiderFieldConfig,
+  value: number | null,
+): string {
+  if (value == null) return "—";
+  if (config.inputType === "pace" && config.paceUnit) {
+    return formatPace(value, config.paceUnit);
+  }
+  return `${value}${config.unit}`;
+}

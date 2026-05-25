@@ -1,5 +1,6 @@
-import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 import * as React from "react";
+
+import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 
 import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
@@ -68,7 +69,6 @@ function parseStreamData(data: string): number[] | null {
   }
 }
 
-
 export default function ActivityStreams(props: ActivityStreamsProps) {
   const { stravaId, onHoverPositionChange, hiddenStreams } = props;
   const athleteId = useAthleteId();
@@ -135,43 +135,47 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
       ? STREAM_DEFS.filter((d) => !hiddenStreams.includes(d.type))
       : STREAM_DEFS;
 
-    const parsed = defs.map((def) => {
-      const stream = streamsByType.get(def.type);
-      if (!stream) return null;
+    const parsed = defs
+      .map((def) => {
+        const stream = streamsByType.get(def.type);
+        if (!stream) return null;
 
-      const yData = parseStreamData(stream.data);
-      if (!yData) return null;
+        const yData = parseStreamData(stream.data);
+        if (!yData) return null;
 
-      let yMin = Infinity;
-      let yMax = -Infinity;
-      let sum = 0;
-      for (const v of yData) {
-        if (v < yMin) yMin = v;
-        if (v > yMax) yMax = v;
-        sum += v;
-      }
-      if (!Number.isFinite(yMin)) yMin = 0;
-      if (!Number.isFinite(yMax)) yMax = 1;
-      const avg = yData.length > 0 ? sum / yData.length : 0;
-      const range = yMax - yMin;
-      const padding = range > 0 ? range * 0.05 : 1;
+        let yMin = Infinity;
+        let yMax = -Infinity;
+        let sum = 0;
+        for (const v of yData) {
+          if (v < yMin) yMin = v;
+          if (v > yMax) yMax = v;
+          sum += v;
+        }
+        if (!Number.isFinite(yMin)) yMin = 0;
+        if (!Number.isFinite(yMax)) yMax = 1;
+        const avg = yData.length > 0 ? sum / yData.length : 0;
+        const range = yMax - yMin;
+        const padding = range > 0 ? range * 0.05 : 1;
 
-      return {
-        def,
-        yData,
-        yMin: yMin - padding,
-        yMax: yMax + padding,
-        stats: { min: yMin, max: yMax, avg },
-      };
-    }).filter(
-      (s): s is {
-        def: StreamDef;
-        yData: number[];
-        yMin: number;
-        yMax: number;
-        stats: StreamStats;
-      } => s !== null,
-    );
+        return {
+          def,
+          yData,
+          yMin: yMin - padding,
+          yMax: yMax + padding,
+          stats: { min: yMin, max: yMax, avg },
+        };
+      })
+      .filter(
+        (
+          s,
+        ): s is {
+          def: StreamDef;
+          yData: number[];
+          yMin: number;
+          yMax: number;
+          stats: StreamStats;
+        } => s !== null,
+      );
 
     return { parsed, distanceData };
   }, [streamsData, hiddenStreams]);
@@ -206,8 +210,17 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
       }),
     );
 
-    return { streams: preparedStreams, distanceData: parsedStreams.distanceData };
-  }, [parsedStreams, activity, sportConfig, tokens.palette, tokens.paletteOklch.length]);
+    return {
+      streams: preparedStreams,
+      distanceData: parsedStreams.distanceData,
+    };
+  }, [
+    parsedStreams,
+    activity,
+    sportConfig,
+    tokens.palette,
+    tokens.paletteOklch.length,
+  ]);
   const distanceAvailable = distanceData != null;
 
   const xAxisOptions = distanceAvailable
@@ -222,7 +235,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 
   if (fetchError) {
     return (
-      <div className="bg-card rounded-sm p-4 text-red-400">
+      <div className="md:bg-card p-4 text-red-400 md:rounded-sm">
         Failed to load streams: {fetchError}
       </div>
     );
@@ -230,7 +243,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 
   if (isFetching || streamsData === undefined || streamsData === null) {
     return (
-      <div className="bg-card text-muted-foreground rounded-sm p-4">
+      <div className="text-muted-foreground md:bg-card p-4 md:rounded-sm">
         Loading stream data...
       </div>
     );
@@ -238,15 +251,15 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 
   if (streams.length === 0) {
     return (
-      <div className="bg-card text-muted-foreground rounded-sm p-4">
+      <div className="text-muted-foreground md:bg-card p-4 md:rounded-sm">
         No stream data available for this activity.
       </div>
     );
   }
 
   return (
-    <div className="bg-card flex flex-col rounded-sm">
-      <div className="border-border flex items-center gap-2 border-b p-4">
+    <div className="md:bg-card flex flex-col md:rounded-sm">
+      <div className="border-border flex items-center gap-2 p-4 md:border-b">
         <h3 className="text-lg font-semibold">Time Series</h3>
         <FeatureHint hintId="hint-activity-streams" title="Time Series">
           Heart rate, power, cadence, speed, altitude, and temperature plotted
