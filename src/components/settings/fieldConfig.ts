@@ -9,14 +9,54 @@ export interface RiderFieldConfig {
   smallStep?: number;
   inputType?: "pace";
   paceUnit?: "/km" | "/100m";
+  /** Shown as the card title's info tooltip. */
+  tooltip?: string;
 }
 
 export const RIDER_FIELD_CONFIG: RiderFieldConfig[] = [
-  { field: "ftp", label: "FTP", unit: "W", min: 0, step: 1 },
-  { field: "weightKg", label: "Weight", unit: "kg", min: 0, step: 1 },
-  { field: "restingHr", label: "Resting HR", unit: "bpm", min: 30, step: 1 },
-  { field: "maxHr", label: "Max HR", unit: "bpm", min: 100, step: 1 },
-  { field: "lthr", label: "LTHR", unit: "bpm", min: 60, step: 1 },
+  {
+    field: "ftp",
+    label: "FTP",
+    unit: "W",
+    min: 0,
+    step: 1,
+    tooltip:
+      "Functional Threshold Power — the power you can hold for ~1 hour. Drives cycling training load (TSS) and power zones.",
+  },
+  {
+    field: "weightKg",
+    label: "Weight",
+    unit: "kg",
+    min: 0,
+    step: 1,
+    tooltip:
+      "Body weight. Used for power-to-weight ratios and climbing estimates.",
+  },
+  {
+    field: "restingHr",
+    label: "Resting HR",
+    unit: "bpm",
+    min: 30,
+    step: 1,
+    tooltip: "Resting heart rate — the low anchor for heart-rate zones.",
+  },
+  {
+    field: "maxHr",
+    label: "Max HR",
+    unit: "bpm",
+    min: 100,
+    step: 1,
+    tooltip: "Maximum heart rate — the high anchor for heart-rate zones.",
+  },
+  {
+    field: "lthr",
+    label: "LTHR",
+    unit: "bpm",
+    min: 60,
+    step: 1,
+    tooltip:
+      "Lactate Threshold Heart Rate — drives heart-rate based training load (HRSS).",
+  },
   {
     field: "runThresholdPace",
     label: "Run Threshold Pace",
@@ -25,6 +65,8 @@ export const RIDER_FIELD_CONFIG: RiderFieldConfig[] = [
     step: 0.01,
     inputType: "pace",
     paceUnit: "/km",
+    tooltip:
+      "The pace you can sustain at threshold. Drives running training load (rTSS) and pace zones.",
   },
   {
     field: "swimThresholdPace",
@@ -34,6 +76,8 @@ export const RIDER_FIELD_CONFIG: RiderFieldConfig[] = [
     step: 0.01,
     inputType: "pace",
     paceUnit: "/100m",
+    tooltip:
+      "Your threshold swim pace per 100m. Drives swimming training load (sTSS).",
   },
 ];
 

@@ -38,11 +38,6 @@ export function EditableValue({
   const [draft, setDraft] = useState<number | null>(value);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Keep the draft in sync when not actively editing.
-  useEffect(() => {
-    if (!editing) setDraft(value);
-  }, [value, editing]);
-
   // Focus the first input when entering edit mode.
   useEffect(() => {
     if (!editing) return;
@@ -50,6 +45,11 @@ export function EditableValue({
     input?.focus();
     input?.select();
   }, [editing]);
+
+  const startEditing = () => {
+    setDraft(value);
+    setEditing(true);
+  };
 
   const commit = () => {
     setEditing(false);
@@ -66,7 +66,7 @@ export function EditableValue({
     return (
       <button
         type="button"
-        onClick={() => setEditing(true)}
+        onClick={startEditing}
         className={cn(
           "rounded px-1 text-left hover:bg-muted/60 focus-visible:ring-ring/50 focus-visible:ring-2 focus-visible:outline-none",
           isEmpty && "text-muted-foreground",
@@ -86,7 +86,7 @@ export function EditableValue({
     <div
       ref={containerRef}
       onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) commit();
+        if (!e.currentTarget.contains(e.relatedTarget)) commit();
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {

@@ -36,7 +36,7 @@ export function TimePeriodStats(props: TimePeriodStatsProps) {
       : "0m 0s";
 
   return (
-    <div className="border-border bg-card rounded-sm border p-5 max-sm:border-0">
+    <div className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
       {/* Hero Row */}
       <div className="border-border mb-4 grid grid-cols-2 gap-2.5 border-b pb-4 md:grid-cols-4">
         <StatCard

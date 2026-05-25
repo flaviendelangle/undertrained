@@ -90,6 +90,15 @@ export function setField(
   return upsertChange(timeline, { id: crypto.randomUUID(), date, [field]: value });
 }
 
+/** Remove a single field from the change point at `date` (reverts to inherited). */
+export function deleteField(
+  timeline: RiderSettingsTimeline,
+  field: TimeVaryingField,
+  date: string,
+): RiderSettingsTimeline {
+  return setField(timeline, field, date, null);
+}
+
 /** Write a single field into the baseline (initial) values. */
 export function setBaselineField(
   timeline: RiderSettingsTimeline,
@@ -155,7 +164,7 @@ export function getFieldHistory(
       entries.push({
         id: change.id,
         date: change.date,
-        value: change[field]!,
+        value: change[field],
         isBaseline: false,
       });
     }

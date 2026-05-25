@@ -17,6 +17,7 @@ import { TimePeriodStats } from "~/components/periods/TimePeriodStats";
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { Button } from "~/components/ui/button";
+import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
 import {
   ResponsiveDialog,
   ResponsiveDialogClose,
@@ -27,7 +28,6 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from "~/components/ui/responsive-dialog";
-
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useTypedParams } from "~/hooks/useTypedParams";
 import type { NextPageWithLayout } from "~/pages/_app";
@@ -36,9 +36,7 @@ import { trpc } from "~/utils/trpc";
 
 const TimePeriodMap = nextDynamic(
   () =>
-    import("~/components/periods/TimePeriodMap").then(
-      (m) => m.TimePeriodMap,
-    ),
+    import("~/components/periods/TimePeriodMap").then((m) => m.TimePeriodMap),
   { ssr: false },
 );
 
@@ -125,7 +123,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
               <TimePeriodMap periodId={periodId} />
               <button
                 onClick={() => setMapExpanded(false)}
-                className="bg-background/80 hover:bg-background text-foreground absolute right-3 top-3 z-20 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
+                className="bg-background/80 hover:bg-background text-foreground absolute top-3 right-3 z-20 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
                 title="Collapse map"
               >
                 <Minimize2 className="size-4" />
@@ -134,47 +132,51 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
           </div>
         )}
         {!mapExpanded && (
-          <div className="relative h-[50vh] min-h-80 max-h-[600px] w-full">
+          <div className="relative h-[50vh] max-h-[600px] min-h-80 w-full">
             <TimePeriodMap periodId={periodId} />
             <div className="from-background pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t to-transparent" />
             <button
               onClick={() => setMapExpanded(true)}
-              className="bg-background/80 hover:bg-background text-foreground absolute right-3 top-3 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
+              className="bg-background/80 hover:bg-background text-foreground absolute top-3 right-3 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
               title="Expand map"
             >
               <Maximize2 className="size-4" />
             </button>
           </div>
         )}
-        <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-          <TimePeriodStats {...data} />
-          <div className="border-border bg-background flex h-[28rem] flex-col overflow-hidden rounded-xl border">
-            <div className="border-border border-b p-4">
-              <CardTitle>Activities</CardTitle>
+        {/* Below the map: full-bleed cards on mobile (hairline dividers), then
+            boxed cards centered on desktop — matching the Statistics page. */}
+        <ChartCardSurfaceProvider surface="responsive">
+          <div className="divide-border border-border flex w-full flex-col divide-y border-b md:mx-auto md:max-w-7xl md:gap-6 md:divide-y-0 md:border-0 md:p-6">
+            <TimePeriodStats {...data} />
+            <div className="md:border-border md:bg-background flex h-112 flex-col overflow-hidden md:rounded-xl md:border">
+              <div className="border-border p-4 md:border-b">
+                <CardTitle>Activities</CardTitle>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <ActivitiesTable timePeriodId={periodId} />
+              </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <ActivitiesTable timePeriodId={periodId} />
-            </div>
+            {hasPower && powerActivityTypes.length > 0 && (
+              <PowerCurve
+                activityTypes={powerActivityTypes}
+                defaultRanges={[
+                  {
+                    id: `period-${period.id}`,
+                    label: period.name,
+                    dateFrom: period.startDate,
+                    dateTo: period.endDate,
+                  },
+                ]}
+              />
+            )}
+            <section className="md:border-border md:bg-card p-5 md:rounded-xl md:border">
+              <CardTitle className="mb-4">Edit Period</CardTitle>
+              <TimePeriodForm period={period} />
+              <DeletePeriodButton athleteId={athleteId} period={period} />
+            </section>
           </div>
-          {hasPower && powerActivityTypes.length > 0 && (
-            <PowerCurve
-              activityTypes={powerActivityTypes}
-              defaultRanges={[
-                {
-                  id: `period-${period.id}`,
-                  label: period.name,
-                  dateFrom: period.startDate,
-                  dateTo: period.endDate,
-                },
-              ]}
-            />
-          )}
-          <section className="border-border bg-card rounded-xl border p-5">
-            <CardTitle className="mb-4">Edit Period</CardTitle>
-            <TimePeriodForm period={period} />
-            <DeletePeriodButton athleteId={athleteId} period={period} />
-          </section>
-        </div>
+        </ChartCardSurfaceProvider>
       </div>
     </>
   );
@@ -207,15 +209,15 @@ function DeletePeriodButton({
       </p>
       <ResponsiveDialog>
         <ResponsiveDialogTrigger
-          render={
-            <Button variant="destructive" size="sm" />
-          }
+          render={<Button variant="destructive" size="sm" />}
         >
           Delete
         </ResponsiveDialogTrigger>
         <ResponsiveDialogContent showCloseButton={false}>
           <ResponsiveDialogHeader>
-            <ResponsiveDialogTitle>Delete &ldquo;{period.name}&rdquo;?</ResponsiveDialogTitle>
+            <ResponsiveDialogTitle>
+              Delete &ldquo;{period.name}&rdquo;?
+            </ResponsiveDialogTitle>
             <ResponsiveDialogDescription>
               This action cannot be undone. The period will be permanently
               deleted.
@@ -255,9 +257,9 @@ function TimePeriodPageSkeleton() {
         <div className="bg-accent h-5 w-40 animate-pulse rounded-md" />
       </Toolbar>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="bg-secondary h-[50vh] min-h-80 max-h-[600px] w-full animate-pulse" />
-        <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-          <div className="border-border bg-card rounded-xl border p-5">
+        <div className="bg-secondary h-[50vh] max-h-[600px] min-h-80 w-full animate-pulse" />
+        <div className="divide-border border-border flex w-full flex-col divide-y border-b md:mx-auto md:max-w-7xl md:gap-6 md:divide-y-0 md:border-0 md:p-6">
+          <div className="md:border-border md:bg-card p-5 md:rounded-xl md:border">
             <div className="bg-accent mb-4 h-7 w-36 animate-pulse rounded" />
             <div className="border-border mb-4 grid grid-cols-2 gap-2.5 border-b pb-4 md:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -268,7 +270,7 @@ function TimePeriodPageSkeleton() {
               ))}
             </div>
           </div>
-          <div className="bg-card h-96 animate-pulse rounded-xl" />
+          <div className="bg-card h-96 animate-pulse md:rounded-xl" />
         </div>
       </div>
     </>

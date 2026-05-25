@@ -3,6 +3,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { PlusIcon, TrendingDownIcon, TrendingUpIcon, XIcon } from "lucide-react";
 
+import { CardTitle } from "~/components/primitives/CardTitle";
 import { Button } from "~/components/ui/button";
 import { NumberField } from "~/components/ui/number-field";
 import { cn } from "~/lib/utils";
@@ -25,6 +26,9 @@ import { EditableValue } from "./EditableValue";
 import { MetricSparkline } from "./MetricSparkline";
 
 const DEFAULTS = DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues;
+
+/** Matches the other settings sections: full-bleed on mobile, boxed card on desktop. */
+const CARD_CHROME = "md:border-border md:bg-card p-5 md:rounded-sm md:border";
 
 function formatRowDate(date: string): string {
   return format(new Date(date), "d MMM yyyy");
@@ -89,6 +93,8 @@ interface MetricCardProps {
   timeline: RiderSettingsTimeline;
   onTimelineChange: (timeline: RiderSettingsTimeline) => void;
   hasSettings: boolean;
+  /** Extra classes for the card element (used for the side-by-side HR row). */
+  className?: string;
 }
 
 export function MetricCard({
@@ -96,6 +102,7 @@ export function MetricCard({
   timeline,
   onTimelineChange,
   hasSettings,
+  className,
 }: MetricCardProps) {
   const [adding, setAdding] = useState(false);
 
@@ -115,38 +122,35 @@ export function MetricCard({
   const trendUp = trendPct != null && trendPct >= 0;
 
   return (
-    <div className="border-border bg-card rounded-lg border p-4">
-      {/* Header: label + current value + trend + sparkline */}
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-sm font-medium">{config.label}</div>
-          <div className="mt-0.5 flex items-baseline gap-2">
+    <section className={cn(CARD_CHROME, "flex flex-col gap-3", className)}>
+      <CardTitle tooltip={config.tooltip}>{config.label}</CardTitle>
+
+      {/* Current value + trend + sparkline */}
+      <div className="flex items-end justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <span
+            className={cn(
+              "text-2xl font-semibold tabular-nums",
+              current == null && "text-muted-foreground",
+            )}
+          >
+            {formatFieldValue(config, current ?? DEFAULTS[field])}
+          </span>
+          {trendPct != null && Math.abs(trendPct) >= 0.5 && (
             <span
               className={cn(
-                "text-2xl font-semibold tabular-nums",
-                current == null && "text-muted-foreground",
+                "inline-flex items-center gap-0.5 text-xs font-medium",
+                trendUp ? "text-emerald-600" : "text-orange-600",
               )}
             >
-              {current != null
-                ? formatFieldValue(config, current)
-                : formatFieldValue(config, DEFAULTS[field]!)}
+              {trendUp ? (
+                <TrendingUpIcon className="size-3" />
+              ) : (
+                <TrendingDownIcon className="size-3" />
+              )}
+              {Math.abs(Math.round(trendPct))}%
             </span>
-            {trendPct != null && Math.abs(trendPct) >= 0.5 && (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-0.5 text-xs font-medium",
-                  trendUp ? "text-emerald-600" : "text-orange-600",
-                )}
-              >
-                {trendUp ? (
-                  <TrendingUpIcon className="size-3" />
-                ) : (
-                  <TrendingDownIcon className="size-3" />
-                )}
-                {Math.abs(Math.round(trendPct))}%
-              </span>
-            )}
-          </div>
+          )}
         </div>
         <MetricSparkline
           timeline={timeline}
@@ -204,7 +208,7 @@ export function MetricCard({
       </div>
 
       {/* Add */}
-      <div className="mt-2">
+      <div>
         {adding ? (
           <AddValueRow
             config={config}
@@ -218,14 +222,14 @@ export function MetricCard({
           <Button
             size="xs"
             variant="ghost"
-            className="text-muted-foreground"
+            className="text-muted-foreground -ml-1"
             onClick={() => setAdding(true)}
           >
             <PlusIcon className="mr-1 size-3" />
-            Log a new {config.label}
+            Log a new value
           </Button>
         )}
       </div>
-    </div>
+    </section>
   );
 }

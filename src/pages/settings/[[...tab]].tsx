@@ -4,7 +4,7 @@ import { SettingsIcon } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 import { CardTitle } from "~/components/primitives/CardTitle";
-import { ChangePointsTimeline } from "~/components/settings/ChangePointsTimeline";
+import { RiderMetricCards } from "~/components/settings/rider/RiderMetricCards";
 import { ResetHintsButton } from "~/components/settings/ResetHintsButton";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import {
@@ -47,13 +47,11 @@ const SettingsPage: NextPageWithLayout = () => {
           the centered column of boxed cards. */}
       <div className="flex flex-1 flex-col overflow-y-auto pb-4 md:items-center md:p-6">
         <div className="divide-border border-border flex w-full flex-col divide-y border-b md:max-w-5xl md:gap-6 md:divide-y-0 md:border-0">
-          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
-            <ChangePointsTimeline
-              timeline={timeline}
-              onTimelineChange={setTimeline}
-              hasSettings={hasSettings}
-            />
-          </section>
+          <RiderMetricCards
+            timeline={timeline}
+            onTimelineChange={setTimeline}
+            hasSettings={hasSettings}
+          />
 
           <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
             <EquipmentFields timeline={timeline} setTimeline={setTimeline} />
