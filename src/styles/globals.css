@@ -85,6 +85,58 @@
   animation: indeterminate-progress 1.2s ease-in-out infinite;
 }
 
+/* ── Preview card trigger-change animation ──
+   The Journal shares one Base UI preview card across many detached triggers
+   (every activity chip and week summary). When the active trigger changes while
+   the card is open, animate the swap: the positioner glides to the new anchor,
+   the popup resizes to the new content's height, and the Viewport cross-fades +
+   slides the content in the direction the new trigger sits. Mirrors the Base UI
+   Preview Card "detached triggers" demo, adapted to this popup's fixed width. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="preview-card-positioner"] {
+    transition-property: top, left, right, bottom, transform;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    transition-duration: 0.3s;
+  }
+
+  /* --popup-height is set on the popup by the Viewport only while swapping
+     content, so the height animates between triggers but stays `auto` (free to
+     reflow for, e.g., the async map) the rest of the time. */
+  [data-slot="preview-card-content"] {
+    height: var(--popup-height, auto);
+    transition-property: height;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    transition-duration: 0.3s;
+  }
+
+  [data-slot="preview-card-viewport"] [data-current],
+  [data-slot="preview-card-viewport"] [data-previous] {
+    /* Freeze each snapshot's width so they don't reflow mid-slide. */
+    width: var(--popup-width);
+    translate: 0;
+    opacity: 1;
+    transition:
+      translate 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  [data-slot="preview-card-viewport"][data-activation-direction~="left"]
+    [data-current][data-starting-style],
+  [data-slot="preview-card-viewport"][data-activation-direction~="right"]
+    [data-previous][data-ending-style] {
+    translate: -30% 0;
+    opacity: 0;
+  }
+
+  [data-slot="preview-card-viewport"][data-activation-direction~="right"]
+    [data-current][data-starting-style],
+  [data-slot="preview-card-viewport"][data-activation-direction~="left"]
+    [data-previous][data-ending-style] {
+    translate: 30% 0;
+    opacity: 0;
+  }
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -126,6 +178,8 @@
   --color-sport-cycling: var(--sport-cycling);
   --color-sport-running: var(--sport-running);
   --color-sport-swimming: var(--sport-swimming);
+  --color-sport-strength: var(--sport-strength);
+  --color-sport-hiking: var(--sport-hiking);
   --color-sport-other: var(--sport-other);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -173,6 +227,8 @@
   --sport-cycling: oklch(0.58 0.20 354.308);
   --sport-running: oklch(0.55 0.11 184.704);
   --sport-swimming: oklch(0.58 0.16 254.624);
+  --sport-strength: oklch(0.60 0.19 41.116);
+  --sport-hiking: oklch(0.55 0.13 130);
   --sport-other: oklch(0.52 0.17 280);
   --sidebar: oklch(0.97 0.005 260);
   --sidebar-foreground: oklch(0.145 0.015 260);
@@ -219,6 +275,8 @@
   --sport-cycling: oklch(0.72 0.22 354.308);
   --sport-running: oklch(0.70 0.12 184.704);
   --sport-swimming: oklch(0.74 0.17 254.624);
+  --sport-strength: oklch(0.74 0.21 41.116);
+  --sport-hiking: oklch(0.72 0.16 130);
   --sport-other: oklch(0.68 0.18 280);
   --sidebar: oklch(0.21 0.012 265);
   --sidebar-foreground: oklch(0.985 0 0);

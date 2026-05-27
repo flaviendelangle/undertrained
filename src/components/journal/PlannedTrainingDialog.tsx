@@ -176,8 +176,15 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
       ? dayKey(existing.plannedDate)
       : format(state.mode === "create" ? state.date : new Date(), "yyyy-MM-dd"),
   );
+  // The week view passes a date carrying the double-clicked time; the month view
+  // passes local midnight, for which we keep a sensible 07:00 default.
+  const createTime =
+    state.mode === "create" &&
+    (state.date.getHours() !== 0 || state.date.getMinutes() !== 0)
+      ? format(state.date, "HH:mm")
+      : "07:00";
   const [timeStr, setTimeStr] = React.useState(
-    existing ? existing.plannedDate.slice(11, 16) : "07:00",
+    existing ? existing.plannedDate.slice(11, 16) : createTime,
   );
 
   const utils = trpc.useUtils();

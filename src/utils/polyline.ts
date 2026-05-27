@@ -67,6 +67,44 @@ export const decode = function (
 };
 
 /**
- * Array with lat and lng elements.
+ * Encodes a sequence of LatLngs into an encoded path string (the inverse of
+ * {@link decode}). Uses the Google polyline algorithm, so the result round-trips
+ * through `decode()` and renders directly in the existing map components.
+ *
+ * See {@link https://developers.google.com/maps/documentation/utilities/polylinealgorithm}
  */
+export const encode = function (
+  path: LatLngTuple[],
+  precision = 5,
+): string {
+  const factor = Math.pow(10, precision);
+
+  const encodeValue = (current: number, previous: number): string => {
+    const curr = Math.round(current * factor);
+    const prev = Math.round(previous * factor);
+    let coordinate = (curr - prev) << 1;
+    if (curr - prev < 0) {
+      coordinate = ~coordinate;
+    }
+    let output = "";
+    while (coordinate >= 0x20) {
+      output += String.fromCharCode((0x20 | (coordinate & 0x1f)) + 63);
+      coordinate >>= 5;
+    }
+    output += String.fromCharCode(coordinate + 63);
+    return output;
+  };
+
+  let output = "";
+  let prevLat = 0;
+  let prevLng = 0;
+  for (const [lat, lng] of path) {
+    output += encodeValue(lat, prevLat);
+    output += encodeValue(lng, prevLng);
+    prevLat = lat;
+    prevLng = lng;
+  }
+  return output;
+};
+
 export type LatLngTuple = [number, number];

@@ -2,7 +2,8 @@ import * as React from "react";
 
 import { SlidersHorizontalIcon } from "lucide-react";
 
-import { BarChartPro, type ZoomData } from "@mui/x-charts-pro";
+import { type ZoomData } from "@mui/x-charts-pro";
+import { BarChartPremium } from "@mui/x-charts-premium";
 
 import { Button } from "~/components/ui/button";
 import { ChartCard } from "~/components/ui/chart-card";
@@ -25,7 +26,7 @@ import {
   useChartTokens,
 } from "~/lib/chartTokens";
 import { formatSlice } from "~/utils/dateUtils";
-import { formatActivityType } from "~/utils/format";
+import { formatActivityType, formatCompactDuration } from "~/utils/format";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
 import { METRICS, type MetricContext, MetricSelect } from "../../MetricSelect";
@@ -36,14 +37,6 @@ import { SportFilterPopover, SportTypeFilter } from "../SportTypeFilter";
 
 const TIME_AXIS_ID = "time";
 const DEFAULT_ZOOM_STEPS = 12;
-
-/** Format a duration given in hours as e.g. "8h30" (rounded to the minute). */
-function formatHoursMinutes(hours: number): string {
-  const totalMinutes = Math.round(hours * 60);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  return `${h}h${String(m).padStart(2, "0")}`;
-}
 
 export default function ActivitiesTimeline() {
   const [metric, setMetric] = React.useState("movingTime");
@@ -128,7 +121,7 @@ export default function ActivitiesTimeline() {
         return "";
       }
       if (metricConfig?.unit === "h") {
-        return formatHoursMinutes(value);
+        return formatCompactDuration(Math.round(value * 60) * 60);
       }
       const formatted = value.toLocaleString(undefined, {
         maximumFractionDigits: 1,
@@ -234,7 +227,8 @@ export default function ActivitiesTimeline() {
     <ChartThemeProvider>
       <ChartCard title="Activities Timeline" actions={actions}>
         <ChartTooltipTotalProvider formatTotal={formatValue}>
-          <BarChartPro
+          <BarChartPremium
+            renderer="webgl"
             zoomData={zoomData}
             onZoomChange={setZoomData}
             xAxis={[
@@ -243,7 +237,11 @@ export default function ActivitiesTimeline() {
                 scaleType: "band",
                 data: xAxisData,
                 valueFormatter: (value: Date) => formatSlice(value, precision),
-                zoom: { filterMode: "discard", minSpan: minZoomSpan },
+                zoom: {
+                  filterMode: "discard",
+                  minSpan: minZoomSpan,
+                  slider: { enabled: true },
+                },
                 height: isMobile
                   ? AXIS_SIZE.mobile.height
                   : AXIS_SIZE.desktop.height,

@@ -12,6 +12,7 @@ import {
   MenuIcon,
   MoonIcon,
   PlayCircleIcon,
+  RouteIcon,
   SettingsIcon,
   ShieldCheckIcon,
   SunIcon,
@@ -26,7 +27,7 @@ import { usePathname } from "next/navigation";
 import { Tooltip, TooltipProps } from "~/components/primitives/Tooltip";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useTheme } from "~/hooks/useTheme";
-import { isLiveTrainingEnabled } from "~/lib/features";
+import { isLiveTrainingEnabled, isRoutesEnabled } from "~/lib/features";
 import { cn } from "~/lib/utils";
 
 import { NavBarContext } from "./NavBarContext";
@@ -167,6 +168,11 @@ export function NavBar() {
           <TooltipIfMenuCollapsed label="Heatmap">
             <NavBarLink icon={MapIcon} label="Heatmap" href="/heatmap" />
           </TooltipIfMenuCollapsed>
+          {isRoutesEnabled && (
+            <TooltipIfMenuCollapsed label="Routes">
+              <NavBarLink icon={RouteIcon} label="Routes" href="/routes" />
+            </TooltipIfMenuCollapsed>
+          )}
           <TooltipIfMenuCollapsed label="Statistics">
             <NavBarLink
               icon={BarChart3Icon}
@@ -287,6 +293,16 @@ export function MobileBottomBar() {
             <CalendarIcon className="size-4" />
             Time Periods
           </Link>
+          {isRoutesEnabled && (
+            <Link
+              href="/routes"
+              className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
+              onClick={() => setMoreOpen(false)}
+            >
+              <RouteIcon className="size-4" />
+              Routes
+            </Link>
+          )}
           <Link
             href="/toolbox"
             className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"

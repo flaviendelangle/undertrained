@@ -9,6 +9,11 @@ const envSchema = z.object({
     .string()
     .min(1, "STRAVA_WEBHOOK_VERIFY_TOKEN is required"),
   STRAVA_WEBHOOK_CALLBACK_URL: z.string().url().optional(),
+  // OpenRouteService API key (https://openrouteservice.org/sign-up/), used to
+  // snap route-builder waypoints to roads/paths. Optional so the app still boots
+  // without it; the routes router throws a clear error if a routing call is made
+  // while it's unset.
+  OPENROUTESERVICE_API_KEY: z.string().min(1).optional(),
   // Public origin of the app (e.g. https://undertrained.app), used to build the
   // absolute iCal subscription URL shown to athletes. Falls back to the request
   // origin when unset.

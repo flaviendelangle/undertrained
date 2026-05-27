@@ -26,7 +26,7 @@ export function ActivityPreviewMap({
 
   return (
     <div className="h-32 w-full overflow-hidden rounded-t-md">
-      <Map activities={activities} zoomControl={false} dragging={false} />
+      <Map activities={activities} interactive={false} />
     </div>
   );
 }

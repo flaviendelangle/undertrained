@@ -5,6 +5,8 @@ import { enGB } from "date-fns/locale/en-GB";
 import { FlagIcon, MedalIcon } from "lucide-react";
 import Link from "next/link";
 
+import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
+
 import {
   Popover,
   PopoverContent,
@@ -14,8 +16,10 @@ import { cn } from "~/lib/utils";
 import { formatActivityType } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
-import { ActivityPreviewCard } from "./ActivityPreviewCard";
+import { useMapPrefetch } from "./ActivityPreviewCard";
 import { useJournalPlanner } from "./journalPlanner";
+import { useJournalPreviewHandles } from "./journalPreview";
+import { useJournalActivityHref } from "./journalView";
 import { PlannedTrainingChip } from "./PlannedTrainingChip";
 import type { JournalActivity, JournalDay } from "./useJournalWeeks";
 
@@ -26,7 +30,7 @@ const MAX_VISIBLE_ACTIVITIES = 3;
  * Strava `workoutType` values that mark an activity as a race. Strava encodes
  * this per sport: `1` for runs, `11` for rides.
  */
-const RACE_WORKOUT_TYPES = new Set([1, 11]);
+export const RACE_WORKOUT_TYPES = new Set([1, 11]);
 
 /**
  * Map of `stravaId → all-time record labels` for the loaded athlete, provided by
@@ -84,46 +88,58 @@ function ActivityChip({ activity }: { activity: JournalActivity }) {
   const isRace =
     activity.workoutType != null && RACE_WORKOUT_TYPES.has(activity.workoutType);
   const isPr = activityRecords != null && activityRecords.length > 0;
+  const href = useJournalActivityHref(activity.startDateLocal, activity.stravaId);
+
+  // Open the Journal's shared preview card (one popup for all chips) with this
+  // activity as the payload, and warm its route map on hover.
+  const handles = useJournalPreviewHandles();
+  const prefetch = useMapPrefetch(activity.stravaId);
 
   return (
-    <ActivityPreviewCard activity={activity} records={activityRecords}>
-      <Link
-        href={`/activities/${activity.stravaId}?from=journal`}
-        aria-label={isRace ? `Race: ${activity.name}` : activity.name}
-        className={cn(
-          "flex min-w-0 flex-col gap-0.5 rounded px-1 py-0.5 leading-tight transition-colors hover:brightness-95 dark:hover:brightness-110",
-          // Races get a gold ring so they stand out from training days.
-          isRace && "ring-1 ring-amber-400/80 ring-inset",
-        )}
-        style={{
-          backgroundColor: `color-mix(in oklab, ${config.color} 16%, transparent)`,
-        }}
-      >
-        <span className="flex min-w-0 items-center gap-1">
-          <Icon className="size-3 shrink-0" style={{ color: config.color }} />
-          <span className="text-foreground truncate text-xs font-medium">
-            {activity.name || formatActivityType(activity.type)}
-          </span>
-          {isRace && (
-            <FlagIcon
-              className="size-3 shrink-0 text-amber-500"
-              aria-label="Race"
-            />
+    <PreviewCardPrimitive.Trigger
+      handle={handles.activity}
+      payload={{ activity, records: activityRecords }}
+      onPointerEnter={prefetch.onPointerEnter}
+      onPointerLeave={prefetch.onPointerLeave}
+      render={
+        <Link
+          href={href}
+          aria-label={isRace ? `Race: ${activity.name}` : activity.name}
+          className={cn(
+            "flex min-w-0 flex-col gap-0.5 rounded px-1 py-0.5 leading-tight transition-colors hover:brightness-95 dark:hover:brightness-110",
+            // Races get a gold ring so they stand out from training days.
+            isRace && "ring-1 ring-amber-400/80 ring-inset",
           )}
-          {isPr && (
-            <MedalIcon
-              className="size-3 shrink-0 text-amber-500"
-              aria-label={`Personal record: ${activityRecords?.join(", ")}`}
-            />
-          )}
-        </span>
-        {stats && (
-          <span className="text-muted-foreground truncate text-[11px] tabular-nums">
-            {stats}
+          style={{
+            backgroundColor: `color-mix(in oklab, ${config.color} 16%, transparent)`,
+          }}
+        >
+          <span className="flex min-w-0 items-center gap-1">
+            <Icon className="size-3 shrink-0" style={{ color: config.color }} />
+            <span className="text-foreground truncate text-xs font-medium">
+              {activity.name || formatActivityType(activity.type)}
+            </span>
+            {isRace && (
+              <FlagIcon
+                className="size-3 shrink-0 text-amber-500"
+                aria-label="Race"
+              />
+            )}
+            {isPr && (
+              <MedalIcon
+                className="size-3 shrink-0 text-amber-500"
+                aria-label={`Personal record: ${activityRecords?.join(", ")}`}
+              />
+            )}
           </span>
-        )}
-      </Link>
-    </ActivityPreviewCard>
+          {stats && (
+            <span className="text-muted-foreground truncate text-[11px] tabular-nums">
+              {stats}
+            </span>
+          )}
+        </Link>
+      }
+    />
   );
 }
 

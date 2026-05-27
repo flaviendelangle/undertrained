@@ -1,5 +1,13 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode, RefObject } from "react";
+import { createPortal } from "react-dom";
 
 import {
   useAxesTooltip,
@@ -67,6 +75,9 @@ export function ChartTooltipTotalProvider({
   );
 }
 
+// Distance between the cursor and the nearest tooltip edge.
+const GAP = 12;
+
 /**
  * Shared chart tooltip using the app's popover design tokens.
  * Use as `slots={{ tooltip: ChartTooltip }}` on any MUI x-chart. Wrap the chart
@@ -89,28 +100,45 @@ export function ChartTooltip() {
     setSvgOrigin({ top: rect.top, left: rect.left });
   }, [containerRef, mousePosition]);
 
-  if (!tooltipData || !mousePosition) return null;
-
   // Offset the tooltip to the side of the cursor (rather than centering it on
   // the cursor) so the hovered bar/column stays visible. Flip to whichever side
   // has more room: when the cursor is past the drawing area's horizontal
-  // midpoint we anchor the tooltip's right edge to the left of the cursor,
-  // otherwise its left edge to the right of the cursor. This also keeps it from
-  // overflowing the chart edges.
-  const GAP = 12;
-  const drawingCenterX =
-    svgOrigin.left + drawingArea.left + drawingArea.width / 2;
-  const isPastMidpoint = mousePosition.x > drawingCenterX;
+  // midpoint we place the tooltip to the left of the cursor, otherwise to the
+  // right. The result is then clamped to the viewport so the fixed-position
+  // tooltip never spills past an edge and triggers a page-level scrollbar.
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [left, setLeft] = useState(0);
+  useLayoutEffect(() => {
+    if (!mousePosition) return;
+    const tooltipWidth = tooltipRef.current?.offsetWidth ?? 0;
+    const drawingCenterX =
+      svgOrigin.left + drawingArea.left + drawingArea.width / 2;
+    const isPastMidpoint = mousePosition.x > drawingCenterX;
+    const desiredLeft = isPastMidpoint
+      ? mousePosition.x - GAP - tooltipWidth
+      : mousePosition.x + GAP;
+    const maxLeft = window.innerWidth - tooltipWidth - GAP;
+    setLeft(Math.max(GAP, Math.min(desiredLeft, maxLeft)));
+  }, [mousePosition, svgOrigin, drawingArea]);
 
-  return (
+  if (!tooltipData || !mousePosition) return null;
+
+  // Portal to <body> so the fixed-position tooltip escapes the chart's
+  // containing block. The chart can live inside a transformed ancestor (e.g. a
+  // Base UI popover/preview-card Positioner uses `transform`), which would
+  // otherwise become the containing block for `position: fixed` and make the
+  // viewport-based coordinates below resolve relative to the popup instead.
+  return createPortal(
     <div
+      ref={tooltipRef}
       style={{
         position: "fixed",
-        left: isPastMidpoint ? mousePosition.x - GAP : mousePosition.x + GAP,
+        left,
         top: svgOrigin.top + drawingArea.top,
-        transform: isPastMidpoint ? "translateX(-100%)" : undefined,
         pointerEvents: "none",
-        zIndex: 1,
+        // Above the preview-card popup (z-60) the chart can be hosted in, since
+        // this is now portalled to <body> as a sibling of that popup.
+        zIndex: 70,
       }}
     >
       <div
@@ -182,6 +210,7 @@ export function ChartTooltip() {
           },
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

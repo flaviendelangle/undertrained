@@ -22,27 +22,16 @@ import { formatElapsed } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 import { ChartThemeProvider } from "../ChartThemeProvider";
-import {
-  computeLapGapSpeed,
-  findRunningPaceZone,
-  parseSampleStreams,
-} from "./lapZones";
+import { findRunningPaceZone } from "./lapZones";
 
 /** Subset of the stored lap shape consumed by the chart. */
 interface LapDatum {
   index: number;
   name: string;
   elapsedTime: number;
-  startIndex: number;
-  endIndex: number;
   averageSpeed: number;
   averageWatts?: number | null;
   averageHeartrate?: number | null;
-}
-
-interface StreamRow {
-  type: string;
-  data: string;
 }
 
 /** A lap laid out for rendering: cumulative time span + bar height + colour. */
@@ -68,8 +57,6 @@ interface ActivityLapsProps {
   /** Activity start date — used to resolve the rider settings in effect then. */
   startDate: string;
   laps: readonly LapDatum[] | null;
-  /** Activity streams (for Grade-Adjusted Pace on running laps). */
-  streams?: readonly StreamRow[] | null;
 }
 
 const X_AXIS_ID = "time";
@@ -77,17 +64,11 @@ const Y_AXIS_ID = "value";
 const BAR_GAP_PX = 1;
 
 export default function ActivityLaps(props: ActivityLapsProps) {
-  const { activityType, startDate, laps, streams } = props;
+  const { activityType, startDate, laps } = props;
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
   const { resolveForDate } = useRiderSettingsTimeline();
   const [hover, setHover] = React.useState<HoverState | null>(null);
-
-  // Parse streams once (hooks must run before any early return).
-  const sampleStreams = React.useMemo(
-    () => parseSampleStreams(streams),
-    [streams],
-  );
 
   const sportConfig = getSportConfig(activityType);
 
@@ -110,18 +91,9 @@ export default function ActivityLaps(props: ActivityLapsProps) {
   const totalDuration = laps.reduce((sum, lap) => sum + lap.elapsedTime, 0);
 
   const bars: LapBar[] = laps.map((lap, i) => {
-    // Running uses Grade-Adjusted Pace (VAP) for both height and zone; cycling
-    // uses average power; other sports use raw average speed.
-    let value: number;
-    if (usePower) {
-      value = lap.averageWatts ?? 0;
-    } else if (isRunning) {
-      value =
-        computeLapGapSpeed(sampleStreams, lap.startIndex, lap.endIndex) ??
-        lap.averageSpeed;
-    } else {
-      value = lap.averageSpeed;
-    }
+    // Cycling uses average power; every other sport (running included) uses the
+    // lap's raw average speed, exactly as Strava reports it.
+    const value = usePower ? (lap.averageWatts ?? 0) : lap.averageSpeed;
 
     const zone = resolveLapZone({
       value,
@@ -147,11 +119,7 @@ export default function ActivityLaps(props: ActivityLapsProps) {
   // Nothing to plot when no lap carries the primary metric (e.g. powerless ride).
   if (totalDuration <= 0 || maxValue <= 0) return null;
 
-  const valueLabel = usePower
-    ? "Power"
-    : isRunning
-      ? "GAP"
-      : sportConfig.speedLabel;
+  const valueLabel = usePower ? "Power" : sportConfig.speedLabel;
 
   return (
     <ChartThemeProvider>
@@ -160,12 +128,7 @@ export default function ActivityLaps(props: ActivityLapsProps) {
           <h3 className="text-lg font-semibold">Laps</h3>
           <FeatureHint hintId="hint-activity-laps" title="Laps">
             Each lap (interval) as a bar — width is its duration, height its
-            average{" "}
-            {usePower
-              ? "power"
-              : isRunning
-                ? "grade-adjusted pace (GAP)"
-                : "pace"}
+            average {usePower ? "power" : "pace"}
             {isRunning
               ? ", colored by intervals.icu pace zone"
               : usePower

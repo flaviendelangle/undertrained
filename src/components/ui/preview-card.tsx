@@ -33,6 +33,7 @@ function PreviewCardContent({
   return (
     <PreviewCardPrimitive.Portal>
       <PreviewCardPrimitive.Positioner
+        data-slot="preview-card-positioner"
         align={align}
         alignOffset={alignOffset}
         side={side}
@@ -47,7 +48,19 @@ function PreviewCardContent({
           )}
           {...props}
         >
-          {children}
+          {/*
+           * The Journal shares one popup across many detached triggers (one per
+           * activity chip / week summary). The Viewport cross-fades and slides
+           * the content as the active trigger changes, while the popup resizes
+           * and the positioner glides to the new anchor. See globals.css for the
+           * transition rules keyed off this slot.
+           */}
+          <PreviewCardPrimitive.Viewport
+            data-slot="preview-card-viewport"
+            className="relative w-full overflow-clip"
+          >
+            {children}
+          </PreviewCardPrimitive.Viewport>
         </PreviewCardPrimitive.Popup>
         <PreviewCardPrimitive.Arrow className="z-60 flex data-[side=bottom]:-top-2.5 data-[side=bottom]:rotate-0 data-[side=inline-end]:-left-3.5 data-[side=inline-end]:-rotate-90 data-[side=inline-start]:-right-3.5 data-[side=inline-start]:rotate-90 data-[side=left]:-right-3.5 data-[side=left]:rotate-90 data-[side=right]:-left-3.5 data-[side=right]:-rotate-90 data-[side=top]:-bottom-2.5 data-[side=top]:rotate-180">
           <ArrowSvg />

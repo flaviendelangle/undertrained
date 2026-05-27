@@ -52,6 +52,4 @@ const HeatmapPage: NextPageWithLayout = () => {
   );
 };
 
-export const dynamic = "force-dynamic";
-
 export default HeatmapPage;

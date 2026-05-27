@@ -12,12 +12,27 @@ import { NextConfig } from "next";
 const liveTrainingEnabled = process.env.LIVE_TRAINING_ENABLED === "true";
 
 /**
+ * Routes (the Strava-style route builder at /routes) is opt-in too: it stays
+ * hidden unless ROUTES_ENABLED=true is set. Leaving it unset — as on the VPS,
+ * which has no OpenRouteService key — keeps the feature off. Exposed to the
+ * client as NEXT_PUBLIC_ROUTES_ENABLED below.
+ */
+const routesEnabled = process.env.ROUTES_ENABLED === "true";
+
+/**
  * @see https://nextjs.org/docs/api-reference/next.config.js/introduction
  */
 export default {
   output: "standalone",
+  // Disables the dev-mode static/dynamic indicator badge. It's purely cosmetic,
+  // and the Pages Router HMR client crashes updating it (reads
+  // `window.next.router.components` without a null guard before the router has
+  // hydrated), spamming the console with "Cannot read properties of undefined
+  // (reading 'components')" on every isrManifest message. See vercel/next.js#71974.
+  devIndicators: false,
   env: {
     NEXT_PUBLIC_LIVE_TRAINING_ENABLED: String(liveTrainingEnabled),
+    NEXT_PUBLIC_ROUTES_ENABLED: String(routesEnabled),
   },
   /** We run typechecking as a separate task in CI */
   typescript: {

@@ -3,6 +3,7 @@ import * as React from "react";
 import { BarChart3Icon } from "lucide-react";
 import nextDynamic from "next/dynamic";
 
+import { SyncPanel } from "~/components/SyncPanel";
 import { LoadingOverlay } from "~/components/primitives/LoadingOverlay";
 import { PageIntro } from "~/components/primitives/PageIntro";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
@@ -76,7 +77,7 @@ const StatisticsPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar>
+      <Toolbar actions={<SyncPanel />}>
         <BarChart3Icon className="size-4" />
         <span className="font-semibold">Statistics</span>
       </Toolbar>
@@ -98,10 +99,10 @@ const StatisticsPage: NextPageWithLayout = () => {
             <div className="divide-border border-border flex flex-col divide-y border-b md:w-full md:max-w-5xl md:gap-4 md:divide-y-0 md:border-0">
               <FitnessChart />
               <ActivitiesTimeline />
-              <ActivitiesCumulativeTimeline />
               <PowerCurve
                 activityTypes={getActivityTypesByCategory("cycling")}
               />
+              <ActivitiesCumulativeTimeline />
               <EddingtonChart />
             </div>
           </ChartCardSurfaceProvider>
@@ -111,7 +112,5 @@ const StatisticsPage: NextPageWithLayout = () => {
     </>
   );
 };
-
-export const dynamic = "force-dynamic";
 
 export default StatisticsPage;

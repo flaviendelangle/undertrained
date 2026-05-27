@@ -39,11 +39,19 @@ const ActivityPage: NextPageWithLayout = () => {
 
 function ActivityPageContent({ stravaId }: { stravaId: number }) {
   const router = useRouter();
+  // Coming from the journal, rebuild its URL from the `view`/`week` recorded on
+  // the link so back returns to the right view and week (independent of how the
+  // calendar was scrolled).
+  const journalBackHref = (() => {
+    const view = router.query.view === "week" ? "week" : "month";
+    const week = typeof router.query.week === "string" ? router.query.week : null;
+    return `/journal/${view}${week ? `?week=${week}` : ""}`;
+  })();
   const backHref =
     router.query.from === "period" && router.query.periodId
       ? `/time-periods/${String(router.query.periodId)}`
       : router.query.from === "journal"
-        ? "/journal"
+        ? journalBackHref
         : "/activities";
 
   const [hoverPosition, setHoverPosition] = React.useState<
@@ -243,7 +251,6 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
               activityType={activity.type}
               startDate={activity.startDate}
               laps={activity.laps}
-              streams={streamsData}
             />
             {hasPower && <PowerCurve stravaId={activity.stravaId} />}
           </div>

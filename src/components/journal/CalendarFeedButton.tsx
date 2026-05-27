@@ -9,22 +9,28 @@ import {
   ResponsiveDialogDescription,
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
-  ResponsiveDialogTrigger,
 } from "~/components/ui/responsive-dialog";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { trpc } from "~/utils/trpc";
 
 /**
- * Header affordance that reveals the athlete's secret iCal subscription URL, so
- * they can add their planned trainings to Google/Apple/Outlook calendar. The
- * token is generated lazily the first time this is opened.
+ * The calendar-subscription dialog (controlled, trigger-less) revealing the
+ * athlete's secret iCal URL so they can add their planned trainings to
+ * Google/Apple/Outlook. The token is minted lazily the first time it opens.
+ * Used directly where the trigger lives elsewhere (e.g. the mobile menu) and
+ * wrapped by {@link CalendarFeedButton} for the desktop header.
  */
-export function CalendarFeedButton() {
+export function CalendarFeedDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const athleteId = useAthleteId();
-  const [open, setOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
-  // Only fetch (and lazily mint the token) once the popover is opened.
+  // Only fetch (and lazily mint the token) once the dialog is opened.
   const { data } = trpc.plannedTrainings.getCalendarToken.useQuery(
     { athleteId: athleteId! },
     { enabled: open && athleteId != null },
@@ -45,15 +51,7 @@ export function CalendarFeedButton() {
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={setOpen}>
-      <ResponsiveDialogTrigger
-        render={
-          <Button size="xs" variant="outline">
-            <CalendarPlusIcon />
-            Subscribe
-          </Button>
-        }
-      />
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Calendar subscription</ResponsiveDialogTitle>
@@ -81,5 +79,21 @@ export function CalendarFeedButton() {
         </div>
       </ResponsiveDialogContent>
     </ResponsiveDialog>
+  );
+}
+
+/**
+ * Header affordance (desktop) that opens the {@link CalendarFeedDialog}.
+ */
+export function CalendarFeedButton() {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <Button size="xs" variant="outline" onClick={() => setOpen(true)}>
+        <CalendarPlusIcon />
+        Subscribe
+      </Button>
+      <CalendarFeedDialog open={open} onOpenChange={setOpen} />
+    </>
   );
 }

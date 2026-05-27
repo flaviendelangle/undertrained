@@ -18,6 +18,16 @@ export const formatDuration = (seconds: number) => {
     .join(":");
 };
 
+/** Compact hours:minutes, e.g. "12h58". `subHour: "min"` renders "45min" instead of "0h45". */
+export function formatCompactDuration(
+  seconds: number,
+  opts?: { subHour?: "h" | "min" },
+): string {
+  const { h, m } = decomposeSeconds(seconds);
+  if (h === 0 && opts?.subHour === "min") return `${m}min`;
+  return `${h}h${String(m).padStart(2, "0")}`;
+}
+
 export const formatHumanDuration = (seconds: number) => {
   const { h, m, s } = decomposeSeconds(seconds);
   if (h > 0) return `${h}h ${m}m ${s}s`;
@@ -36,6 +46,11 @@ export function formatElapsed(seconds: number): string {
 export function formatMinutesSeconds(seconds: number): string {
   const rounded = Math.round(seconds);
   return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")}`;
+}
+
+/** Distance in kilometres, e.g. "12.3 km". */
+export function formatKm(meters: number, decimals = 1): string {
+  return `${(meters / 1000).toFixed(decimals)} km`;
 }
 
 export function formatActivityType(activityType: string): string {

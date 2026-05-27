@@ -75,6 +75,7 @@ export default function Map(props: MapProps) {
     enableExplorerTiles = false,
     fitMode = "all",
     highlightPosition,
+    interactive = true,
     onReady,
     routePositions,
     zoomControl = true,
@@ -172,8 +173,13 @@ export default function Map(props: MapProps) {
         zoom={14}
         className="z-0 h-full w-full"
         attributionControl={false}
-        dragging={dragging}
-        zoomControl={zoomControl}
+        dragging={interactive && dragging}
+        zoomControl={interactive && zoomControl}
+        scrollWheelZoom={interactive}
+        doubleClickZoom={interactive}
+        touchZoom={interactive}
+        boxZoom={interactive}
+        keyboard={interactive}
       >
         <AttributionControl position="bottomleft" prefix="Leaflet" />
         <TileLayer
@@ -257,6 +263,12 @@ interface MapProps {
    */
   fitMode?: "all" | "last";
   highlightPosition?: [number, number] | null;
+  /**
+   * Whether the map responds to user input at all (pan, scroll/double-click/
+   * touch/box zoom, keyboard). When `false`, the map is purely static.
+   * Defaults to `true`.
+   */
+  interactive?: boolean;
   /** Called once the view is fitted and its tiles have finished loading. */
   onReady?: () => void;
   routePositions?: [number, number][] | null;

@@ -3,6 +3,7 @@ import * as React from "react";
 import { TrophyIcon } from "lucide-react";
 import nextDynamic from "next/dynamic";
 
+import { SyncPanel } from "~/components/SyncPanel";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import type { NextPageWithLayout } from "~/pages/_app";
 
@@ -14,7 +15,7 @@ const Records = nextDynamic(
 const RecordsPage: NextPageWithLayout = () => {
   return (
     <>
-      <Toolbar>
+      <Toolbar actions={<SyncPanel />}>
         <TrophyIcon className="size-4" />
         <span className="font-semibold">Personal bests</span>
       </Toolbar>
@@ -27,7 +28,5 @@ const RecordsPage: NextPageWithLayout = () => {
     </>
   );
 };
-
-export const dynamic = "force-dynamic";
 
 export default RecordsPage;

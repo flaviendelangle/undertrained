@@ -4,22 +4,22 @@ import { format, isSameMonth, startOfDay } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
 import { CalendarClockIcon } from "lucide-react";
 
+import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
+
 import {
   Drawer,
   DrawerContent,
   DrawerTitle,
   DrawerTrigger,
 } from "~/components/ui/drawer";
-import {
-  PreviewCard,
-  PreviewCardContent,
-  PreviewCardTrigger,
-} from "~/components/ui/preview-card";
+import { PreviewCardContent } from "~/components/ui/preview-card";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { cn } from "~/lib/utils";
+import { formatCompactDuration } from "~/utils/format";
 import { SPORT_CATEGORY_META } from "~/utils/sportConfig";
 
 import { JournalDayCell } from "./JournalDayCell";
+import { useJournalPreviewHandles } from "./journalPreview";
 import { WeeklyLoadChart } from "./WeeklyLoadChart";
 import type { JournalWeek } from "./useJournalWeeks";
 
@@ -28,7 +28,7 @@ export const ROW_HEIGHT = 160;
 
 /** Grid template shared by the header and the rows so columns stay aligned. */
 export const JOURNAL_GRID_COLS =
-  "grid-cols-[3rem_repeat(7,minmax(0,1fr))_5rem] md:grid-cols-[7rem_repeat(7,minmax(0,1fr))_7rem]";
+  "grid-cols-[3.75rem_repeat(7,minmax(0,1fr))_5rem] md:grid-cols-[7rem_repeat(7,minmax(0,1fr))_7rem]";
 
 /**
  * Shared classes for every cell of the right-pinned Summary column. It stays
@@ -42,16 +42,9 @@ const SUMMARY_CELL =
 
 const LOCALE_OPTIONS = { locale: enGB };
 
-/** Compact non-wrapping duration for weekly totals, e.g. "12h58". */
-function formatWeeklyTotal(totalSeconds: number): string {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  return `${hours}h${String(minutes).padStart(2, "0")}`;
-}
-
 /**
- * Compact, single-line week date range. When both ends share a month the month
- * is only printed once, e.g. "22 – 28 May"; otherwise "27 Apr – 3 May".
+ * Week date range; the month is printed once when both ends share it, e.g.
+ * "22 – 28 May", otherwise "27 Apr – 3 May".
  */
 function formatWeekRange(weekStart: Date, weekEnd: Date): string {
   const start = isSameMonth(weekStart, weekEnd)
@@ -62,24 +55,18 @@ function formatWeekRange(weekStart: Date, weekEnd: Date): string {
 
 /**
  * The week's training verdict (Undertrained → Overreaching), as a colour-dotted
- * chip. The trailing-average delta that feeds the under/over edges is kept in
- * the tooltip so the calendar stays uncluttered.
+ * chip. Only the label shows here so the calendar stays uncluttered; the
+ * trailing-average delta that drives the under/over edges is surfaced in the
+ * summary card instead (see {@link WeekSummaryCardBody}).
  */
 function VerdictChip({ week }: { week: JournalWeek }) {
   if (week.verdict == null) {
     return null;
   }
-  const deltaPct =
-    week.loadTrend != null ? Math.round((week.loadTrend - 1) * 100) : null;
-  const tooltip =
-    deltaPct != null
-      ? `${week.verdict.label} · ${deltaPct > 0 ? "+" : ""}${deltaPct}% vs. trailing 4-week average`
-      : week.verdict.label;
   return (
     <span
       className="flex min-w-0 items-center gap-1 text-[11px] leading-none font-medium"
       style={{ color: week.verdict.color }}
-      title={tooltip}
     >
       <span
         aria-hidden
@@ -91,13 +78,13 @@ function VerdictChip({ week }: { week: JournalWeek }) {
   );
 }
 
-/**
- * Hover-card detail for a week's summary: a header line (range, total duration
- * and load), the verdict, the per-sport-category breakdown, and the cumulative
- * weekly-load comparison chart. Only mounts while the card is open.
- */
+/** Hover-card detail for a week's summary. Only mounts while the card is open. */
 function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
   const todayStart = startOfDay(new Date()).getTime();
+  // Signed % the week's load sits above/below its trailing 4-week average — the
+  // quantitative backing for the verdict, shown here rather than as a tooltip.
+  const deltaPct =
+    week.loadTrend != null ? Math.round((week.loadTrend - 1) * 100) : null;
   return (
     <div className="flex flex-col gap-3 p-3">
       <div className="flex flex-col gap-1">
@@ -106,14 +93,30 @@ function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
             {formatWeekRange(week.weekStart, week.weekEnd)}
           </span>
           <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
-            {formatWeeklyTotal(week.totalSeconds)} ·{" "}
+            {formatCompactDuration(week.totalSeconds)} ·{" "}
             <span className="text-foreground font-medium">
               {Math.round(week.totalLoad)}
             </span>{" "}
             load
           </span>
         </div>
-        <VerdictChip week={week} />
+        {week.verdict != null && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <VerdictChip week={week} />
+            {deltaPct != null && (
+              <span className="text-muted-foreground text-[11px] leading-none tabular-nums">
+                {deltaPct > 0 ? "+" : ""}
+                {deltaPct}% vs. trailing 4-week average
+              </span>
+            )}
+          </div>
+        )}
+        {week.plannedSeconds > 0 && (
+          <div className="text-muted-foreground flex items-center gap-1 text-[11px] tabular-nums">
+            <CalendarClockIcon className="size-3 shrink-0" aria-hidden />+
+            {formatCompactDuration(week.plannedSeconds)} still planned this week
+          </div>
+        )}
       </div>
 
       {week.sportBreakdown.length > 0 && (
@@ -133,7 +136,7 @@ function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
                 />
                 <span className="text-foreground">{meta.label}</span>
                 <span className="text-muted-foreground ml-auto tabular-nums">
-                  {formatWeeklyTotal(stat.totalSeconds)}
+                  {formatCompactDuration(stat.totalSeconds)}
                 </span>
                 <span className="text-foreground w-9 text-right font-medium tabular-nums">
                   {Math.round(stat.totalLoad)}
@@ -173,6 +176,31 @@ function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
   );
 }
 
+/**
+ * The single preview card shared by every week's Summary cell (desktop hover),
+ * mounted once by the Journal. Each summary is a detached
+ * `PreviewCard.Trigger` carrying its week as the payload, so one popup serves
+ * all rows instead of a card instance per row. Mobile uses a per-cell Drawer
+ * (see {@link WeekSummaryDisclosure}), so this never opens there.
+ */
+export function WeekSummaryPreviewHost({
+  handle,
+}: {
+  handle: PreviewCardPrimitive.Handle<JournalWeek>;
+}) {
+  return (
+    <PreviewCardPrimitive.Root handle={handle}>
+      {({ payload }) =>
+        payload != null ? (
+          <PreviewCardContent side="left" align="center" className="w-80">
+            <WeekSummaryCardBody week={payload} />
+          </PreviewCardContent>
+        ) : null
+      }
+    </PreviewCardPrimitive.Root>
+  );
+}
+
 function WeekSummary({ week }: { week: JournalWeek }) {
   const hasActual = week.totalSeconds > 0;
   const hasPlanned = week.plannedSeconds > 0;
@@ -185,7 +213,7 @@ function WeekSummary({ week }: { week: JournalWeek }) {
       <div className={cn(SUMMARY_CELL, "gap-0.5")}>
         <div className="text-muted-foreground flex items-center gap-1 text-sm font-semibold tabular-nums">
           <CalendarClockIcon className="size-3.5 shrink-0" aria-hidden />
-          {formatWeeklyTotal(week.plannedSeconds)}
+          {formatCompactDuration(week.plannedSeconds)}
         </div>
         <div className="text-muted-foreground/70 text-[11px]">planned</div>
       </div>
@@ -197,15 +225,12 @@ function WeekSummary({ week }: { week: JournalWeek }) {
   const cellInner = (
     <>
       <div className="text-foreground text-sm font-semibold tabular-nums">
-        {formatWeeklyTotal(week.totalSeconds)}
+        {formatCompactDuration(week.totalSeconds)}
       </div>
       {hasPlanned && (
-        <div
-          className="text-muted-foreground flex items-center gap-1 text-[11px] tabular-nums max-md:hidden"
-          title={`${formatWeeklyTotal(week.plannedSeconds)} of training still planned this week`}
-        >
+        <div className="text-muted-foreground flex items-center gap-1 text-[11px] tabular-nums max-md:hidden">
           <CalendarClockIcon className="size-3 shrink-0" aria-hidden />+
-          {formatWeeklyTotal(week.plannedSeconds)} planned
+          {formatCompactDuration(week.plannedSeconds)} planned
         </div>
       )}
       <div className="text-muted-foreground text-xs whitespace-nowrap">
@@ -241,6 +266,7 @@ function WeekSummaryDisclosure({
   children: React.ReactNode;
 }) {
   const isMobile = useIsMobile();
+  const handles = useJournalPreviewHandles();
 
   if (isMobile) {
     return (
@@ -270,14 +296,11 @@ function WeekSummaryDisclosure({
   }
 
   return (
-    <PreviewCard>
-      <PreviewCardTrigger
-        render={<div className={cn(SUMMARY_CELL, "gap-1")}>{children}</div>}
-      />
-      <PreviewCardContent side="left" align="center" className="w-80">
-        <WeekSummaryCardBody week={week} />
-      </PreviewCardContent>
-    </PreviewCard>
+    <PreviewCardPrimitive.Trigger
+      handle={handles.summary}
+      payload={week}
+      render={<div className={cn(SUMMARY_CELL, "gap-1")}>{children}</div>}
+    />
   );
 }
 

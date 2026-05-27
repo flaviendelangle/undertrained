@@ -311,3 +311,38 @@ export const plannedTrainings = pgTable(
     index("planned_trainings_athlete_date_idx").on(t.athlete, t.plannedDate),
   ],
 );
+
+/**
+ * A route the athlete plans on the map (Strava-style route builder). We store the
+ * editable anchor `waypoints` (so the route can be reopened and tweaked) alongside
+ * the last road-snapped geometry/stats returned by OpenRouteService, so the list
+ * and previews render without re-routing.
+ */
+export const routes = pgTable(
+  "routes",
+  {
+    id: serial("id").primaryKey(),
+    athlete: integer("athlete")
+      .notNull()
+      .references(() => athletes.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // High-level sport ("cycling" | "running"); drives the default ORS profile.
+    sport: text("sport").notNull(),
+    // Concrete OpenRouteService profile, e.g. "cycling-regular", "foot-walking".
+    profile: text("profile").notNull(),
+    // Ordered anchor points [[lat, lng], ...] the user dropped — the editable
+    // source of truth. Geometry below is derived from these via ORS.
+    waypoints: jsonb("waypoints").$type<[number, number][]>().notNull(),
+    // Road-snapped geometry as a Google-format encoded polyline (precision 5),
+    // decoded with `~/utils/polyline`'s `decode()` for rendering.
+    mapPolyline: text("map_polyline").notNull(),
+    distance: real("distance").notNull(), // meters
+    elevationGain: real("elevation_gain"), // meters (ORS ascent), null if unavailable
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    index("routes_athlete_idx").on(t.athlete),
+    index("routes_athlete_created_idx").on(t.athlete, t.createdAt),
+  ],
+);

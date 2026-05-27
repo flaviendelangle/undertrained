@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { BarChartPro } from "@mui/x-charts-pro";
+import { BarChartPremium } from "@mui/x-charts-premium";
 
 import { ChartCard } from "~/components/ui/chart-card";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
@@ -111,8 +111,9 @@ export default function EddingtonChart() {
   return (
     <ChartThemeProvider>
       <ChartCard title="Eddington Number" info={INFO} actions={actions}>
-        <BarChartPro
+        <BarChartPremium
           key={activeTab}
+          renderer="webgl"
           initialZoom={initialZoom}
           xAxis={[
             {

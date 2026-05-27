@@ -1,17 +1,25 @@
 import * as React from "react";
 
-import { addDays, addMonths, endOfMonth, format, startOfMonth } from "date-fns";
-import { enGB } from "date-fns/locale/en-GB";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDownIcon, PlusIcon } from "lucide-react";
+import { format } from "date-fns";
+import {
+  CalendarCheckIcon,
+  CalendarPlusIcon,
+  EllipsisIcon,
+  PlusIcon,
+} from "lucide-react";
+import { useRouter } from "next/router";
+import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
+import { PreviewCard } from "@base-ui/react/preview-card";
 
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
@@ -19,57 +27,48 @@ import { usePersonalRecords } from "~/hooks/usePersonalRecords";
 import { usePlannedTrainings } from "~/hooks/usePlannedTrainings";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { classifyForm } from "~/lib/fitness";
-import { cn } from "~/lib/utils";
 import { startOf } from "~/utils/dateUtils";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
-import { CalendarFeedButton } from "./CalendarFeedButton";
+import { ActivityPreviewHost } from "./ActivityPreviewCard";
+import { CalendarFeedDialog } from "./CalendarFeedButton";
 import { JournalRecordsContext } from "./JournalDayCell";
+import { JournalMonthView } from "./JournalMonthView";
 import { JournalPlannerContext } from "./journalPlanner";
 import {
-  JOURNAL_GRID_COLS,
-  JournalWeekRow,
-  ROW_HEIGHT,
-} from "./JournalWeekRow";
+  JournalPreviewProvider,
+  type ActivityPreviewPayload,
+  type JournalPreviewHandles,
+} from "./journalPreview";
+import { JournalViewContext, type JournalView } from "./journalView";
+import { JournalWeekView } from "./JournalWeekView";
+import { WeekSummaryPreviewHost } from "./JournalWeekRow";
 import {
   PlannedTrainingDialog,
   type PlannerDialogState,
 } from "./PlannedTrainingDialog";
-import { useJournalWeeks } from "./useJournalWeeks";
+import { useJournalWeeks, type JournalWeek } from "./useJournalWeeks";
 
-const VIRTUALIZER_OVERSCAN = 6;
-const SKELETON_ROW_COUNT = 8;
+const VIEW_OPTIONS: { value: JournalView; label: string }[] = [
+  { value: "month", label: "Month" },
+  { value: "week", label: "Week" },
+];
 
-// Monday → Sunday short labels, derived once via a known Monday (1 Jan 2024).
-const DAY_NAMES = Array.from({ length: 7 }, (_, i) =>
-  format(addDays(new Date(2024, 0, 1), i), "EEE", { locale: enGB }),
-);
+/** URL date key (yyyy-MM-dd) for a week's Monday, stored in `?week=`. */
+function weekParamOf(weekStart: Date): string {
+  return format(weekStart, "yyyy-MM-dd");
+}
 
-function HeaderCell({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "border-border flex items-center px-2 py-2 not-first:border-l",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
+/** Build the journal location `/journal/<view>` (+ `?week=`), used for routing. */
+function journalHref(view: JournalView, weekParam: string | null): string {
+  return weekParam ? `/journal/${view}?week=${weekParam}` : `/journal/${view}`;
 }
 
 export function Journal() {
-  const { data: activities, isLoading, isError } = useActivitiesQuery();
+  const { data: activities, isError } = useActivitiesQuery();
   const { data: plannedTrainings } = usePlannedTrainings();
   const { timeline } = useRiderSettingsTimeline();
   const records = usePersonalRecords();
-  const scrollRef = React.useRef<HTMLDivElement>(null);
 
   const loadPreferences = React.useMemo(
     () => getLoadPreferences(timeline),
@@ -82,8 +81,82 @@ export function Journal() {
     plannedTrainings,
   );
 
-  // Planner dialog state, exposed to day cells via context so the memoized week
-  // rows aren't broken by prop-drilling.
+  // View and current week live in the URL (`/journal/<view>?week=<yyyy-MM-dd>`)
+  // so that returning from an activity restores the same view, and the right
+  // scroll (month) / page (week). Both are read here and written on change.
+  const router = useRouter();
+  const viewParam = Array.isArray(router.query.view)
+    ? router.query.view[0]
+    : router.query.view;
+  const view: JournalView = viewParam === "week" ? "week" : "month";
+  const weekParam =
+    typeof router.query.week === "string" ? router.query.week : null;
+  const urlAnchor = React.useMemo(
+    () => (weekParam ? startOf(new Date(`${weekParam}T00:00:00`), "week") : null),
+    [weekParam],
+  );
+
+  // Calendar-subscription dialog, opened from the overflow menu.
+  const [subscribeOpen, setSubscribeOpen] = React.useState(false);
+  // Bumped to ask the month view to (re)scroll to the anchor week — e.g. "Today".
+  const [scrollNonce, setScrollNonce] = React.useState(0);
+
+  // The anchor week: the URL's `?week=` if present, else the latest week with an
+  // activity or plan. It's the week the week view renders and the month view
+  // scrolls to.
+  const seededAnchor = React.useMemo(() => {
+    if (weeks.length === 0) {
+      return null;
+    }
+    const index = weeks.findIndex(
+      (week) =>
+        week.activities.length > 0 ||
+        week.days.some((day) => day.plannedTrainings.length > 0),
+    );
+    return weeks[index > 0 ? index : 0].weekStart;
+  }, [weeks]);
+  const effectiveAnchor = urlAnchor ?? seededAnchor;
+
+  // Update the URL (shallow, no scroll reset) when the view or week changes.
+  // `useValueAsRef` keeps these in sync with the latest render so `navigate`
+  // stays stable — otherwise the month view's scroll-reporting effect would
+  // re-fire and spam navigations every render.
+  const routerRef = useValueAsRef(router);
+  const weekParamRef = useValueAsRef(weekParam);
+  const navigate = React.useCallback(
+    (nextView: JournalView, weekStart: Date | null) => {
+      const nextWeekParam = weekStart
+        ? weekParamOf(weekStart)
+        : weekParamRef.current;
+      void routerRef.current.replace(
+        journalHref(nextView, nextWeekParam),
+        undefined,
+        { shallow: true, scroll: false },
+      );
+    },
+    [routerRef, weekParamRef],
+  );
+
+  const setView = (nextView: JournalView) => navigate(nextView, effectiveAnchor);
+  const onVisibleWeekChange = React.useCallback(
+    (weekStart: Date) => navigate("month", weekStart),
+    [navigate],
+  );
+  const onSelectWeek = React.useCallback(
+    (weekStart: Date) => navigate("week", weekStart),
+    [navigate],
+  );
+
+  // The two hover cards shared across every activity chip and week summary —
+  // created once so a busy calendar mounts cheap detached triggers instead of a
+  // card instance per chip/row (see {@link JournalPreviewHandles}).
+  const [previewHandles] = React.useState<JournalPreviewHandles>(() => ({
+    activity: PreviewCard.createHandle<ActivityPreviewPayload>(),
+    summary: PreviewCard.createHandle<JournalWeek>(),
+  }));
+
+  // Planner dialog state, exposed to the day cells / event blocks via context so
+  // the memoized week rows aren't broken by prop-drilling.
   const [dialogState, setDialogState] =
     React.useState<PlannerDialogState>(null);
   const onCreatePlanned = React.useCallback(
@@ -101,199 +174,137 @@ export function Journal() {
   );
 
   // Today's Form (TSB) and its zone, for the header readout.
-  const formZone =
-    currentForm != null ? classifyForm(currentForm.tsb) : null;
+  const formZone = currentForm != null ? classifyForm(currentForm.tsb) : null;
 
-  const rowVirtualizer = useVirtualizer({
-    count: weeks.length,
-    estimateSize: () => ROW_HEIGHT,
-    getScrollElement: () => scrollRef.current,
-    overscan: VIRTUALIZER_OVERSCAN,
-  });
-
-  // Month and year of the topmost visible week, shown in the (otherwise static)
-  // header cell — they update as you scroll, à la Strava.
-  const topIndex = Math.min(
-    weeks.length - 1,
-    Math.max(0, Math.floor((rowVirtualizer.scrollOffset ?? 0) / ROW_HEIGHT)),
-  );
-  const visibleWeekStart = weeks[topIndex]?.weekStart ?? new Date();
-  const visibleMonth = format(visibleWeekStart, "MMM", { locale: enGB });
-  const visibleYear = visibleWeekStart.getFullYear();
-
-  // Every month spanned by the timeline, newest first, grouped by year — the
-  // contents of the corner month picker.
-  const monthGroups = React.useMemo(() => {
-    if (weeks.length === 0) {
-      return [];
+  // Resolve the week the week view renders (the anchor week, or the newest week
+  // when no anchor matches the loaded range).
+  const anchorIndex =
+    effectiveAnchor != null
+      ? weeks.findIndex(
+          (week) => week.weekStart.getTime() === effectiveAnchor.getTime(),
+        )
+      : -1;
+  const weekIndex = anchorIndex >= 0 ? anchorIndex : 0;
+  const activeWeek = weeks[weekIndex] ?? null;
+  // Jump both views to the current week (the week view re-renders it; the month
+  // view scrolls to it via the bumped nonce).
+  const goToToday = () => {
+    const todayWeek = startOf(new Date(), "week").getTime();
+    const match = weeks.find((week) => week.weekStart.getTime() === todayWeek);
+    if (match != null) {
+      navigate(view, match.weekStart);
+      setScrollNonce((nonce) => nonce + 1);
     }
-    const newest = startOfMonth(weeks[0].weekStart);
-    const oldest = startOfMonth(weeks[weeks.length - 1].weekStart);
-    const groups: { year: number; months: Date[] }[] = [];
-    for (
-      let cursor = newest;
-      cursor.getTime() >= oldest.getTime();
-      cursor = addMonths(cursor, -1)
-    ) {
-      const year = cursor.getFullYear();
-      const last = groups[groups.length - 1];
-      if (last?.year === year) {
-        last.months.push(cursor);
-      } else {
-        groups.push({ year, months: [cursor] });
-      }
-    }
-    return groups;
-  }, [weeks]);
-
-  // Jump to the last week of the chosen month (clamped to the newest week for
-  // the current/future month, whose final week may not exist yet).
-  const scrollToMonth = (month: Date) => {
-    const targetWeekStart = startOf(endOfMonth(month), "week").getTime();
-    const index = weeks.findIndex(
-      (week) => week.weekStart.getTime() <= targetWeekStart,
-    );
-    rowVirtualizer.scrollToIndex(index < 0 ? weeks.length - 1 : index, {
-      align: "start",
-    });
   };
 
   return (
+    <JournalPreviewProvider value={previewHandles}>
     <JournalPlannerContext.Provider value={plannerValue}>
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="text-muted-foreground border-border flex items-center justify-between gap-3 border-b px-3 py-1.5 text-[11px]">
-        {formZone != null && currentForm != null ? (
-          <span
-            className="flex items-center gap-1.5 font-medium"
-            title={`Today's Form (TSB): ${currentForm.tsb > 0 ? "+" : ""}${Math.round(currentForm.tsb)} — ${formZone.label}`}
-          >
-            <span className="uppercase">Form</span>
-            <span
-              className="inline-flex items-center gap-1 rounded px-1.5 py-px tabular-nums"
-              style={{
-                color: formZone.color,
-                backgroundColor: `${formZone.color}22`,
-              }}
-            >
-              {currentForm.tsb > 0 ? "+" : ""}
-              {Math.round(currentForm.tsb)}
-              <span className="not-italic">· {formZone.label}</span>
-            </span>
-          </span>
-        ) : (
-          <span />
-        )}
-        <span className="flex items-center gap-3">
-          <CalendarFeedButton />
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => onCreatePlanned(new Date())}
-          >
-            <PlusIcon />
-            Plan
-          </Button>
-        </span>
-      </div>
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
-        <JournalRecordsContext.Provider value={records}>
-        <div className="min-w-150 md:min-w-194" role="grid">
-          <div
-            role="row"
-            className={cn(
-              "bg-accent text-muted-foreground sticky top-0 z-10 grid text-xs uppercase",
-              JOURNAL_GRID_COLS,
-            )}
-          >
+      <JournalRecordsContext.Provider value={records}>
+       <JournalViewContext.Provider value={view}>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="text-muted-foreground border-border flex items-center justify-between gap-3 border-b px-3 py-1.5 text-[11px]">
+            <div className="flex min-w-0 items-center gap-3">
+              {formZone != null && currentForm != null ? (
+                <span
+                  className="flex items-center gap-1.5 font-medium"
+                  title={`Today's Form (TSB): ${currentForm.tsb > 0 ? "+" : ""}${Math.round(currentForm.tsb)} — ${formZone.label}`}
+                >
+                  <span className="uppercase">Form</span>
+                  <span
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-px tabular-nums"
+                    style={{
+                      color: formZone.color,
+                      backgroundColor: `${formZone.color}22`,
+                    }}
+                  >
+                    {currentForm.tsb > 0 ? "+" : ""}
+                    {Math.round(currentForm.tsb)}
+                    <span className="not-italic">· {formZone.label}</span>
+                  </span>
+                </span>
+              ) : null}
+
+            </div>
+
             <DropdownMenu>
               <DropdownMenuTrigger
-                title="Jump to month"
-                className="border-border hover:bg-background/60 flex cursor-pointer flex-col items-start justify-center gap-0.5 px-2 py-2 leading-none tabular-nums uppercase outline-none transition-colors"
-              >
-                <span className="text-foreground flex items-center gap-1 font-semibold">
-                  {visibleMonth}
-                  <ChevronDownIcon className="size-3" />
-                </span>
-                <span>{visibleYear}</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="max-h-80 w-40 normal-case"
-              >
-                {monthGroups.map((group) => (
-                  <DropdownMenuGroup key={group.year}>
-                    <DropdownMenuLabel>{group.year}</DropdownMenuLabel>
-                    {group.months.map((month) => (
-                      <DropdownMenuItem
-                        key={month.toISOString()}
-                        onClick={() => scrollToMonth(month)}
-                      >
-                        {format(month, "MMMM", { locale: enGB })}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuGroup>
-                ))}
+                render={
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Journal options"
+                  >
+                    <EllipsisIcon />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuRadioGroup
+                  value={view}
+                  onValueChange={(value) => setView(value as JournalView)}
+                >
+                  <DropdownMenuLabel>View</DropdownMenuLabel>
+                  {VIEW_OPTIONS.map((option) => (
+                    <DropdownMenuRadioItem
+                      key={option.value}
+                      value={option.value}
+                      closeOnClick
+                    >
+                      {option.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem closeOnClick onClick={goToToday}>
+                  <CalendarCheckIcon />
+                  Navigate to today
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onCreatePlanned(new Date())}>
+                  <PlusIcon />
+                  Plan a training
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSubscribeOpen(true)}>
+                  <CalendarPlusIcon />
+                  Subscribe
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            {DAY_NAMES.map((name) => (
-              <HeaderCell key={name}>{name}</HeaderCell>
-            ))}
-            <HeaderCell className="bg-accent sticky right-0 z-20">
-              Summary
-            </HeaderCell>
           </div>
 
-          {isError ? (
-            <div className="text-muted-foreground p-8 text-center text-sm">
-              Couldn&apos;t load your activities. Please try again.
-            </div>
-          ) : isLoading ? (
-            <div>
-              {Array.from({ length: SKELETON_ROW_COUNT }).map((_, index) => (
-                <div
-                  key={index}
-                  className="border-border border-b"
-                  style={{ height: ROW_HEIGHT }}
-                >
-                  <div className="bg-border mx-3 mt-3 h-4 w-40 animate-pulse rounded" />
-                </div>
-              ))}
-            </div>
-          ) : weeks.length === 0 ? (
-            <div className="text-muted-foreground p-8 text-center text-sm">
-              No activities yet.
-            </div>
+          {view === "week" && activeWeek != null ? (
+            <JournalWeekView
+              week={activeWeek}
+              weeks={weeks}
+              onSelectWeek={onSelectWeek}
+            />
           ) : (
-            <div
-              className="relative"
-              style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
-            >
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const week = weeks[virtualRow.index];
-                return (
-                  <JournalWeekRow
-                    key={week.weekStart.toISOString()}
-                    week={week}
-                    dayLoadScale={dayLoadScale}
-                    style={{
-                      top: 0,
-                      left: 0,
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  />
-                );
-              })}
-            </div>
+            <JournalMonthView
+              weeks={weeks}
+              dayLoadScale={dayLoadScale}
+              isError={isError}
+              anchorWeekStart={effectiveAnchor}
+              scrollNonce={scrollNonce}
+              onVisibleWeekChange={onVisibleWeekChange}
+            />
           )}
+
+          {/* Shared hover cards: one popup each for all chips / week summaries. */}
+          <ActivityPreviewHost handle={previewHandles.activity} />
+          <WeekSummaryPreviewHost handle={previewHandles.summary} />
+
+          <PlannedTrainingDialog
+            state={dialogState}
+            onClose={() => setDialogState(null)}
+          />
+          <CalendarFeedDialog
+            open={subscribeOpen}
+            onOpenChange={setSubscribeOpen}
+          />
         </div>
-        </JournalRecordsContext.Provider>
-      </div>
-      <PlannedTrainingDialog
-        state={dialogState}
-        onClose={() => setDialogState(null)}
-      />
-    </div>
+       </JournalViewContext.Provider>
+      </JournalRecordsContext.Provider>
     </JournalPlannerContext.Provider>
+    </JournalPreviewProvider>
   );
 }

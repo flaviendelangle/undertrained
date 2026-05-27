@@ -29,6 +29,7 @@ import {
   formatCompact,
   useChartTokens,
 } from "~/lib/chartTokens";
+import { formatCompactDuration } from "~/utils/format";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
 import { METRICS, type MetricContext, MetricSelect } from "../../MetricSelect";
@@ -39,14 +40,6 @@ import { SportFilterPopover, SportTypeFilter } from "../SportTypeFilter";
 const MONTH_LABELS = Array.from({ length: 12 }, (_, i) =>
   format(new Date(2024, i, 1), "MMMM", { locale: enGB }),
 );
-
-/** Format a duration given in hours as e.g. "8h30" (rounded to the minute). */
-function formatHoursMinutes(hours: number): string {
-  const totalMinutes = Math.round(hours * 60);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  return `${h}h${String(m).padStart(2, "0")}`;
-}
 
 export default function ActivitiesCumulativeTimeline() {
   const [metric, setMetric] = React.useState("distance");
@@ -83,7 +76,7 @@ export default function ActivitiesCumulativeTimeline() {
         return "";
       }
       if (metricConfig?.unit === "h") {
-        return formatHoursMinutes(value);
+        return formatCompactDuration(Math.round(value * 60) * 60);
       }
       const formatted = Math.round(value).toLocaleString();
       return metricConfig?.unit

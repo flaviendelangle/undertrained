@@ -90,6 +90,19 @@ export const rateLimited = t.middleware(async ({ ctx, next }) => {
   return next();
 });
 
+/**
+ * Looser rate limit for the route-builder's live preview, which fires (debounced)
+ * on every waypoint edit. Sized to stay under OpenRouteService's free tier
+ * (~40 req/min) while still feeling responsive while drawing.
+ */
+export const routePreviewRateLimited = t.middleware(async ({ ctx, next }) => {
+  const rateLimitKey = ctx.session?.athleteId
+    ? String(ctx.session.athleteId)
+    : `ip:${ctx.ip}`;
+  rateLimit(`route-preview:${rateLimitKey}`, 40, 60_000);
+  return next();
+});
+
 export async function resolveTimePeriod(
   db: Database,
   timePeriodId: number | undefined,

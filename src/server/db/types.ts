@@ -6,6 +6,7 @@ import type {
   athletes,
   plannedTrainings,
   riderSettings,
+  routes,
   syncJobs,
 } from "./schema";
 
@@ -31,3 +32,4 @@ export type ActivityStream = InferSelectModel<typeof activityStreams>;
 export type RiderSettingsRow = InferSelectModel<typeof riderSettings>;
 export type SyncJob = InferSelectModel<typeof syncJobs>;
 export type PlannedTraining = InferSelectModel<typeof plannedTrainings>;
+export type Route = InferSelectModel<typeof routes>;

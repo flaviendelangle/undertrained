@@ -6,18 +6,17 @@ import { cn } from "~/lib/utils";
 import { getSportConfig } from "~/utils/sportConfig";
 
 import { useJournalPlanner } from "./journalPlanner";
-
-/** Compact, unambiguous planned duration, e.g. "1h00" or "45min". */
-function formatPlannedDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return hours > 0 ? `${hours}h${String(minutes).padStart(2, "0")}` : `${minutes}min`;
-}
+import {
+  PLANNED_BLOCK_CLASS,
+  PlannedBlockBody,
+  plannedBlockStyle,
+} from "./plannedBlock";
 
 /**
- * A still-planned training in a Journal day cell. Styled as a dashed, muted
- * outline so it reads as "to do", distinct from the solid activity chips.
- * Clicking opens the planner dialog to edit it or mark it done.
+ * A still-planned training in a Journal day cell. Shares its sport-tinted fill +
+ * dashed border with the week view's {@link WeekPlannedBlock} so a plan looks the
+ * same in both views — colourful, yet reading as "to do" rather than a solid,
+ * completed-activity chip. Clicking opens the planner dialog to edit it.
  */
 export function PlannedTrainingChip({
   training,
@@ -26,8 +25,6 @@ export function PlannedTrainingChip({
 }) {
   const planner = useJournalPlanner();
   const config = getSportConfig(training.sportType);
-  const Icon = config.icon;
-  const time = training.plannedDate.slice(11, 16);
 
   return (
     <button
@@ -38,26 +35,24 @@ export function PlannedTrainingChip({
         planner?.onEditPlanned(training);
       }}
       aria-label={`Planned: ${training.title}`}
+      style={plannedBlockStyle(config.color)}
       className={cn(
-        "border-muted-foreground/40 hover:bg-muted/60 flex min-w-0 cursor-pointer flex-col gap-0.5 rounded border border-dashed px-1 py-0.5 text-left leading-tight transition-colors",
+        PLANNED_BLOCK_CLASS,
+        "cursor-pointer transition-[filter] hover:brightness-95 dark:hover:brightness-110",
       )}
     >
-      <span className="flex min-w-0 items-center gap-1">
-        <Icon
-          className="size-3 shrink-0 opacity-70"
-          style={{ color: config.color }}
-        />
-        <span className="text-muted-foreground truncate text-xs font-medium">
-          {training.title}
-        </span>
-        <CalendarClockIcon
-          className="text-muted-foreground/60 size-3 shrink-0"
-          aria-hidden
-        />
-      </span>
-      <span className="text-muted-foreground/80 truncate text-[11px] tabular-nums">
-        {time} · {formatPlannedDuration(training.durationSeconds)}
-      </span>
+      <PlannedBlockBody
+        sportType={training.sportType}
+        title={training.title}
+        time={training.plannedDate.slice(11, 16)}
+        durationSeconds={training.durationSeconds}
+        trailing={
+          <CalendarClockIcon
+            className="text-muted-foreground/60 size-3 shrink-0"
+            aria-hidden
+          />
+        }
+      />
     </button>
   );
 }

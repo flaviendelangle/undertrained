@@ -4,99 +4,97 @@ import { format } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
 import { MedalIcon } from "lucide-react";
 
-import {
-  PreviewCard,
-  PreviewCardContent,
-  PreviewCardTrigger,
-} from "~/components/ui/preview-card";
+import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
+
+import { PreviewCardContent } from "~/components/ui/preview-card";
 import { trpc } from "~/utils/trpc";
 import { formatActivityType, formatHumanDuration } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 import { ActivityPreviewMap } from "./ActivityPreviewMap";
+import type { ActivityPreviewPayload } from "./journalPreview";
 import type { JournalActivity } from "./useJournalWeeks";
 
 const LOCALE_OPTIONS = { locale: enGB };
 
 /**
  * Prefetch the route ahead of the card opening so it's warm on mount. The card
- * itself opens on the library's default 600ms hover delay.
+ * itself opens on the trigger's default 600ms hover delay.
  */
 const PREFETCH_DELAY = 300;
 
 /**
- * Wraps a Journal activity chip so hovering it reveals a preview card with the
- * activity's key stats and a small route map. The route polyline isn't part of
- * the journal data, so it's prefetched on hover (300ms) and the card opens a
- * touch later (600ms) — the map is usually warm by the time it mounts.
+ * The single preview card shared by every Journal activity chip. One popup (and
+ * one floating-ui context) serves all chips through Base UI detached triggers:
+ * each chip is a `PreviewCard.Trigger` carrying its activity as the payload, so
+ * the calendar can mount hundreds of chips without a card instance per chip.
+ * Rendered once by the Journal; the body reads the hovered activity here.
  */
-export function ActivityPreviewCard({
-  activity,
-  records,
-  children,
+export function ActivityPreviewHost({
+  handle,
 }: {
-  activity: JournalActivity;
-  /** All-time record labels this activity holds, badged in the card. */
-  records?: string[];
-  children: React.ReactNode;
+  handle: PreviewCardPrimitive.Handle<ActivityPreviewPayload>;
 }) {
-  const [open, setOpen] = React.useState(false);
+  return (
+    <PreviewCardPrimitive.Root handle={handle}>
+      {({ payload }) =>
+        payload != null ? (
+          <PreviewCardContent align="start">
+            <ActivityPreviewCardBody
+              activity={payload.activity}
+              records={payload.records}
+            />
+          </PreviewCardContent>
+        ) : null
+      }
+    </PreviewCardPrimitive.Root>
+  );
+}
+
+/**
+ * Hover handlers for an activity chip that warm its route map — which isn't part
+ * of the journal data — ahead of the shared card opening: prefetch on a 300ms
+ * hover, while the card opens on the trigger's 600ms delay, so the map is
+ * usually in by the time it mounts.
+ */
+export function useMapPrefetch(stravaId: number) {
   const utils = trpc.useUtils();
   const prefetchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
 
-  const handlePointerEnter = React.useCallback(() => {
+  const onPointerEnter = React.useCallback(() => {
     prefetchTimer.current = setTimeout(() => {
-      void utils.activities.getMapPolyline.prefetch({
-        stravaId: activity.stravaId,
-      });
+      void utils.activities.getMapPolyline.prefetch({ stravaId });
     }, PREFETCH_DELAY);
-  }, [utils, activity.stravaId]);
+  }, [utils, stravaId]);
 
-  const handlePointerLeave = React.useCallback(() => {
+  const onPointerLeave = React.useCallback(() => {
     if (prefetchTimer.current != null) {
       clearTimeout(prefetchTimer.current);
       prefetchTimer.current = null;
     }
   }, []);
 
-  React.useEffect(() => handlePointerLeave, [handlePointerLeave]);
+  React.useEffect(() => onPointerLeave, [onPointerLeave]);
 
-  return (
-    <PreviewCard open={open} onOpenChange={setOpen}>
-      <PreviewCardTrigger
-        render={children as React.ReactElement}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-      />
-      <PreviewCardContent align="start">
-        <ActivityPreviewCardBody
-          activity={activity}
-          records={records}
-          open={open}
-        />
-      </PreviewCardContent>
-    </PreviewCard>
-  );
+  return { onPointerEnter, onPointerLeave };
 }
 
 function ActivityPreviewCardBody({
   activity,
   records,
-  open,
 }: {
   activity: JournalActivity;
   records?: string[];
-  open: boolean;
 }) {
   const config = getSportConfig(activity.type);
   const Icon = config.icon;
 
-  const polylineQuery = trpc.activities.getMapPolyline.useQuery(
-    { stravaId: activity.stravaId },
-    { enabled: open },
-  );
+  // Only mounted while the shared card is open, so the query can always run.
+  const polylineQuery = trpc.activities.getMapPolyline.useQuery({
+    stravaId: activity.stravaId,
+  });
   // Treat an empty polyline as "no route" so we never mount an empty map.
   const mapPolyline = polylineQuery.data?.mapPolyline || null;
   const showMapSlot = polylineQuery.isLoading || mapPolyline != null;

@@ -12,3 +12,11 @@
  */
 export const isLiveTrainingEnabled =
   process.env.NEXT_PUBLIC_LIVE_TRAINING_ENABLED === "true";
+
+/**
+ * The route builder (Strava-style route planning at /routes) is opt-in. It is
+ * hidden unless ROUTES_ENABLED=true was set when the app was built. Kept off on
+ * the VPS, which has no OpenRouteService API key configured.
+ */
+export const isRoutesEnabled =
+  process.env.NEXT_PUBLIC_ROUTES_ENABLED === "true";

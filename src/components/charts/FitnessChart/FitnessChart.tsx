@@ -19,6 +19,7 @@ import { ChartTooltip } from "../ChartTooltip";
 
 const TIME_AXIS_ID = "time";
 const LOAD_AXIS_ID = "load";
+const FORM_AXIS_ID = "form";
 const DEFAULT_ZOOM_DAYS = 90;
 
 export default function FitnessChart() {
@@ -28,6 +29,7 @@ export default function FitnessChart() {
 
   const fitnessColor = tokens.palette[5]; // orange
   const fatigueColor = tokens.axisLabel; // gray
+  const formColor = tokens.palette[3]; // blue
 
   const xData = React.useMemo(() => series.map((p) => p.date), [series]);
 
@@ -58,8 +60,19 @@ export default function FitnessChart() {
         curve: "monotoneX" as const,
         valueFormatter: (v: number | null) => (v == null ? "" : v.toFixed(0)),
       },
+      {
+        id: "tsb",
+        label: "Form",
+        data: series.map((p) => p.tsb),
+        yAxisId: FORM_AXIS_ID,
+        color: formColor,
+        showMark: false,
+        curve: "monotoneX" as const,
+        valueFormatter: (v: number | null) =>
+          v == null ? "" : `${v > 0 ? "+" : ""}${v.toFixed(0)}`,
+      },
     ],
-    [series, fitnessColor, fatigueColor],
+    [series, fitnessColor, fatigueColor, formColor],
   );
 
   // Default the visible window to the most recent ~90 days, warmed up by the
@@ -100,6 +113,9 @@ export default function FitnessChart() {
   // reference line can hide alongside it when toggled off via the legend.
   const [fitnessHidden, setFitnessHidden] = React.useState(false);
 
+  // Track Form (TSB) visibility so its zero baseline hides alongside the series.
+  const [formHidden, setFormHidden] = React.useState(false);
+
   const yAxisWidth = isMobile
     ? AXIS_SIZE.mobile.width
     : AXIS_SIZE.desktop.width;
@@ -131,7 +147,11 @@ export default function FitnessChart() {
                       ? format(value, "MMM yyyy")
                       : format(value, "d MMM yyyy"),
                   tickLabelStyle: { fontSize: 11 },
-                  zoom: { filterMode: "keep", minSpan: minZoomSpan },
+                  zoom: {
+                    filterMode: "keep",
+                    minSpan: minZoomSpan,
+                    slider: { enabled: true },
+                  },
                   height: xAxisHeight,
                 },
               ]}
@@ -143,17 +163,27 @@ export default function FitnessChart() {
                   width: yAxisWidth,
                   valueFormatter: (v: number) => Math.round(v).toString(),
                 },
+                {
+                  id: FORM_AXIS_ID,
+                  position: "right",
+                  width: yAxisWidth,
+                  valueFormatter: (v: number) =>
+                    `${v > 0 ? "+" : ""}${Math.round(v)}`,
+                },
               ]}
               series={seriesConfig}
               margin={CHART_MARGINS.standard}
               grid={{ horizontal: true }}
               slots={{ tooltip: ChartTooltip }}
               slotProps={{ legend: { toggleVisibilityOnClick: true } }}
-              onHiddenItemsChange={(hiddenItems) =>
+              onHiddenItemsChange={(hiddenItems) => {
                 setFitnessHidden(
                   hiddenItems.some((item) => item.seriesId === "ctl"),
-                )
-              }
+                );
+                setFormHidden(
+                  hiddenItems.some((item) => item.seriesId === "tsb"),
+                );
+              }}
             >
               {targetFitness > 0 && !fitnessHidden && (
                 <ChartsReferenceLine
@@ -161,6 +191,17 @@ export default function FitnessChart() {
                   y={targetFitness}
                   lineStyle={{
                     stroke: fitnessColor,
+                    strokeDasharray: "4 4",
+                    strokeOpacity: 0.6,
+                  }}
+                />
+              )}
+              {!formHidden && (
+                <ChartsReferenceLine
+                  axisId={FORM_AXIS_ID}
+                  y={0}
+                  lineStyle={{
+                    stroke: formColor,
                     strokeDasharray: "4 4",
                     strokeOpacity: 0.6,
                   }}

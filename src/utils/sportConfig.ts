@@ -14,10 +14,16 @@ import {
   Waves,
 } from "lucide-react";
 
-import { formatElapsed } from "~/utils/format";
+import { formatElapsed, formatKm } from "~/utils/format";
 
 /** Broad sport category used to drive load-algorithm selection, TSS labels, and settings UI. */
-export type SportCategory = "cycling" | "running" | "swimming" | "other";
+export type SportCategory =
+  | "cycling"
+  | "running"
+  | "swimming"
+  | "strength"
+  | "hiking"
+  | "other";
 
 /** Minimal activity shape needed to build the per-sport Journal stats line. */
 export interface JournalStatsActivity {
@@ -84,7 +90,7 @@ export class SportConfig {
    * @example "42.20 km", "1500 m"
    */
   formatPreciseDistance(meters: number): string {
-    return `${(meters / 1000).toFixed(2)} km`;
+    return formatKm(meters, 2);
   }
 
   /**
@@ -357,6 +363,30 @@ class SwimSportConfig extends SportConfig {
   }
 }
 
+// ── Strength ────────────────────────────────────────────────────
+
+class StrengthSportConfig extends SportConfig {
+  constructor() {
+    super(Dumbbell);
+  }
+
+  override readonly category = "strength" as const;
+  override readonly color = "var(--sport-strength)";
+}
+
+// ── Hiking ──────────────────────────────────────────────────────
+
+class HikingSportConfig extends SportConfig {
+  // Walk and Hike share this category but keep their own chip icons (footprints
+  // vs. mountain), so the icon stays configurable.
+  constructor(icon: LucideIcon = Mountain) {
+    super(icon);
+  }
+
+  override readonly category = "hiking" as const;
+  override readonly color = "var(--sport-hiking)";
+}
+
 // ── Config map ──────────────────────────────────────────────────
 
 const SPORT_CONFIGS: Record<string, SportConfig> = {
@@ -364,10 +394,10 @@ const SPORT_CONFIGS: Record<string, SportConfig> = {
   VirtualRide: new CyclingSportConfig(Bike),
   Run: new RunSportConfig(),
   VirtualRun: new RunSportConfig(),
-  Walk: new SportConfig(Footprints),
+  Walk: new HikingSportConfig(Footprints),
   Swim: new SwimSportConfig(),
-  Hike: new SportConfig(Mountain),
-  WeightTraining: new SportConfig(Dumbbell),
+  Hike: new HikingSportConfig(Mountain),
+  WeightTraining: new StrengthSportConfig(),
   NordicSki: new SportConfig(Snowflake),
   AlpineSki: new SportConfig(Snowflake),
   BackcountrySki: new SportConfig(Snowflake),
@@ -387,6 +417,8 @@ export const SPORT_CATEGORY_META: Record<
   cycling: { label: "Cycling", color: "var(--sport-cycling)", icon: Bike },
   running: { label: "Running", color: "var(--sport-running)", icon: Footprints },
   swimming: { label: "Swimming", color: "var(--sport-swimming)", icon: Waves },
+  strength: { label: "Strength", color: "var(--sport-strength)", icon: Dumbbell },
+  hiking: { label: "Hiking", color: "var(--sport-hiking)", icon: Mountain },
   other: { label: "Other", color: "var(--sport-other)", icon: Activity },
 };
 
