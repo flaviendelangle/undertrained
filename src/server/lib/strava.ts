@@ -148,7 +148,13 @@ export function workoutTypeForSport(sportType: string): number | undefined {
 export async function updateActivityOnStrava(
   accessToken: string,
   stravaId: number,
-  fields: { name?: string; workout_type?: number },
+  fields: {
+    name?: string;
+    description?: string;
+    sport_type?: string;
+    workout_type?: number;
+    commute?: boolean;
+  },
 ): Promise<void> {
   const response = await fetch(
     `https://www.strava.com/api/v3/activities/${stravaId}`,
@@ -220,9 +226,7 @@ export function getActivityDetailFields(detailed: DetailedActivity) {
   };
 }
 
-export function normalizeStreams(
-  streams: unknown,
-): {
+export function normalizeStreams(streams: unknown): {
   type: string;
   seriesType: string;
   originalSize: number;

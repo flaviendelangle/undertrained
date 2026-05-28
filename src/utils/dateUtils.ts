@@ -17,11 +17,11 @@ import {
   startOfWeek,
   startOfYear,
 } from "date-fns";
-import { enGB } from "date-fns/locale/en-GB";
-
 import { SlicePrecision } from "~/hooks/useTimeSlices";
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 
-const LOCALE_OPTIONS = { locale: enGB };
+/** Resolves the user's active `date-fns` locale at call time. */
+const localeOptions = () => ({ locale: getActiveDateLocale() });
 
 export function startOf(date: Date, precision: SlicePrecision): Date {
   switch (precision) {
@@ -32,7 +32,7 @@ export function startOf(date: Date, precision: SlicePrecision): Date {
     case "month":
       return startOfMonth(date);
     case "week":
-      return startOfWeek(date, LOCALE_OPTIONS);
+      return startOfWeek(date, localeOptions());
   }
 }
 
@@ -45,7 +45,7 @@ export function endOf(date: Date, precision: SlicePrecision): Date {
     case "month":
       return endOfMonth(date);
     case "week":
-      return endOfWeek(date, LOCALE_OPTIONS);
+      return endOfWeek(date, localeOptions());
   }
 }
 
@@ -74,17 +74,17 @@ export function addUnit(
 export function formatSlice(date: Date, precision: SlicePrecision): string {
   switch (precision) {
     case "year":
-      return format(date, "yyyy", LOCALE_OPTIONS);
+      return format(date, "yyyy", localeOptions());
     case "quarter":
-      return format(date, "QQQ yyyy", LOCALE_OPTIONS);
+      return format(date, "QQQ yyyy", localeOptions());
     case "month":
-      return format(date, "MMM yyyy", LOCALE_OPTIONS);
+      return format(date, "MMM yyyy", localeOptions());
     case "week":
       // e.g. "W1 2025" — week number plus its week-numbering year (`Y`, not
       // `yyyy`), so a week straddling the new year keeps the year that matches
       // its week number rather than the calendar year of its start day.
       return format(date, "'W'w Y", {
-        ...LOCALE_OPTIONS,
+        ...localeOptions(),
         useAdditionalWeekYearTokens: true,
       });
   }
@@ -103,6 +103,6 @@ export function isSameUnit(
     case "month":
       return isSameMonth(a, b);
     case "week":
-      return isSameWeek(a, b, LOCALE_OPTIONS);
+      return isSameWeek(a, b, localeOptions());
   }
 }

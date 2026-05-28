@@ -11,6 +11,9 @@ import {
 import { ChartCard } from "~/components/ui/chart-card";
 import { useFitnessData } from "~/hooks/useFitnessData";
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
+import { formZoneLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { classifyForm } from "~/lib/fitness";
 
@@ -23,6 +26,7 @@ const FORM_AXIS_ID = "form";
 const DEFAULT_ZOOM_DAYS = 90;
 
 export default function FitnessChart() {
+  const t = useT();
   const { series, current, isLoading } = useFitnessData();
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
@@ -42,7 +46,7 @@ export default function FitnessChart() {
     () => [
       {
         id: "ctl",
-        label: "Fitness",
+        label: t("charts.fitness.series.fitness"),
         data: series.map((p) => p.ctl),
         yAxisId: LOAD_AXIS_ID,
         color: fitnessColor,
@@ -52,7 +56,7 @@ export default function FitnessChart() {
       },
       {
         id: "atl",
-        label: "Fatigue",
+        label: t("charts.fitness.series.fatigue"),
         data: series.map((p) => p.atl),
         yAxisId: LOAD_AXIS_ID,
         color: fatigueColor,
@@ -62,7 +66,7 @@ export default function FitnessChart() {
       },
       {
         id: "tsb",
-        label: "Form",
+        label: t("charts.fitness.series.form"),
         data: series.map((p) => p.tsb),
         yAxisId: FORM_AXIS_ID,
         color: formColor,
@@ -72,7 +76,7 @@ export default function FitnessChart() {
           v == null ? "" : `${v > 0 ? "+" : ""}${v.toFixed(0)}`,
       },
     ],
-    [series, fitnessColor, fatigueColor, formColor],
+    [series, fitnessColor, fatigueColor, formColor, t],
   );
 
   // Default the visible window to the most recent ~90 days, warmed up by the
@@ -126,7 +130,7 @@ export default function FitnessChart() {
 
   return (
     <ChartThemeProvider>
-      <ChartCard title="Fitness" bodyClassName="flex">
+      <ChartCard title={t("charts.fitness.title")} bodyClassName="flex">
         <div className="min-h-0 flex-1">
           {series.length === 0 ? (
             <EmptyState isLoading={isLoading} />
@@ -144,8 +148,10 @@ export default function FitnessChart() {
                   tickInterval: (value: Date) => value.getDate() === 1,
                   valueFormatter: (value: Date, ctx) =>
                     ctx?.location === "tick"
-                      ? format(value, "MMM yyyy")
-                      : format(value, "d MMM yyyy"),
+                      ? format(value, "MMM yyyy", { locale: getActiveDateLocale() })
+                      : format(value, "d MMM yyyy", {
+                          locale: getActiveDateLocale(),
+                        }),
                   tickLabelStyle: { fontSize: 11 },
                   zoom: {
                     filterMode: "keep",
@@ -243,21 +249,24 @@ function Readout({
   fitnessColor: string;
   fatigueColor: string;
 }) {
+  const t = useT();
   const zone = classifyForm(current.tsb);
   return (
     <div className="hidden w-36 shrink-0 flex-col justify-center gap-4 border-l px-4 sm:flex">
       <Stat
-        label="Fitness"
+        label={t("charts.fitness.series.fitness")}
         value={Math.round(current.ctl)}
         color={fitnessColor}
       />
       <Stat
-        label="Fatigue"
+        label={t("charts.fitness.series.fatigue")}
         value={Math.round(current.atl)}
         color={fatigueColor}
       />
       <div className="flex flex-col gap-0.5">
-        <span className="text-muted-foreground text-xs">Form</span>
+        <span className="text-muted-foreground text-xs">
+          {t("charts.fitness.series.form")}
+        </span>
         <span className="text-2xl font-semibold" style={{ color: zone.color }}>
           {current.tsb > 0 ? "+" : ""}
           {Math.round(current.tsb)}
@@ -266,7 +275,7 @@ function Readout({
           className="text-[10px] leading-tight"
           style={{ color: zone.color }}
         >
-          {zone.label}
+          {formZoneLabel(zone.key, t)}
         </span>
       </div>
     </div>
@@ -296,11 +305,10 @@ function Stat({
 }
 
 function EmptyState({ isLoading }: { isLoading: boolean }) {
+  const t = useT();
   return (
     <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-      {isLoading
-        ? "Loading…"
-        : "No training load yet. Configure your rider settings to see fitness data."}
+      {isLoading ? t("common.loading") : t("charts.fitness.empty")}
     </div>
   );
 }

@@ -21,6 +21,8 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useRiderSettings } from "~/hooks/useRiderSettings";
+import { type AppMessageKey, type TFunction } from "~/i18n/I18nProvider";
+import { useT } from "~/i18n/useT";
 import {
   HR_ZONES,
   POWER_ZONES,
@@ -37,21 +39,34 @@ type ReferenceType = "marathon" | "half-marathon" | "10k" | "5k" | "vma";
 
 const RACE_DISTANCES: Record<
   Exclude<ReferenceType, "vma">,
-  { label: string; meters: number }
+  { meters: number }
 > = {
-  marathon: { label: "Marathon", meters: 42195 },
-  "half-marathon": { label: "Half Marathon", meters: 21097.5 },
-  "10k": { label: "10K", meters: 10000 },
-  "5k": { label: "5K", meters: 5000 },
+  marathon: { meters: 42195 },
+  "half-marathon": { meters: 21097.5 },
+  "10k": { meters: 10000 },
+  "5k": { meters: 5000 },
 };
 
-const REFERENCE_OPTIONS: { id: ReferenceType; label: string }[] = [
-  { id: "marathon", label: "Marathon" },
-  { id: "half-marathon", label: "Half Marathon" },
-  { id: "10k", label: "10K" },
-  { id: "5k", label: "5K" },
-  { id: "vma", label: "VMA" },
+const REFERENCE_LABEL_KEYS: Record<ReferenceType, AppMessageKey> = {
+  marathon: "toolbox.distance.marathon",
+  "half-marathon": "toolbox.distance.halfMarathon",
+  "10k": "toolbox.distance.10kUpper",
+  "5k": "toolbox.distance.5kUpper",
+  vma: "toolbox.zone.vma",
+};
+
+const REFERENCE_ORDER: ReferenceType[] = [
+  "marathon",
+  "half-marathon",
+  "10k",
+  "5k",
+  "vma",
 ];
+
+const createReferenceOptions = (
+  t: TFunction,
+): { id: ReferenceType; label: string }[] =>
+  REFERENCE_ORDER.map((id) => ({ id, label: t(REFERENCE_LABEL_KEYS[id]) }));
 
 // --- Jack Daniels VDOT formulas live in ~/sensors/types (shared with lap zones) ---
 
@@ -186,21 +201,27 @@ function ZoneCalculatorAnonymous() {
 }
 
 function RaceRefInputFields({
+  t,
   label,
   value,
   onChange,
   allowVma,
   onRemove,
 }: {
+  t: TFunction;
   label: string;
   value: RaceRef;
   onChange: (v: RaceRef) => void;
   allowVma: boolean;
   onRemove?: () => void;
 }) {
+  const referenceOptions = React.useMemo(
+    () => createReferenceOptions(t),
+    [t],
+  );
   const options = allowVma
-    ? REFERENCE_OPTIONS
-    : REFERENCE_OPTIONS.filter((o) => o.id !== "vma");
+    ? referenceOptions
+    : referenceOptions.filter((o) => o.id !== "vma");
 
   return (
     <div className="flex flex-col gap-3">
@@ -231,7 +252,7 @@ function RaceRefInputFields({
       {value.type === "vma" ? (
         <div>
           <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-            VMA
+            {t("toolbox.zone.vma")}
           </label>
           <div className="flex items-center gap-1.5">
             <NumberField
@@ -248,7 +269,7 @@ function RaceRefInputFields({
       ) : (
         <div>
           <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-            Finish time
+            {t("toolbox.finishTime")}
           </label>
           <div className="flex items-center gap-1.5">
             <NumberField
@@ -316,6 +337,7 @@ function ZoneCalculatorInner({
   ref2: RaceRef;
   setRef2: (v: RaceRef) => void;
 }) {
+  const t = useT();
   const vdot1 = React.useMemo(() => getVdotFromRef(ref1), [ref1]);
   const vdot2 = React.useMemo(
     () => (useSecondRef ? getVdotFromRef(ref2) : null),
@@ -339,21 +361,21 @@ function ZoneCalculatorInner({
             size="sm"
             onClick={() => setTab("heart-rate")}
           >
-            Heart Rate Zones
+            {t("toolbox.zone.heartRateTab")}
           </Button>
           <Button
             variant={tab === "power" ? "default" : "outline"}
             size="sm"
             onClick={() => setTab("power")}
           >
-            Cycling Power Zones
+            {t("toolbox.zone.powerTab")}
           </Button>
           <Button
             variant={tab === "running-pace" ? "default" : "outline"}
             size="sm"
             onClick={() => setTab("running-pace")}
           >
-            Running Pace Zones
+            {t("toolbox.zone.runningPaceTab")}
           </Button>
         </div>
 
@@ -376,7 +398,7 @@ function ZoneCalculatorInner({
             </div>
             <div>
               <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-                Weight (optional)
+                {t("toolbox.zone.weightOptional")}
               </label>
               <div className="flex items-center gap-1.5">
                 <NumberField
@@ -396,7 +418,7 @@ function ZoneCalculatorInner({
           <div className="flex flex-wrap items-end gap-4">
             <div>
               <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-                Max Heart Rate
+                {t("toolbox.zone.maxHeartRate")}
               </label>
               <div className="flex items-center gap-1.5">
                 <NumberField
@@ -411,7 +433,7 @@ function ZoneCalculatorInner({
             </div>
             <div>
               <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-                Resting Heart Rate
+                {t("toolbox.zone.restingHeartRate")}
               </label>
               <div className="flex items-center gap-1.5">
                 <NumberField
@@ -430,7 +452,8 @@ function ZoneCalculatorInner({
         {tab === "running-pace" && (
           <div className="flex flex-col gap-6">
             <RaceRefInputFields
-              label="Reference 1"
+              t={t}
+              label={t("toolbox.zone.reference1")}
               value={ref1}
               onChange={setRef1}
               allowVma
@@ -439,7 +462,8 @@ function ZoneCalculatorInner({
             {useSecondRef ? (
               <div className="border-border border-t pt-6">
                 <RaceRefInputFields
-                  label="Reference 2"
+                  t={t}
+                  label={t("toolbox.zone.reference2")}
                   value={ref2}
                   onChange={setRef2}
                   allowVma={false}
@@ -452,7 +476,7 @@ function ZoneCalculatorInner({
                 onClick={() => setUseSecondRef(true)}
               >
                 <PlusIcon className="size-3.5" />
-                Add a second reference for more accuracy
+                {t("toolbox.zone.addSecondReference")}
               </button>
             )}
 
@@ -471,8 +495,7 @@ function ZoneCalculatorInner({
                         }
                       />
                       <TooltipContent side="top" className="max-w-64">
-                        A fitness score from the Jack Daniels formula. It
-                        estimates your VO2max adjusted for running economy.
+                        {t("toolbox.zone.vdotTooltip")}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -483,7 +506,10 @@ function ZoneCalculatorInner({
                   {vdot2 != null && vdot1 != null && (
                     <span>
                       {" "}
-                      (average of {vdot1.toFixed(1)} and {vdot2.toFixed(1)})
+                      {t("toolbox.zone.vdotAverage", {
+                        v1: vdot1.toFixed(1),
+                        v2: vdot2.toFixed(1),
+                      })}
                     </span>
                   )}
                 </div>
@@ -514,24 +540,25 @@ function PowerZonesTable({
   ftp: number;
   weightKg: number | null;
 }) {
+  const t = useT();
   const showWkg = weightKg != null && weightKg > 0;
 
   return (
     <div className="md:border-border md:bg-card md:rounded-sm md:border">
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
         <h2 className="text-foreground text-lg font-semibold">
-          Power Zones (Coggan)
+          {t("toolbox.zone.powerTitle")}
         </h2>
         <p className="text-muted-foreground text-sm">
-          Based on FTP of {ftp}W
+          {t("toolbox.zone.basedOnFtp", { ftp })}
           {showWkg && <> — {(ftp / weightKg).toFixed(2)} W/kg</>}
         </p>
       </div>
       <ToolboxTable>
         <ToolboxTableHeader>
           <ToolboxTableHeaderRow>
-            <ToolboxTableHead first>Zone</ToolboxTableHead>
-            <ToolboxTableHead>Name</ToolboxTableHead>
+            <ToolboxTableHead first>{t("toolbox.zone.zone")}</ToolboxTableHead>
+            <ToolboxTableHead>{t("toolbox.zone.name")}</ToolboxTableHead>
             <ToolboxTableHead>% FTP</ToolboxTableHead>
             <ToolboxTableHead>Watts</ToolboxTableHead>
             {showWkg && <ToolboxTableHead>W/kg</ToolboxTableHead>}
@@ -591,6 +618,7 @@ function HrZonesTable({
   maxHr: number;
   restingHr: number;
 }) {
+  const t = useT();
   // Karvonen formula: target HR = resting + (max - resting) * intensity%
   const hrReserve = maxHr - restingHr;
 
@@ -598,19 +626,20 @@ function HrZonesTable({
     <div className="md:border-border md:bg-card md:rounded-sm md:border">
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
         <h2 className="text-foreground text-lg font-semibold">
-          Heart Rate Zones (Karvonen)
+          {t("toolbox.zone.hrTitle")}
         </h2>
         <p className="text-muted-foreground text-sm">
-          Based on max HR of {maxHr} bpm
-          {restingHr > 0 && <> and resting HR of {restingHr} bpm</>}
-          {" — "}HR reserve: {hrReserve} bpm
+          {t("toolbox.zone.basedOnMaxHr", { maxHr })}
+          {restingHr > 0 && <> {t("toolbox.zone.andRestingHr", { restingHr })}</>}
+          {" — "}
+          {t("toolbox.zone.hrReserve", { hrReserve })}
         </p>
       </div>
       <ToolboxTable>
         <ToolboxTableHeader>
           <ToolboxTableHeaderRow>
-            <ToolboxTableHead first>Zone</ToolboxTableHead>
-            <ToolboxTableHead>Name</ToolboxTableHead>
+            <ToolboxTableHead first>{t("toolbox.zone.zone")}</ToolboxTableHead>
+            <ToolboxTableHead>{t("toolbox.zone.name")}</ToolboxTableHead>
             <ToolboxTableHead>% HRR</ToolboxTableHead>
             <ToolboxTableHead>BPM</ToolboxTableHead>
           </ToolboxTableHeaderRow>
@@ -650,24 +679,25 @@ function HrZonesTable({
 }
 
 function RunningPaceZonesTable({ vdot }: { vdot: number }) {
+  const t = useT();
   const zones = React.useMemo(() => computeRunningZones(vdot), [vdot]);
 
   return (
     <div className="md:border-border md:bg-card md:rounded-sm md:border">
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
         <h2 className="text-foreground text-lg font-semibold">
-          Running Pace Zones (Daniels)
+          {t("toolbox.zone.runningTitle")}
         </h2>
         <p className="text-muted-foreground text-sm">
-          Based on VDOT of {vdot.toFixed(1)}
+          {t("toolbox.zone.basedOnVdot", { vdot: vdot.toFixed(1) })}
         </p>
       </div>
       <ToolboxTable>
         <ToolboxTableHeader>
           <ToolboxTableHeaderRow>
-            <ToolboxTableHead first>Zone</ToolboxTableHead>
-            <ToolboxTableHead>Pace /km</ToolboxTableHead>
-            <ToolboxTableHead>Speed</ToolboxTableHead>
+            <ToolboxTableHead first>{t("toolbox.zone.zone")}</ToolboxTableHead>
+            <ToolboxTableHead>{t("toolbox.pace.paceKm")}</ToolboxTableHead>
+            <ToolboxTableHead>{t("toolbox.zone.speed")}</ToolboxTableHead>
           </ToolboxTableHeaderRow>
         </ToolboxTableHeader>
         <ToolboxTableBody>

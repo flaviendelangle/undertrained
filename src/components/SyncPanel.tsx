@@ -33,6 +33,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import { trpc } from "~/utils/trpc";
 
@@ -70,17 +71,18 @@ function SyncProgress(props: {
     streamsFetched: number;
   };
 }) {
+  const t = useT();
   const { syncJob } = props;
   const mode = syncJob.mode ?? "load_missing";
 
   const phaseLabel =
     mode === "load_new"
-      ? "Checking for new activities..."
+      ? t("sync.status.checkingNew")
       : mode === "reload_all"
-        ? "Downloading all activities..."
+        ? t("sync.status.downloadingAll")
         : mode === "recompute_scores"
-          ? "Computing training scores..."
-          : "Scanning all activities...";
+          ? t("sync.status.computingScores")
+          : t("sync.status.scanningAll");
 
   // For recompute_scores, skip activity/stream phases
   if (mode === "recompute_scores") {
@@ -109,7 +111,9 @@ function SyncProgress(props: {
           <Loader2 className="text-muted-foreground size-3.5 shrink-0 animate-spin" />
         )}
         <span className="text-xs">
-          Activities: {syncJob.activitiesFetched} loaded
+          {t("sync.progress.activitiesLoaded", {
+            count: syncJob.activitiesFetched,
+          })}
         </span>
       </div>
 
@@ -117,7 +121,7 @@ function SyncProgress(props: {
       {syncJob.status === "fetching_activities" && (
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <div className="size-3.5 shrink-0" />
-          <span>Streams: waiting...</span>
+          <span>{t("sync.progress.streamsWaiting")}</span>
         </div>
       )}
       {(syncJob.status === "fetching_streams" ||
@@ -130,7 +134,10 @@ function SyncProgress(props: {
               <Loader2 className="text-muted-foreground size-3.5 shrink-0 animate-spin" />
             )}
             <span className="text-xs">
-              Streams: {syncJob.streamsFetched} / {syncJob.streamsTotal}
+              {t("sync.progress.streamsCount", {
+                loaded: syncJob.streamsFetched,
+                total: syncJob.streamsTotal,
+              })}
             </span>
           </div>
           {syncJob.streamsTotal > 0 && (
@@ -148,7 +155,7 @@ function SyncProgress(props: {
       {syncJob.status === "computing_scores" && (
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <Loader2 className="size-3.5 shrink-0 animate-spin" />
-          <span>Computing training scores...</span>
+          <span>{t("sync.status.computingScores")}</span>
         </div>
       )}
     </div>
@@ -166,6 +173,7 @@ function SyncAction(props: {
   loading?: boolean;
   variant?: "secondary" | "destructive";
 }) {
+  const t = useT();
   return (
     <div className="flex items-center gap-1">
       <Button
@@ -189,7 +197,7 @@ function SyncAction(props: {
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={`Info about: ${props.label}`}
+              aria-label={t("sync.action.infoAbout", { label: props.label })}
             />
           }
         >
@@ -210,21 +218,21 @@ function ReloadAllConfirmDialog(props: {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
 }) {
+  const t = useT();
   return (
     <ResponsiveDialog open={props.open} onOpenChange={props.onOpenChange}>
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>Reload all activities?</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>
+            {t("sync.reloadDialog.title")}
+          </ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            This will delete all your synced activities and streams, then
-            re-download everything from Strava. This is a very heavy operation
-            that uses significant API quota and may take a long time depending
-            on your activity history.
+            {t("sync.reloadDialog.description")}
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <ResponsiveDialogFooter>
           <ResponsiveDialogClose render={<Button variant="outline" />}>
-            Cancel
+            {t("common.cancel")}
           </ResponsiveDialogClose>
           <Button
             variant="destructive"
@@ -233,7 +241,7 @@ function ReloadAllConfirmDialog(props: {
               props.onOpenChange(false);
             }}
           >
-            Reload all
+            {t("sync.button.reloadAll")}
           </Button>
         </ResponsiveDialogFooter>
       </ResponsiveDialogContent>
@@ -244,10 +252,11 @@ function ReloadAllConfirmDialog(props: {
 // ── First sync view ──────────────────────────────────────────────────
 
 function FirstSyncContent(props: { onSync: () => void; loading: boolean }) {
+  const t = useT();
   return (
     <div className="flex flex-col gap-3">
       <p className="text-muted-foreground text-xs">
-        Import your activities from Strava to get started.
+        {t("sync.firstSync.prompt")}
       </p>
       <Button
         size="sm"
@@ -260,7 +269,7 @@ function FirstSyncContent(props: { onSync: () => void; loading: boolean }) {
         ) : (
           <RefreshCwIcon className="size-3.5" />
         )}
-        Load all activities
+        {t("sync.button.loadAll")}
       </Button>
     </div>
   );
@@ -277,21 +286,22 @@ function IdleContent(props: {
   onAction: (mode: SyncMode) => void;
   recomputing: boolean;
 }) {
+  const t = useT();
   const { syncJob } = props;
 
   return (
     <div className="flex flex-col gap-2">
       <SyncAction
         icon={<ArrowDownToLineIcon className="size-3.5" />}
-        label="Load new activities"
-        tooltip="Quickly checks for activities recorded since your last sync"
+        label={t("sync.button.loadNew")}
+        tooltip={t("sync.tooltip.loadNew")}
         onClick={() => props.onAction("load_new")}
       />
 
       <SyncAction
         icon={<SearchIcon className="size-3.5" />}
-        label="Load missing activities"
-        tooltip="Scans your full Strava history to find gaps and re-syncs activities that were updated"
+        label={t("sync.button.loadMissing")}
+        tooltip={t("sync.tooltip.loadMissing")}
         onClick={() => props.onAction("load_missing")}
       />
 
@@ -299,8 +309,8 @@ function IdleContent(props: {
 
       <SyncAction
         icon={<RotateCcwIcon className="size-3.5" />}
-        label="Reload all activities"
-        tooltip="Deletes all local data and re-downloads everything from Strava"
+        label={t("sync.button.reloadAllActivities")}
+        tooltip={t("sync.tooltip.reloadAll")}
         onClick={() => props.onAction("reload_all")}
       />
 
@@ -308,8 +318,8 @@ function IdleContent(props: {
 
       <SyncAction
         icon={<CalculatorIcon className="size-3.5" />}
-        label="Recompute all scores"
-        tooltip="Recalculates TSS, HRSS, and power bests using current rider settings without fetching from Strava"
+        label={t("sync.button.recomputeScores")}
+        tooltip={t("sync.tooltip.recomputeScores")}
         onClick={() => props.onAction("recompute_scores")}
         loading={props.recomputing}
       />
@@ -317,13 +327,13 @@ function IdleContent(props: {
       {syncJob?.status === "failed" && syncJob.lastError && (
         <div className="flex items-center gap-1.5 text-xs text-red-400">
           <AlertCircleIcon className="size-3.5 shrink-0" />
-          <span>Last sync failed</span>
+          <span>{t("sync.status.lastFailed")}</span>
         </div>
       )}
 
       {syncJob?.status === "completed" && (
         <span className="text-muted-foreground text-xs">
-          Last synced:{" "}
+          {t("sync.status.lastSynced")}{" "}
           {new Date(syncJob.startedAt).toLocaleDateString(undefined, {
             month: "short",
             day: "numeric",
@@ -339,6 +349,7 @@ function IdleContent(props: {
 // ── Main SyncPanel ───────────────────────────────────────────────────
 
 export function SyncPanel() {
+  const t = useT();
   const athleteId = useAthleteId();
   const { data: syncJob } = trpc.sync.getJob.useQuery(
     { athleteId: athleteId! },
@@ -426,7 +437,7 @@ export function SyncPanel() {
                 ) : (
                   <RefreshCwIcon className="size-3.5" />
                 )}
-                <span>Sync</span>
+                <span>{t("sync.label")}</span>
                 {isInProgress && (
                   <span className="bg-primary/20 text-primary-foreground size-1.5 rounded-full" />
                 )}

@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useT } from "~/i18n/useT";
 import { trpc } from "~/utils/trpc";
 
 import { LoadingButton } from "./primitives/LoadingButton";
@@ -9,6 +10,7 @@ export function ReloadActivityFromStravaButton(
   props: ReloadActivityFromStravaButtonProps,
 ) {
   const { stravaId } = props;
+  const t = useT();
   const athleteId = useAthleteId();
   const reloadActivity = trpc.activityStreams.reload.useMutation();
   const utils = trpc.useUtils();
@@ -32,7 +34,7 @@ export function ReloadActivityFromStravaButton(
         }
       }}
     >
-      Reload from Strava
+      {t("activities.reloadFromStrava")}
     </LoadingButton>
   );
 }

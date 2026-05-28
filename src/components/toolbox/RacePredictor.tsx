@@ -4,6 +4,8 @@ import { InfoIcon, PlusIcon, XIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { NumberField } from "~/components/ui/number-field";
+import { type TFunction } from "~/i18n/I18nProvider";
+import { useT } from "~/i18n/useT";
 import { formatDuration, formatMinutesSeconds } from "~/utils/format";
 
 import {
@@ -17,20 +19,23 @@ import {
 } from "./ToolboxTable";
 
 const DISTANCES = [
-  { label: "1 km", km: 1 },
-  { label: "1 mile", km: 1.60934 },
-  { label: "5 km", km: 5 },
-  { label: "10 km", km: 10 },
-  { label: "Half Marathon", km: 21.0975 },
-  { label: "Marathon", km: 42.195 },
-  { label: "50 km", km: 50 },
-  { label: "100 km", km: 100 },
+  { id: "1km", labelKey: "toolbox.distance.1km", km: 1 },
+  { id: "1mile", labelKey: "toolbox.distance.1mile", km: 1.60934 },
+  { id: "5k", labelKey: "toolbox.distance.5k", km: 5 },
+  { id: "10k", labelKey: "toolbox.distance.10k", km: 10 },
+  { id: "half-marathon", labelKey: "toolbox.distance.halfMarathon", km: 21.0975 },
+  { id: "marathon", labelKey: "toolbox.distance.marathon", km: 42.195 },
+  { id: "50km", labelKey: "toolbox.distance.50km", km: 50 },
+  { id: "100km", labelKey: "toolbox.distance.100km", km: 100 },
 ] as const;
+
+const createDistances = (t: TFunction) =>
+  DISTANCES.map((d) => ({ ...d, label: t(d.labelKey) }));
 
 const DEFAULT_RIEGEL_EXPONENT = 1.06;
 
 interface RaceInput {
-  distanceLabel: string;
+  distanceId: string;
   customKm: number | null;
   hours: number | null;
   minutes: number | null;
@@ -38,10 +43,10 @@ interface RaceInput {
 }
 
 function getDistanceKm(input: RaceInput): number | null {
-  if (input.distanceLabel === "Custom") {
+  if (input.distanceId === "custom") {
     return input.customKm;
   }
-  return DISTANCES.find((d) => d.label === input.distanceLabel)?.km ?? null;
+  return DISTANCES.find((d) => d.id === input.distanceId)?.km ?? null;
 }
 
 function getTotalSeconds(input: RaceInput): number | null {
@@ -52,11 +57,13 @@ function getTotalSeconds(input: RaceInput): number | null {
   return total > 0 ? total : null;
 }
 
+type WarningKey = "sameDistance" | "inconsistent";
+
 interface Model {
   a: number;
   b: number;
   personalized: boolean;
-  warning: string | null;
+  warning: WarningKey | null;
 }
 
 function computeModel(
@@ -77,7 +84,7 @@ function computeModel(
         a,
         b,
         personalized: false,
-        warning: "Both races have the same distance. Using default formula.",
+        warning: "sameDistance",
       };
     }
 
@@ -91,8 +98,7 @@ function computeModel(
         a,
         b: bFallback,
         personalized: false,
-        warning:
-          "The two results seem inconsistent. Using default formula instead.",
+        warning: "inconsistent",
       };
     }
 
@@ -111,10 +117,14 @@ function predictTime(model: { a: number; b: number }, km: number): number {
 }
 
 function RaceInputFields({
+  t,
+  distances,
   label,
   value,
   onChange,
 }: {
+  t: TFunction;
+  distances: { id: string; label: string }[];
   label?: string;
   value: RaceInput;
   onChange: (v: RaceInput) => void;
@@ -128,21 +138,24 @@ function RaceInputFields({
       {/* Distance picker */}
       <div>
         <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-          Distance
+          {t("toolbox.distance.label")}
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {[...DISTANCES, { label: "Custom" as const, km: null }].map((d) => (
+          {[
+            ...distances,
+            { id: "custom", label: t("toolbox.distance.custom") },
+          ].map((d) => (
             <Button
-              key={d.label}
-              variant={value.distanceLabel === d.label ? "default" : "outline"}
+              key={d.id}
+              variant={value.distanceId === d.id ? "default" : "outline"}
               size="xs"
-              onClick={() => onChange({ ...value, distanceLabel: d.label })}
+              onClick={() => onChange({ ...value, distanceId: d.id })}
             >
               {d.label}
             </Button>
           ))}
         </div>
-        {value.distanceLabel === "Custom" && (
+        {value.distanceId === "custom" && (
           <div className="mt-2 flex items-center gap-1.5">
             <NumberField
               min={0.1}
@@ -159,7 +172,7 @@ function RaceInputFields({
       {/* Time input */}
       <div>
         <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-          Finish time
+          {t("toolbox.finishTime")}
         </label>
         <div className="flex items-center gap-1.5">
           <NumberField
@@ -192,10 +205,13 @@ function RaceInputFields({
 }
 
 export function RacePredictor() {
+  const t = useT();
+  const distances = React.useMemo(() => createDistances(t), [t]);
+
   const [useSecondRace, setUseSecondRace] = React.useState(false);
 
   const [race1, setRace1] = React.useState<RaceInput>({
-    distanceLabel: "10 km",
+    distanceId: "10k",
     customKm: null,
     hours: 0,
     minutes: 45,
@@ -203,7 +219,7 @@ export function RacePredictor() {
   });
 
   const [race2, setRace2] = React.useState<RaceInput>({
-    distanceLabel: "Half Marathon",
+    distanceId: "half-marathon",
     customKm: null,
     hours: 1,
     minutes: 40,
@@ -228,13 +244,19 @@ export function RacePredictor() {
       {/* Input Card */}
       <div className="md:border-border md:bg-card p-4 md:rounded-sm md:border md:p-6">
         <div className="flex flex-col gap-6">
-          <RaceInputFields label="Race 1" value={race1} onChange={setRace1} />
+          <RaceInputFields
+            t={t}
+            distances={distances}
+            label={t("toolbox.racePredictor.race1")}
+            value={race1}
+            onChange={setRace1}
+          />
 
           {useSecondRace ? (
             <div className="border-border border-t pt-6">
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-foreground text-sm font-medium">
-                  Race 2
+                  {t("toolbox.racePredictor.race2")}
                 </span>
                 <Button
                   variant="ghost"
@@ -244,7 +266,12 @@ export function RacePredictor() {
                   <XIcon className="size-3.5" />
                 </Button>
               </div>
-              <RaceInputFields value={race2} onChange={setRace2} />
+              <RaceInputFields
+                t={t}
+                distances={distances}
+                value={race2}
+                onChange={setRace2}
+              />
             </div>
           ) : (
             <button
@@ -252,7 +279,7 @@ export function RacePredictor() {
               onClick={() => setUseSecondRace(true)}
             >
               <PlusIcon className="size-3.5" />
-              Add a second race for personalized predictions
+              {t("toolbox.racePredictor.addSecondRace")}
             </button>
           )}
         </div>
@@ -263,26 +290,27 @@ export function RacePredictor() {
             <InfoIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
             <div className="text-muted-foreground text-sm">
               {model.warning ? (
-                <span>{model.warning}</span>
+                <span>
+                  {model.warning === "sameDistance"
+                    ? t("toolbox.racePredictor.warningSameDistance")
+                    : t("toolbox.racePredictor.warningInconsistent")}
+                </span>
               ) : model.personalized ? (
                 <>
-                  Personal fatigue factor:{" "}
+                  {t("toolbox.racePredictor.fatigueFactor")}{" "}
                   <span className="text-foreground font-medium tabular-nums">
                     {model.b.toFixed(3)}
                   </span>
                   {model.b < 1.05 ? (
-                    <span> — speed-oriented profile</span>
+                    <span> {t("toolbox.racePredictor.profileSpeed")}</span>
                   ) : model.b > 1.07 ? (
-                    <span> — endurance-oriented profile</span>
+                    <span> {t("toolbox.racePredictor.profileEndurance")}</span>
                   ) : (
-                    <span> — balanced profile</span>
+                    <span> {t("toolbox.racePredictor.profileBalanced")}</span>
                   )}
                 </>
               ) : (
-                <>
-                  Using Riegel&apos;s default fatigue factor (1.06). Add a
-                  second race for a personalized model.
-                </>
+                <>{t("toolbox.racePredictor.defaultModel")}</>
               )}
             </div>
           </div>
@@ -294,24 +322,28 @@ export function RacePredictor() {
         <div className="md:border-border md:bg-card md:rounded-sm md:border">
           <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
             <h2 className="text-foreground text-lg font-semibold">
-              Predicted Race Times
+              {t("toolbox.racePredictor.tableTitle")}
             </h2>
             <p className="text-muted-foreground text-sm">
               {model.personalized
-                ? "Based on your personalized fatigue curve"
-                : "Based on Riegel's formula (T₂ = T₁ × (D₂/D₁)^1.06)"}
+                ? t("toolbox.racePredictor.basedOnPersonalized")
+                : t("toolbox.racePredictor.basedOnRiegel")}
             </p>
           </div>
           <ToolboxTable>
             <ToolboxTableHeader>
               <ToolboxTableHeaderRow>
-                <ToolboxTableHead first>Distance</ToolboxTableHead>
-                <ToolboxTableHead>Predicted Time</ToolboxTableHead>
-                <ToolboxTableHead>Pace</ToolboxTableHead>
+                <ToolboxTableHead first>
+                  {t("toolbox.distance.label")}
+                </ToolboxTableHead>
+                <ToolboxTableHead>
+                  {t("toolbox.racePredictor.predictedTime")}
+                </ToolboxTableHead>
+                <ToolboxTableHead>{t("toolbox.pace.pace")}</ToolboxTableHead>
               </ToolboxTableHeaderRow>
             </ToolboxTableHeader>
             <ToolboxTableBody>
-              {DISTANCES.map((d) => {
+              {distances.map((d) => {
                 const predicted = predictTime(model, d.km);
                 const pacePerKm = predicted / d.km;
                 const isInput =
@@ -321,12 +353,12 @@ export function RacePredictor() {
                     Math.abs(d.km - race2Km) < 0.01);
 
                 return (
-                  <ToolboxTableRow key={d.label}>
+                  <ToolboxTableRow key={d.id}>
                     <ToolboxTableCell first>
                       {d.label}
                       {isInput && (
                         <span className="text-muted-foreground ml-1.5 text-xs">
-                          (input)
+                          {t("toolbox.racePredictor.input")}
                         </span>
                       )}
                     </ToolboxTableCell>

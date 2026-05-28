@@ -30,8 +30,9 @@ import {
 } from "~/components/ui/responsive-dialog";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useTypedParams } from "~/hooks/useTypedParams";
+import { sportTypeLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
-import { formatActivityType } from "~/utils/format";
 import { trpc } from "~/utils/trpc";
 
 const TimePeriodMap = nextDynamic(
@@ -65,6 +66,7 @@ const TimePeriodPage: NextPageWithLayout = () => {
 };
 
 function TimePeriodPageContent({ periodId }: { periodId: number }) {
+  const t = useT();
   const athleteId = useAthleteId();
   const [mapExpanded, setMapExpanded] = React.useState(false);
   const [data] = trpc.timePeriods.getById.useSuspenseQuery({
@@ -110,7 +112,9 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
         </span>
         {period.sportTypes && period.sportTypes.length > 0 && (
           <span className="text-muted-foreground hidden text-xs sm:inline">
-            {period.sportTypes.map(formatActivityType).join(", ")}
+            {period.sportTypes
+              .map((type) => sportTypeLabel(type, t))
+              .join(", ")}
           </span>
         )}
         <div className="flex-1" />
@@ -124,7 +128,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
               <button
                 onClick={() => setMapExpanded(false)}
                 className="bg-background/80 hover:bg-background text-foreground absolute top-3 right-3 z-20 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
-                title="Collapse map"
+                title={t("periods.collapseMap")}
               >
                 <Minimize2 className="size-4" />
               </button>
@@ -138,7 +142,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
             <button
               onClick={() => setMapExpanded(true)}
               className="bg-background/80 hover:bg-background text-foreground absolute top-3 right-3 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
-              title="Expand map"
+              title={t("periods.expandMap")}
             >
               <Maximize2 className="size-4" />
             </button>
@@ -151,7 +155,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
             <TimePeriodStats {...data} />
             <div className="md:border-border md:bg-background flex h-112 flex-col overflow-hidden md:rounded-xl md:border">
               <div className="border-border p-4 md:border-b">
-                <CardTitle>Activities</CardTitle>
+                <CardTitle>{t("periods.activities")}</CardTitle>
               </div>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <ActivitiesTable timePeriodId={periodId} />
@@ -171,7 +175,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
               />
             )}
             <section className="md:border-border md:bg-card p-5 md:rounded-xl md:border">
-              <CardTitle className="mb-4">Edit Period</CardTitle>
+              <CardTitle className="mb-4">{t("periods.editPeriod")}</CardTitle>
               <TimePeriodForm period={period} />
               <DeletePeriodButton athleteId={athleteId} period={period} />
             </section>
@@ -193,6 +197,7 @@ function DeletePeriodButton({
   athleteId: number | undefined;
   period: { id: number; name: string };
 }) {
+  const t = useT();
   const router = useRouter();
   const utils = trpc.useUtils();
   const deleteMutation = trpc.timePeriods.delete.useMutation({
@@ -205,27 +210,26 @@ function DeletePeriodButton({
   return (
     <div className="border-border mt-4 flex items-center justify-between border-t pt-4">
       <p className="text-muted-foreground text-sm">
-        Permanently delete this period and remove it from your list.
+        {t("periods.deleteHint")}
       </p>
       <ResponsiveDialog>
         <ResponsiveDialogTrigger
           render={<Button variant="destructive" size="sm" />}
         >
-          Delete
+          {t("common.delete")}
         </ResponsiveDialogTrigger>
         <ResponsiveDialogContent showCloseButton={false}>
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>
-              Delete &ldquo;{period.name}&rdquo;?
+              {t("periods.deleteConfirmTitle", { name: period.name })}
             </ResponsiveDialogTitle>
             <ResponsiveDialogDescription>
-              This action cannot be undone. The period will be permanently
-              deleted.
+              {t("periods.deleteConfirmDescription")}
             </ResponsiveDialogDescription>
           </ResponsiveDialogHeader>
           <ResponsiveDialogFooter>
             <ResponsiveDialogClose render={<Button variant="outline" />}>
-              Cancel
+              {t("common.cancel")}
             </ResponsiveDialogClose>
             <Button
               variant="destructive"
@@ -235,7 +239,9 @@ function DeletePeriodButton({
                 deleteMutation.mutate({ athleteId, id: period.id });
               }}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending
+                ? t("periods.deleting")
+                : t("common.delete")}
             </Button>
           </ResponsiveDialogFooter>
         </ResponsiveDialogContent>

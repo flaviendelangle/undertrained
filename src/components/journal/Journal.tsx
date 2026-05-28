@@ -26,6 +26,8 @@ import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { usePersonalRecords } from "~/hooks/usePersonalRecords";
 import { usePlannedTrainings } from "~/hooks/usePlannedTrainings";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import { formZoneLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import { classifyForm } from "~/lib/fitness";
 import { startOf } from "~/utils/dateUtils";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
@@ -49,10 +51,7 @@ import {
 } from "./PlannedTrainingDialog";
 import { useJournalWeeks, type JournalWeek } from "./useJournalWeeks";
 
-const VIEW_OPTIONS: { value: JournalView; label: string }[] = [
-  { value: "month", label: "Month" },
-  { value: "week", label: "Week" },
-];
+const VIEW_OPTIONS: JournalView[] = ["month", "week"];
 
 /** URL date key (yyyy-MM-dd) for a week's Monday, stored in `?week=`. */
 function weekParamOf(weekStart: Date): string {
@@ -65,6 +64,7 @@ function journalHref(view: JournalView, weekParam: string | null): string {
 }
 
 export function Journal() {
+  const t = useT();
   const { data: activities, isError } = useActivitiesQuery();
   const { data: plannedTrainings } = usePlannedTrainings();
   const { timeline } = useRiderSettingsTimeline();
@@ -101,19 +101,31 @@ export function Journal() {
   // Bumped to ask the month view to (re)scroll to the anchor week — e.g. "Today".
   const [scrollNonce, setScrollNonce] = React.useState(0);
 
-  // The anchor week: the URL's `?week=` if present, else the latest week with an
-  // activity or plan. It's the week the week view renders and the month view
-  // scrolls to.
+  // The anchor week: the URL's `?week=` if present, else the latest non-future
+  // week with an activity or plan. It's the week the week view renders and the
+  // month view scrolls to. Future weeks are skipped so a training planned weeks
+  // ahead (now rendered, see useJournalWeeks) doesn't pull the opening view past
+  // today; the user scrolls up to reach it.
   const seededAnchor = React.useMemo(() => {
     if (weeks.length === 0) {
       return null;
     }
+    const thisWeekStart = startOf(new Date(), "week").getTime();
     const index = weeks.findIndex(
       (week) =>
-        week.activities.length > 0 ||
-        week.days.some((day) => day.plannedTrainings.length > 0),
+        week.weekStart.getTime() <= thisWeekStart &&
+        (week.activities.length > 0 ||
+          week.days.some((day) => day.plannedTrainings.length > 0)),
     );
-    return weeks[index > 0 ? index : 0].weekStart;
+    if (index >= 0) {
+      return weeks[index].weekStart;
+    }
+    // Nothing done or planned up to today: open on the current week if it's in
+    // range, else the oldest loaded week.
+    const currentWeek = weeks.find(
+      (week) => week.weekStart.getTime() === thisWeekStart,
+    );
+    return (currentWeek ?? weeks[weeks.length - 1]).weekStart;
   }, [weeks]);
   const effectiveAnchor = urlAnchor ?? seededAnchor;
 
@@ -208,9 +220,12 @@ export function Journal() {
               {formZone != null && currentForm != null ? (
                 <span
                   className="flex items-center gap-1.5 font-medium"
-                  title={`Today's Form (TSB): ${currentForm.tsb > 0 ? "+" : ""}${Math.round(currentForm.tsb)} — ${formZone.label}`}
+                  title={t("journal.form.tooltip", {
+                    value: `${currentForm.tsb > 0 ? "+" : ""}${Math.round(currentForm.tsb)}`,
+                    zone: formZoneLabel(formZone.key, t),
+                  })}
                 >
-                  <span className="uppercase">Form</span>
+                  <span className="uppercase">{t("journal.form.label")}</span>
                   <span
                     className="inline-flex items-center gap-1 rounded px-1.5 py-px tabular-nums"
                     style={{
@@ -220,7 +235,9 @@ export function Journal() {
                   >
                     {currentForm.tsb > 0 ? "+" : ""}
                     {Math.round(currentForm.tsb)}
-                    <span className="not-italic">· {formZone.label}</span>
+                    <span className="not-italic">
+                      · {formZoneLabel(formZone.key, t)}
+                    </span>
                   </span>
                 </span>
               ) : null}
@@ -233,7 +250,7 @@ export function Journal() {
                   <Button
                     size="icon-sm"
                     variant="ghost"
-                    aria-label="Journal options"
+                    aria-label={t("journal.options")}
                   >
                     <EllipsisIcon />
                   </Button>
@@ -244,29 +261,31 @@ export function Journal() {
                   value={view}
                   onValueChange={(value) => setView(value as JournalView)}
                 >
-                  <DropdownMenuLabel>View</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t("journal.view.label")}</DropdownMenuLabel>
                   {VIEW_OPTIONS.map((option) => (
                     <DropdownMenuRadioItem
-                      key={option.value}
-                      value={option.value}
+                      key={option}
+                      value={option}
                       closeOnClick
                     >
-                      {option.label}
+                      {option === "week"
+                        ? t("journal.view.week")
+                        : t("journal.view.month")}
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem closeOnClick onClick={goToToday}>
                   <CalendarCheckIcon />
-                  Navigate to today
+                  {t("journal.navigateToToday")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onCreatePlanned(new Date())}>
                   <PlusIcon />
-                  Plan a training
+                  {t("journal.planTraining")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSubscribeOpen(true)}>
                   <CalendarPlusIcon />
-                  Subscribe
+                  {t("journal.subscribe")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

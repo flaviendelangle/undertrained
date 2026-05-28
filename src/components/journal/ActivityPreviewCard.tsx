@@ -1,21 +1,22 @@
 import * as React from "react";
 
 import { format } from "date-fns";
-import { enGB } from "date-fns/locale/en-GB";
 import { MedalIcon } from "lucide-react";
 
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 
 import { PreviewCardContent } from "~/components/ui/preview-card";
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
+import { type TFunction } from "~/i18n/I18nProvider";
+import { sportTypeLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import { trpc } from "~/utils/trpc";
-import { formatActivityType, formatHumanDuration } from "~/utils/format";
+import { formatHumanDuration } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 import { ActivityPreviewMap } from "./ActivityPreviewMap";
 import type { ActivityPreviewPayload } from "./journalPreview";
 import type { JournalActivity } from "./useJournalWeeks";
-
-const LOCALE_OPTIONS = { locale: enGB };
 
 /**
  * Prefetch the route ahead of the card opening so it's warm on mount. The card
@@ -88,6 +89,7 @@ function ActivityPreviewCardBody({
   activity: JournalActivity;
   records?: string[];
 }) {
+  const t = useT();
   const config = getSportConfig(activity.type);
   const Icon = config.icon;
 
@@ -99,7 +101,7 @@ function ActivityPreviewCardBody({
   const mapPolyline = polylineQuery.data?.mapPolyline || null;
   const showMapSlot = polylineQuery.isLoading || mapPolyline != null;
 
-  const stats = buildStats(activity, config);
+  const stats = buildStats(activity, config, t);
 
   return (
     <>
@@ -115,15 +117,13 @@ function ActivityPreviewCardBody({
           <span className="flex min-w-0 items-center gap-1.5">
             <Icon className="size-3.5 shrink-0" style={{ color: config.color }} />
             <span className="text-foreground truncate font-medium">
-              {activity.name || formatActivityType(activity.type)}
+              {activity.name || sportTypeLabel(activity.type, t)}
             </span>
           </span>
           <span className="text-muted-foreground text-xs">
-            {format(
-              new Date(activity.startDateLocal),
-              "EEE d MMM, HH:mm",
-              LOCALE_OPTIONS,
-            )}
+            {format(new Date(activity.startDateLocal), "EEE d MMM, HH:mm", {
+              locale: getActiveDateLocale(),
+            })}
           </span>
         </div>
 
@@ -176,31 +176,32 @@ function rpeColor(rpe: number): string {
 function buildStats(
   activity: JournalActivity,
   config: ReturnType<typeof getSportConfig>,
+  t: TFunction,
 ): { label: string; value: React.ReactNode }[] {
   const stats: { label: string; value: React.ReactNode }[] = [];
 
   if (activity.distance > 0) {
     stats.push({
-      label: "Distance",
+      label: t("journal.stat.distance"),
       value: config.formatDistance(activity.distance),
     });
   }
 
   stats.push({
-    label: "Duration",
+    label: t("journal.stat.duration"),
     value: formatHumanDuration(activity.movingTime),
   });
 
   if (activity.totalElevationGain > 0) {
     stats.push({
-      label: "Elevation",
+      label: t("journal.stat.elevation"),
       value: `${Math.round(activity.totalElevationGain)} m`,
     });
   }
 
   const watts = activity.weightedAverageWatts ?? activity.averageWatts;
   if (config.hasPowerMetrics && watts != null) {
-    stats.push({ label: "Power", value: `${Math.round(watts)} W` });
+    stats.push({ label: t("journal.stat.power"), value: `${Math.round(watts)} W` });
   } else if (activity.averageSpeed > 0) {
     stats.push({
       label: config.speedLabel,
@@ -210,7 +211,7 @@ function buildStats(
 
   if (activity.averageHeartrate != null) {
     stats.push({
-      label: "Avg HR",
+      label: t("journal.stat.avgHr"),
       value: `${Math.round(activity.averageHeartrate)} bpm`,
     });
   }

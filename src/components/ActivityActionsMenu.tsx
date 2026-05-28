@@ -11,10 +11,12 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useT } from "~/i18n/useT";
 import { trpc } from "~/utils/trpc";
 
 export function ActivityActionsMenu(props: ActivityActionsMenuProps) {
   const { stravaId } = props;
+  const t = useT();
   const athleteId = useAthleteId();
   const reloadActivity = trpc.activityStreams.reload.useMutation();
   const utils = trpc.useUtils();
@@ -44,7 +46,7 @@ export function ActivityActionsMenu(props: ActivityActionsMenuProps) {
           target="_blank"
         >
           <ExternalLink />
-          View on Strava
+          {t("activities.viewOnStrava")}
         </DropdownMenuLinkItem>
         <DropdownMenuItem
           disabled={loading}
@@ -64,7 +66,7 @@ export function ActivityActionsMenu(props: ActivityActionsMenuProps) {
           }}
         >
           <RefreshCw />
-          Reload from Strava
+          {t("activities.reloadFromStrava")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

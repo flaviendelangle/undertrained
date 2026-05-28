@@ -4,7 +4,7 @@ const APP_NAME = "Undertrained";
 const ROUTE_TITLES: Record<string, string> = {
   "/activities": "Activities",
   "/journal": "Journal",
-  "/heatmap": "Heatmap",
+  "/map": "Map",
   "/statistics": "Statistics",
   "/personal-bests": "Personal bests",
   "/time-periods": "Time Periods",

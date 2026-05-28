@@ -31,7 +31,7 @@ function DrawerOverlay({
     <DialogPrimitive.Backdrop
       data-slot="drawer-overlay"
       className={cn(
-        "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs",
+        "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:[--tw-ease:cubic-bezier(0.4,0,1,1)] fixed inset-0 isolate z-50 bg-black/10 duration-150 supports-backdrop-filter:backdrop-blur-xs",
         className,
       )}
       {...props}
@@ -53,7 +53,7 @@ function DrawerContent({
       <DialogPrimitive.Popup
         data-slot="drawer-content"
         className={cn(
-          "bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:slide-out-to-bottom data-open:slide-in-from-bottom ring-foreground/10 fixed inset-x-0 bottom-0 z-50 flex max-h-[90svh] flex-col gap-6 overflow-y-auto rounded-t-xl px-6 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-sm ring-1 duration-150 outline-none",
+          "bg-background data-open:animate-in data-closed:animate-out data-closed:[--tw-ease:cubic-bezier(0.4,0,1,1)] data-closed:slide-out-to-bottom data-open:slide-in-from-bottom ring-foreground/10 fixed inset-x-0 bottom-0 z-50 flex max-h-[90svh] flex-col gap-6 overflow-y-auto rounded-t-xl px-6 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-sm ring-1 duration-150 outline-none",
           className,
         )}
         {...props}

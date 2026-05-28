@@ -48,6 +48,9 @@ export const athletes = pgTable(
     refreshToken: text("refresh_token").notNull().default(""),
     tokenExpiresAt: integer("token_expires_at").notNull().default(0),
     name: text("name"),
+    // Preferred UI locale (BCP-47, e.g. "en-GB", "fr-FR"). Account-level
+    // preference; defaults to British English. See ~/i18n/locales.
+    language: text("language").notNull().default("en-GB"),
     // Secret, unguessable token authenticating the athlete's iCal subscription
     // feed (`/api/calendar/{token}.ics`). Generated lazily, revocable.
     calendarToken: text("calendar_token"),

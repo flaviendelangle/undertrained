@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { Button } from "~/components/ui/button";
 import { NumberField } from "~/components/ui/number-field";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
 import {
@@ -150,6 +151,7 @@ function ratioColor(ratio: number, minRatio: number, maxRatio: number): string {
 // ── Component ──
 
 export function GearCalculator() {
+  const t = useT();
   const [ringsInput, setRingsInput] = React.useState("52/36");
   const [cogsInput, setCogsInput] = React.useState(
     "11,12,13,14,16,18,20,22,25,28,32",
@@ -195,7 +197,7 @@ export function GearCalculator() {
           {/* Chainrings */}
           <div>
             <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
-              Chainrings
+              {t("toolbox.gear.chainrings")}
             </label>
             <input
               type="text"
@@ -225,7 +227,7 @@ export function GearCalculator() {
           {/* Cassette */}
           <div>
             <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
-              Cassette
+              {t("toolbox.gear.cassette")}
             </label>
             <input
               type="text"
@@ -254,7 +256,7 @@ export function GearCalculator() {
           <div className="flex flex-wrap items-end gap-4">
             <div>
               <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
-                Wheel size
+                {t("toolbox.gear.wheelSize")}
               </label>
               <div className="flex flex-wrap gap-1">
                 {WHEEL_PRESETS.map((w) => (
@@ -272,7 +274,7 @@ export function GearCalculator() {
             {viewTab === "speed" && (
               <div>
                 <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
-                  Cadence
+                  {t("toolbox.gear.cadence")}
                 </label>
                 <div className="flex items-center gap-1.5">
                   <NumberField
@@ -299,36 +301,37 @@ export function GearCalculator() {
               size="sm"
               onClick={() => setViewTab("ratio")}
             >
-              Gear Ratio
+              {t("toolbox.gear.ratioTab")}
             </Button>
             <Button
               variant={viewTab === "speed" ? "default" : "outline"}
               size="sm"
               onClick={() => setViewTab("speed")}
             >
-              Speed
+              {t("toolbox.gear.speedTab")}
             </Button>
             <Button
               variant={viewTab === "development" ? "default" : "outline"}
               size="sm"
               onClick={() => setViewTab("development")}
             >
-              Development
+              {t("toolbox.gear.developmentTab")}
             </Button>
           </div>
           <div className="px-4 pt-1 pb-2 md:px-6">
             <p className="text-muted-foreground text-sm">
-              {viewTab === "ratio" && "Chainring teeth ÷ cog teeth"}
-              {viewTab === "speed" && `Speed (km/h) at ${cadence ?? 90} rpm`}
+              {viewTab === "ratio" && t("toolbox.gear.ratioDescription")}
+              {viewTab === "speed" &&
+                t("toolbox.gear.speedDescription", { rpm: cadence ?? 90 })}
               {viewTab === "development" &&
-                "Distance per pedal revolution (meters)"}
+                t("toolbox.gear.developmentDescription")}
             </p>
           </div>
 
           <ToolboxTable>
             <ToolboxTableHeader>
               <ToolboxTableHeaderRow>
-                <ToolboxTableHead first>Cog</ToolboxTableHead>
+                <ToolboxTableHead first>{t("toolbox.gear.cog")}</ToolboxTableHead>
                 {rings.map((ring) => (
                   <ToolboxTableHead key={ring} className="text-center">
                     {ring}T
@@ -386,11 +389,23 @@ export function GearCalculator() {
 
           {/* Summary */}
           <div className="text-muted-foreground border-t px-4 py-3 text-xs md:px-6">
-            {cogs.length} speeds × {rings.length} chainring
-            {rings.length > 1 ? "s" : ""} = {cogs.length * rings.length} gear
-            combinations — Ratio range: {minRatio.toFixed(2)} to{" "}
-            {maxRatio.toFixed(2)} — Wheel: {wheel.label} (
-            {(circumference * 1000).toFixed(0)}mm circumference)
+            {t("toolbox.gear.summaryCombinations", {
+              speeds: cogs.length,
+              chainrings: t("toolbox.gear.chainringCount", {
+                count: rings.length,
+              }),
+              combinations: cogs.length * rings.length,
+            })}{" "}
+            —{" "}
+            {t("toolbox.gear.summaryRatioRange", {
+              min: minRatio.toFixed(2),
+              max: maxRatio.toFixed(2),
+            })}{" "}
+            —{" "}
+            {t("toolbox.gear.summaryWheel", {
+              wheel: wheel.label,
+              circumference: (circumference * 1000).toFixed(0),
+            })}
           </div>
         </div>
       )}

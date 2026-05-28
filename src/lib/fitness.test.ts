@@ -93,6 +93,32 @@ describe("computeFitnessSeries", () => {
     });
     expect(series[0].load).toBe(100);
   });
+
+  it("starts at the oldest activity that carries load, ignoring earlier load-less ones", () => {
+    const noLoad: FitnessActivity = {
+      type: "Ride",
+      tss: null,
+      hrss: null,
+      startDateLocal: "2024-01-01T10:00:00",
+    };
+    const series = computeFitnessSeries([noLoad, ride("2024-01-04", 100)], PREFS, {
+      endDate: new Date(2024, 0, 4),
+    });
+
+    // The Jan-1 load-less activity is ignored; the curve begins on Jan 4.
+    expect(series).toHaveLength(1);
+    expect(localDay(series[0].date)).toBe("2024-01-04");
+  });
+
+  it("returns an empty series when no activity carries load", () => {
+    const noLoad: FitnessActivity = {
+      type: "Ride",
+      tss: null,
+      hrss: null,
+      startDateLocal: "2024-01-01T10:00:00",
+    };
+    expect(computeFitnessSeries([noLoad], PREFS)).toEqual([]);
+  });
 });
 
 describe("classifyForm", () => {

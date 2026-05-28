@@ -1,0 +1,1 @@
+ALTER TABLE "athletes" ADD COLUMN "language" text DEFAULT 'en-GB' NOT NULL;

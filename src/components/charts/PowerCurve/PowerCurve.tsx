@@ -25,6 +25,8 @@ import {
 import { useActivityFilter } from "~/hooks/useActivityFilter";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import { type TFunction } from "~/i18n/I18nProvider";
+import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import { trpc } from "~/utils/trpc";
 
@@ -60,11 +62,11 @@ function makeRollingRange(days: number, label: string): DateRange {
   };
 }
 
-const PRESET_OPTIONS = [
-  { value: "90d", label: "Last 90 days" },
-  { value: "1y", label: "Last year" },
-  { value: "2y", label: "Last 2 years" },
-  { value: "all", label: "All time" },
+const createPresetOptions = (t: TFunction) => [
+  { value: "90d", label: t("charts.powerCurve.preset.last90Days") },
+  { value: "1y", label: t("charts.powerCurve.preset.lastYear") },
+  { value: "2y", label: t("charts.powerCurve.preset.last2Years") },
+  { value: "all", label: t("charts.powerCurve.preset.allTime") },
 ];
 
 function makeYearRange(year: number): DateRange {
@@ -76,22 +78,20 @@ function makeYearRange(year: number): DateRange {
   };
 }
 
-function presetToRange(preset: string): DateRange {
+function presetToRange(preset: string, t: TFunction): DateRange {
   switch (preset) {
     case "90d":
-      return makeRollingRange(90, "Last 90 days");
+      return makeRollingRange(90, t("charts.powerCurve.preset.last90Days"));
     case "1y":
-      return makeRollingRange(365, "Last year");
+      return makeRollingRange(365, t("charts.powerCurve.preset.lastYear"));
     case "2y":
-      return makeRollingRange(730, "Last 2 years");
+      return makeRollingRange(730, t("charts.powerCurve.preset.last2Years"));
     case "all":
-      return { id: "preset-all", label: "All time" };
+      return { id: "preset-all", label: t("charts.powerCurve.preset.allTime") };
     default:
-      return makeRollingRange(365, "Last year");
+      return makeRollingRange(365, t("charts.powerCurve.preset.lastYear"));
   }
 }
-
-const DEFAULT_RANGES: DateRange[] = [presetToRange("1y")];
 
 // --- Props ---
 
@@ -135,19 +135,16 @@ export default PowerCurve;
 // --- Single activity mode ---
 
 const ACTIVITY_RANGE_ID = "activity";
-const ACTIVITY_RANGE: DateRange = {
-  id: ACTIVITY_RANGE_ID,
-  label: "This Activity",
-};
 const SINGLE_ACTIVITY_TYPES = ["Ride", "VirtualRide"];
 const SINGLE_ACTIVITY_LOCKED_IDS = new Set([ACTIVITY_RANGE_ID]);
 
 function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
+  const t = useT();
   const tokens = useChartTokens();
   const athleteId = useAthleteId();
-  const [ranges, setRanges] = React.useState<DateRange[]>([
-    ACTIVITY_RANGE,
-    presetToRange("all"),
+  const [ranges, setRanges] = React.useState<DateRange[]>(() => [
+    { id: ACTIVITY_RANGE_ID, label: t("charts.powerCurve.thisActivity") },
+    presetToRange("all", t),
   ]);
   const [mode, setMode] = React.useState<PowerCurveMode>("watts");
   const { resolveForDate } = useRiderSettingsTimeline();
@@ -280,11 +277,10 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
   const hint = (
     <FeatureHint
       hintId="hint-activity-power-curve"
-      title="Power Curve"
+      title={t("charts.powerCurve.title")}
       side="right"
     >
-      Your best sustained power efforts at each duration. Add date ranges to
-      compare this activity against your historical bests and spot improvements.
+      {t("charts.powerCurve.hint")}
     </FeatureHint>
   );
 
@@ -294,7 +290,7 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
 
   return (
     <ChartCard
-      title={POWER_CURVE_TITLE}
+      title={t("charts.powerCurve.cardTitle")}
       actions={
         <Toolbar
           ranges={ranges}
@@ -333,6 +329,7 @@ function AggregatedPowerCurve({
   workoutTypes?: number[];
   defaultRanges?: PowerCurveDateRange[];
 }) {
+  const t = useT();
   const tokens = useChartTokens();
   const athleteId = useAthleteId();
   const filter = useActivityFilter();
@@ -340,7 +337,7 @@ function AggregatedPowerCurve({
     workoutTypesProp ??
     (filter.workoutTypes.length > 0 ? filter.workoutTypes : undefined);
   const [ranges, setRanges] = React.useState<DateRange[]>(
-    defaultRanges ?? DEFAULT_RANGES,
+    () => defaultRanges ?? [presetToRange("1y", t)],
   );
   const lockedRangeIds = React.useMemo(
     () => (defaultRanges ? new Set(defaultRanges.map((r) => r.id)) : undefined),
@@ -426,7 +423,7 @@ function AggregatedPowerCurve({
       return {
         id: seriesId,
         yData: durations.map((d) => byDuration.get(d)?.watts ?? null),
-        label: ranges[i]?.label ?? `Range ${i + 1}`,
+        label: ranges[i]?.label ?? t("charts.powerCurve.rangeFallback", { index: i + 1 }),
         color: tokens.palette[i % tokens.palette.length],
         weights: durations.map((d) => {
           const entry = byDuration.get(d);
@@ -441,7 +438,7 @@ function AggregatedPowerCurve({
       series: chartSeries,
       activityMetadata: metadata,
     };
-  }, [queries, ranges, tokens.palette, resolveForDate]);
+  }, [queries, ranges, tokens.palette, resolveForDate, t]);
 
   const toolbar = (
     <Toolbar
@@ -460,16 +457,16 @@ function AggregatedPowerCurve({
 
   if (xData.length === 0) {
     return (
-      <ChartCard title={POWER_CURVE_TITLE} actions={toolbar}>
+      <ChartCard title={t("charts.powerCurve.cardTitle")} actions={toolbar}>
         <div className="text-muted-foreground flex h-full items-center justify-center">
-          No power data available
+          {t("charts.powerCurve.empty")}
         </div>
       </ChartCard>
     );
   }
 
   return (
-    <ChartCard title={POWER_CURVE_TITLE} actions={toolbar}>
+    <ChartCard title={t("charts.powerCurve.cardTitle")} actions={toolbar}>
       <PowerCurveWebGLChart
         xData={xData}
         series={series}
@@ -532,6 +529,7 @@ function Toolbar({
   showCustomRange?: boolean;
   hint?: React.ReactNode;
 }) {
+  const t = useT();
   const tokens = useChartTokens();
 
   const rangeControls = (
@@ -582,7 +580,9 @@ function Toolbar({
         />
         <ResponsivePopoverContent align="end" className="flex flex-col gap-2">
           <ResponsivePopoverHeader>
-            <ResponsivePopoverTitle>Date ranges</ResponsivePopoverTitle>
+            <ResponsivePopoverTitle>
+              {t("charts.powerCurve.dateRanges")}
+            </ResponsivePopoverTitle>
           </ResponsivePopoverHeader>
           {rangeControls}
         </ResponsivePopoverContent>
@@ -592,8 +592,6 @@ function Toolbar({
     </>
   );
 }
-
-const POWER_CURVE_TITLE = "Cycling Power Curve";
 
 function RangeChip({
   range,
@@ -637,6 +635,8 @@ function PresetSelect({
   activityTypes?: string[];
   workoutTypes?: number[];
 }) {
+  const t = useT();
+  const presetOptions = React.useMemo(() => createPresetOptions(t), [t]);
   const { data: years } = trpc.analytics.getPowerCurveYears.useQuery(
     { athleteId: athleteId!, activityTypes, workoutTypes },
     { enabled: athleteId != null },
@@ -650,15 +650,15 @@ function PresetSelect({
         if (v.startsWith("year-")) {
           onSelect(makeYearRange(Number(v.slice(5))));
         } else {
-          onSelect(presetToRange(v));
+          onSelect(presetToRange(v, t));
         }
       }}
     >
       <SelectTrigger className="text-muted-foreground h-7 min-w-28 border-dashed text-xs">
-        <SelectValue placeholder="Add range…" />
+        <SelectValue placeholder={t("charts.powerCurve.addRange")} />
       </SelectTrigger>
       <SelectContent>
-        {PRESET_OPTIONS.map((opt) => (
+        {presetOptions.map((opt) => (
           <SelectItem key={opt.value} value={opt.value}>
             {opt.label}
           </SelectItem>
@@ -679,6 +679,7 @@ function PresetSelect({
 }
 
 function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
+  const t = useT();
   const [open, setOpen] = React.useState(false);
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
@@ -705,17 +706,19 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
             size="xs"
             className="text-muted-foreground border-dashed"
           >
-            Custom range…
+            {t("charts.powerCurve.customRange")}
           </Button>
         }
       />
       <ResponsivePopoverContent align="start" className="sm:w-64">
         <ResponsivePopoverHeader>
-          <ResponsivePopoverTitle>Custom range</ResponsivePopoverTitle>
+          <ResponsivePopoverTitle>
+            {t("charts.powerCurve.customRangeTitle")}
+          </ResponsivePopoverTitle>
         </ResponsivePopoverHeader>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label>From</Label>
+            <Label>{t("charts.powerCurve.from")}</Label>
             <input
               type="date"
               value={from}
@@ -724,7 +727,7 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>To</Label>
+            <Label>{t("charts.powerCurve.to")}</Label>
             <input
               type="date"
               value={to}
@@ -733,7 +736,7 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
             />
           </div>
           <Button size="sm" onClick={handleAdd} disabled={!from || !to}>
-            Add range
+            {t("charts.powerCurve.addRangeButton")}
           </Button>
         </div>
       </ResponsivePopoverContent>
@@ -744,10 +747,11 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
 // --- Shared empty state ---
 
 function EmptyChart() {
+  const t = useT();
   return (
-    <ChartCard title={POWER_CURVE_TITLE}>
+    <ChartCard title={t("charts.powerCurve.cardTitle")}>
       <div className="text-muted-foreground flex h-full items-center justify-center">
-        No power data available
+        {t("charts.powerCurve.empty")}
       </div>
     </ChartCard>
   );

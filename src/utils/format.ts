@@ -1,3 +1,5 @@
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
+
 function decomposeSeconds(seconds: number): {
   h: number;
   m: number;
@@ -48,9 +50,21 @@ export function formatMinutesSeconds(seconds: number): string {
   return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")}`;
 }
 
-/** Distance in kilometres, e.g. "12.3 km". */
+/**
+ * Distance in kilometres, e.g. "12.3 km" (en) / "12,3 km" (fr). The numeric
+ * part is locale-formatted via the active `date-fns` locale's BCP-47 code, so
+ * the decimal separator follows the user's language.
+ */
 export function formatKm(meters: number, decimals = 1): string {
-  return `${(meters / 1000).toFixed(decimals)} km`;
+  return `${formatNumber(meters / 1000, decimals)} km`;
+}
+
+/** Locale-aware number formatting using the active locale's decimal rules. */
+export function formatNumber(value: number, decimals = 1): string {
+  return new Intl.NumberFormat(getActiveDateLocale().code, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
 }
 
 export function formatActivityType(activityType: string): string {

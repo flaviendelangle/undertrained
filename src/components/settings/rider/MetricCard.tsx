@@ -6,6 +6,7 @@ import { PlusIcon, TrendingDownIcon, TrendingUpIcon, XIcon } from "lucide-react"
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { Button } from "~/components/ui/button";
 import { NumberField } from "~/components/ui/number-field";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import {
   DEFAULT_RIDER_SETTINGS_TIMELINE,
@@ -44,6 +45,7 @@ function AddValueRow({
   onAdd: (date: string, value: number) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [value, setValue] = useState<number | null>(null);
 
@@ -79,7 +81,7 @@ function AddValueRow({
           if (value != null) onAdd(date, value);
         }}
       >
-        Add
+        {t("settings.metric.add")}
       </Button>
       <Button size="icon-xs" variant="ghost" onClick={onCancel}>
         <XIcon />
@@ -104,6 +106,7 @@ export function MetricCard({
   hasSettings,
   className,
 }: MetricCardProps) {
+  const t = useT();
   const [adding, setAdding] = useState(false);
 
   const field = config.field;
@@ -123,7 +126,9 @@ export function MetricCard({
 
   return (
     <section className={cn(CARD_CHROME, "flex flex-col gap-3", className)}>
-      <CardTitle tooltip={config.tooltip}>{config.label}</CardTitle>
+      <CardTitle tooltip={config.tooltipKey ? t(config.tooltipKey) : undefined}>
+        {t(config.labelKey)}
+      </CardTitle>
 
       {/* Current value + trend + sparkline */}
       <div className="flex items-end justify-between gap-3">
@@ -194,7 +199,9 @@ export function MetricCard({
 
         {/* Baseline ("Start") row */}
         <div className="flex items-center justify-between gap-2 border-t border-dashed pt-1.5 text-sm">
-          <span className="text-muted-foreground text-xs">Start</span>
+          <span className="text-muted-foreground text-xs">
+            {t("settings.metric.start")}
+          </span>
           <EditableValue
             config={config}
             value={hasSettings ? timeline.initialValues[field] : null}
@@ -226,7 +233,7 @@ export function MetricCard({
             onClick={() => setAdding(true)}
           >
             <PlusIcon className="mr-1 size-3" />
-            Log a new value
+            {t("settings.metric.logValue")}
           </Button>
         )}
       </div>

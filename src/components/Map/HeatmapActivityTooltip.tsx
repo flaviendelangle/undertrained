@@ -2,7 +2,9 @@ import Link from "next/link";
 
 import type { ListActivity } from "@server/db/types";
 
-import { formatActivityType, formatElapsed } from "~/utils/format";
+import { sportTypeLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
+import { formatElapsed } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 interface HeatmapActivityTooltipProps {
@@ -16,6 +18,7 @@ export function HeatmapActivityTooltip({
   position,
   onClose,
 }: HeatmapActivityTooltipProps) {
+  const t = useT();
   const sportConfig = getSportConfig(activity.type);
   const Icon = sportConfig.icon;
   const date = new Date(activity.startDateLocal).toLocaleDateString("en-US", {
@@ -40,7 +43,7 @@ export function HeatmapActivityTooltip({
         <div className="flex items-center gap-2">
           <Icon className="text-muted-foreground size-4 shrink-0" />
           <span className="text-muted-foreground text-xs">
-            {formatActivityType(activity.type)}
+            {sportTypeLabel(activity.type, t)}
           </span>
         </div>
         <p className="mt-1 truncate font-medium">{activity.name}</p>
@@ -49,14 +52,18 @@ export function HeatmapActivityTooltip({
           <span>{sportConfig.formatDistance(activity.distance)}</span>
           <span>{formatElapsed(activity.movingTime)}</span>
           {activity.totalElevationGain > 0 && (
-            <span>{Math.round(activity.totalElevationGain)}m elev.</span>
+            <span>
+              {t("map.elevationShort", {
+                value: Math.round(activity.totalElevationGain),
+              })}
+            </span>
           )}
         </div>
         <Link
           href={`/activities/${activity.stravaId}`}
           className="text-primary mt-2 block text-xs underline"
         >
-          View activity
+          {t("map.viewActivity")}
         </Link>
       </div>
     </>

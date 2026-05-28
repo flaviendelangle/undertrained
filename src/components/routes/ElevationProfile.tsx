@@ -1,5 +1,7 @@
 import * as React from "react";
 
+import { useT } from "~/i18n/useT";
+
 /**
  * Lightweight inline-SVG elevation profile. Self-contained (no chart lib) since
  * it only needs to draw a filled area for a single elevation series — keeps the
@@ -17,6 +19,7 @@ export function ElevationProfile({
   hoverIndex: number | null;
   onHoverIndexChange: (index: number | null) => void;
 }) {
+  const t = useT();
   const path = React.useMemo(() => {
     if (elevation.length < 2) return null;
     const width = 100;
@@ -61,7 +64,7 @@ export function ElevationProfile({
   return (
     <div className="flex flex-col gap-1">
       <div className="text-muted-foreground flex justify-between text-xs">
-        <span>Elevation</span>
+        <span>{t("routes.elevation")}</span>
         <span>
           {Math.round(path.min)}–{Math.round(path.max)} m
         </span>
@@ -75,7 +78,7 @@ export function ElevationProfile({
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
           className="h-full w-full"
-          aria-label="Elevation profile"
+          aria-label={t("routes.elevationProfile")}
         >
           <path d={path.area} fill="#3b82f6" fillOpacity={0.15} />
           <path

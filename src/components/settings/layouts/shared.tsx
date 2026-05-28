@@ -20,6 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import type { AppMessageKey, TFunction } from "~/i18n/I18nProvider";
+import { useT } from "~/i18n/useT";
 import type { RiderSettingsTimeline } from "~/sensors/types";
 import { getLoadAlgorithmConfigs } from "~/utils/sportConfig";
 
@@ -43,6 +45,7 @@ export function EquipmentFields({
   className?: string;
   showHeader?: boolean;
 }) {
+  const t = useT();
   const updateStatic = (
     field: "cdA" | "crr" | "bikeWeightKg",
     value: number | null,
@@ -54,15 +57,15 @@ export function EquipmentFields({
     <div className="flex flex-col gap-5">
       {showHeader && (
         <CardTitle
-          tooltip="Only used on the Live Training page to estimate virtual power from speed data. Bike weight affects climbing calculations, CdA (coefficient of drag times frontal area) models air resistance, and Crr (coefficient of rolling resistance) models tire friction."
-          description="Used on the Live Training page. These values are constant and do not change over time."
+          tooltip={t("settings.equipment.tooltip")}
+          description={t("settings.equipment.description")}
         >
-          Equipment & Aerodynamics
+          {t("settings.equipment.title")}
         </CardTitle>
       )}
       <div className={className ?? "grid grid-cols-1 gap-5 sm:grid-cols-3"}>
         <div className="flex flex-col gap-2">
-          <Label>Bike weight (kg)</Label>
+          <Label>{t("settings.equipment.bikeWeight")}</Label>
           <NumberField
             value={timeline.bikeWeightKg}
             onValueChange={(v) => updateStatic("bikeWeightKg", v)}
@@ -72,7 +75,7 @@ export function EquipmentFields({
           />
         </div>
         <div className="flex flex-col gap-2">
-          <Label>CdA (drag coefficient x area)</Label>
+          <Label>{t("settings.equipment.cda")}</Label>
           <NumberField
             value={timeline.cdA}
             onValueChange={(v) => updateStatic("cdA", v)}
@@ -82,7 +85,7 @@ export function EquipmentFields({
           />
         </div>
         <div className="flex flex-col gap-2">
-          <Label>Crr (rolling resistance)</Label>
+          <Label>{t("settings.equipment.crr")}</Label>
           <NumberField
             value={timeline.crr}
             onValueChange={(v) => updateStatic("crr", v)}
@@ -99,10 +102,13 @@ export function EquipmentFields({
 const LOAD_ALGORITHM_CONFIGS = getLoadAlgorithmConfigs();
 
 function renderLabel(
-  options: readonly { value: string; label: string }[],
+  options: readonly { value: string; labelKey: AppMessageKey }[],
+  t: TFunction,
 ): (value: string | null) => string {
-  return (value) =>
-    options.find((o) => o.value === value)?.label ?? value ?? "";
+  return (value) => {
+    const option = options.find((o) => o.value === value);
+    return option ? t(option.labelKey) : value ?? "";
+  };
 }
 
 export function LoadAlgorithmFields({
@@ -114,6 +120,7 @@ export function LoadAlgorithmFields({
   setTimeline: (t: RiderSettingsTimeline) => void;
   className?: string;
 }) {
+  const t = useT();
   return (
     <div
       className={
@@ -127,7 +134,7 @@ export function LoadAlgorithmFields({
         ];
         return (
           <div key={config.key} className="flex flex-col gap-2">
-            <Label>{config.label}</Label>
+            <Label>{t(config.labelKey)}</Label>
             <Select
               value={currentValue}
               onValueChange={(v) =>
@@ -135,12 +142,12 @@ export function LoadAlgorithmFields({
               }
             >
               <SelectTrigger>
-                <SelectValue>{renderLabel(config.options)}</SelectValue>
+                <SelectValue>{renderLabel(config.options, t)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {config.options.map((o) => (
                   <SelectItem key={o.value} value={o.value}>
-                    {o.label}
+                    {t(o.labelKey)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -165,30 +172,31 @@ export function DangerZone({
   setDeleteDialogOpen: (open: boolean) => void;
   variant?: "card" | "inline";
 }) {
+  const t = useT();
   const content = (
     <>
       <h2
         className={`text-destructive font-semibold ${variant === "card" ? "mb-2 text-lg" : "mb-1 text-base"}`}
       >
-        Danger Zone
+        {t("settings.dangerZone.title")}
       </h2>
       <p className="text-muted-foreground mb-4 text-sm">
-        Permanently delete all your activities, streams, settings, and log out.
-        This cannot be undone.
+        {t("settings.dangerZone.description")}
       </p>
       <ResponsiveDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
       >
         <ResponsiveDialogTrigger render={<Button variant="destructive" />}>
-          Delete all my data
+          {t("settings.dangerZone.deleteAll")}
         </ResponsiveDialogTrigger>
         <ResponsiveDialogContent>
           <ResponsiveDialogHeader>
-            <ResponsiveDialogTitle>Delete all data?</ResponsiveDialogTitle>
+            <ResponsiveDialogTitle>
+              {t("settings.dangerZone.dialogTitle")}
+            </ResponsiveDialogTitle>
             <ResponsiveDialogDescription>
-              This will permanently delete all your activities, settings, and
-              log you out. This action cannot be undone.
+              {t("settings.dangerZone.dialogDescription")}
             </ResponsiveDialogDescription>
           </ResponsiveDialogHeader>
           <ResponsiveDialogFooter>
@@ -196,14 +204,16 @@ export function DangerZone({
               variant="outline"
               onClick={() => setDeleteDialogOpen(false)}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
               disabled={deleting}
               onClick={onDeleteAllData}
             >
-              {deleting ? "Deleting..." : "Delete everything"}
+              {deleting
+                ? t("settings.dangerZone.deleting")
+                : t("settings.dangerZone.confirm")}
             </Button>
           </ResponsiveDialogFooter>
         </ResponsiveDialogContent>

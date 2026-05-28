@@ -14,6 +14,7 @@ import {
   formatPeriodRange,
 } from "~/components/periods/shared";
 import { Button } from "~/components/ui/button";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
 const TimePeriodMap = nextDynamic(
@@ -55,6 +56,7 @@ export function PeriodsDashboard({ stats, onDelete }: PeriodsDashboardProps) {
 }
 
 function DashboardMasterDetail({ stats, onDelete }: PeriodsDashboardProps) {
+  const t = useT();
   const [selectedId, setSelectedId] = React.useState(stats[0]?.period.id);
 
   // Keep the selection valid as periods are added or removed.
@@ -66,7 +68,11 @@ function DashboardMasterDetail({ stats, onDelete }: PeriodsDashboardProps) {
       {/* Master list */}
       <div className="flex w-72 shrink-0 flex-col gap-3">
         <div className="flex items-center justify-end">
-          <NewPeriodButton size="sm" variant="outline" label="New" />
+          <NewPeriodButton
+            size="sm"
+            variant="outline"
+            label={t("periods.new")}
+          />
         </div>
         <div className="border-border bg-card flex flex-col overflow-hidden rounded-sm border">
           {stats.map((row) => {
@@ -136,7 +142,7 @@ function DashboardMasterDetail({ stats, onDelete }: PeriodsDashboardProps) {
               size="sm"
               render={<Link href={`/time-periods/${selected.period.id}`} />}
             >
-              Open period
+              {t("periods.openPeriod")}
               <ArrowRightIcon className="size-4" />
             </Button>
           </div>

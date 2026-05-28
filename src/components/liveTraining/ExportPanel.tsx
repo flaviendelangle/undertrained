@@ -2,6 +2,7 @@ import { useTimeout } from "@base-ui/utils/useTimeout";
 import { useState } from "react";
 
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useT } from "~/i18n/useT";
 import type { SessionDataPoint, SessionSummary } from "~/sensors/types";
 import { downloadFitFile, generateFitFile } from "~/utils/fitFileGenerator";
 import { trpc } from "~/utils/trpc";
@@ -19,6 +20,7 @@ interface ExportPanelProps {
 
 export function ExportPanel(props: ExportPanelProps) {
   const { dataPoints, summary, activityName } = props;
+  const t = useT();
   const athleteId = useAthleteId();
   const uploadAction = trpc.upload.uploadToStrava.useMutation();
   const checkStatusAction = trpc.upload.checkUploadStatus.useMutation();
@@ -53,7 +55,9 @@ export function ExportPanel(props: ExportPanelProps) {
 
       const name =
         activityName ||
-        `Indoor Training ${summary.startTime.toLocaleDateString()}`;
+        t("liveTraining.defaultActivityName", {
+          date: summary.startTime.toLocaleDateString(),
+        });
 
       const result = await uploadAction.mutateAsync({
         athleteId,
@@ -88,10 +92,10 @@ export function ExportPanel(props: ExportPanelProps) {
         attempts++;
       }
 
-      setErrorMsg("Upload is taking longer than expected. Check Strava.");
+      setErrorMsg(t("liveTraining.uploadTimeout"));
       setUploadState("error");
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "Upload failed");
+      setErrorMsg(e instanceof Error ? e.message : t("liveTraining.uploadFailed"));
       setUploadState("error");
     }
   };
@@ -102,7 +106,7 @@ export function ExportPanel(props: ExportPanelProps) {
         onClick={handleDownloadFit}
         className="bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md px-4 py-2 text-sm font-medium"
       >
-        Download FIT
+        {t("liveTraining.downloadFit")}
       </button>
 
       <button
@@ -115,10 +119,10 @@ export function ExportPanel(props: ExportPanelProps) {
         className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50"
       >
         {uploadState === "uploading"
-          ? "Uploading..."
+          ? t("liveTraining.uploading")
           : uploadState === "processing"
-            ? "Processing..."
-            : "Upload to Strava"}
+            ? t("liveTraining.processing")
+            : t("liveTraining.uploadToStrava")}
       </button>
 
       {uploadState === "success" && activityId && (
@@ -128,7 +132,7 @@ export function ExportPanel(props: ExportPanelProps) {
           rel="noopener noreferrer"
           className="text-sm text-orange-400 underline"
         >
-          View on Strava
+          {t("liveTraining.viewOnStrava")}
         </a>
       )}
 

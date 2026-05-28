@@ -1,54 +1,52 @@
 import * as React from "react";
 
 import { addDays, format, isSameMonth } from "date-fns";
-import { enGB } from "date-fns/locale/en-GB";
+import { ChevronDownIcon } from "lucide-react";
+
+import { Select as SelectPrimitive } from "@base-ui/react/select";
+import { PointerActivationConstraints } from "@dnd-kit/dom";
 import {
   DragDropProvider,
+  type DragEndEvent,
+  type DragMoveEvent,
   DragOverlay,
+  type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
   useDroppable,
-  type DragEndEvent,
-  type DragMoveEvent,
-  type DragStartEvent,
 } from "@dnd-kit/react";
-import { PointerActivationConstraints } from "@dnd-kit/dom";
-import { ChevronDownIcon } from "lucide-react";
+import type { PlannedTraining } from "@server/db/types";
 
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+} from "~/components/ui/select";
 import { useReschedulePlannedTraining } from "~/hooks/useReschedulePlannedTraining";
+import { useLocale, useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
-import { useJournalPlanner } from "./journalPlanner";
-import { buildWeekGroups } from "./journalView";
-import type { JournalWeek } from "./useJournalWeeks";
-import {
-  buildDayEvents,
-  COMPACT_BLOCK_HEIGHT,
-  HOUR_HEIGHT,
-  MIN_BLOCK_HEIGHT,
-  MINUTES_PER_DAY,
-  MINUTES_PER_PIXEL,
-  minutesToTimeLabel,
-  packDayEvents,
-  snapMinutes,
-  type PositionedEvent,
-} from "./weekGrid";
 import {
   WeekActivityBlock,
   WeekPlannedBlock,
   WeekPlannedBlockGhost,
 } from "./WeekEventBlock";
-import type { PlannedTraining } from "@server/db/types";
-
-const LOCALE_OPTIONS = { locale: enGB };
+import { useJournalPlanner } from "./journalPlanner";
+import { buildWeekGroups } from "./journalView";
+import type { JournalWeek } from "./useJournalWeeks";
+import {
+  COMPACT_BLOCK_HEIGHT,
+  HOUR_HEIGHT,
+  MINUTES_PER_DAY,
+  MINUTES_PER_PIXEL,
+  MIN_BLOCK_HEIGHT,
+  type PositionedEvent,
+  buildDayEvents,
+  minutesToTimeLabel,
+  packDayEvents,
+  snapMinutes,
+} from "./weekGrid";
 
 /** Shared grid template: a fixed hour-axis gutter, then 7 equal day columns. */
 const GRID_TEMPLATE = "3.25rem repeat(7, minmax(0, 1fr))";
@@ -105,10 +103,13 @@ function TimeAxis() {
 /** The snapped, full-opacity drop target shown in a day column while dragging. */
 function PreviewGhost({ preview }: { preview: DropPreview }) {
   const durationMinutes = preview.training.durationSeconds / 60;
-  const height = Math.max(MIN_BLOCK_HEIGHT, (durationMinutes / 60) * HOUR_HEIGHT);
+  const height = Math.max(
+    MIN_BLOCK_HEIGHT,
+    (durationMinutes / 60) * HOUR_HEIGHT,
+  );
   return (
     <div
-      className="pointer-events-none absolute right-0 left-0 z-20 pr-0.5"
+      className="pointer-events-none absolute right-0 left-0 z-20 pr-1.5"
       style={{ top: (preview.minutes / 60) * HOUR_HEIGHT, height }}
     >
       <WeekPlannedBlockGhost
@@ -136,7 +137,9 @@ function DayColumn({
   /** Snapped ghost shown while a drag hovers this day (null otherwise). */
   preview: DropPreview | null;
 }) {
-  const { ref, isDropTarget } = useDroppable({ id: format(date, "yyyy-MM-dd") });
+  const { ref, isDropTarget } = useDroppable({
+    id: format(date, "yyyy-MM-dd"),
+  });
   const planner = useJournalPlanner();
 
   // Double-click an empty slot to plan a training on this day, prefilled to the
@@ -176,7 +179,7 @@ function DayColumn({
           key={event.id}
           // Double-clicking an existing event shouldn't also open the planner.
           onDoubleClick={(e) => e.stopPropagation()}
-          className="absolute pr-0.5"
+          className="absolute pr-1.5"
           style={{
             top,
             height,
@@ -214,6 +217,9 @@ function JournalWeekViewImpl({
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
   const reschedule = useReschedulePlannedTraining();
+  const t = useT();
+  const { dateLocale } = useLocale();
+  const localeOptions = { locale: dateLocale };
 
   // The corner week picker: every loaded week, newest first, grouped under its
   // month for scannability. One item per week, jumping straight to it.
@@ -287,12 +293,18 @@ function JournalWeekViewImpl({
     setPreview((prev) =>
       prev?.dayKey === drop.dayKey && prev?.minutes === drop.minutes
         ? prev
-        : { dayKey: drop.dayKey, minutes: drop.minutes, training: drop.training },
+        : {
+            dayKey: drop.dayKey,
+            minutes: drop.minutes,
+            training: drop.training,
+          },
     );
   };
 
-  const handleDragStart = (event: DragStartEvent) => updatePreview(event.operation);
-  const handleDragMove = (event: DragMoveEvent) => updatePreview(event.operation);
+  const handleDragStart = (event: DragStartEvent) =>
+    updatePreview(event.operation);
+  const handleDragMove = (event: DragMoveEvent) =>
+    updatePreview(event.operation);
 
   const handleDragEnd = (event: DragEndEvent) => {
     setPreview(null);
@@ -322,52 +334,61 @@ function JournalWeekViewImpl({
             className="bg-accent border-border sticky top-0 z-20 grid border-b"
             style={{ gridTemplateColumns: GRID_TEMPLATE }}
           >
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                title="Jump to week"
-                className="hover:bg-background/60 flex cursor-pointer flex-col items-center justify-center gap-0.5 py-2 outline-none transition-colors"
+            <SelectPrimitive.Root
+              value={format(week.weekStart, "yyyy-MM-dd")}
+              onValueChange={(value) => {
+                const target = weeks.find(
+                  (item) => format(item.weekStart, "yyyy-MM-dd") === value,
+                );
+                if (target != null) {
+                  onSelectWeek(target.weekStart);
+                }
+              }}
+            >
+              <SelectPrimitive.Trigger
+                title={t("journal.jumpToWeek")}
+                className="hover:bg-background/60 flex cursor-pointer flex-col items-center justify-center gap-0.5 py-2 transition-colors outline-none"
               >
                 <span className="text-foreground flex items-center gap-0.5 text-[11px] leading-none font-semibold">
-                  {format(week.weekStart, "'W'w", LOCALE_OPTIONS)}
+                  <SelectPrimitive.Value>
+                    {() => format(week.weekStart, "'W'w", localeOptions)}
+                  </SelectPrimitive.Value>
                   <ChevronDownIcon className="size-3" />
                 </span>
                 <span className="text-muted-foreground text-[10px] leading-none tabular-nums">
                   {format(week.weekStart, "yyyy")}
                 </span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-80 w-52">
+              </SelectPrimitive.Trigger>
+              <SelectContent align="start" className="max-h-80 w-52">
                 {weekGroups.map((group) => (
-                  <DropdownMenuGroup key={group.month.toISOString()}>
-                    <DropdownMenuLabel>
-                      {format(group.month, "MMMM yyyy", LOCALE_OPTIONS)}
-                    </DropdownMenuLabel>
+                  <SelectGroup key={group.month.toISOString()}>
+                    <SelectLabel>
+                      {format(group.month, "MMMM yyyy", localeOptions)}
+                    </SelectLabel>
                     {group.weeks.map((item) => {
                       const end = addDays(item.weekStart, 6);
                       const range = isSameMonth(item.weekStart, end)
-                        ? `${format(item.weekStart, "d")}–${format(end, "d MMM", LOCALE_OPTIONS)}`
-                        : `${format(item.weekStart, "d MMM", LOCALE_OPTIONS)} – ${format(end, "d MMM", LOCALE_OPTIONS)}`;
-                      const isActive =
-                        item.weekStart.getTime() === week.weekStart.getTime();
+                        ? `${format(item.weekStart, "d")}–${format(end, "d MMM", localeOptions)}`
+                        : `${format(item.weekStart, "d MMM", localeOptions)} – ${format(end, "d MMM", localeOptions)}`;
                       return (
-                        <DropdownMenuItem
+                        <SelectItem
                           key={item.weekStart.toISOString()}
-                          onClick={() => onSelectWeek(item.weekStart)}
-                          className={cn(
-                            "justify-between gap-3 tabular-nums",
-                            isActive && "text-foreground font-semibold",
-                          )}
+                          value={format(item.weekStart, "yyyy-MM-dd")}
+                          className="tabular-nums"
                         >
-                          <span>{format(item.weekStart, "'W'w", LOCALE_OPTIONS)}</span>
-                          <span className="text-muted-foreground text-xs">
+                          <span>
+                            {format(item.weekStart, "'W'w", localeOptions)}
+                          </span>
+                          <span className="text-muted-foreground ml-auto text-xs">
                             {range}
                           </span>
-                        </DropdownMenuItem>
+                        </SelectItem>
                       );
                     })}
-                  </DropdownMenuGroup>
+                  </SelectGroup>
                 ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </SelectContent>
+            </SelectPrimitive.Root>
             {week.days.map((day) => (
               <div
                 key={day.date.toISOString()}
@@ -379,7 +400,7 @@ function JournalWeekViewImpl({
                     day.isToday ? "text-primary" : "text-muted-foreground",
                   )}
                 >
-                  {format(day.date, "EEE", LOCALE_OPTIONS)}
+                  {format(day.date, "EEE", localeOptions)}
                 </span>
                 <span
                   className={cn(

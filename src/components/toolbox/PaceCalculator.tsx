@@ -2,6 +2,8 @@ import * as React from "react";
 
 import { Button } from "~/components/ui/button";
 import { NumberField } from "~/components/ui/number-field";
+import { type TFunction } from "~/i18n/I18nProvider";
+import { useT } from "~/i18n/useT";
 import { formatDuration, formatMinutesSeconds } from "~/utils/format";
 
 import {
@@ -15,11 +17,18 @@ import {
 } from "./ToolboxTable";
 
 const DISTANCES = [
-  { label: "Marathon", km: 42.195 },
-  { label: "Half Marathon", km: 21.0975 },
-  { label: "10 km", km: 10 },
-  { label: "5 km", km: 5 },
+  { id: "marathon", labelKey: "toolbox.distance.marathon", km: 42.195 },
+  {
+    id: "half-marathon",
+    labelKey: "toolbox.distance.halfMarathon",
+    km: 21.0975,
+  },
+  { id: "10k", labelKey: "toolbox.distance.10k", km: 10 },
+  { id: "5k", labelKey: "toolbox.distance.5k", km: 5 },
 ] as const;
+
+const createDistances = (t: TFunction) =>
+  DISTANCES.map((d) => ({ ...d, label: t(d.labelKey) }));
 
 // Generate pace rows from 2:30 to 9:00 in 5-second increments
 const paceRows = (() => {
@@ -38,11 +47,14 @@ const paceRows = (() => {
 type Mode = "pace-to-duration" | "duration-to-pace";
 
 export function PaceCalculator() {
+  const t = useT();
+  const distances = React.useMemo(() => createDistances(t), [t]);
+
   const [mode, setMode] = React.useState<Mode>("pace-to-duration");
 
   // Distance selection
   const [selectedDistance, setSelectedDistance] =
-    React.useState<string>("Marathon");
+    React.useState<string>("marathon");
   const [customKm, setCustomKm] = React.useState<number | null>(15);
 
   // Pace inputs (for pace-to-duration mode)
@@ -59,9 +71,9 @@ export function PaceCalculator() {
   );
 
   const distanceKm =
-    selectedDistance === "Custom"
+    selectedDistance === "custom"
       ? customKm
-      : (DISTANCES.find((d) => d.label === selectedDistance)?.km ?? null);
+      : (DISTANCES.find((d) => d.id === selectedDistance)?.km ?? null);
 
   const computedResult = React.useMemo(() => {
     if (distanceKm == null || distanceKm <= 0) return null;
@@ -101,14 +113,14 @@ export function PaceCalculator() {
             size="sm"
             onClick={() => setMode("pace-to-duration")}
           >
-            Pace → Duration
+            {t("toolbox.pace.paceToDuration")}
           </Button>
           <Button
             variant={mode === "duration-to-pace" ? "default" : "outline"}
             size="sm"
             onClick={() => setMode("duration-to-pace")}
           >
-            Duration → Pace
+            {t("toolbox.pace.durationToPace")}
           </Button>
         </div>
 
@@ -118,25 +130,24 @@ export function PaceCalculator() {
             {/* Distance picker */}
             <div>
               <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
-                Distance
+                {t("toolbox.distance.label")}
               </label>
               <div className="flex flex-wrap gap-1.5">
-                {[...DISTANCES, { label: "Custom" as const, km: null }].map(
-                  (d) => (
-                    <Button
-                      key={d.label}
-                      variant={
-                        selectedDistance === d.label ? "default" : "outline"
-                      }
-                      size="sm"
-                      onClick={() => setSelectedDistance(d.label)}
-                    >
-                      {d.label}
-                    </Button>
-                  ),
-                )}
+                {[
+                  ...distances,
+                  { id: "custom", label: t("toolbox.distance.custom") },
+                ].map((d) => (
+                  <Button
+                    key={d.id}
+                    variant={selectedDistance === d.id ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedDistance(d.id)}
+                  >
+                    {d.label}
+                  </Button>
+                ))}
               </div>
-              {selectedDistance === "Custom" && (
+              {selectedDistance === "custom" && (
                 <div className="mt-2 flex items-center gap-1.5">
                   <NumberField
                     min={0.1}
@@ -154,7 +165,7 @@ export function PaceCalculator() {
             {mode === "pace-to-duration" ? (
               <div>
                 <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
-                  Pace
+                  {t("toolbox.pace.pace")}
                 </label>
                 <div className="flex items-center gap-1.5">
                   <NumberField
@@ -178,7 +189,7 @@ export function PaceCalculator() {
             ) : (
               <div>
                 <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
-                  Duration
+                  {t("toolbox.pace.duration")}
                 </label>
                 <div className="flex items-center gap-1.5">
                   <NumberField
@@ -212,7 +223,9 @@ export function PaceCalculator() {
           {/* Right side: result */}
           <div className="flex flex-col items-start justify-center md:items-center">
             <span className="text-muted-foreground mb-1 text-sm font-medium">
-              {mode === "pace-to-duration" ? "Finish Time" : "Pace"}
+              {mode === "pace-to-duration"
+                ? t("toolbox.pace.finishTime")
+                : t("toolbox.pace.pace")}
             </span>
             <span className="text-foreground text-3xl font-bold tabular-nums">
               {computedResult ?? "—"}
@@ -225,18 +238,18 @@ export function PaceCalculator() {
       <div className="md:border-border md:bg-card md:rounded-sm md:border">
         <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
           <h2 className="text-foreground text-lg font-semibold">
-            Pace Reference Table
+            {t("toolbox.pace.referenceTableTitle")}
           </h2>
           <p className="text-muted-foreground text-sm">
-            Finish times for common distances at each pace
+            {t("toolbox.pace.referenceTableSubtitle")}
           </p>
         </div>
         <ToolboxTable containerClassName="max-h-[600px]">
           <ToolboxTableHeader>
             <ToolboxTableHeaderRow>
-              <ToolboxTableHead first>Pace /km</ToolboxTableHead>
-              {DISTANCES.map((d) => (
-                <ToolboxTableHead key={d.label}>{d.label}</ToolboxTableHead>
+              <ToolboxTableHead first>{t("toolbox.pace.paceKm")}</ToolboxTableHead>
+              {distances.map((d) => (
+                <ToolboxTableHead key={d.id}>{d.label}</ToolboxTableHead>
               ))}
             </ToolboxTableHeaderRow>
           </ToolboxTableHeader>
@@ -246,7 +259,7 @@ export function PaceCalculator() {
                 <ToolboxTableCell first>{row.paceLabel}</ToolboxTableCell>
                 {DISTANCES.map((d) => (
                   <ToolboxTableCell
-                    key={d.label}
+                    key={d.id}
                     className="text-muted-foreground tabular-nums"
                   >
                     {formatDuration(row.paceSeconds * d.km)}

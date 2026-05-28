@@ -4,8 +4,10 @@ import { RotateCcwIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { useDismissedHints } from "~/hooks/useDismissedHints";
+import { useT } from "~/i18n/useT";
 
 export function ResetHintsButton() {
+  const t = useT();
   const { resetAll } = useDismissedHints();
   const [didReset, setDidReset] = React.useState(false);
 
@@ -20,7 +22,9 @@ export function ResetHintsButton() {
       }}
     >
       <RotateCcwIcon className="size-3.5" />
-      {didReset ? "Hints restored" : "Reset all hints"}
+      {didReset
+        ? t("settings.preferences.hintsRestored")
+        : t("settings.preferences.resetHints")}
     </Button>
   );
 }

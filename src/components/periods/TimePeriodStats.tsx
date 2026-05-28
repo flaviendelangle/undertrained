@@ -9,6 +9,7 @@ import {
 
 import { StatCard } from "~/components/primitives/StatCard";
 import { StatSection } from "~/components/primitives/StatSection";
+import { useT } from "~/i18n/useT";
 import { formatHumanDuration } from "~/utils/format";
 
 interface TimePeriodStatsProps {
@@ -20,6 +21,7 @@ interface TimePeriodStatsProps {
 }
 
 export function TimePeriodStats(props: TimePeriodStatsProps) {
+  const t = useT();
   const {
     activityCount,
     totalMovingTime,
@@ -41,25 +43,25 @@ export function TimePeriodStats(props: TimePeriodStatsProps) {
       <div className="border-border mb-4 grid grid-cols-2 gap-2.5 border-b pb-4 md:grid-cols-4">
         <StatCard
           icon={ListIcon}
-          label="Activities"
+          label={t("periods.stats.activities")}
           value={activityCount}
           variant="hero"
         />
         <StatCard
           icon={Timer}
-          label="Moving Time"
+          label={t("periods.stats.movingTime")}
           value={formatHumanDuration(totalMovingTime)}
           variant="hero"
         />
         <StatCard
           icon={Route}
-          label="Distance"
+          label={t("periods.stats.distance")}
           value={`${(totalDistance / 1000).toFixed(1)} km`}
           variant="hero"
         />
         <StatCard
           icon={Mountain}
-          label="Elevation"
+          label={t("periods.stats.elevation")}
           value={`${Math.round(totalElevation)} m`}
           variant="hero"
         />
@@ -67,19 +69,25 @@ export function TimePeriodStats(props: TimePeriodStatsProps) {
 
       {/* Grouped Sections */}
       <div className="flex flex-col gap-4">
-        <StatSection icon={Clock} title="Other totals">
+        <StatSection icon={Clock} title={t("periods.stats.otherTotals")}>
           <StatCard
-            label="Elapsed Time"
+            label={t("periods.stats.elapsedTime")}
             value={formatHumanDuration(totalElapsedTime)}
           />
         </StatSection>
 
         {activityCount > 0 && (
-          <StatSection icon={TrendingUp} title="Averages per Activity">
-            <StatCard label="Avg Distance" value={`${avgDistance} km`} />
-            <StatCard label="Avg Duration" value={avgDuration} />
+          <StatSection
+            icon={TrendingUp}
+            title={t("periods.stats.averagesPerActivity")}
+          >
             <StatCard
-              label="Avg Elevation"
+              label={t("periods.stats.avgDistance")}
+              value={`${avgDistance} km`}
+            />
+            <StatCard label={t("periods.stats.avgDuration")} value={avgDuration} />
+            <StatCard
+              label={t("periods.stats.avgElevation")}
               value={`${activityCount > 0 ? Math.round(totalElevation / activityCount) : 0} m`}
             />
           </StatSection>

@@ -2,6 +2,7 @@ import { SettingsIcon, XIcon } from "lucide-react";
 import Link from "next/link";
 
 import { useDismissedHints } from "~/hooks/useDismissedHints";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
 interface SettingsCalloutProps {
@@ -17,6 +18,7 @@ export function SettingsCallout({
   settingsPath = "/settings/rider",
   className,
 }: SettingsCalloutProps) {
+  const t = useT();
   const { isDismissed, dismiss } = useDismissedHints();
 
   if (isDismissed(hintId)) return null;
@@ -35,13 +37,13 @@ export function SettingsCallout({
           href={settingsPath}
           className="text-primary hover:text-primary/80 font-medium underline underline-offset-2"
         >
-          Open Settings
+          {t("common.openSettings")}
         </Link>
       </div>
       <button
         onClick={() => dismiss(hintId)}
         className="text-muted-foreground hover:text-foreground -mt-0.5 -mr-1 shrink-0 p-1"
-        aria-label="Dismiss"
+        aria-label={t("common.dismiss")}
       >
         <XIcon className="size-3" />
       </button>

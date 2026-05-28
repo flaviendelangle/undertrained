@@ -1,7 +1,6 @@
 import * as React from "react";
 
 import { format } from "date-fns";
-import { enGB } from "date-fns/locale/en-GB";
 import Link from "next/link";
 
 import type { ListActivity } from "@server/db/types";
@@ -27,6 +26,10 @@ import {
 } from "~/components/ui/table";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
+import { type TFunction } from "~/i18n/I18nProvider";
+import { sportTypeLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import { formatActivityType, formatDuration } from "~/utils/format";
 import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
 import { getSportConfig } from "~/utils/sportConfig";
@@ -84,7 +87,7 @@ function ActivityRow(props: {
 
 const columnHelper = createColumnHelper<ActivityWithoutMap>();
 
-const columns = [
+const createColumns = (t: TFunction) => [
   columnHelper.accessor("type", {
     cell: (info) => {
       const type = info.getValue();
@@ -92,11 +95,11 @@ const columns = [
       return (
         <span className="inline-flex items-center gap-2">
           <Icon className="size-4 shrink-0" />
-          <span className="truncate">{formatActivityType(type)}</span>
+          <span className="truncate">{sportTypeLabel(type, t)}</span>
         </span>
       );
     },
-    header: () => <span>Sport</span>,
+    header: () => <span>{t("activities.columns.sport")}</span>,
     size: 2,
     meta: { minWidth: 155 },
     filterFn: (row, _columnId, filterValue: string[]) => {
@@ -106,13 +109,13 @@ const columns = [
   }),
   columnHelper.accessor("name", {
     cell: (info) => <span className="truncate">{info.getValue()}</span>,
-    header: () => <span>Title</span>,
+    header: () => <span>{t("activities.columns.title")}</span>,
     size: 3,
     meta: { minWidth: 140 },
   }),
   columnHelper.accessor("startDateLocal", {
-    cell: (info) => <span className="truncate">{format(new Date(info.getValue()), "P p", { locale: enGB })}</span>,
-    header: () => <span>Date</span>,
+    cell: (info) => <span className="truncate">{format(new Date(info.getValue()), "P p", { locale: getActiveDateLocale() })}</span>,
+    header: () => <span>{t("activities.columns.date")}</span>,
     size: 2,
     meta: { minWidth: 140 },
   }),
@@ -123,7 +126,7 @@ const columns = [
         ? ""
         : getSportConfig(activity.type).formatDistance(activity.distance);
     },
-    header: () => <span>Distance</span>,
+    header: () => <span>{t("activities.columns.distance")}</span>,
     sortingFn: "basic",
     size: 1,
   }),
@@ -132,13 +135,13 @@ const columns = [
       const value = info.getValue();
       return value === 0 ? "" : `${Math.round(value)} m`;
     },
-    header: () => <span>Elevation</span>,
+    header: () => <span>{t("activities.columns.elevation")}</span>,
     sortingFn: "basic",
     size: 1,
   }),
   columnHelper.accessor("movingTime", {
     cell: (info) => formatDuration(info.getValue()),
-    header: () => <span>Moving Time</span>,
+    header: () => <span>{t("activities.columns.movingTime")}</span>,
     sortingFn: "basic",
     size: 1,
   }),
@@ -149,7 +152,7 @@ const columns = [
         ? ""
         : getSportConfig(activity.type).formatSpeed(activity.averageSpeed);
     },
-    header: () => <span>Pace</span>,
+    header: () => <span>{t("activities.columns.pace")}</span>,
     sortingFn: "basic",
     size: 1,
   }),
@@ -158,7 +161,7 @@ const columns = [
       const value = info.getValue();
       return value != null ? Math.round(value) : "";
     },
-    header: () => <span>Load</span>,
+    header: () => <span>{t("activities.columns.load")}</span>,
     sortingFn: "basic",
     size: 1,
   }),
@@ -168,29 +171,34 @@ const ROW_HEIGHT = 48;
 const VIRTUALIZER_OVERSCAN = 20;
 const SKELETON_ROW_COUNT = 25;
 
-const activitySearchFilter = (
-  row: Row<ActivityWithoutMap>,
-  _columnId: string,
-  filterValue: string,
-) => {
-  if (!filterValue) return true;
-  const activity = row.original;
-  const haystack = [
-    activity.name,
-    formatActivityType(activity.type),
-    format(new Date(activity.startDateLocal), "P p", { locale: enGB }),
-  ]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(filterValue.toLowerCase());
-};
+const createActivitySearchFilter =
+  (t: TFunction) =>
+  (row: Row<ActivityWithoutMap>, _columnId: string, filterValue: string) => {
+    if (!filterValue) return true;
+    const activity = row.original;
+    const haystack = [
+      activity.name,
+      // Match both the raw enum name and the localised label so search works
+      // regardless of the active locale.
+      formatActivityType(activity.type),
+      sportTypeLabel(activity.type, t),
+      format(new Date(activity.startDateLocal), "P p", { locale: getActiveDateLocale() }),
+    ]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(filterValue.toLowerCase());
+  };
 
 export function ActivitiesTable(props: { searchFilter?: string; timePeriodId?: number }) {
+  const t = useT();
   const activitiesQuery = useActivitiesQuery(
     props.timePeriodId != null ? { timePeriodId: props.timePeriodId } : undefined,
   );
   const { timeline } = useRiderSettingsTimeline();
   const tableContainerRef = React.useRef<HTMLDivElement>(null);
+
+  const columns = React.useMemo(() => createColumns(t), [t]);
+  const globalFilterFn = React.useMemo(() => createActivitySearchFilter(t), [t]);
 
   const loadPreferences = React.useMemo(
     () => getLoadPreferences(timeline),
@@ -209,7 +217,7 @@ export function ActivitiesTable(props: { searchFilter?: string; timePeriodId?: n
     data,
     columns,
     state: { globalFilter: props.searchFilter ?? "" },
-    globalFilterFn: activitySearchFilter,
+    globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -244,10 +252,10 @@ export function ActivitiesTable(props: { searchFilter?: string; timePeriodId?: n
                   title={
                     header.column.getCanSort()
                       ? header.column.getNextSortingOrder() === "asc"
-                        ? "Sort ascending"
+                        ? t("activities.sortAscending")
                         : header.column.getNextSortingOrder() === "desc"
-                          ? "Sort descending"
-                          : "Clear sort"
+                          ? t("activities.sortDescending")
+                          : t("activities.clearSort")
                       : undefined
                   }
                   className="flex min-w-0 items-center px-3 py-3 md:px-6"

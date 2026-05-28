@@ -7,6 +7,7 @@ import { useRouter } from "next/router";
 import { ActivityActionsMenu } from "~/components/ActivityActionsMenu";
 import { ActivityMap } from "~/components/ActivityMap";
 import { ActivityStats } from "~/components/ActivityStats";
+import { EditActivityButton } from "~/components/EditActivityDialog";
 import { ElevationProfile } from "~/components/ElevationProfile";
 import { PageTitle } from "~/components/PageTitle";
 import { ActivityLaps } from "~/components/charts/ActivityLaps";
@@ -15,8 +16,10 @@ import { PowerCurve } from "~/components/charts/PowerCurve";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
 import { useTypedParams } from "~/hooks/useTypedParams";
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
+import { sportTypeLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import { NextPageWithLayout } from "~/pages/_app";
-import { formatActivityType } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
@@ -38,13 +41,15 @@ const ActivityPage: NextPageWithLayout = () => {
 };
 
 function ActivityPageContent({ stravaId }: { stravaId: number }) {
+  const t = useT();
   const router = useRouter();
   // Coming from the journal, rebuild its URL from the `view`/`week` recorded on
   // the link so back returns to the right view and week (independent of how the
   // calendar was scrolled).
   const journalBackHref = (() => {
     const view = router.query.view === "week" ? "week" : "month";
-    const week = typeof router.query.week === "string" ? router.query.week : null;
+    const week =
+      typeof router.query.week === "string" ? router.query.week : null;
     return `/journal/${view}${week ? `?week=${week}` : ""}`;
   })();
   const backHref =
@@ -117,7 +122,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   if (!activity) {
     return (
       <div className="flex h-full w-full items-center justify-center">
-        <p className="text-muted-foreground">Activity not found</p>
+        <p className="text-muted-foreground">{t("activities.notFound")}</p>
       </div>
     );
   }
@@ -134,7 +139,14 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   return (
     <>
       <PageTitle title={activity.name} />
-      <Toolbar actions={<ActivityActionsMenu stravaId={activity.stravaId} />}>
+      <Toolbar
+        actions={
+          <>
+            <EditActivityButton activity={activity} />
+            <ActivityActionsMenu stravaId={activity.stravaId} />
+          </>
+        }
+      >
         <Link
           href={backHref}
           className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 items-center justify-center rounded-lg transition-colors"
@@ -142,32 +154,66 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
           <ArrowLeftIcon className="size-4" />
         </Link>
         <span className="min-w-0 truncate font-semibold">{activity.name}</span>
+        <span className="bg-accent text-accent-foreground hidden shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium uppercase sm:inline-flex">
+          {React.createElement(getSportConfig(activity.type).icon, {
+            className: "size-3.5",
+          })}
+          {sportTypeLabel(activity.type, t)}
+        </span>
+        {isRace && (
+          <span className="hidden shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-amber-500 uppercase ring-1 ring-amber-400/80 ring-inset sm:inline-flex">
+            <FlagIcon className="size-3" />
+            {t("activities.race")}
+          </span>
+        )}
+        {activity.commute && (
+          <span className="bg-accent text-muted-foreground hidden shrink-0 items-center rounded-md px-2 py-0.5 text-xs font-medium uppercase sm:inline-flex">
+            {t("activities.commute")}
+          </span>
+        )}
+        <span className="text-muted-foreground hidden shrink-0 text-sm sm:inline">
+          {new Date(activity.startDateLocal).toLocaleDateString(
+            getActiveDateLocale().code,
+            {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            },
+          )}
+        </span>
+      </Toolbar>
+
+      <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-4 py-2 sm:hidden">
         <span className="bg-accent text-accent-foreground inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium uppercase">
           {React.createElement(getSportConfig(activity.type).icon, {
             className: "size-3.5",
           })}
-          {formatActivityType(activity.type)}
+          {sportTypeLabel(activity.type, t)}
         </span>
         {isRace && (
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-amber-500 uppercase ring-1 ring-amber-400/80 ring-inset">
             <FlagIcon className="size-3" />
-            Race
+            {t("activities.race")}
           </span>
         )}
         {activity.commute && (
           <span className="bg-accent text-muted-foreground inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-xs font-medium uppercase">
-            Commute
+            {t("activities.commute")}
           </span>
         )}
-        <span className="text-muted-foreground hidden shrink-0 text-sm sm:inline">
-          {new Date(activity.startDateLocal).toLocaleDateString(undefined, {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
+        <span className="text-muted-foreground text-xs">
+          {new Date(activity.startDateLocal).toLocaleDateString(
+            getActiveDateLocale().code,
+            {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            },
+          )}
         </span>
-      </Toolbar>
+      </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
         {hasMap && mapExpanded && (
@@ -181,7 +227,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
               <button
                 onClick={() => setMapExpanded(false)}
                 className="bg-background/80 hover:bg-background text-foreground absolute top-3 right-3 z-20 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
-                title="Collapse map"
+                title={t("activities.collapseMap")}
               >
                 <Minimize2 className="size-4" />
               </button>
@@ -201,13 +247,14 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             <ActivityMap
               activity={activity}
               highlightPosition={hoverPosition}
+              interactive={false}
               routePositions={latlngRoute}
             />
             <div className="from-background pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t to-transparent" />
             <button
               onClick={() => setMapExpanded(true)}
               className="bg-background/80 hover:bg-background text-foreground absolute top-3 right-3 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
-              title="Expand map"
+              title={t("activities.expandMap")}
             >
               <Maximize2 className="size-4" />
             </button>
@@ -223,7 +270,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
                 {activity.description && (
                   <div>
                     <div className="text-muted-foreground mb-1 text-xs font-medium">
-                      Description
+                      {t("activities.description")}
                     </div>
                     <p className="text-sm whitespace-pre-wrap">
                       {activity.description}
@@ -233,7 +280,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
                 {activity.privateNote && (
                   <div>
                     <div className="text-muted-foreground mb-1 text-xs font-medium">
-                      Private note
+                      {t("activities.privateNote")}
                     </div>
                     <p className="text-sm whitespace-pre-wrap">
                       {activity.privateNote}
@@ -270,9 +317,14 @@ function ActivityPageSkeleton() {
       <Toolbar>
         <div className="bg-accent size-8 animate-pulse rounded-lg" />
         <div className="bg-accent h-6 w-48 animate-pulse rounded" />
-        <div className="bg-accent h-5 w-20 animate-pulse rounded-md" />
-        <div className="bg-accent h-5 w-40 animate-pulse rounded" />
+        <div className="bg-accent hidden h-5 w-20 animate-pulse rounded-md sm:block" />
+        <div className="bg-accent hidden h-5 w-40 animate-pulse rounded sm:block" />
       </Toolbar>
+
+      <div className="border-border flex items-center gap-1.5 border-b px-4 py-2 sm:hidden">
+        <div className="bg-accent h-5 w-20 animate-pulse rounded-md" />
+        <div className="bg-accent h-4 w-32 animate-pulse rounded" />
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="bg-secondary h-[50vh] max-h-[600px] min-h-80 w-full animate-pulse" />

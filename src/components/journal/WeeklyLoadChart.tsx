@@ -2,12 +2,11 @@ import * as React from "react";
 
 import { LineChartPro } from "@mui/x-charts-pro";
 
+import { useT } from "~/i18n/useT";
 import { AXIS_SIZE, useChartTokens } from "~/lib/chartTokens";
 
 import { ChartThemeProvider } from "../charts/ChartThemeProvider";
 import { ChartTooltip } from "../charts/ChartTooltip";
-
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /**
  * Running total of a 7-day load array, so the line rises across the week.
@@ -43,16 +42,30 @@ export function WeeklyLoadChart({
   /** Previous week's 7 daily loads, or `null` when there is no prior week. */
   lastWeek: number[] | null;
 }) {
+  const t = useT();
   const tokens = useChartTokens();
   const thisWeekColor = "var(--primary)";
   const lastWeekColor = tokens.axisLabel; // grey
+
+  const dayLabels = React.useMemo(
+    () => [
+      t("journal.day.mon"),
+      t("journal.day.tue"),
+      t("journal.day.wed"),
+      t("journal.day.thu"),
+      t("journal.day.fri"),
+      t("journal.day.sat"),
+      t("journal.day.sun"),
+    ],
+    [t],
+  );
 
   const series = React.useMemo(() => {
     const config = [];
     if (lastWeek != null) {
       config.push({
         id: "last",
-        label: "Previous week",
+        label: t("journal.previousWeek"),
         data: cumulative(lastWeek),
         color: lastWeekColor,
         showMark: true,
@@ -62,7 +75,7 @@ export function WeeklyLoadChart({
     }
     config.push({
       id: "this",
-      label: "This week",
+      label: t("journal.thisWeek"),
       data: cumulative(thisWeek),
       color: thisWeekColor,
       showMark: true,
@@ -70,7 +83,7 @@ export function WeeklyLoadChart({
       valueFormatter: (v: number | null) => (v == null ? "" : v.toFixed(0)),
     });
     return config;
-  }, [thisWeek, lastWeek, thisWeekColor, lastWeekColor]);
+  }, [thisWeek, lastWeek, thisWeekColor, lastWeekColor, t]);
 
   return (
     <ChartThemeProvider>
@@ -79,7 +92,7 @@ export function WeeklyLoadChart({
           xAxis={[
             {
               scaleType: "point",
-              data: DAY_LABELS,
+              data: dayLabels,
               tickLabelStyle: { fontSize: 10 },
               height: AXIS_SIZE.mobile.height,
             },

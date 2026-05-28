@@ -4,6 +4,7 @@ import { ExportPanel } from "~/components/liveTraining/ExportPanel";
 import { PowerHrChart } from "~/components/liveTraining/PowerHrChart";
 import { StatCard } from "~/components/primitives/StatCard";
 import { Button } from "~/components/ui/button";
+import { useT } from "~/i18n/useT";
 import { msToKmh } from "~/sensors/speedFromPower";
 import type { SessionDataPoint, SessionSummary } from "~/sensors/types";
 import { formatHumanDuration } from "~/utils/format";
@@ -23,6 +24,7 @@ export function HudPostTraining({
   ftp,
   onReset,
 }: HudPostTrainingProps) {
+  const t = useT();
   const [activityName, setActivityName] = useState("");
 
   return (
@@ -35,7 +37,9 @@ export function HudPostTraining({
 
         {/* Header */}
         <div className="mb-6 text-center">
-          <h2 className="text-foreground text-3xl font-bold">Ride Complete</h2>
+          <h2 className="text-foreground text-3xl font-bold">
+            {t("liveTraining.rideComplete")}
+          </h2>
           <p className="mt-2 font-mono text-4xl font-bold text-teal-400">
             {formatHumanDuration(summary.elapsedSeconds)}
           </p>
@@ -44,28 +48,28 @@ export function HudPostTraining({
         {/* Activity name */}
         <div className="mb-6">
           <label className="text-muted-foreground mb-2 block text-xs tracking-wider uppercase">
-            Activity Name
+            {t("liveTraining.activityName")}
           </label>
           <input
             className="border-border bg-card text-foreground placeholder:text-muted-foreground focus:border-primary w-full rounded-xl border px-4 py-3 text-lg focus:outline-none"
             value={activityName}
             onChange={(e) => setActivityName(e.target.value)}
-            placeholder="Name your ride..."
+            placeholder={t("liveTraining.nameYourRide")}
           />
         </div>
 
         {/* Stats grid */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard
-            label="Avg Power"
+            label={t("liveTraining.stat.avgPower")}
             value={summary.avgPower != null ? `${summary.avgPower} W` : null}
           />
           <StatCard
-            label="Max Power"
+            label={t("liveTraining.stat.maxPower")}
             value={summary.maxPower != null ? `${summary.maxPower} W` : null}
           />
           <StatCard
-            label="Normalized"
+            label={t("liveTraining.stat.normalized")}
             value={
               summary.normalizedPower != null
                 ? `${summary.normalizedPower} W`
@@ -73,7 +77,7 @@ export function HudPostTraining({
             }
           />
           <StatCard
-            label="Avg HR"
+            label={t("liveTraining.stat.avgHr")}
             value={
               summary.avgHeartRate != null
                 ? `${summary.avgHeartRate} bpm`
@@ -81,7 +85,7 @@ export function HudPostTraining({
             }
           />
           <StatCard
-            label="Max HR"
+            label={t("liveTraining.stat.maxHr")}
             value={
               summary.maxHeartRate != null
                 ? `${summary.maxHeartRate} bpm`
@@ -89,17 +93,17 @@ export function HudPostTraining({
             }
           />
           <StatCard
-            label="Distance"
+            label={t("liveTraining.stat.distance")}
             value={`${(summary.totalDistance / 1000).toFixed(2)} km`}
           />
           <StatCard
-            label="Avg Cadence"
+            label={t("liveTraining.stat.avgCadence")}
             value={
               summary.avgCadence != null ? `${summary.avgCadence} rpm` : null
             }
           />
           <StatCard
-            label="Avg Speed"
+            label={t("liveTraining.stat.avgSpeed")}
             value={
               summary.avgSpeed != null
                 ? `${msToKmh(summary.avgSpeed).toFixed(1)} km/h`
@@ -118,7 +122,7 @@ export function HudPostTraining({
         {/* Export */}
         <div className="border-border/50 bg-card/50 mb-6 rounded-xl border p-4">
           <h3 className="text-muted-foreground mb-3 text-sm font-medium uppercase">
-            Save & Share
+            {t("liveTraining.saveAndShare")}
           </h3>
           <ExportPanel
             dataPoints={dataPoints}
@@ -133,7 +137,7 @@ export function HudPostTraining({
           onClick={onReset}
           className="w-full rounded-xl py-3"
         >
-          Start New Session
+          {t("liveTraining.startNewSession")}
         </Button>
       </div>
     </div>

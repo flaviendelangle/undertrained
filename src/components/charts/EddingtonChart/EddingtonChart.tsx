@@ -7,6 +7,7 @@ import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useEddingtonData } from "~/hooks/useEddingtonData";
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { useT } from "~/i18n/useT";
 import {
   AXIS_SIZE,
   CHART_MARGINS,
@@ -35,11 +36,9 @@ const TAB_OPTIONS: { value: TabKey; label: React.ReactNode }[] = [
 ];
 
 const DISTANCE_DIVISOR = 1000;
-const UNIT_LABEL = "Distance";
-const INFO =
-  "Your Eddington number E is the largest number such that you have cycled at least E km on E different days. Each bar shows how many days you rode at least that distance.";
 
 export default function EddingtonChart() {
+  const t = useT();
   const [activeTab, setActiveTab] = React.useState<TabKey>("riding");
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
@@ -74,9 +73,13 @@ export default function EddingtonChart() {
   if (!eddington || eddington.data.length === 0) {
     return (
       <ChartThemeProvider>
-        <ChartCard title="Eddington Number" info={INFO} actions={actions}>
+        <ChartCard
+          title={t("charts.eddington.title")}
+          info={t("charts.eddington.info")}
+          actions={actions}
+        >
           <div className="text-muted-foreground flex h-full items-center justify-center">
-            No data available
+            {t("charts.eddington.empty")}
           </div>
         </ChartCard>
       </ChartThemeProvider>
@@ -110,7 +113,11 @@ export default function EddingtonChart() {
 
   return (
     <ChartThemeProvider>
-      <ChartCard title="Eddington Number" info={INFO} actions={actions}>
+      <ChartCard
+        title={t("charts.eddington.title")}
+        info={t("charts.eddington.info")}
+        actions={actions}
+      >
         <BarChartPremium
           key={activeTab}
           renderer="webgl"
@@ -120,7 +127,7 @@ export default function EddingtonChart() {
               id: "distance",
               scaleType: "band",
               data: xAxisData,
-              label: isMobile ? undefined : UNIT_LABEL,
+              label: isMobile ? undefined : t("charts.eddington.distanceAxis"),
               height: isMobile
                 ? AXIS_SIZE.mobile.height
                 : AXIS_SIZE.desktop.height,
@@ -135,7 +142,7 @@ export default function EddingtonChart() {
           ]}
           yAxis={[
             {
-              label: isMobile ? undefined : "Days",
+              label: isMobile ? undefined : t("charts.eddington.daysAxis"),
               valueFormatter: (value: number) =>
                 isMobile
                   ? formatCompact(value)
@@ -148,7 +155,7 @@ export default function EddingtonChart() {
           series={[
             {
               data: yAxisData,
-              label: "Days",
+              label: t("charts.eddington.daysAxis"),
             },
           ]}
           grid={{ horizontal: true }}

@@ -5,11 +5,11 @@ import nextDynamic from "next/dynamic";
 
 import { SyncPanel } from "~/components/SyncPanel";
 import { LoadingOverlay } from "~/components/primitives/LoadingOverlay";
-import { PageIntro } from "~/components/primitives/PageIntro";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useInitialLoadComplete } from "~/hooks/useInitialLoadComplete";
+import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { getActivityTypesByCategory } from "~/utils/sportConfig";
 
@@ -49,6 +49,7 @@ const PowerCurve = nextDynamic(loadPowerCurve, { ssr: false });
 const EddingtonChart = nextDynamic(loadEddingtonChart, { ssr: false });
 
 const StatisticsPage: NextPageWithLayout = () => {
+  const t = useT();
   // Prefetch the page's primary dataset from the (non-lazy) page itself so the
   // request overlaps with the chart modules loading; the three charts that share
   // this exact key then mount already populated. Harmless on SPA navigation —
@@ -79,7 +80,7 @@ const StatisticsPage: NextPageWithLayout = () => {
     <>
       <Toolbar actions={<SyncPanel />}>
         <BarChart3Icon className="size-4" />
-        <span className="font-semibold">Statistics</span>
+        <span className="font-semibold">{t("statistics.title")}</span>
       </Toolbar>
 
       <div className="relative flex flex-1 flex-col overflow-hidden">
@@ -87,14 +88,6 @@ const StatisticsPage: NextPageWithLayout = () => {
             separated by hairline dividers. Desktop (md+): the familiar centered
             column of boxed cards with gaps. `md` matches useIsMobile. */}
         <div className="flex flex-1 flex-col overflow-y-auto pb-3 md:items-center md:gap-4 md:p-4">
-          {/* `empty:hidden` collapses the intro (and its padding) once the hint
-              is dismissed, so the first chart sits flush under the toolbar. */}
-          <div className="px-3 pt-3 empty:hidden md:w-full md:max-w-5xl md:px-0 md:pt-0">
-            <PageIntro hintId="intro-statistics-charts">
-              Training volume and intensity trends over time. Configure your
-              rider settings to see training load data in the charts.
-            </PageIntro>
-          </div>
           <ChartCardSurfaceProvider surface="responsive">
             <div className="divide-border border-border flex flex-col divide-y border-b md:w-full md:max-w-5xl md:gap-4 md:divide-y-0 md:border-0">
               <FitnessChart />

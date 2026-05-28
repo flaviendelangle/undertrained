@@ -5,6 +5,7 @@ import nextDynamic from "next/dynamic";
 
 import { SyncPanel } from "~/components/SyncPanel";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
+import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 
 const Records = nextDynamic(
@@ -13,11 +14,12 @@ const Records = nextDynamic(
 );
 
 const RecordsPage: NextPageWithLayout = () => {
+  const t = useT();
   return (
     <>
       <Toolbar actions={<SyncPanel />}>
         <TrophyIcon className="size-4" />
-        <span className="font-semibold">Personal bests</span>
+        <span className="font-semibold">{t("nav.personalBests")}</span>
       </Toolbar>
 
       <div className="flex flex-1 flex-col overflow-y-auto p-3 sm:p-6 max-sm:px-0">

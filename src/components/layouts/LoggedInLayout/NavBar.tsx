@@ -27,6 +27,7 @@ import { usePathname } from "next/navigation";
 import { Tooltip, TooltipProps } from "~/components/primitives/Tooltip";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useTheme } from "~/hooks/useTheme";
+import { useT } from "~/i18n/useT";
 import { isLiveTrainingEnabled, isRoutesEnabled } from "~/lib/features";
 import { cn } from "~/lib/utils";
 
@@ -99,8 +100,10 @@ function TooltipIfMenuCollapsed(props: TooltipProps) {
 }
 
 function ThemeToggleNavButton() {
+  const t = useT();
   const { resolvedTheme, setTheme } = useTheme();
-  const label = resolvedTheme === "dark" ? "Light mode" : "Dark mode";
+  const label =
+    resolvedTheme === "dark" ? t("nav.lightMode") : t("nav.darkMode");
 
   return (
     <TooltipIfMenuCollapsed label={label}>
@@ -126,6 +129,7 @@ function SettingsSetupDot() {
 
 /* ── Desktop sidebar ── */
 export function NavBar() {
+  const t = useT();
   const [isMenuExpanded, setIsMenuExpanded] = React.useState(false);
 
   return (
@@ -136,11 +140,13 @@ export function NavBar() {
       >
         <div className="flex flex-col gap-0.5">
           <TooltipIfMenuCollapsed
-            label={isMenuExpanded ? "Collapse menu" : "Expand menu"}
+            label={isMenuExpanded ? t("nav.collapseMenu") : t("nav.expandMenu")}
           >
             <button
               className="hover:bg-accent mx-2 mb-2 flex h-10 items-center gap-3 rounded-lg px-2.5 text-sm font-bold whitespace-nowrap transition-colors"
-              aria-label={isMenuExpanded ? "Collapse menu" : "Expand menu"}
+              aria-label={
+                isMenuExpanded ? t("nav.collapseMenu") : t("nav.expandMenu")
+              }
               onClick={() => setIsMenuExpanded((prev) => !prev)}
             >
               {isMenuExpanded ? (
@@ -155,76 +161,97 @@ export function NavBar() {
             </button>
           </TooltipIfMenuCollapsed>
 
-          <TooltipIfMenuCollapsed label="Journal">
+          <TooltipIfMenuCollapsed label={t("nav.journal")}>
             <NavBarLink
               icon={CalendarDaysIcon}
-              label="Journal"
+              label={t("nav.journal")}
               href="/journal"
             />
           </TooltipIfMenuCollapsed>
-          <TooltipIfMenuCollapsed label="Activities">
-            <NavBarLink icon={ListIcon} label="Activities" href="/activities" />
+          <TooltipIfMenuCollapsed label={t("nav.activities")}>
+            <NavBarLink
+              icon={ListIcon}
+              label={t("nav.activities")}
+              href="/activities"
+            />
           </TooltipIfMenuCollapsed>
-          <TooltipIfMenuCollapsed label="Heatmap">
-            <NavBarLink icon={MapIcon} label="Heatmap" href="/heatmap" />
+          <TooltipIfMenuCollapsed label={t("nav.map")}>
+            <NavBarLink
+              icon={MapIcon}
+              label={t("nav.map")}
+              href="/map"
+            />
           </TooltipIfMenuCollapsed>
           {isRoutesEnabled && (
-            <TooltipIfMenuCollapsed label="Routes">
-              <NavBarLink icon={RouteIcon} label="Routes" href="/routes" />
+            <TooltipIfMenuCollapsed label={t("nav.routes")}>
+              <NavBarLink
+                icon={RouteIcon}
+                label={t("nav.routes")}
+                href="/routes"
+              />
             </TooltipIfMenuCollapsed>
           )}
-          <TooltipIfMenuCollapsed label="Statistics">
+          <TooltipIfMenuCollapsed label={t("nav.statistics")}>
             <NavBarLink
               icon={BarChart3Icon}
-              label="Statistics"
+              label={t("nav.statistics")}
               href="/statistics"
             />
           </TooltipIfMenuCollapsed>
-          <TooltipIfMenuCollapsed label="Personal bests">
+          <TooltipIfMenuCollapsed label={t("nav.personalBests")}>
             <NavBarLink
               icon={TrophyIcon}
-              label="Personal bests"
+              label={t("nav.personalBests")}
               href="/personal-bests"
             />
           </TooltipIfMenuCollapsed>
-          <TooltipIfMenuCollapsed label="Time Periods">
+          <TooltipIfMenuCollapsed label={t("nav.timePeriods")}>
             <NavBarLink
               icon={CalendarIcon}
-              label="Time Periods"
+              label={t("nav.timePeriods")}
               href="/time-periods"
             />
           </TooltipIfMenuCollapsed>
           {isLiveTrainingEnabled && (
-            <TooltipIfMenuCollapsed label="Live Training">
+            <TooltipIfMenuCollapsed label={t("nav.liveTraining")}>
               <NavBarLink
                 icon={PlayCircleIcon}
-                label="Live Training"
+                label={t("nav.liveTraining")}
                 href="/live-training"
               />
             </TooltipIfMenuCollapsed>
           )}
-          <TooltipIfMenuCollapsed label="Toolbox">
-            <NavBarLink icon={WrenchIcon} label="Toolbox" href="/toolbox" />
+          <TooltipIfMenuCollapsed label={t("nav.toolbox")}>
+            <NavBarLink
+              icon={WrenchIcon}
+              label={t("nav.toolbox")}
+              href="/toolbox"
+            />
           </TooltipIfMenuCollapsed>
         </div>
 
         <div className="flex flex-col gap-0.5">
           <div className="border-sidebar-border mx-3 mb-1 border-t" />
-          <TooltipIfMenuCollapsed label="Settings">
-            <NavBarLink icon={SettingsIcon} label="Settings" href="/settings" badge={<SettingsSetupDot />} />
+          <TooltipIfMenuCollapsed label={t("nav.settings")}>
+            <NavBarLink
+              icon={SettingsIcon}
+              label={t("nav.settings")}
+              href="/settings"
+              badge={<SettingsSetupDot />}
+            />
           </TooltipIfMenuCollapsed>
-          <TooltipIfMenuCollapsed label="Privacy Policy">
+          <TooltipIfMenuCollapsed label={t("nav.privacyPolicy")}>
             <NavBarLink
               icon={ShieldCheckIcon}
-              label="Privacy"
+              label={t("nav.privacy")}
               href="/privacy"
             />
           </TooltipIfMenuCollapsed>
           <ThemeToggleNavButton />
-          <TooltipIfMenuCollapsed label="Sign out">
+          <TooltipIfMenuCollapsed label={t("nav.logout")}>
             <NavBarButton
               icon={LogOutIcon}
-              label="Sign out"
+              label={t("nav.logout")}
               onClick={() => signOut({ callbackUrl: "/login" })}
             />
           </TooltipIfMenuCollapsed>
@@ -263,6 +290,7 @@ function MobileTabLink({ icon: Icon, label, href }: MobileTabLinkProps) {
 }
 
 export function MobileBottomBar() {
+  const t = useT();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const { resolvedTheme, setTheme } = useTheme();
 
@@ -283,7 +311,7 @@ export function MobileBottomBar() {
             onClick={() => setMoreOpen(false)}
           >
             <TrophyIcon className="size-4" />
-            Personal bests
+            {t("nav.personalBests")}
           </Link>
           <Link
             href="/time-periods"
@@ -291,7 +319,7 @@ export function MobileBottomBar() {
             onClick={() => setMoreOpen(false)}
           >
             <CalendarIcon className="size-4" />
-            Time Periods
+            {t("nav.timePeriods")}
           </Link>
           {isRoutesEnabled && (
             <Link
@@ -300,7 +328,7 @@ export function MobileBottomBar() {
               onClick={() => setMoreOpen(false)}
             >
               <RouteIcon className="size-4" />
-              Routes
+              {t("nav.routes")}
             </Link>
           )}
           <Link
@@ -309,7 +337,7 @@ export function MobileBottomBar() {
             onClick={() => setMoreOpen(false)}
           >
             <WrenchIcon className="size-4" />
-            Toolbox
+            {t("nav.toolbox")}
           </Link>
           <Link
             href="/settings"
@@ -320,7 +348,7 @@ export function MobileBottomBar() {
               <SettingsIcon className="size-4" />
               <SettingsSetupDot />
             </span>
-            Settings
+            {t("nav.settings")}
           </Link>
           {isLiveTrainingEnabled && (
             <Link
@@ -329,7 +357,7 @@ export function MobileBottomBar() {
               onClick={() => setMoreOpen(false)}
             >
               <PlayCircleIcon className="size-4" />
-              Live Training
+              {t("nav.liveTraining")}
             </Link>
           )}
           <Link
@@ -338,7 +366,7 @@ export function MobileBottomBar() {
             onClick={() => setMoreOpen(false)}
           >
             <ShieldCheckIcon className="size-4" />
-            Privacy
+            {t("nav.privacy")}
           </Link>
           <button
             className="text-foreground hover:bg-accent flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
@@ -352,14 +380,14 @@ export function MobileBottomBar() {
             ) : (
               <MoonIcon className="size-4" />
             )}
-            {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
+            {resolvedTheme === "dark" ? t("nav.lightMode") : t("nav.darkMode")}
           </button>
           <button
             className="text-foreground hover:bg-accent flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
             onClick={() => signOut({ callbackUrl: "/login" })}
           >
             <LogOutIcon className="size-4" />
-            Sign out
+            {t("nav.logout")}
           </button>
         </div>
       )}
@@ -368,14 +396,22 @@ export function MobileBottomBar() {
       <nav className="bg-sidebar border-sidebar-border fixed right-0 bottom-0 left-0 z-30 flex h-14 items-stretch border-t md:hidden">
         <MobileTabLink
           icon={CalendarDaysIcon}
-          label="Journal"
+          label={t("nav.journal")}
           href="/journal"
         />
-        <MobileTabLink icon={ListIcon} label="Activities" href="/activities" />
-        <MobileTabLink icon={MapIcon} label="Heatmap" href="/heatmap" />
+        <MobileTabLink
+          icon={ListIcon}
+          label={t("nav.activities")}
+          href="/activities"
+        />
+        <MobileTabLink
+          icon={MapIcon}
+          label={t("nav.map")}
+          href="/map"
+        />
         <MobileTabLink
           icon={BarChart3Icon}
-          label="Statistics"
+          label={t("nav.statistics")}
           href="/statistics"
         />
         <button
@@ -388,7 +424,7 @@ export function MobileBottomBar() {
           onClick={() => setMoreOpen((prev) => !prev)}
         >
           <EllipsisIcon className="size-5" />
-          <span>More</span>
+          <span>{t("nav.more")}</span>
         </button>
       </nav>
     </>

@@ -6,11 +6,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { useT } from "~/i18n/useT";
+
 import stravaButton from "../../public/strava-connect-button-orange.svg";
 import { SharedLayout } from "../components/layouts/SharedLayout";
 import { NextPageWithLayout } from "./_app";
 
 const LoginPage: NextPageWithLayout = () => {
+  const t = useT();
   const router = useRouter();
   const session = useSession();
 
@@ -35,9 +38,7 @@ const LoginPage: NextPageWithLayout = () => {
               Undertrained
             </h1>
           </div>
-          <p className="text-muted-foreground text-lg">
-            Analyze your triathlon performance
-          </p>
+          <p className="text-muted-foreground text-lg">{t("auth.tagline")}</p>
         </div>
 
         <button
@@ -48,7 +49,7 @@ const LoginPage: NextPageWithLayout = () => {
           <Image
             priority
             src={stravaButton}
-            alt="Login with Strava"
+            alt={t("auth.loginWithStrava")}
             className="relative"
           />
         </button>
@@ -58,15 +59,19 @@ const LoginPage: NextPageWithLayout = () => {
           className="border-border bg-card/50 hover:bg-card group/card w-full max-w-md rounded-sm border p-4 transition-colors"
         >
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-foreground text-sm font-semibold">Toolbox</span>
-            <span className="text-muted-foreground bg-muted rounded-full px-2.5 py-0.5 text-xs">No login required</span>
+            <span className="text-foreground text-sm font-semibold">
+              {t("auth.toolbox")}
+            </span>
+            <span className="text-muted-foreground bg-muted rounded-full px-2.5 py-0.5 text-xs">
+              {t("auth.noLoginRequired")}
+            </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { icon: TimerIcon, label: "Pace Calculator" },
-              { icon: TrendingUpIcon, label: "Race Predictor" },
-              { icon: GaugeIcon, label: "Zone Calculator" },
-              { icon: CogIcon, label: "Gear Calculator" },
+              { icon: TimerIcon, label: t("auth.tool.paceCalculator") },
+              { icon: TrendingUpIcon, label: t("auth.tool.racePredictor") },
+              { icon: GaugeIcon, label: t("auth.tool.zoneCalculator") },
+              { icon: CogIcon, label: t("auth.tool.gearCalculator") },
             ].map(({ icon: Icon, label }) => (
               <div key={label} className="text-muted-foreground flex items-center gap-2 text-sm">
                 <Icon className="size-4 shrink-0" />
@@ -80,7 +85,7 @@ const LoginPage: NextPageWithLayout = () => {
           href="/privacy"
           className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-3"
         >
-          Privacy Policy
+          {t("auth.privacyPolicy")}
         </Link>
       </div>
     </main>

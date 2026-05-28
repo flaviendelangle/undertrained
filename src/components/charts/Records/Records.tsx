@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
 import { formatShortDate } from "./format";
@@ -31,6 +32,7 @@ import { RecordControl, useRecordsExplorer } from "./useRecordsExplorer";
  * strip and every rank is laid out in a dense, full-width table.
  */
 export function Records() {
+  const t = useT();
   const {
     sportControl,
     metricControl,
@@ -51,7 +53,7 @@ export function Records() {
           stay edge-to-edge, but these aren't cards). */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 max-sm:px-3">
         {sportControl.items.length > 0 && (
-          <ControlGroup label="Sport">
+          <ControlGroup label={t("charts.records.sport")}>
             <SegmentedToggle
               value={sportControl.selected ?? sportControl.items[0]?.key}
               onChange={sportControl.onSelect}
@@ -62,7 +64,7 @@ export function Records() {
             />
           </ControlGroup>
         )}
-        <ControlGroup label="Metric">
+        <ControlGroup label={t("charts.records.metric")}>
           <ParamSelect control={metricControl} />
         </ControlGroup>
         {paramControl && (
@@ -73,7 +75,7 @@ export function Records() {
       </div>
 
       {isLoading ? (
-        <RecordsEmptyState message="Loading…" />
+        <RecordsEmptyState message={t("common.loading")} />
       ) : entries.length === 0 ? (
         <RecordsEmptyState message={emptyMessage} />
       ) : (
@@ -120,10 +122,12 @@ export function Records() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-16 text-center">#</TableHead>
-                  <TableHead>Result</TableHead>
-                  {hasSub && <TableHead>Avg</TableHead>}
-                  <TableHead>Activity</TableHead>
-                  <TableHead className="text-right">Date</TableHead>
+                  <TableHead>{t("charts.records.result")}</TableHead>
+                  {hasSub && <TableHead>{t("charts.records.avg")}</TableHead>}
+                  <TableHead>{t("charts.records.activity")}</TableHead>
+                  <TableHead className="text-right">
+                    {t("charts.records.date")}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -194,6 +198,7 @@ function ParamSelect<T extends string | number>({
 }: {
   control: RecordControl<T>;
 }) {
+  const t = useT();
   const selectItems = control.items.map((it) => ({
     value: String(it.key),
     label: it.label,
@@ -208,7 +213,7 @@ function ParamSelect<T extends string | number>({
       }}
     >
       <SelectTrigger size="sm" className="h-8 text-xs">
-        <SelectValue placeholder="Select…" />
+        <SelectValue placeholder={t("charts.records.selectPlaceholder")} />
       </SelectTrigger>
       <SelectContent>
         {control.items.map((item) => (

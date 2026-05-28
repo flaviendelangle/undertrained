@@ -42,9 +42,12 @@ export interface FitnessSeriesOptions {
   endDate?: Date;
 }
 
+/** Stable identifier for a form (TSB) band; drives its translated label. */
+export type FormZoneKey = "highRisk" | "optimal" | "grey" | "fresh" | "transition";
+
 /** A Training Stress Balance band, used for background shading and the readout. */
 export interface FormZone {
-  key: string;
+  key: FormZoneKey;
   label: string;
   /** Solid hex for text / legend swatches. */
   color: string;
@@ -165,7 +168,14 @@ export function computeFitnessSeries(
   }
 
   const dayKeys = Array.from(loadByDay.keys()).sort();
-  const firstDay = parseDayKey(dayKeys[0]);
+  // Anchor the curve at the oldest day that actually carries load. Leading
+  // activities with no load (missing HR/power data, etc.) shouldn't stretch the
+  // chart back to a flat, zero-fitness lead-in.
+  const firstLoadedDayKey = dayKeys.find((key) => (loadByDay.get(key) ?? 0) > 0);
+  if (firstLoadedDayKey === undefined) {
+    return [];
+  }
+  const firstDay = parseDayKey(firstLoadedDayKey);
   const lastActivityDay = parseDayKey(dayKeys[dayKeys.length - 1]);
   const endDay = stripTime(endDate);
   const lastDay = differenceInCalendarDays(endDay, lastActivityDay) > 0 ? endDay : lastActivityDay;

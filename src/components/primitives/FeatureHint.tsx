@@ -11,6 +11,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { useDismissedHints } from "~/hooks/useDismissedHints";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
 interface FeatureHintProps {
@@ -28,6 +29,7 @@ export function FeatureHint({
   side = "bottom",
   className,
 }: FeatureHintProps) {
+  const t = useT();
   const { isDismissed, dismiss } = useDismissedHints();
   const [open, setOpen] = React.useState(false);
 
@@ -42,7 +44,7 @@ export function FeatureHint({
               "text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center justify-center rounded-full p-0.5 transition-colors",
               className,
             )}
-            aria-label={`Learn about ${title}`}
+            aria-label={t("auth.learnAbout", { title })}
           >
             <InfoIcon className="size-3.5" />
           </button>
@@ -60,7 +62,7 @@ export function FeatureHint({
           }}
           className="text-primary hover:text-primary/80 self-end text-xs font-medium"
         >
-          Got it
+          {t("auth.gotIt")}
         </button>
       </PopoverContent>
     </Popover>

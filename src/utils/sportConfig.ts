@@ -1,9 +1,4 @@
 import type { LucideIcon } from "lucide-react";
-import type { RiderSettings } from "~/sensors/types";
-import type {
-  LoadAlgorithm,
-  LoadAlgorithmPreferences,
-} from "~/utils/getActivityLoad";
 import {
   Activity,
   Bike,
@@ -14,7 +9,13 @@ import {
   Waves,
 } from "lucide-react";
 
+import type { AppMessageKey } from "~/i18n/I18nProvider";
+import type { RiderSettings } from "~/sensors/types";
 import { formatElapsed, formatKm } from "~/utils/format";
+import type {
+  LoadAlgorithm,
+  LoadAlgorithmPreferences,
+} from "~/utils/getActivityLoad";
 
 /** Broad sport category used to drive load-algorithm selection, TSS labels, and settings UI. */
 export type SportCategory =
@@ -36,7 +37,11 @@ export interface JournalStatsActivity {
 
 interface LoadAlgorithmOption {
   readonly value: string;
-  readonly label: string;
+  /**
+   * i18n key for the option's display label, resolved with `t(labelKey)` at the
+   * rendering boundary (e.g. the Load Algorithm settings dropdown).
+   */
+  readonly labelKey: AppMessageKey;
 }
 
 /**
@@ -179,11 +184,12 @@ export class SportConfig {
   // ── Load algorithm settings ─────────────────────────────────
 
   /**
-   * Display name for this sport in the load-algorithm settings UI (e.g. `"Cycling"`).
+   * i18n key for this sport's name in the load-algorithm settings UI, resolved
+   * with `t(loadAlgorithmLabelKey)` at the rendering boundary (e.g. `"sport.cycling.label"`).
    *
    * `null` when the sport has no configurable load algorithm.
    */
-  readonly loadAlgorithmLabel: string | null = null;
+  readonly loadAlgorithmLabelKey: AppMessageKey | null = null;
 
   /**
    * Available load-algorithm choices for the settings dropdown.
@@ -244,10 +250,10 @@ class CyclingSportConfig extends SportConfig {
   override readonly settingsCalloutMessage =
     "Set your FTP and HR thresholds in Settings to calculate TSS, HRSS, and Intensity Factor.";
 
-  override readonly loadAlgorithmLabel = "Cycling";
+  override readonly loadAlgorithmLabelKey = "sport.cycling.label";
   override readonly loadAlgorithmOptions = [
-    { value: "tss", label: "TSS (Power-based)" },
-    { value: "hrss", label: "HRSS (Heart Rate-based)" },
+    { value: "tss", labelKey: "settings.loadAlgorithm.option.tss" },
+    { value: "hrss", labelKey: "settings.loadAlgorithm.option.hrss" },
   ] as const;
   override readonly loadAlgorithmKey = "cyclingLoadAlgorithm";
   override readonly defaultLoadAlgorithm = "tss";
@@ -280,10 +286,10 @@ class RunSportConfig extends SportConfig {
   override readonly settingsCalloutMessage =
     "Set your run threshold pace in Settings to calculate rTSS.";
 
-  override readonly loadAlgorithmLabel = "Running";
+  override readonly loadAlgorithmLabelKey = "sport.running.label";
   override readonly loadAlgorithmOptions = [
-    { value: "rtss", label: "rTSS (Pace-based)" },
-    { value: "hrss", label: "HRSS (Heart Rate-based)" },
+    { value: "rtss", labelKey: "settings.loadAlgorithm.option.rtss" },
+    { value: "hrss", labelKey: "settings.loadAlgorithm.option.hrss" },
   ] as const;
   override readonly loadAlgorithmKey = "runningLoadAlgorithm";
   override readonly defaultLoadAlgorithm = "rtss";
@@ -339,10 +345,10 @@ class SwimSportConfig extends SportConfig {
   override readonly settingsCalloutMessage =
     "Set your swim threshold pace in Settings to calculate sTSS.";
 
-  override readonly loadAlgorithmLabel = "Swimming";
+  override readonly loadAlgorithmLabelKey = "sport.swimming.label";
   override readonly loadAlgorithmOptions = [
-    { value: "stss", label: "sTSS (Pace-based)" },
-    { value: "hrss", label: "HRSS (Heart Rate-based)" },
+    { value: "stss", labelKey: "settings.loadAlgorithm.option.stss" },
+    { value: "hrss", labelKey: "settings.loadAlgorithm.option.hrss" },
   ] as const;
   override readonly loadAlgorithmKey = "swimmingLoadAlgorithm";
   override readonly defaultLoadAlgorithm = "stss";
@@ -415,9 +421,17 @@ export const SPORT_CATEGORY_META: Record<
   { label: string; color: string; icon: LucideIcon }
 > = {
   cycling: { label: "Cycling", color: "var(--sport-cycling)", icon: Bike },
-  running: { label: "Running", color: "var(--sport-running)", icon: Footprints },
+  running: {
+    label: "Running",
+    color: "var(--sport-running)",
+    icon: Footprints,
+  },
   swimming: { label: "Swimming", color: "var(--sport-swimming)", icon: Waves },
-  strength: { label: "Strength", color: "var(--sport-strength)", icon: Dumbbell },
+  strength: {
+    label: "Strength",
+    color: "var(--sport-strength)",
+    icon: Dumbbell,
+  },
   hiking: { label: "Hiking", color: "var(--sport-hiking)", icon: Mountain },
   other: { label: "Other", color: "var(--sport-other)", icon: Activity },
 };
@@ -435,18 +449,95 @@ export function getSportConfig(activityType: string): SportConfig {
  *
  * Useful when a component needs the raw list (e.g. for a database query filter).
  */
-export function getActivityTypesByCategory(
-  category: SportCategory,
-): string[] {
+export function getActivityTypesByCategory(category: SportCategory): string[] {
   return Object.entries(SPORT_CONFIGS)
     .filter(([, config]) => config.category === category)
     .map(([type]) => type);
 }
 
+// ── Workout type (Strava `workout_type`) ────────────────────────
+
+/**
+ * Strava's `workout_type` is sport-specific and only exists for runs and rides.
+ * The edit form exposes it as a small, sport-dependent set of choices; this
+ * sport-agnostic union is the key shared by the form and the update mutation.
+ */
+export type WorkoutChoice = "none" | "race" | "long_run" | "workout";
+
+/**
+ * The workout-type choices Strava offers for a sport, in display order, or
+ * `null` for sports without a `workout_type` (the edit form hides the control).
+ * Runs add "Long run"; rides don't — mirroring Strava's own activity editor.
+ */
+export function workoutChoicesForSport(
+  sportType: string,
+): WorkoutChoice[] | null {
+  switch (sportType) {
+    case "Run":
+    case "VirtualRun":
+      return ["none", "race", "long_run", "workout"];
+    case "Ride":
+    case "VirtualRide":
+      return ["none", "race", "workout"];
+    default:
+      return null;
+  }
+}
+
+/**
+ * Maps a sport + choice to Strava's integer `workout_type` (runs 0–3, rides
+ * 10–12). Returns `undefined` for sports without a workout type, so callers omit
+ * the field from the Strava payload and store `null` locally.
+ */
+export function workoutChoiceToValue(
+  sportType: string,
+  choice: WorkoutChoice,
+): number | undefined {
+  switch (sportType) {
+    case "Run":
+    case "VirtualRun":
+      return { none: 0, race: 1, long_run: 2, workout: 3 }[choice];
+    case "Ride":
+    case "VirtualRide":
+      // Rides have no "long run"; treat it as unspecified.
+      return { none: 10, race: 11, long_run: 10, workout: 12 }[choice];
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The choice a stored `workout_type` integer represents for a sport, used to
+ * seed the edit form. Anything unrecognised (incl. `null`) reads back as "none".
+ */
+export function workoutValueToChoice(
+  sportType: string,
+  value: number | null | undefined,
+): WorkoutChoice {
+  switch (sportType) {
+    case "Run":
+    case "VirtualRun":
+      return value === 1
+        ? "race"
+        : value === 2
+          ? "long_run"
+          : value === 3
+            ? "workout"
+            : "none";
+    case "Ride":
+    case "VirtualRide":
+      return value === 11 ? "race" : value === 12 ? "workout" : "none";
+    default:
+      return "none";
+  }
+}
+
 export interface LoadAlgorithmConfig {
-  label: string;
+  /** i18n key for the sport's name; resolve with `t(labelKey)` when rendering. */
+  labelKey: AppMessageKey;
   key: keyof LoadAlgorithmPreferences;
-  options: readonly { value: string; label: string }[];
+  /** Each option's label is an i18n key; resolve with `t(option.labelKey)`. */
+  options: readonly { value: string; labelKey: AppMessageKey }[];
 }
 
 /**
@@ -459,14 +550,14 @@ export function getLoadAlgorithmConfigs(): LoadAlgorithmConfig[] {
   const configs: LoadAlgorithmConfig[] = [];
   for (const config of Object.values(SPORT_CONFIGS)) {
     if (
-      config.loadAlgorithmLabel != null &&
+      config.loadAlgorithmLabelKey != null &&
       config.loadAlgorithmOptions != null &&
       config.loadAlgorithmKey != null &&
       !seen.has(config.category)
     ) {
       seen.add(config.category);
       configs.push({
-        label: config.loadAlgorithmLabel,
+        labelKey: config.loadAlgorithmLabelKey,
         key: config.loadAlgorithmKey,
         options: config.loadAlgorithmOptions,
       });

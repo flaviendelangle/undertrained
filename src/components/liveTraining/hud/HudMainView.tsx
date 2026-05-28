@@ -1,4 +1,5 @@
 import { PowerHrChart } from "~/components/liveTraining/PowerHrChart";
+import { useT } from "~/i18n/useT";
 import type { SessionDataPoint } from "~/sensors/types";
 
 import { HudMetricTile } from "./HudMetricTile";
@@ -34,6 +35,7 @@ export function HudMainView({
   onPause,
   onStop,
 }: HudMainViewProps) {
+  const t = useT();
   return (
     <div className="from-background to-background absolute inset-0 flex flex-col bg-linear-to-br">
       {/* Top bar */}
@@ -49,13 +51,13 @@ export function HudMainView({
         {/* Metrics row — HR and Cadence side by side */}
         <div className="flex justify-center gap-3 px-4 pt-2">
           <HudMetricTile
-            label="Heart Rate"
+            label={t("liveTraining.heartRate")}
             value={currentHr}
             unit="bpm"
             color="#f87171"
           />
           <HudMetricTile
-            label="Cadence"
+            label={t("liveTraining.cadence")}
             value={currentCadence != null ? Math.round(currentCadence) : null}
             unit="rpm"
             color="#f472b6"
@@ -101,13 +103,13 @@ export function HudMainView({
           {/* Right metrics stack */}
           <div className="flex flex-col gap-3">
             <HudMetricTile
-              label="Heart Rate"
+              label={t("liveTraining.heartRate")}
               value={currentHr}
               unit="bpm"
               color="#f87171"
             />
             <HudMetricTile
-              label="Cadence"
+              label={t("liveTraining.cadence")}
               value={currentCadence != null ? Math.round(currentCadence) : null}
               unit="rpm"
               color="#f472b6"

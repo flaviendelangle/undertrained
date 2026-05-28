@@ -2,20 +2,25 @@ import * as React from "react";
 
 import { addDays, format } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDownIcon } from "lucide-react";
 
+import { Select as SelectPrimitive } from "@base-ui/react/select";
+import { useVirtualizer } from "@tanstack/react-virtual";
+
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+} from "~/components/ui/select";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
-import { JOURNAL_GRID_COLS, JournalWeekRow, ROW_HEIGHT } from "./JournalWeekRow";
+import {
+  JOURNAL_GRID_COLS,
+  JournalWeekRow,
+  ROW_HEIGHT,
+} from "./JournalWeekRow";
 import { buildMonthGroups, weekIndexForMonth } from "./journalView";
 import type { JournalWeek } from "./useJournalWeeks";
 
@@ -71,6 +76,7 @@ function JournalMonthViewImpl({
   scrollNonce: number;
   onVisibleWeekChange: (weekStart: Date) => void;
 }) {
+  const t = useT();
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({
@@ -136,6 +142,10 @@ function JournalMonthViewImpl({
   const visibleWeekStart = weeks[topIndex]?.weekStart ?? new Date();
   const visibleMonth = format(visibleWeekStart, "MMM", { locale: enGB });
   const visibleYear = visibleWeekStart.getFullYear();
+  // The visible month as the picker's selected value (`yyyy-MM`), so the Select
+  // opens scrolled to it. Always matches one item: `buildMonthGroups` covers
+  // every month in the loaded range.
+  const visibleMonthValue = format(visibleWeekStart, "yyyy-MM");
 
   // Keep the Journal's anchor in sync with the visible week (keyed on the week's
   // timestamp so it only fires on a week change, not every scroll frame).
@@ -168,51 +178,57 @@ function JournalMonthViewImpl({
             JOURNAL_GRID_COLS,
           )}
         >
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              title="Jump to month"
-              className="border-border hover:bg-background/60 flex cursor-pointer flex-col items-start justify-center gap-0.5 px-2 py-2 leading-none tabular-nums uppercase outline-none transition-colors"
+          <SelectPrimitive.Root
+            value={visibleMonthValue}
+            onValueChange={(value) => {
+              if (value != null) {
+                scrollToMonth(new Date(`${value}-01T00:00:00`));
+              }
+            }}
+          >
+            <SelectPrimitive.Trigger
+              title={t("journal.jumpToMonth")}
+              className="border-border hover:bg-background/60 flex cursor-pointer flex-col items-start justify-center gap-0.5 px-2 py-2 leading-none uppercase tabular-nums transition-colors outline-none"
             >
               <span className="text-foreground flex items-center gap-1 font-semibold">
-                {visibleMonth}
+                <SelectPrimitive.Value>
+                  {() => visibleMonth}
+                </SelectPrimitive.Value>
                 <ChevronDownIcon className="size-3" />
               </span>
               <span>{visibleYear}</span>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="max-h-80 w-40 normal-case"
-            >
+            </SelectPrimitive.Trigger>
+            <SelectContent align="start" className="max-h-80 w-40 normal-case">
               {monthGroups.map((group) => (
-                <DropdownMenuGroup key={group.year}>
-                  <DropdownMenuLabel>{group.year}</DropdownMenuLabel>
+                <SelectGroup key={group.year}>
+                  <SelectLabel>{group.year}</SelectLabel>
                   {group.months.map((month) => (
-                    <DropdownMenuItem
+                    <SelectItem
                       key={month.toISOString()}
-                      onClick={() => scrollToMonth(month)}
+                      value={format(month, "yyyy-MM")}
                     >
                       {format(month, "MMMM", { locale: enGB })}
-                    </DropdownMenuItem>
+                    </SelectItem>
                   ))}
-                </DropdownMenuGroup>
+                </SelectGroup>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </SelectContent>
+          </SelectPrimitive.Root>
           {DAY_NAMES.map((name) => (
             <HeaderCell key={name}>{name}</HeaderCell>
           ))}
           <HeaderCell className="bg-accent sticky right-0 z-20">
-            Summary
+            {t("journal.summary")}
           </HeaderCell>
         </div>
 
         {isError ? (
           <div className="text-muted-foreground p-8 text-center text-sm">
-            Couldn&apos;t load your activities. Please try again.
+            {t("journal.loadError")}
           </div>
         ) : weeks.length === 0 ? (
           <div className="text-muted-foreground p-8 text-center text-sm">
-            No activities yet.
+            {t("journal.empty")}
           </div>
         ) : (
           <div

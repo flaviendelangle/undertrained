@@ -10,6 +10,7 @@ import {
 
 import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { useT } from "~/i18n/useT";
 import type { SessionDataPoint } from "~/sensors/types";
 import { getPowerZoneColor } from "~/sensors/types";
 
@@ -26,6 +27,7 @@ interface PowerHrChartProps {
 
 export function PowerHrChart(props: PowerHrChartProps) {
   const { dataPoints, ftp, showAll = false } = props;
+  const t = useT();
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
 
@@ -38,12 +40,12 @@ export function PowerHrChart(props: PowerHrChartProps) {
     const totalPoints = points.length;
     return points.map((_, i) => {
       const secsAgo = totalPoints - 1 - i;
-      if (secsAgo === 0) return "now";
+      if (secsAgo === 0) return t("liveTraining.chart.now");
       const min = Math.floor(secsAgo / 60);
       const sec = secsAgo % 60;
       return `-${min}:${String(sec).padStart(2, "0")}`;
     });
-  }, [points]);
+  }, [points, t]);
 
   const powerColors = React.useMemo(
     () =>
@@ -61,7 +63,7 @@ export function PowerHrChart(props: PowerHrChartProps) {
     () => [
       {
         type: "bar" as const,
-        label: "Power",
+        label: t("liveTraining.chart.power"),
         data: points.map((p) => p.power ?? 0),
         yAxisId: "power",
         valueFormatter: (value: number | null) =>
@@ -71,7 +73,7 @@ export function PowerHrChart(props: PowerHrChartProps) {
       },
       {
         type: "line" as const,
-        label: "Heart Rate",
+        label: t("liveTraining.chart.heartRate"),
         data: points.map((p) => p.heartRate ?? 0),
         yAxisId: "hr",
         color: tokens.palette[0],
@@ -84,7 +86,7 @@ export function PowerHrChart(props: PowerHrChartProps) {
         ? [
             {
               type: "line" as const,
-              label: "Target",
+              label: t("liveTraining.chart.target"),
               data: points.map((p) => p.targetPower ?? null),
               yAxisId: "power",
               color: tokens.palette[7],
@@ -95,7 +97,7 @@ export function PowerHrChart(props: PowerHrChartProps) {
           ]
         : []),
     ],
-    [points, powerColors, hasTargetPower, tokens.palette],
+    [points, powerColors, hasTargetPower, tokens.palette, t],
   );
 
   const totalPoints = points.length;

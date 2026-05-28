@@ -19,13 +19,14 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import type { AppMessageKey } from "~/i18n/I18nProvider";
+import { useT } from "~/i18n/useT";
 import type { Route } from "@server/db/types";
 import { formatKm } from "~/utils/format";
 import { buildGpx, downloadFile } from "~/utils/gpx";
 import { decode, type LatLngTuple } from "~/utils/polyline";
 import {
   DEFAULT_PROFILE_BY_SPORT,
-  getRouteProfile,
   ROUTE_PROFILES,
   type RouteSport,
 } from "~/utils/routeProfiles";
@@ -33,6 +34,15 @@ import { trpc } from "~/utils/trpc";
 
 import { ElevationProfile } from "./ElevationProfile";
 import { RouteBuilderMap } from "./LazyRouteBuilderMap";
+
+/** Translation keys for each ORS routing profile (labels live in routeProfiles). */
+const PROFILE_LABEL_KEY: Record<string, AppMessageKey> = {
+  "cycling-regular": "routes.profile.cyclingRegular",
+  "cycling-road": "routes.profile.cyclingRoad",
+  "cycling-mountain": "routes.profile.cyclingMountain",
+  "foot-walking": "routes.profile.footWalking",
+  "foot-hiking": "routes.profile.footHiking",
+};
 
 interface PreviewData {
   encodedPolyline: string;
@@ -45,6 +55,7 @@ interface PreviewData {
 }
 
 export function RouteBuilder({ route }: { route?: Route }) {
+  const t = useT();
   const athleteId = useAthleteId();
   const router = useRouter();
   const utils = trpc.useUtils();
@@ -176,7 +187,7 @@ export function RouteBuilder({ route }: { route?: Route }) {
   const exportGpx = () => {
     if (!activePreview) return;
     const gpx = buildGpx(
-      name || "Route",
+      name || t("routes.defaultName"),
       activePreview.points,
       activePreview.elevation,
     );
@@ -211,7 +222,7 @@ export function RouteBuilder({ route }: { route?: Route }) {
         />
         {previewMutation.isPending && (
           <div className="bg-background/90 text-muted-foreground absolute top-3 left-3 z-400 rounded-md px-2.5 py-1 text-xs shadow">
-            Routing…
+            {t("routes.routing")}
           </div>
         )}
       </div>
@@ -220,54 +231,59 @@ export function RouteBuilder({ route }: { route?: Route }) {
       <div className="border-border flex w-full shrink-0 flex-col gap-4 overflow-y-auto border-t p-4 md:w-80 md:border-t-0 md:border-l">
         <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
           <LocateFixedIcon className="size-3.5" />
-          Click the map to drop points. Drag a point to move it, click it to
-          remove.
+          {t("routes.dropPointsHint")}
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label>Name</Label>
+          <Label>{t("routes.name")}</Label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Sunday long ride"
+            placeholder={t("routes.namePlaceholder")}
             className="border-border bg-background h-9 rounded-md border px-3 text-sm"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-2">
-            <Label>Sport</Label>
+            <Label>{t("routes.sport")}</Label>
             <Select
               value={sport}
               onValueChange={(v) => handleSportChange(v as RouteSport)}
             >
               <SelectTrigger size="sm" className="w-full">
                 <SelectValue>
-                  {sport === "cycling" ? "Cycling" : "Running"}
+                  {sport === "cycling"
+                    ? t("sport.cycling.label")
+                    : t("sport.running.label")}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cycling">Cycling</SelectItem>
-                <SelectItem value="running">Running</SelectItem>
+                <SelectItem value="cycling">{t("sport.cycling.label")}</SelectItem>
+                <SelectItem value="running">{t("sport.running.label")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label>Profile</Label>
+            <Label>{t("routes.profileLabel")}</Label>
             <Select
               value={profile}
               onValueChange={(v) => v && setProfile(v)}
             >
               <SelectTrigger size="sm" className="w-full">
                 <SelectValue>
-                  {getRouteProfile(profile)?.label ?? profile}
+                  {PROFILE_LABEL_KEY[profile]
+                    ? t(PROFILE_LABEL_KEY[profile])
+                    : profile}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {profilesForSport.map((p) => (
                   <SelectItem key={p.value} value={p.value}>
-                    {p.label}
+                    {PROFILE_LABEL_KEY[p.value]
+                      ? t(PROFILE_LABEL_KEY[p.value])
+                      : p.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -278,13 +294,13 @@ export function RouteBuilder({ route }: { route?: Route }) {
         {/* Stats */}
         <div className="bg-muted/40 grid grid-cols-2 gap-2 rounded-md p-3 text-sm">
           <div>
-            <div className="text-muted-foreground text-xs">Distance</div>
+            <div className="text-muted-foreground text-xs">{t("routes.distance")}</div>
             <div className="font-semibold">
               {activePreview ? formatKm(activePreview.distance) : "—"}
             </div>
           </div>
           <div>
-            <div className="text-muted-foreground text-xs">Elevation gain</div>
+            <div className="text-muted-foreground text-xs">{t("routes.elevationGain")}</div>
             <div className="font-semibold">
               {activePreview ? `${Math.round(activePreview.ascent)} m` : "—"}
             </div>
@@ -313,7 +329,7 @@ export function RouteBuilder({ route }: { route?: Route }) {
             onClick={undo}
             disabled={history.length === 0}
           >
-            <RotateCcwIcon /> Undo
+            <RotateCcwIcon /> {t("routes.undo")}
           </Button>
           <Button
             variant="outline"
@@ -321,7 +337,7 @@ export function RouteBuilder({ route }: { route?: Route }) {
             onClick={clear}
             disabled={waypoints.length === 0}
           >
-            <Trash2Icon /> Clear
+            <Trash2Icon /> {t("routes.clear")}
           </Button>
           <Button
             variant="outline"
@@ -336,10 +352,10 @@ export function RouteBuilder({ route }: { route?: Route }) {
         <Button onClick={save} disabled={!canSave || isSaving} className="mt-auto">
           <SaveIcon />
           {isSaving
-            ? "Saving…"
+            ? t("routes.saving")
             : route
-              ? "Update route"
-              : "Save route"}
+              ? t("routes.updateRoute")
+              : t("routes.saveRoute")}
         </Button>
       </div>
     </div>

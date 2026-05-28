@@ -5,7 +5,6 @@ import { enGB } from "date-fns/locale/en-GB";
 
 import type { ListActivity, PlannedTraining } from "@server/db/types";
 
-import { useActivitiesTimeBoundaries } from "~/hooks/useActivitiesTimeBoundaries";
 import {
   classifyWeeklyLoad,
   computeFitnessSeries,
@@ -155,8 +154,6 @@ export function useJournalWeeks(
   loadPreferences: LoadAlgorithmPreferences,
   plannedTrainings?: PlannedTraining[],
 ): JournalWeeksResult {
-  const boundaries = useActivitiesTimeBoundaries(activities);
-
   // Bucket planned trainings onto their local calendar day, same key scheme as
   // activities (the date portion of the stored floating-local datetime).
   const plannedByDay = React.useMemo(() => {
@@ -223,17 +220,30 @@ export function useJournalWeeks(
 
   return React.useMemo(() => {
     // The grid spans back to the earliest activity *or* planned training, so a
-    // user with only plans (and no activities yet) still gets rows to work with.
-    let oldest = boundaries.oldest;
-    for (const key of plannedByDay.keys()) {
-      const date = new Date(key);
-      if (oldest == null || date.getTime() < oldest.getTime()) {
-        oldest = date;
+    // user with only plans (and no activities yet) still gets rows to work with,
+    // and forward to the furthest planned training (see the week loop below).
+    // Both maps key by the floating-local calendar day (yyyy-MM-dd), so a lexical
+    // min/max is the chronological one — and, crucially, the bounds share the
+    // exact clock the activities are bucketed by, unlike the UTC `startDate`.
+    let oldestKey: string | null = null;
+    let latestPlannedKey: string | null = null;
+    for (const key of activitiesByDay.keys()) {
+      if (oldestKey == null || key < oldestKey) {
+        oldestKey = key;
       }
     }
-    if (oldest == null) {
+    for (const key of plannedByDay.keys()) {
+      if (oldestKey == null || key < oldestKey) {
+        oldestKey = key;
+      }
+      if (latestPlannedKey == null || key > latestPlannedKey) {
+        latestPlannedKey = key;
+      }
+    }
+    if (oldestKey == null) {
       return { weeks: [], dayLoadScale: 0, currentForm: null };
     }
+    const oldest = new Date(`${oldestKey}T00:00:00`);
 
     // CTL/TSB carried into a day; for days past the series end (e.g. the rest
     // of the current week) fall back to the latest point, before it to 0.
@@ -249,10 +259,20 @@ export function useJournalWeeks(
     const firstWeekStart = startOf(oldest, "week");
     const weeks: JournalWeek[] = [];
 
-    // Start one week in the future so the Journal renders the upcoming week,
-    // giving an empty canvas to plan into (double-click a cell / "+ Plan").
+    // Render the upcoming week by default (an empty canvas to plan into), and
+    // extend further out only when a training is planned beyond it, so a plan
+    // set weeks ahead still has a row to live in rather than silently vanishing.
     const currentWeekStart = startOf(new Date(), "week");
-    let weekStart = startOf(addUnit(new Date(), 1, "week"), "week");
+    const nextWeekStart = startOf(addUnit(new Date(), 1, "week"), "week");
+    const latestPlannedWeekStart =
+      latestPlannedKey != null
+        ? startOf(new Date(`${latestPlannedKey}T00:00:00`), "week")
+        : null;
+    let weekStart =
+      latestPlannedWeekStart != null &&
+      latestPlannedWeekStart.getTime() > nextWeekStart.getTime()
+        ? latestPlannedWeekStart
+        : nextWeekStart;
     while (weekStart.getTime() >= firstWeekStart.getTime()) {
       const days: JournalDay[] = [];
       const weekActivities: JournalActivity[] = [];
@@ -388,11 +408,5 @@ export function useJournalWeeks(
       dayLoadScale: percentile90(nonEmptyDayLoads),
       currentForm: fitnessByDay.last,
     };
-  }, [
-    boundaries.oldest,
-    activitiesByDay,
-    plannedByDay,
-    loadByStravaId,
-    fitnessByDay,
-  ]);
+  }, [activitiesByDay, plannedByDay, loadByStravaId, fitnessByDay]);
 }

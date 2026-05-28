@@ -6,8 +6,9 @@ import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { sportTypeLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
-import { formatActivityType } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
@@ -30,6 +31,7 @@ interface TimePeriodFormProps {
 }
 
 export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
+  const t = useT();
   const athleteId = useAthleteId();
   const utils = trpc.useUtils();
   const { allTypes: activityTypes } = useActivitiesQuery();
@@ -105,20 +107,20 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <Label>Name</Label>
+        <Label>{t("periods.name")}</Label>
         <input
           type="text"
           value={form.name}
           onChange={(e) =>
             setForm((prev) => ({ ...prev, name: e.target.value }))
           }
-          placeholder="e.g. 2024 Season"
+          placeholder={t("periods.namePlaceholder")}
           className="border-border bg-background h-9 rounded-md border px-3 text-sm"
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-2">
-          <Label>Start Date</Label>
+          <Label>{t("periods.startDate")}</Label>
           <input
             type="date"
             value={form.startDate}
@@ -129,7 +131,7 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
           />
         </div>
         <div className="flex flex-col gap-2">
-          <Label>End Date</Label>
+          <Label>{t("periods.endDate")}</Label>
           <input
             type="date"
             value={form.endDate}
@@ -143,9 +145,9 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
       {activityTypes && activityTypes.length > 0 && (
         <div className="flex flex-col gap-2">
           <Label>
-            Sport Types{" "}
+            {t("periods.sportTypes")}{" "}
             <span className="text-muted-foreground font-normal">
-              (optional, empty = all)
+              {t("periods.sportTypesHint")}
             </span>
           </Label>
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
@@ -165,7 +167,7 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
                   )}
                 >
                   <Icon className="size-3.5 shrink-0" />
-                  <span className="truncate">{formatActivityType(type)}</span>
+                  <span className="truncate">{sportTypeLabel(type, t)}</span>
                 </button>
               );
             })}
@@ -182,14 +184,14 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
         >
           {period ? (
             isSubmitting ? (
-              "Saving..."
+              t("periods.saving")
             ) : (
-              "Update"
+              t("periods.update")
             )
           ) : (
             <>
               <PlusIcon className="size-4" />
-              {isSubmitting ? "Creating..." : "Create Period"}
+              {isSubmitting ? t("periods.creating") : t("periods.createPeriod")}
             </>
           )}
         </Button>

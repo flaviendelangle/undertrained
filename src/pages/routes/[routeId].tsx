@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import { RouteBuilder } from "~/components/routes/RouteBuilder";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useT } from "~/i18n/useT";
 import { isRoutesEnabled } from "~/lib/features";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { trpc } from "~/utils/trpc";
@@ -15,6 +16,7 @@ export const getServerSideProps: GetServerSideProps = async () => {
 };
 
 const EditRoutePage: NextPageWithLayout = () => {
+  const t = useT();
   const router = useRouter();
   const athleteId = useAthleteId();
   const routeId = Number(router.query.routeId);
@@ -28,7 +30,7 @@ const EditRoutePage: NextPageWithLayout = () => {
     <>
       <Toolbar>
         <RouteIcon className="size-4" />
-        <span className="font-semibold">{route?.name ?? "Edit route"}</span>
+        <span className="font-semibold">{route?.name ?? t("routes.editRoute")}</span>
       </Toolbar>
       <div className="relative flex-1 overflow-hidden">
         {route ? (
@@ -36,7 +38,7 @@ const EditRoutePage: NextPageWithLayout = () => {
           <RouteBuilder key={route.id} route={route} />
         ) : (
           <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-            {isLoading ? "Loading…" : "Route not found."}
+            {isLoading ? t("common.loading") : t("routes.notFound")}
           </div>
         )}
       </div>

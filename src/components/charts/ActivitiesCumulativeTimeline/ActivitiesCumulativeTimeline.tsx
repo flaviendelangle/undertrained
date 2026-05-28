@@ -23,6 +23,7 @@ import {
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useTimeSlices } from "~/hooks/useTimeSlices";
+import { useT } from "~/i18n/useT";
 import {
   AXIS_SIZE,
   CHART_MARGINS,
@@ -42,6 +43,7 @@ const MONTH_LABELS = Array.from({ length: 12 }, (_, i) =>
 );
 
 export default function ActivitiesCumulativeTimeline() {
+  const t = useT();
   const [metric, setMetric] = React.useState("distance");
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>([]);
   const tokens = useChartTokens();
@@ -178,11 +180,13 @@ export default function ActivitiesCumulativeTimeline() {
           className="flex flex-col gap-3 sm:w-56"
         >
           <ResponsivePopoverHeader>
-            <ResponsivePopoverTitle>Display options</ResponsivePopoverTitle>
+            <ResponsivePopoverTitle>
+              {t("charts.displayOptions")}
+            </ResponsivePopoverTitle>
           </ResponsivePopoverHeader>
           <div className="flex flex-col gap-1.5">
             <span className="text-muted-foreground text-xs font-medium">
-              Metric
+              {t("charts.metric")}
             </span>
             <MetricSelect value={metric} onValueChange={setMetric} />
           </div>
@@ -205,7 +209,7 @@ export default function ActivitiesCumulativeTimeline() {
 
   return (
     <ChartThemeProvider>
-      <ChartCard title="Year-over-Year Progress" actions={actions}>
+      <ChartCard title={t("charts.cumulativeTimeline.title")} actions={actions}>
         <LineChart
           xAxis={[
             {

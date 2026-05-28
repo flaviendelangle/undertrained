@@ -2,6 +2,7 @@ import { CalendarClockIcon } from "lucide-react";
 
 import type { PlannedTraining } from "@server/db/types";
 
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import { getSportConfig } from "~/utils/sportConfig";
 
@@ -23,6 +24,7 @@ export function PlannedTrainingChip({
 }: {
   training: PlannedTraining;
 }) {
+  const t = useT();
   const planner = useJournalPlanner();
   const config = getSportConfig(training.sportType);
 
@@ -34,7 +36,7 @@ export function PlannedTrainingChip({
         e.stopPropagation();
         planner?.onEditPlanned(training);
       }}
-      aria-label={`Planned: ${training.title}`}
+      aria-label={t("journal.plannedLabel", { title: training.title })}
       style={plannedBlockStyle(config.color)}
       className={cn(
         PLANNED_BLOCK_CLASS,

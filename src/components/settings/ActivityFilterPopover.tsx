@@ -7,6 +7,7 @@ import {
   ResponsiveDialogTrigger,
 } from "~/components/ui/responsive-dialog";
 import { useActivityFilter } from "~/hooks/useActivityFilter";
+import { useT } from "~/i18n/useT";
 
 import { ActivityFilterPanel } from "./ActivityFilterPanel";
 
@@ -18,6 +19,7 @@ export function ActivityFilterPopover({
   search?: string;
   onSearchChange?: (value: string) => void;
 } = {}) {
+  const t = useT();
   const { activeFilterCount } = useActivityFilter();
 
   return (
@@ -30,7 +32,7 @@ export function ActivityFilterPopover({
             className="text-muted-foreground gap-1.5"
           >
             <FilterIcon className="size-3.5" />
-            <span>Filter</span>
+            <span>{t("settings.filter.trigger")}</span>
             {activeFilterCount > 0 && (
               <span className="bg-primary/20 text-primary-foreground rounded px-1 text-xs">
                 {activeFilterCount}

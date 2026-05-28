@@ -4,6 +4,7 @@ import { SettingsIcon } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 import { CardTitle } from "~/components/primitives/CardTitle";
+import { LanguageSelect } from "~/components/settings/LanguageSelect";
 import { RiderMetricCards } from "~/components/settings/rider/RiderMetricCards";
 import { ResetHintsButton } from "~/components/settings/ResetHintsButton";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
@@ -14,10 +15,12 @@ import {
 } from "~/components/settings/layouts/shared";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { trpc } from "~/utils/trpc";
 
 const SettingsPage: NextPageWithLayout = () => {
+  const t = useT();
   const { timeline, setTimeline, hasSettings } = useRiderSettingsTimeline();
   const athleteId = useAthleteId();
   const deleteAllData = trpc.account.deleteAllData.useMutation();
@@ -39,7 +42,7 @@ const SettingsPage: NextPageWithLayout = () => {
     <>
       <Toolbar>
         <SettingsIcon className="size-4" />
-        <span className="font-semibold">Settings</span>
+        <span className="font-semibold">{t("settings.title")}</span>
       </Toolbar>
 
       {/* Mobile (< md): full-bleed sections separated by hairline dividers,
@@ -59,11 +62,11 @@ const SettingsPage: NextPageWithLayout = () => {
 
           <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
             <CardTitle
-              tooltip="TSS uses power data (most accurate for cycling with a power meter). HRSS uses heart rate (works for any sport with an HR monitor). rTSS/sTSS use pace (good for running/swimming without power)."
-              description="Choose which training load metric to display for each sport category."
+              tooltip={t("settings.loadAlgorithm.tooltip")}
+              description={t("settings.loadAlgorithm.description")}
               className="mb-5"
             >
-              Load Algorithm
+              {t("settings.loadAlgorithm.title")}
             </CardTitle>
             <LoadAlgorithmFields
               timeline={timeline}
@@ -72,10 +75,13 @@ const SettingsPage: NextPageWithLayout = () => {
           </section>
 
           <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
-            <CardTitle description="Manage app preferences and onboarding hints.">
-              Preferences
+            <CardTitle description={t("settings.preferences.description")}>
+              {t("settings.preferences.title")}
             </CardTitle>
-            <ResetHintsButton />
+            <div className="flex flex-col gap-5">
+              <LanguageSelect />
+              <ResetHintsButton />
+            </div>
           </section>
 
           <DangerZone

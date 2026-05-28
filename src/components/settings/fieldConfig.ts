@@ -1,83 +1,80 @@
+import type { AppMessageKey } from "~/i18n/I18nProvider";
 import type { TimeVaryingField } from "~/sensors/types";
 
 export interface RiderFieldConfig {
   field: TimeVaryingField;
-  label: string;
+  /** i18n key for the field's display label; resolve with `t(labelKey)`. */
+  labelKey: AppMessageKey;
   unit: string;
   min: number;
   step: number;
   smallStep?: number;
   inputType?: "pace";
   paceUnit?: "/km" | "/100m";
-  /** Shown as the card title's info tooltip. */
-  tooltip?: string;
+  /** i18n key for the card title's info tooltip; resolve with `t(tooltipKey)`. */
+  tooltipKey?: AppMessageKey;
 }
 
 export const RIDER_FIELD_CONFIG: RiderFieldConfig[] = [
   {
     field: "ftp",
-    label: "FTP",
+    labelKey: "settings.field.ftp.label",
     unit: "W",
     min: 0,
     step: 1,
-    tooltip:
-      "Functional Threshold Power — the power you can hold for ~1 hour. Drives cycling training load (TSS) and power zones.",
+    tooltipKey: "settings.field.ftp.tooltip",
   },
   {
     field: "weightKg",
-    label: "Weight",
+    labelKey: "settings.field.weight.label",
     unit: "kg",
     min: 0,
     step: 1,
-    tooltip:
-      "Body weight. Used for power-to-weight ratios and climbing estimates.",
+    tooltipKey: "settings.field.weight.tooltip",
   },
   {
     field: "restingHr",
-    label: "Resting HR",
+    labelKey: "settings.field.restingHr.label",
     unit: "bpm",
     min: 30,
     step: 1,
-    tooltip: "Resting heart rate — the low anchor for heart-rate zones.",
+    tooltipKey: "settings.field.restingHr.tooltip",
   },
   {
     field: "maxHr",
-    label: "Max HR",
+    labelKey: "settings.field.maxHr.label",
     unit: "bpm",
     min: 100,
     step: 1,
-    tooltip: "Maximum heart rate — the high anchor for heart-rate zones.",
+    tooltipKey: "settings.field.maxHr.tooltip",
   },
   {
     field: "lthr",
-    label: "LTHR",
+    labelKey: "settings.field.lthr.label",
     unit: "bpm",
     min: 60,
     step: 1,
-    tooltip:
-      "Lactate Threshold Heart Rate — drives heart-rate based training load (HRSS).",
+    tooltipKey: "settings.field.lthr.tooltip",
   },
   {
     field: "runThresholdPace",
-    label: "Run Threshold Pace",
+    labelKey: "settings.field.runThresholdPace.label",
     unit: "/km",
     min: 0.1,
     step: 0.01,
     inputType: "pace",
     paceUnit: "/km",
-    tooltip:
-      "The pace you can sustain at threshold. Drives running training load (rTSS) and pace zones.",
+    tooltipKey: "settings.field.runThresholdPace.tooltip",
   },
   {
     field: "swimThresholdPace",
-    label: "Swim Threshold Pace",
+    labelKey: "settings.field.swimThresholdPace.label",
     unit: "/100m",
     min: 0.1,
     step: 0.01,
     inputType: "pace",
     paceUnit: "/100m",
-    tooltip:
-      "Your threshold swim pace per 100m. Drives swimming training load (sTSS).",
+    tooltipKey: "settings.field.swimThresholdPace.tooltip",
   },
 ];
 

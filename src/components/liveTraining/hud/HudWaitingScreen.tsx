@@ -1,3 +1,5 @@
+import { useT } from "~/i18n/useT";
+
 interface HudWaitingScreenProps {
   currentHr: number | null;
   hrConnected: boolean;
@@ -19,6 +21,7 @@ export function HudWaitingScreen({
   onTargetPowerChange,
   supportsControl,
 }: HudWaitingScreenProps) {
+  const t = useT();
   return (
     <div className="from-background to-background absolute inset-0 z-40 flex items-center justify-center bg-linear-to-br">
       {/* Live HR badge */}
@@ -50,7 +53,7 @@ export function HudWaitingScreen({
         </div>
 
         <p className="animate-breathe text-muted-foreground text-2xl font-light tracking-wide">
-          Start pedaling to begin
+          {t("liveTraining.startPedaling")}
         </p>
 
         {/* ERG mode toggle */}
@@ -76,7 +79,7 @@ export function HudWaitingScreen({
                   <path d="M7 2v11h3v9l7-12h-4l4-8z" />
                 </svg>
                 <span className="text-foreground text-sm font-medium">
-                  ERG Mode
+                  {t("liveTraining.ergMode")}
                 </span>
               </div>
               <button
@@ -134,7 +137,7 @@ export function HudWaitingScreen({
           onClick={onManualStart}
           className="border-border text-muted-foreground hover:border-border hover:text-foreground mt-4 rounded-full border px-6 py-2 text-sm transition-colors"
         >
-          Start Manually
+          {t("liveTraining.startManually")}
         </button>
       </div>
     </div>

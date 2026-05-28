@@ -27,8 +27,10 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from "~/components/ui/responsive-dialog";
+import { sportTypeLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
-import { formatActivityType, formatHumanDuration } from "~/utils/format";
+import { formatHumanDuration } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 /** A single row from `timePeriods.getStats` — one period plus its aggregated totals. */
@@ -76,10 +78,11 @@ export function SportTypeIcons({
   sportTypes: string[] | null;
   className?: string;
 }) {
+  const t = useT();
   if (!sportTypes || sportTypes.length === 0) {
     return (
       <span className={cn("text-muted-foreground text-xs", className)}>
-        All sports
+        {t("periods.allSports")}
       </span>
     );
   }
@@ -91,7 +94,7 @@ export function SportTypeIcons({
         return (
           <span
             key={type}
-            title={formatActivityType(type)}
+            title={sportTypeLabel(type, t)}
             className="text-muted-foreground bg-muted flex size-6 items-center justify-center rounded-md"
           >
             <Icon className="size-3.5" />
@@ -106,12 +109,13 @@ export function SportTypeIcons({
 export function NewPeriodButton({
   size = "sm",
   variant = "default",
-  label = "New period",
+  label,
 }: {
   size?: "sm" | "default";
   variant?: "default" | "outline";
   label?: string;
 }) {
+  const t = useT();
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -120,11 +124,13 @@ export function NewPeriodButton({
         render={<Button size={size} variant={variant} />}
       >
         <PlusIcon className="size-4" />
-        {label}
+        {label ?? t("periods.newPeriod")}
       </ResponsiveDialogTrigger>
       <ResponsiveDialogContent className="sm:max-w-lg">
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>New time period</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>
+            {t("periods.newTimePeriod")}
+          </ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         <TimePeriodForm onSuccess={() => setOpen(false)} />
       </ResponsiveDialogContent>
@@ -142,6 +148,7 @@ export function DeletePeriodButton({
   onDelete: () => void;
   className?: string;
 }) {
+  const t = useT();
   return (
     <ResponsiveDialog>
       <ResponsiveDialogTrigger
@@ -149,7 +156,7 @@ export function DeletePeriodButton({
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label="Delete period"
+            aria-label={t("periods.deletePeriod")}
             className={cn(
               "text-muted-foreground hover:text-destructive relative z-10 opacity-0 transition-opacity group-hover:opacity-100",
               className,
@@ -167,22 +174,21 @@ export function DeletePeriodButton({
       <ResponsiveDialogContent showCloseButton={false}>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
-            Delete &ldquo;{name}&rdquo;?
+            {t("periods.deleteConfirmTitle", { name })}
           </ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            This action cannot be undone. The period will be permanently
-            deleted.
+            {t("periods.deleteConfirmDescription")}
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <ResponsiveDialogFooter>
           <ResponsiveDialogClose render={<Button variant="outline" />}>
-            Cancel
+            {t("common.cancel")}
           </ResponsiveDialogClose>
           <ResponsiveDialogClose
             render={<Button variant="destructive" />}
             onClick={onDelete}
           >
-            Delete
+            {t("common.delete")}
           </ResponsiveDialogClose>
         </ResponsiveDialogFooter>
       </ResponsiveDialogContent>
@@ -204,6 +210,7 @@ export function PeriodSummaryCard({
   row: PeriodStatRow;
   onDelete: (id: number) => void;
 }) {
+  const t = useT();
   return (
     <div className="sm:bg-card relative flex flex-col sm:rounded-sm">
       <div className="border-border flex items-start justify-between gap-2 p-4 sm:border-b">
@@ -232,22 +239,22 @@ export function PeriodSummaryCard({
       <div className="grid grid-cols-2 gap-x-3 gap-y-3 p-4">
         <StatCard
           icon={ListIcon}
-          label="Activities"
+          label={t("periods.stats.activities")}
           value={row.activityCount}
         />
         <StatCard
           icon={TimerIcon}
-          label="Moving"
+          label={t("periods.stats.moving")}
           value={formatHumanDuration(row.totalMovingTime)}
         />
         <StatCard
           icon={RouteIcon}
-          label="Distance"
+          label={t("periods.stats.distance")}
           value={formatKm(row.totalDistance)}
         />
         <StatCard
           icon={MountainIcon}
-          label="Elevation"
+          label={t("periods.stats.elevation")}
           value={formatElevation(row.totalElevation)}
         />
       </div>
@@ -257,6 +264,7 @@ export function PeriodSummaryCard({
 
 /** Shown when the athlete has no periods yet — the form becomes the focus. */
 export function PeriodsEmptyState() {
+  const t = useT();
   return (
     <div className="border-border bg-card mx-auto w-full max-w-lg rounded-xl border p-6 sm:p-8">
       <div className="mb-6 flex flex-col items-center gap-3 text-center">
@@ -265,11 +273,10 @@ export function PeriodsEmptyState() {
         </div>
         <div>
           <h3 className="text-lg font-semibold">
-            Create your first time period
+            {t("periods.emptyTitle")}
           </h3>
           <p className="text-muted-foreground mt-1 text-sm">
-            Group activities into training blocks — a season, a camp, a trip —
-            to see aggregated stats and maps.
+            {t("periods.emptyDescription")}
           </p>
         </div>
       </div>

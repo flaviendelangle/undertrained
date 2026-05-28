@@ -3,6 +3,8 @@ import * as React from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { type TFunction } from "~/i18n/I18nProvider";
+import { useT } from "~/i18n/useT";
 import { CYCLING_POWER_DURATIONS as DURATIONS } from "~/utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCES } from "~/utils/cyclingRecordDistances";
 import { formatElapsed } from "~/utils/format";
@@ -29,25 +31,29 @@ type CyclingMetric =
   | "distance"
   | "duration"
   | "load";
-const CYCLING_METRIC_LABELS: Record<CyclingMetric, string> = {
-  power: "Power",
-  speed: "Speed",
-  elevation_total: "Total elevation",
-  biggest_climb: "Biggest climb",
-  heartrate: "Heart rate",
-  distance: "Distance",
-  duration: "Duration",
-  load: "Load",
-};
+const createCyclingMetricLabels = (
+  t: TFunction,
+): Record<CyclingMetric, string> => ({
+  power: t("charts.records.metricLabel.power"),
+  speed: t("charts.records.metricLabel.speed"),
+  elevation_total: t("charts.records.metricLabel.totalElevation"),
+  biggest_climb: t("charts.records.metricLabel.biggestClimb"),
+  heartrate: t("charts.records.metricLabel.heartRate"),
+  distance: t("charts.records.metricLabel.distance"),
+  duration: t("charts.records.metricLabel.duration"),
+  load: t("charts.records.metricLabel.load"),
+});
 
 type RunningMetric = "pace" | "heartrate" | "distance" | "duration" | "load";
-const RUNNING_METRIC_LABELS: Record<RunningMetric, string> = {
-  pace: "Pace",
-  heartrate: "Heart rate",
-  distance: "Distance",
-  duration: "Duration",
-  load: "Load",
-};
+const createRunningMetricLabels = (
+  t: TFunction,
+): Record<RunningMetric, string> => ({
+  pace: t("charts.records.metricLabel.pace"),
+  heartrate: t("charts.records.metricLabel.heartRate"),
+  distance: t("charts.records.metricLabel.distance"),
+  duration: t("charts.records.metricLabel.duration"),
+  load: t("charts.records.metricLabel.load"),
+});
 
 // The three metrics backed by the "longest activity" leaderboard, which differ
 // only in how the ranked value is computed and formatted.
@@ -116,6 +122,15 @@ export interface RecordsExplorer {
  * page variant can render them however it likes.
  */
 export function useRecordsExplorer(): RecordsExplorer {
+  const t = useT();
+  const cyclingMetricLabels = React.useMemo(
+    () => createCyclingMetricLabels(t),
+    [t],
+  );
+  const runningMetricLabels = React.useMemo(
+    () => createRunningMetricLabels(t),
+    [t],
+  );
   const athleteId = useAthleteId();
   const { data: options } = trpc.records.getOptions.useQuery(
     { athleteId: athleteId! },
@@ -227,17 +242,17 @@ export function useRecordsExplorer(): RecordsExplorer {
     isPlaceholderData: boolean;
   } = powerQuery;
   let freshEntries: Entry[] = [];
-  let emptyMessage = "No records for this selection yet.";
+  let emptyMessage = t("charts.records.empty.default");
 
   if (heartrateActive) {
     active = heartrateQuery;
-    emptyMessage = "No heart-rate records for this duration yet.";
+    emptyMessage = t("charts.records.empty.heartRate");
     freshEntries = (heartrateQuery.data ?? []).map((r) =>
       toEntry(r, `${r.value} bpm`),
     );
   } else if (longestActive) {
     active = longestQuery;
-    emptyMessage = "No activities for this selection yet.";
+    emptyMessage = t("charts.records.empty.activities");
     const config = getSportConfig(isCycling ? "Ride" : "Run");
     freshEntries = (longestQuery.data ?? []).map((r) =>
       toEntry(
@@ -251,7 +266,7 @@ export function useRecordsExplorer(): RecordsExplorer {
     );
   } else if (paceActive) {
     active = runningQuery;
-    emptyMessage = "No best efforts for this distance yet.";
+    emptyMessage = t("charts.records.empty.bestEfforts");
     freshEntries = (runningQuery.data ?? []).map((r) =>
       toEntry(
         r,
@@ -278,8 +293,8 @@ export function useRecordsExplorer(): RecordsExplorer {
     active = powerQuery;
     emptyMessage =
       options && !options.hasCyclingPower
-        ? "No records computed yet — run a sync (or recompute scores) to build them from your rides."
-        : "No records for this selection yet.";
+        ? t("charts.records.empty.notComputed")
+        : t("charts.records.empty.default");
     freshEntries = (powerQuery.data ?? []).map((r) =>
       toEntry(r, `${r.value} W`),
     );
@@ -316,37 +331,37 @@ export function useRecordsExplorer(): RecordsExplorer {
 
   const metricControl: RecordControl<string> = isCycling
     ? {
-        items: (Object.keys(CYCLING_METRIC_LABELS) as CyclingMetric[])
-          .map((m) => ({ key: m, label: CYCLING_METRIC_LABELS[m] }))
+        items: (Object.keys(cyclingMetricLabels) as CyclingMetric[])
+          .map((m) => ({ key: m, label: cyclingMetricLabels[m] }))
           .sort((a, b) => a.label.localeCompare(b.label)),
         selected: cyclingMetric,
         onSelect: (m) => setCyclingMetric(m as CyclingMetric),
       }
     : {
-        items: (Object.keys(RUNNING_METRIC_LABELS) as RunningMetric[])
-          .map((m) => ({ key: m, label: RUNNING_METRIC_LABELS[m] }))
+        items: (Object.keys(runningMetricLabels) as RunningMetric[])
+          .map((m) => ({ key: m, label: runningMetricLabels[m] }))
           .sort((a, b) => a.label.localeCompare(b.label)),
         selected: runningMetric,
         onSelect: (m) => setRunningMetric(m as RunningMetric),
       };
 
   const metricLabel = isCycling
-    ? CYCLING_METRIC_LABELS[cyclingMetric]
-    : RUNNING_METRIC_LABELS[runningMetric];
+    ? cyclingMetricLabels[cyclingMetric]
+    : runningMetricLabels[runningMetric];
 
   // Only Power/Heart rate (a duration) and Speed/Pace (a distance) take a
   // secondary parameter; every other metric ranks on a fixed value.
   let paramControl: RecordControl<string | number> | null = null;
   let paramLabel = "";
   if (metric === "power" || heartrateActive) {
-    paramLabel = "For duration";
+    paramLabel = t("charts.records.forDuration");
     paramControl = {
       items: DURATIONS.map((d) => ({ key: d.seconds, label: d.label })),
       selected: duration,
       onSelect: (v) => setDuration(Number(v)),
     };
   } else if (metric === "speed") {
-    paramLabel = "For distance";
+    paramLabel = t("charts.records.forDistance");
     paramControl = {
       items: CYCLING_SPEED_DISTANCES.map((d) => ({
         key: d.meters,
@@ -356,7 +371,7 @@ export function useRecordsExplorer(): RecordsExplorer {
       onSelect: (v) => setSpeedDistance(Number(v)),
     };
   } else if (paceActive) {
-    paramLabel = "For distance";
+    paramLabel = t("charts.records.forDistance");
     paramControl = {
       items: (options?.runDistances ?? []).map((d) => ({
         key: d.name,

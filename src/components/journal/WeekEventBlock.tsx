@@ -8,8 +8,9 @@ import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card
 
 import type { PlannedTraining } from "@server/db/types";
 
+import { sportTypeLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
-import { formatActivityType } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 import { useMapPrefetch } from "./ActivityPreviewCard";
@@ -36,6 +37,7 @@ export function WeekActivityBlock({
   activity: JournalActivity;
   compact?: boolean;
 }) {
+  const t = useT();
   const config = getSportConfig(activity.type);
   const Icon = config.icon;
   const stats = config.formatJournalStats(activity);
@@ -60,30 +62,34 @@ export function WeekActivityBlock({
       render={
         <Link
           href={href}
-          aria-label={isRace ? `Race: ${activity.name}` : activity.name}
+          aria-label={
+            isRace ? t("journal.activity.race", { name: activity.name }) : activity.name
+          }
           className={cn(
             "flex h-full w-full min-w-0 flex-col gap-0.5 overflow-hidden rounded px-1 py-0.5 leading-tight transition-[filter] hover:brightness-95 dark:hover:brightness-110",
             isRace && "ring-1 ring-amber-400/80 ring-inset",
           )}
           style={{
-            backgroundColor: `color-mix(in oklab, ${config.color} 16%, transparent)`,
+            backgroundColor: `color-mix(in oklab, ${config.color} 16%, var(--background))`,
           }}
         >
           <span className="flex min-w-0 items-center gap-1">
             <Icon className="size-3 shrink-0" style={{ color: config.color }} />
             <span className="text-foreground truncate text-xs font-medium">
-              {activity.name || formatActivityType(activity.type)}
+              {activity.name || sportTypeLabel(activity.type, t)}
             </span>
             {isRace && (
               <FlagIcon
                 className="size-3 shrink-0 text-amber-500"
-                aria-label="Race"
+                aria-label={t("journal.raceBadge")}
               />
             )}
             {isPr && (
               <MedalIcon
                 className="size-3 shrink-0 text-amber-500"
-                aria-label={`Personal record: ${activityRecords?.join(", ")}`}
+                aria-label={t("journal.personalRecord", {
+                  records: activityRecords?.join(", ") ?? "",
+                })}
               />
             )}
           </span>
@@ -111,6 +117,7 @@ export function WeekPlannedBlock({
   training: PlannedTraining;
   compact?: boolean;
 }) {
+  const t = useT();
   const planner = useJournalPlanner();
   const config = getSportConfig(training.sportType);
   const { ref, isDragging } = useDraggable({ id: `planned-${training.id}` });
@@ -123,7 +130,7 @@ export function WeekPlannedBlock({
         e.stopPropagation();
         planner?.onEditPlanned(training);
       }}
-      aria-label={`Planned: ${training.title}`}
+      aria-label={t("journal.plannedLabel", { title: training.title })}
       style={plannedBlockStyle(config.color)}
       className={cn(
         PLANNED_BLOCK_CLASS,

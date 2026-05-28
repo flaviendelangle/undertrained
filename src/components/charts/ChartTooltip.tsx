@@ -15,6 +15,8 @@ import {
   useDrawingArea,
 } from "@mui/x-charts-pro";
 
+import { useT } from "~/i18n/useT";
+
 /**
  * Tracks the pointer position (in viewport coordinates) over the chart container.
  */
@@ -84,6 +86,7 @@ const GAP = 12;
  * in {@link ChartTooltipTotalProvider} to additionally show a "Total" row.
  */
 export function ChartTooltip() {
+  const t = useT();
   const totalConfig = useContext(ChartTooltipTotalContext);
   const showTotal = totalConfig != null;
   const formatTotal = totalConfig?.formatTotal;
@@ -196,7 +199,7 @@ export function ChartTooltip() {
                     <div className="border-border mt-1 flex items-center gap-2 border-t pt-1 text-sm whitespace-nowrap">
                       {/* Spacer matching the series dot so labels line up. */}
                       <span className="inline-block size-2 shrink-0" />
-                      <span>Total</span>
+                      <span>{t("charts.tooltip.total")}</span>
                       <span className="font-medium">
                         {formatTotal
                           ? formatTotal(total)

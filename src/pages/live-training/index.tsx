@@ -11,6 +11,7 @@ import { HudPauseOverlay } from "~/components/liveTraining/hud/HudPauseOverlay";
 import { HudPostTraining } from "~/components/liveTraining/hud/HudPostTraining";
 import { HudWaitingScreen } from "~/components/liveTraining/hud/HudWaitingScreen";
 import { useTrainingPageController } from "~/hooks/useTrainingPageController";
+import { useT } from "~/i18n/useT";
 import { isLiveTrainingEnabled } from "~/lib/features";
 
 // Live Training is opt-in (see next.config.ts). When it's disabled the route
@@ -34,6 +35,7 @@ function getPhase(ctrl: ReturnType<typeof useTrainingPageController>): Phase {
 }
 
 export default function Training1Page() {
+  const t = useT();
   const ctrl = useTrainingPageController();
   const phase = getPhase(ctrl);
 
@@ -82,7 +84,7 @@ export default function Training1Page() {
         {(phase === "connection" || phase === "waiting") && (
           <SettingsCallout
             hintId="callout-training-equipment"
-            message="Set your weight, bike weight, and aerodynamics (CdA, Crr) in Settings for accurate watts/kg and virtual speed."
+            message={t("liveTraining.equipmentCallout")}
           />
         )}
       </div>

@@ -5,14 +5,14 @@ import { getSportConfig } from "~/utils/sportConfig";
 
 /**
  * Sport-tinted fill + dashed border shared by every planned-training block (the
- * month chip, the week block, and the drag ghost): colourful and legible, while
- * the dashed outline keeps it reading as a still-to-do plan — distinct from the
- * solid completed-activity chips, and from the gridlines behind it on the week
- * view's time-grid.
+ * month chip, the week block, and the drag ghost): colourful and legible. The
+ * fill is opaque (mixed over the background, not transparent) so it fully covers
+ * the week view's time-grid, while the dashed outline keeps it reading as a
+ * still-to-do plan — distinct from the solid completed-activity chips.
  */
 export function plannedBlockStyle(color: string): React.CSSProperties {
   return {
-    backgroundColor: `color-mix(in oklab, ${color} 18%, transparent)`,
+    backgroundColor: `color-mix(in oklab, ${color} 18%, var(--background))`,
     borderColor: `color-mix(in oklab, ${color} 60%, transparent)`,
   };
 }

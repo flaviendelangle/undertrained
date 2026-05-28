@@ -22,6 +22,7 @@ import { SettingsCallout } from "~/components/primitives/SettingsCallout";
 import { StatCard } from "~/components/primitives/StatCard";
 import { StatSection } from "~/components/primitives/StatSection";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import { formatHumanDuration } from "~/utils/format";
 import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
@@ -41,6 +42,7 @@ interface ActivityStatsProps {
 export const ActivityStats = React.memo(function ActivityStats({
   activity,
 }: ActivityStatsProps) {
+  const t = useT();
   const sportConfig = getSportConfig(activity.type);
   const { resolveForDate, hasSettings, timeline } = useRiderSettingsTimeline();
   const activityDate = activity.startDateLocal.slice(0, 10);
@@ -59,7 +61,7 @@ export const ActivityStats = React.memo(function ActivityStats({
   const tssTooltipLines = sportConfig.getTssTooltipLines(riderSettings, np);
   const tssTooltip = (
     <div className="flex flex-col gap-0.5">
-      <div className="font-medium">Settings for {activityDate}</div>
+      <div className="font-medium">{t("stats.settingsForDate", { date: activityDate })}</div>
       {tssTooltipLines.map((line) => (
         <div key={line.label}>
           {line.label}: {line.value}
@@ -70,9 +72,9 @@ export const ActivityStats = React.memo(function ActivityStats({
 
   const hrSettingsTooltip = (
     <div className="flex flex-col gap-0.5">
-      <div className="font-medium">Settings for {activityDate}</div>
-      <div>Resting HR: {riderSettings.restingHr} bpm</div>
-      <div>Max HR: {riderSettings.maxHr} bpm</div>
+      <div className="font-medium">{t("stats.settingsForDate", { date: activityDate })}</div>
+      <div>{t("stats.restingHr")}: {riderSettings.restingHr} bpm</div>
+      <div>{t("stats.maxHr")}: {riderSettings.maxHr} bpm</div>
       <div>LTHR: {riderSettings.lthr} bpm</div>
     </div>
   );
@@ -82,14 +84,14 @@ export const ActivityStats = React.memo(function ActivityStats({
   const heroStats: Stat[] = [
     {
       icon: Timer,
-      label: "Moving Time",
+      label: t("stats.movingTime"),
       value: formatHumanDuration(activity.movingTime),
     },
     ...(activity.distance > 0
       ? [
           {
             icon: Route,
-            label: "Distance",
+            label: t("stats.distance"),
             value: sportConfig.formatDistance(activity.distance),
           },
         ]
@@ -98,7 +100,7 @@ export const ActivityStats = React.memo(function ActivityStats({
       ? [
           {
             icon: Gauge,
-            label: `Avg ${sportConfig.speedLabel}`,
+            label: t("stats.avgLabel", { label: sportConfig.speedLabel }),
             value: sportConfig.formatSpeed(activity.averageSpeed),
           },
         ]
@@ -106,7 +108,7 @@ export const ActivityStats = React.memo(function ActivityStats({
         ? [
             {
               icon: Mountain,
-              label: "Elevation",
+              label: t("stats.elevation"),
               value: `${activity.totalElevationGain} m`,
             },
           ]
@@ -120,7 +122,7 @@ export const ActivityStats = React.memo(function ActivityStats({
         ? [
             {
               icon: TrendingUp,
-              label: "Load",
+              label: t("stats.load"),
               value: Math.round(loadResult.value).toString(),
               tooltip: loadResult.tooltip,
             },
@@ -133,13 +135,13 @@ export const ActivityStats = React.memo(function ActivityStats({
 
   const timeSpeedStats: Stat[] = [
     {
-      label: "Elapsed Time",
+      label: t("stats.elapsedTime"),
       value: formatHumanDuration(activity.elapsedTime),
     },
     ...(activity.averageSpeed > 0
       ? [
           {
-            label: `Avg ${sportConfig.speedLabel}`,
+            label: t("stats.avgLabel", { label: sportConfig.speedLabel }),
             value: sportConfig.formatSpeed(activity.averageSpeed),
           },
         ]
@@ -147,7 +149,7 @@ export const ActivityStats = React.memo(function ActivityStats({
     ...(activity.maxSpeed != null && activity.maxSpeed > 0
       ? [
           {
-            label: `Max ${sportConfig.speedLabel}`,
+            label: t("stats.maxLabel", { label: sportConfig.speedLabel }),
             value: sportConfig.formatSpeed(activity.maxSpeed),
           },
         ]
@@ -160,7 +162,7 @@ export const ActivityStats = React.memo(function ActivityStats({
     ...(activity.averageHeartrate != null
       ? [
           {
-            label: "Avg HR",
+            label: t("stats.avgHr"),
             value: `${Math.round(activity.averageHeartrate)} bpm`,
           },
         ]
@@ -168,7 +170,7 @@ export const ActivityStats = React.memo(function ActivityStats({
     ...(activity.maxHeartrate != null
       ? [
           {
-            label: "Max HR",
+            label: t("stats.maxHr"),
             value: `${Math.round(activity.maxHeartrate)} bpm`,
           },
         ]
@@ -181,7 +183,7 @@ export const ActivityStats = React.memo(function ActivityStats({
     ...(activity.averageWatts != null
       ? [
           {
-            label: "Avg Power",
+            label: t("stats.avgPower"),
             value: `${Math.round(activity.averageWatts)} W`,
           },
         ]
@@ -189,7 +191,7 @@ export const ActivityStats = React.memo(function ActivityStats({
     ...(activity.maxWatts != null
       ? [
           {
-            label: "Max Power",
+            label: t("stats.maxPower"),
             value: `${Math.round(activity.maxWatts)} W`,
           },
         ]
@@ -197,7 +199,7 @@ export const ActivityStats = React.memo(function ActivityStats({
     ...(np != null
       ? [
           {
-            label: "Normalized Power",
+            label: t("stats.normalizedPower"),
             value: `${Math.round(np)} W`,
           },
         ]
@@ -208,12 +210,12 @@ export const ActivityStats = React.memo(function ActivityStats({
 
   const energyCadenceStats: Stat[] = [
     ...(activity.kilojoules != null
-      ? [{ label: "Energy", value: `${Math.round(activity.kilojoules)} kJ` }]
+      ? [{ label: t("stats.energy"), value: `${Math.round(activity.kilojoules)} kJ` }]
       : []),
     ...(activity.calories != null
       ? [
           {
-            label: "Calories",
+            label: t("stats.calories"),
             value: `${Math.round(activity.calories)} kcal`,
           },
         ]
@@ -221,7 +223,7 @@ export const ActivityStats = React.memo(function ActivityStats({
     ...(activity.averageCadence != null
       ? [
           {
-            label: "Avg Cadence",
+            label: t("stats.avgCadence"),
             value: `${Math.round(activity.averageCadence)} ${sportConfig.cadenceUnit}`,
           },
         ]
@@ -238,7 +240,7 @@ export const ActivityStats = React.memo(function ActivityStats({
         ...(intensityFactor != null
           ? [
               {
-                label: "Intensity Factor",
+                label: t("stats.intensityFactor"),
                 value: intensityFactor.toFixed(2),
                 tooltip: tssTooltip,
               },
@@ -267,10 +269,9 @@ export const ActivityStats = React.memo(function ActivityStats({
         ...(sportConfig.hasPowerMetrics
           ? [
               {
-                label: "Intensity Factor",
+                label: t("stats.intensityFactor"),
                 value: null,
-                tooltip:
-                  "Configure your rider settings (FTP) to enable this metric.",
+                tooltip: t("stats.ftpSettingsHint"),
               },
               {
                 label: "TSS",
@@ -280,8 +281,7 @@ export const ActivityStats = React.memo(function ActivityStats({
               {
                 label: "HRSS",
                 value: null,
-                tooltip:
-                  "Configure your rider settings (Resting HR, Max HR, LTHR) to enable this metric.",
+                tooltip: t("stats.hrSettingsHint"),
               },
             ]
           : sportConfig.hasPaceTSS
@@ -297,7 +297,7 @@ export const ActivityStats = React.memo(function ActivityStats({
 
   return (
     <div className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
-      <CardTitle className="mb-4">Activity Details</CardTitle>
+      <CardTitle className="mb-4">{t("stats.section.activityDetails")}</CardTitle>
 
       {/* Hero Row */}
       <div
@@ -319,14 +319,14 @@ export const ActivityStats = React.memo(function ActivityStats({
 
       {/* Grouped Sections */}
       <div className="flex flex-col gap-4">
-        <StatSection icon={Clock} title={`Time & ${sportConfig.speedLabel}`}>
+        <StatSection icon={Clock} title={t("stats.section.timeAndSpeed", { label: sportConfig.speedLabel })}>
           {timeSpeedStats.map((stat) => (
             <StatCard key={stat.label} {...stat} />
           ))}
         </StatSection>
 
         {heartRateStats.length > 0 && (
-          <StatSection icon={HeartPulse} title="Heart Rate">
+          <StatSection icon={HeartPulse} title={t("stats.section.heartRate")}>
             {heartRateStats.map((stat) => (
               <StatCard key={stat.label} {...stat} />
             ))}
@@ -334,7 +334,7 @@ export const ActivityStats = React.memo(function ActivityStats({
         )}
 
         {powerStats.length > 0 && (
-          <StatSection icon={Zap} title="Power">
+          <StatSection icon={Zap} title={t("stats.section.power")}>
             {powerStats.map((stat) => (
               <StatCard key={stat.label} {...stat} />
             ))}
@@ -342,7 +342,7 @@ export const ActivityStats = React.memo(function ActivityStats({
         )}
 
         {energyCadenceStats.length > 0 && (
-          <StatSection icon={Flame} title="Energy & Cadence">
+          <StatSection icon={Flame} title={t("stats.section.energyAndCadence")}>
             {energyCadenceStats.map((stat) => (
               <StatCard key={stat.label} {...stat} />
             ))}
@@ -350,7 +350,7 @@ export const ActivityStats = React.memo(function ActivityStats({
         )}
 
         {activity.perceivedExertion != null && (
-          <StatSection icon={ActivityIcon} title="Perceived Exertion">
+          <StatSection icon={ActivityIcon} title={t("stats.section.perceivedExertion")}>
             <StatCard
               label="RPE"
               value={`${activity.perceivedExertion} / 10`}
@@ -359,7 +359,7 @@ export const ActivityStats = React.memo(function ActivityStats({
         )}
 
         {trainingLoadStats.length > 0 && (
-          <StatSection icon={TrendingUp} title="Training Load Details">
+          <StatSection icon={TrendingUp} title={t("stats.section.trainingLoadDetails")}>
             {!hasSettings && (
               <SettingsCallout
                 hintId="callout-activity-load"

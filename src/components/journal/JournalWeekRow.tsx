@@ -1,7 +1,6 @@
 import * as React from "react";
 
 import { format, isSameMonth, startOfDay } from "date-fns";
-import { enGB } from "date-fns/locale/en-GB";
 import { CalendarClockIcon } from "lucide-react";
 
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
@@ -14,6 +13,9 @@ import {
 } from "~/components/ui/drawer";
 import { PreviewCardContent } from "~/components/ui/preview-card";
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
+import { sportCategoryLabel, weeklyVerdictLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import { formatCompactDuration } from "~/utils/format";
 import { SPORT_CATEGORY_META } from "~/utils/sportConfig";
@@ -40,17 +42,15 @@ export const JOURNAL_GRID_COLS =
 const SUMMARY_CELL =
   "border-border bg-muted/40 sticky right-0 z-10 isolate flex flex-col justify-center border-l px-2 before:absolute before:inset-0 before:-z-10 before:bg-background before:content-['']";
 
-const LOCALE_OPTIONS = { locale: enGB };
-
 /**
  * Week date range; the month is printed once when both ends share it, e.g.
  * "22 – 28 May", otherwise "27 Apr – 3 May".
  */
 function formatWeekRange(weekStart: Date, weekEnd: Date): string {
   const start = isSameMonth(weekStart, weekEnd)
-    ? format(weekStart, "d", LOCALE_OPTIONS)
-    : format(weekStart, "d MMM", LOCALE_OPTIONS);
-  return `${start} – ${format(weekEnd, "d MMM", LOCALE_OPTIONS)}`;
+    ? format(weekStart, "d", { locale: getActiveDateLocale() })
+    : format(weekStart, "d MMM", { locale: getActiveDateLocale() });
+  return `${start} – ${format(weekEnd, "d MMM", { locale: getActiveDateLocale() })}`;
 }
 
 /**
@@ -60,6 +60,7 @@ function formatWeekRange(weekStart: Date, weekEnd: Date): string {
  * summary card instead (see {@link WeekSummaryCardBody}).
  */
 function VerdictChip({ week }: { week: JournalWeek }) {
+  const t = useT();
   if (week.verdict == null) {
     return null;
   }
@@ -73,13 +74,16 @@ function VerdictChip({ week }: { week: JournalWeek }) {
         className="size-1.5 shrink-0 rounded-full"
         style={{ backgroundColor: week.verdict.color }}
       />
-      <span className="truncate">{week.verdict.label}</span>
+      <span className="truncate">
+        {weeklyVerdictLabel(week.verdict.key, t)}
+      </span>
     </span>
   );
 }
 
 /** Hover-card detail for a week's summary. Only mounts while the card is open. */
 function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
+  const t = useT();
   const todayStart = startOfDay(new Date()).getTime();
   // Signed % the week's load sits above/below its trailing 4-week average — the
   // quantitative backing for the verdict, shown here rather than as a tooltip.
@@ -97,7 +101,7 @@ function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
             <span className="text-foreground font-medium">
               {Math.round(week.totalLoad)}
             </span>{" "}
-            load
+            {t("journal.load")}
           </span>
         </div>
         {week.verdict != null && (
@@ -105,16 +109,19 @@ function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
             <VerdictChip week={week} />
             {deltaPct != null && (
               <span className="text-muted-foreground text-[11px] leading-none tabular-nums">
-                {deltaPct > 0 ? "+" : ""}
-                {deltaPct}% vs. trailing 4-week average
+                {t("journal.deltaVsAverage", {
+                  delta: `${deltaPct > 0 ? "+" : ""}${deltaPct}`,
+                })}
               </span>
             )}
           </div>
         )}
         {week.plannedSeconds > 0 && (
           <div className="text-muted-foreground flex items-center gap-1 text-[11px] tabular-nums">
-            <CalendarClockIcon className="size-3 shrink-0" aria-hidden />+
-            {formatCompactDuration(week.plannedSeconds)} still planned this week
+            <CalendarClockIcon className="size-3 shrink-0" aria-hidden />
+            {t("journal.stillPlanned", {
+              duration: formatCompactDuration(week.plannedSeconds),
+            })}
           </div>
         )}
       </div>
@@ -134,7 +141,9 @@ function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
                   style={{ color: meta.color }}
                   aria-hidden
                 />
-                <span className="text-foreground">{meta.label}</span>
+                <span className="text-foreground">
+                  {sportCategoryLabel(stat.category, t)}
+                </span>
                 <span className="text-muted-foreground ml-auto tabular-nums">
                   {formatCompactDuration(stat.totalSeconds)}
                 </span>
@@ -162,12 +171,12 @@ function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
               className="size-1.5 rounded-full"
               style={{ backgroundColor: "var(--primary)" }}
             />
-            This week
+            {t("journal.thisWeek")}
           </span>
           {week.previousWeekDailyLoad != null && (
             <span className="flex items-center gap-1">
               <span className="bg-muted-foreground size-1.5 rounded-full" />
-              Previous week
+              {t("journal.previousWeek")}
             </span>
           )}
         </div>
@@ -202,6 +211,7 @@ export function WeekSummaryPreviewHost({
 }
 
 function WeekSummary({ week }: { week: JournalWeek }) {
+  const t = useT();
   const hasActual = week.totalSeconds > 0;
   const hasPlanned = week.plannedSeconds > 0;
   // An upcoming (or otherwise activity-free) week with plans: the planned total
@@ -215,7 +225,9 @@ function WeekSummary({ week }: { week: JournalWeek }) {
           <CalendarClockIcon className="size-3.5 shrink-0" aria-hidden />
           {formatCompactDuration(week.plannedSeconds)}
         </div>
-        <div className="text-muted-foreground/70 text-[11px]">planned</div>
+        <div className="text-muted-foreground/70 text-[11px]">
+          {t("journal.planned")}
+        </div>
       </div>
     );
   }
@@ -229,15 +241,17 @@ function WeekSummary({ week }: { week: JournalWeek }) {
       </div>
       {hasPlanned && (
         <div className="text-muted-foreground flex items-center gap-1 text-[11px] tabular-nums max-md:hidden">
-          <CalendarClockIcon className="size-3 shrink-0" aria-hidden />+
-          {formatCompactDuration(week.plannedSeconds)} planned
+          <CalendarClockIcon className="size-3 shrink-0" aria-hidden />
+          {t("journal.plannedDuration", {
+            duration: formatCompactDuration(week.plannedSeconds),
+          })}
         </div>
       )}
       <div className="text-muted-foreground text-xs whitespace-nowrap">
         <span className="text-foreground font-medium tabular-nums">
           {Math.round(week.totalLoad)}
         </span>{" "}
-        load
+        {t("journal.load")}
       </div>
       <VerdictChip week={week} />
     </>
@@ -265,6 +279,7 @@ function WeekSummaryDisclosure({
   week: JournalWeek;
   children: React.ReactNode;
 }) {
+  const t = useT();
   const isMobile = useIsMobile();
   const handles = useJournalPreviewHandles();
 
@@ -281,13 +296,15 @@ function WeekSummaryDisclosure({
               />
             }
           >
-            More info
+            {t("journal.moreInfo")}
           </DrawerTrigger>
         </div>
         <DrawerContent>
           {/* Screen-reader heading; the visible range lives in the body header. */}
           <DrawerTitle className="sr-only">
-            {formatWeekRange(week.weekStart, week.weekEnd)} summary
+            {t("journal.weekSummaryTitle", {
+              range: formatWeekRange(week.weekStart, week.weekEnd),
+            })}
           </DrawerTitle>
           <WeekSummaryCardBody week={week} />
         </DrawerContent>
@@ -324,7 +341,7 @@ function JournalWeekRowImpl({
     >
       <div className="flex flex-col justify-center px-2">
         <div className="text-muted-foreground text-[11px] leading-none font-medium uppercase">
-          {format(week.weekStart, "'W'w", LOCALE_OPTIONS)}
+          {format(week.weekStart, "'W'w", { locale: getActiveDateLocale() })}
         </div>
         {week.monthStart != null && (
           <div className="text-foreground text-xs leading-tight font-semibold whitespace-nowrap md:hidden">

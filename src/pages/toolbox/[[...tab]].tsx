@@ -26,18 +26,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { type TFunction } from "~/i18n/I18nProvider";
+import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 
 const TOOLS = [
-  { id: "pace-calculator", label: "Pace Calculator", icon: TimerIcon },
-  { id: "race-predictor", label: "Race Predictor", icon: TrendingUpIcon },
-  { id: "zone-calculator", label: "Zone Calculator", icon: GaugeIcon },
-  { id: "gear-calculator", label: "Gear Calculator", icon: CogIcon },
+  { id: "pace-calculator", icon: TimerIcon },
+  { id: "race-predictor", icon: TrendingUpIcon },
+  { id: "zone-calculator", icon: GaugeIcon },
+  { id: "gear-calculator", icon: CogIcon },
 ] as const;
 
 type ToolId = (typeof TOOLS)[number]["id"];
 
+const createToolLabels = (t: TFunction): Record<ToolId, string> => ({
+  "pace-calculator": t("toolbox.tool.paceCalculator"),
+  "race-predictor": t("toolbox.tool.racePredictor"),
+  "zone-calculator": t("toolbox.tool.zoneCalculator"),
+  "gear-calculator": t("toolbox.tool.gearCalculator"),
+});
+
 const ToolboxPage: NextPageWithLayout = () => {
+  const t = useT();
+  const toolLabels = React.useMemo(() => createToolLabels(t), [t]);
   const router = useRouter();
   const rawTab = Array.isArray(router.query.tab)
     ? router.query.tab[0]
@@ -65,7 +76,7 @@ const ToolboxPage: NextPageWithLayout = () => {
               className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm font-medium transition-colors"
             >
               <ActivityIcon className="size-4" />
-              Sign in
+              {t("toolbox.signIn")}
             </Link>
           ) : undefined
         }
@@ -84,7 +95,7 @@ const ToolboxPage: NextPageWithLayout = () => {
                   return (
                     <>
                       <Icon className="size-4" />
-                      {tool.label}
+                      {toolLabels[tool.id]}
                     </>
                   );
                 })()}
@@ -96,7 +107,7 @@ const ToolboxPage: NextPageWithLayout = () => {
                 return (
                   <SelectItem key={tool.id} value={tool.id}>
                     <Icon className="size-4" />
-                    {tool.label}
+                    {toolLabels[tool.id]}
                   </SelectItem>
                 );
               })}
@@ -121,7 +132,7 @@ const ToolboxPage: NextPageWithLayout = () => {
                 render={<Link href={`/toolbox/${tool.id}`} />}
               >
                 <Icon className="size-4" />
-                {tool.label}
+                {toolLabels[tool.id]}
               </Button>
             );
           })}

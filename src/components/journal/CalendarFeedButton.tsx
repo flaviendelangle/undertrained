@@ -11,6 +11,7 @@ import {
   ResponsiveDialogTitle,
 } from "~/components/ui/responsive-dialog";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useT } from "~/i18n/useT";
 import { trpc } from "~/utils/trpc";
 
 /**
@@ -27,6 +28,7 @@ export function CalendarFeedDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const athleteId = useAthleteId();
   const [copied, setCopied] = React.useState(false);
 
@@ -54,16 +56,17 @@ export function CalendarFeedDialog({
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>Calendar subscription</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>
+            {t("journal.feed.title")}
+          </ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
-            Add this secret URL to Google, Apple or Outlook calendar to see your
-            planned trainings. It refreshes automatically.
+            {t("journal.feed.description")}
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <div className="flex items-center gap-2">
           <input
             readOnly
-            value={feedUrl ?? "Generating…"}
+            value={feedUrl ?? t("journal.feed.generating")}
             onFocus={(e) => e.currentTarget.select()}
             className="border-input bg-muted/40 min-w-0 flex-1 truncate rounded-md border px-2 py-1.5 text-xs"
           />
@@ -72,7 +75,7 @@ export function CalendarFeedDialog({
             variant="outline"
             disabled={!feedUrl}
             onClick={handleCopy}
-            aria-label="Copy calendar URL"
+            aria-label={t("journal.feed.copyUrl")}
           >
             {copied ? <CheckIcon /> : <CopyIcon />}
           </Button>
@@ -86,12 +89,13 @@ export function CalendarFeedDialog({
  * Header affordance (desktop) that opens the {@link CalendarFeedDialog}.
  */
 export function CalendarFeedButton() {
+  const t = useT();
   const [open, setOpen] = React.useState(false);
   return (
     <>
       <Button size="xs" variant="outline" onClick={() => setOpen(true)}>
         <CalendarPlusIcon />
-        Subscribe
+        {t("journal.subscribe")}
       </Button>
       <CalendarFeedDialog open={open} onOpenChange={setOpen} />
     </>

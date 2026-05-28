@@ -1,4 +1,5 @@
 import { Button } from "~/components/ui/button";
+import { useT } from "~/i18n/useT";
 import type { ConnectionState, SensorSource } from "~/sensors/types";
 
 interface HudDeviceCardProps {
@@ -20,9 +21,13 @@ function HudDeviceCard({
   onConnect,
   onDisconnect,
 }: HudDeviceCardProps) {
+  const t = useT();
   const isConnected = state === "connected";
   const isConnecting = state === "connecting";
-  const label = type === "heartRate" ? "Heart Rate" : "Trainer";
+  const label =
+    type === "heartRate"
+      ? t("liveTraining.heartRate")
+      : t("liveTraining.trainer");
 
   return (
     <div
@@ -91,10 +96,10 @@ function HudDeviceCard({
           <h3 className="text-foreground text-base font-semibold sm:text-lg">{label}</h3>
           <p className="text-muted-foreground mt-0.5 text-xs sm:mt-1 sm:text-sm">
             {isConnected
-              ? (deviceName ?? "Connected")
+              ? (deviceName ?? t("liveTraining.connected"))
               : isConnecting
-                ? "Searching..."
-                : "Not connected"}
+                ? t("liveTraining.searching")
+                : t("liveTraining.notConnected")}
           </p>
         </div>
 
@@ -135,10 +140,10 @@ function HudDeviceCard({
           }`}
         >
           {isConnected
-            ? "Disconnect"
+            ? t("liveTraining.disconnect")
             : isConnecting
-              ? "Searching..."
-              : "Connect"}
+              ? t("liveTraining.searching")
+              : t("liveTraining.connect")}
         </Button>
       </div>
     </div>
@@ -161,12 +166,15 @@ interface HudConnectionWizardProps {
 }
 
 export function HudConnectionWizard(props: HudConnectionWizardProps) {
+  const t = useT();
   return (
     <div className="bg-background/95 absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm p-4">
       <div className="flex flex-col items-center gap-4 sm:gap-8">
-        <h1 className="text-foreground text-xl font-bold sm:text-3xl">Connect Devices</h1>
+        <h1 className="text-foreground text-xl font-bold sm:text-3xl">
+          {t("liveTraining.connectDevices")}
+        </h1>
         <p className="text-muted-foreground text-sm sm:text-base">
-          Pair your sensors to get started
+          {t("liveTraining.pairSensors")}
         </p>
         <div className="flex w-full flex-col items-center gap-4 sm:flex-row sm:justify-center sm:gap-6">
           <HudDeviceCard

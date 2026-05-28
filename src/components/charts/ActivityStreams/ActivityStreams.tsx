@@ -5,6 +5,8 @@ import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { type TFunction } from "~/i18n/I18nProvider";
+import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
@@ -12,9 +14,11 @@ import { trpc } from "~/utils/trpc";
 import { MultiPanelChart } from "./MultiPanelChart";
 import type { PreparedStream, StreamStats, XAxisMode } from "./types";
 
-const X_AXIS_OPTIONS: { value: XAxisMode; label: string }[] = [
-  { value: "time", label: "Time" },
-  { value: "distance", label: "Distance" },
+const createXAxisOptions = (
+  t: TFunction,
+): { value: XAxisMode; label: string }[] => [
+  { value: "time", label: t("charts.streams.xAxis.time") },
+  { value: "distance", label: t("charts.streams.xAxis.distance") },
 ];
 
 interface StreamDef {
@@ -26,33 +30,45 @@ interface StreamDef {
   area: boolean;
 }
 
-const STREAM_DEFS: StreamDef[] = [
+const createStreamDefs = (t: TFunction): StreamDef[] => [
   {
     type: "heartrate",
-    title: "Heart rate",
+    title: t("charts.streams.stream.heartRate"),
     unit: "bpm",
     colorIndex: 0,
     area: false,
   },
-  { type: "watts", title: "Power", unit: "W", colorIndex: 1, area: false },
+  {
+    type: "watts",
+    title: t("charts.streams.stream.power"),
+    unit: "W",
+    colorIndex: 1,
+    area: false,
+  },
   {
     type: "cadence",
-    title: "Cadence",
+    title: t("charts.streams.stream.cadence"),
     unit: "rpm",
     colorIndex: 2,
     area: false,
   },
   {
     type: "velocity_smooth",
-    title: "Speed",
+    title: t("charts.streams.stream.speed"),
     unit: "m/s",
     colorIndex: 3,
     area: false,
   },
-  { type: "altitude", title: "Altitude", unit: "m", colorIndex: 4, area: true },
+  {
+    type: "altitude",
+    title: t("charts.streams.stream.altitude"),
+    unit: "m",
+    colorIndex: 4,
+    area: true,
+  },
   {
     type: "temp",
-    title: "Temperature",
+    title: t("charts.streams.stream.temperature"),
     unit: "°C",
     colorIndex: 5,
     area: false,
@@ -71,6 +87,8 @@ function parseStreamData(data: string): number[] | null {
 
 export default function ActivityStreams(props: ActivityStreamsProps) {
   const { stravaId, onHoverPositionChange, hiddenStreams } = props;
+  const t = useT();
+  const streamDefs = React.useMemo(() => createStreamDefs(t), [t]);
   const athleteId = useAthleteId();
   const tokens = useChartTokens();
 
@@ -132,8 +150,8 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
       : null;
 
     const defs = hiddenStreams
-      ? STREAM_DEFS.filter((d) => !hiddenStreams.includes(d.type))
-      : STREAM_DEFS;
+      ? streamDefs.filter((d) => !hiddenStreams.includes(d.type))
+      : streamDefs;
 
     const parsed = defs
       .map((def) => {
@@ -178,7 +196,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
       );
 
     return { parsed, distanceData };
-  }, [streamsData, hiddenStreams]);
+  }, [streamsData, hiddenStreams, streamDefs]);
 
   const sportConfig = activity ? getSportConfig(activity.type) : null;
 
@@ -223,9 +241,10 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
   ]);
   const distanceAvailable = distanceData != null;
 
+  const allXAxisOptions = React.useMemo(() => createXAxisOptions(t), [t]);
   const xAxisOptions = distanceAvailable
-    ? X_AXIS_OPTIONS
-    : X_AXIS_OPTIONS.filter((opt) => opt.value !== "distance");
+    ? allXAxisOptions
+    : allXAxisOptions.filter((opt) => opt.value !== "distance");
 
   // Build x-axis data (time indices)
   const xData = React.useMemo(() => {
@@ -236,7 +255,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
   if (fetchError) {
     return (
       <div className="md:bg-card p-4 text-red-400 md:rounded-sm">
-        Failed to load streams: {fetchError}
+        {t("charts.streams.loadError", { error: fetchError })}
       </div>
     );
   }
@@ -244,7 +263,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
   if (isFetching || streamsData === undefined || streamsData === null) {
     return (
       <div className="text-muted-foreground md:bg-card p-4 md:rounded-sm">
-        Loading stream data...
+        {t("charts.streams.loading")}
       </div>
     );
   }
@@ -252,7 +271,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
   if (streams.length === 0) {
     return (
       <div className="text-muted-foreground md:bg-card p-4 md:rounded-sm">
-        No stream data available for this activity.
+        {t("charts.streams.empty")}
       </div>
     );
   }
@@ -260,11 +279,12 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
   return (
     <div className="md:bg-card flex flex-col md:rounded-sm">
       <div className="border-border flex items-center gap-2 p-4 md:border-b">
-        <h3 className="text-lg font-semibold">Time Series</h3>
-        <FeatureHint hintId="hint-activity-streams" title="Time Series">
-          Heart rate, power, cadence, speed, altitude, and temperature plotted
-          over time or distance. Hover to see all metrics at a specific point.
-          Toggle the X-axis between time and distance.
+        <h3 className="text-lg font-semibold">{t("charts.streams.title")}</h3>
+        <FeatureHint
+          hintId="hint-activity-streams"
+          title={t("charts.streams.title")}
+        >
+          {t("charts.streams.hint")}
         </FeatureHint>
         <div className="flex-1" />
         {xAxisOptions.length > 1 && (

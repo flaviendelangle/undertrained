@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { useT } from "~/i18n/useT";
+
 interface Capabilities {
   bluetooth: boolean;
   usb: boolean;
@@ -25,6 +27,7 @@ function getServerCapabilities(): null {
 }
 
 export function BrowserCompatibilityBanner() {
+  const t = useT();
   const capabilities = useSyncExternalStore(
     subscribe,
     getCapabilities,
@@ -44,14 +47,11 @@ export function BrowserCompatibilityBanner() {
   return (
     <div className="mb-4 rounded-md border border-yellow-600 bg-yellow-900/30 px-4 py-3 text-sm text-yellow-200">
       {noBle && noUsb ? (
-        <p>
-          Web Bluetooth and WebUSB are not available. BLE and ANT+ sensors will
-          not work. Please use Chrome, Edge, or Brave on desktop.
-        </p>
+        <p>{t("liveTraining.compat.noBleNoUsb")}</p>
       ) : (
         <p>
-          WebUSB is not available — ANT+ sensors will not work. You can still
-          connect <strong>BLE</strong> sensors.
+          {t("liveTraining.compat.noUsbBefore")} <strong>BLE</strong>{" "}
+          {t("liveTraining.compat.noUsbAfter")}
         </p>
       )}
     </div>

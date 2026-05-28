@@ -12,6 +12,7 @@ import {
 import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import { useT } from "~/i18n/useT";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import {
   type RiderSettings,
@@ -65,6 +66,7 @@ const BAR_GAP_PX = 1;
 
 export default function ActivityLaps(props: ActivityLapsProps) {
   const { activityType, startDate, laps } = props;
+  const t = useT();
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
   const { resolveForDate } = useRiderSettingsTimeline();
@@ -119,28 +121,31 @@ export default function ActivityLaps(props: ActivityLapsProps) {
   // Nothing to plot when no lap carries the primary metric (e.g. powerless ride).
   if (totalDuration <= 0 || maxValue <= 0) return null;
 
-  const valueLabel = usePower ? "Power" : sportConfig.speedLabel;
+  const valueLabel = usePower ? t("charts.laps.power") : sportConfig.speedLabel;
 
   return (
     <ChartThemeProvider>
       <div className="md:bg-card flex h-96 w-full flex-col md:rounded-sm">
         <div className="border-border flex items-center gap-2 p-4 md:border-b">
-          <h3 className="text-lg font-semibold">Laps</h3>
-          <FeatureHint hintId="hint-activity-laps" title="Laps">
-            Each lap (interval) as a bar — width is its duration, height its
-            average {usePower ? "power" : "pace"}
+          <h3 className="text-lg font-semibold">{t("charts.laps.title")}</h3>
+          <FeatureHint hintId="hint-activity-laps" title={t("charts.laps.title")}>
+            {t("charts.laps.hintIntro", {
+              metric: usePower
+                ? t("charts.laps.power").toLowerCase()
+                : t("charts.laps.pace"),
+            })}
             {isRunning
-              ? ", colored by intervals.icu pace zone"
+              ? t("charts.laps.hintColorPace")
               : usePower
-                ? ", colored by power zone"
+                ? t("charts.laps.hintColorPower")
                 : ""}
-            .
+            {". "}
             {usePower
-              ? " From your FTP."
+              ? t("charts.laps.hintFromFtp")
               : isRunning
-                ? " From your run threshold pace."
+                ? t("charts.laps.hintFromThreshold")
                 : ""}{" "}
-            Falls back to heart-rate zones when that metric is missing.
+            {t("charts.laps.hintFallback")}
           </FeatureHint>
         </div>
         <div className="relative min-h-0 flex-1">
@@ -178,7 +183,7 @@ export default function ActivityLaps(props: ActivityLapsProps) {
             <LapBars bars={bars} onHover={setHover} />
             <ChartsXAxis
               axisId={X_AXIS_ID}
-              label={isMobile ? undefined : "Time"}
+              label={isMobile ? undefined : t("charts.laps.timeAxis")}
             />
             <ChartsYAxis
               axisId={Y_AXIS_ID}

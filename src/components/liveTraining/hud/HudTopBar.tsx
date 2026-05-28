@@ -1,3 +1,4 @@
+import { useT } from "~/i18n/useT";
 import { formatElapsed } from "~/utils/format";
 
 interface HudTopBarProps {
@@ -11,11 +12,12 @@ export function HudTopBar({
   distanceKm,
   speedKmh,
 }: HudTopBarProps) {
+  const t = useT();
   return (
     <div className="border-border/30 bg-background/60 flex h-14 items-center justify-between border-b px-6 backdrop-blur-md">
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground text-xs tracking-wider uppercase">
-          Dist
+          {t("liveTraining.dist")}
         </span>
         <span className="text-foreground font-mono text-lg">
           {distanceKm.toFixed(2)}
@@ -31,7 +33,7 @@ export function HudTopBar({
 
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground text-xs tracking-wider uppercase">
-          Speed
+          {t("liveTraining.speed")}
         </span>
         <span className="text-foreground font-mono text-lg">
           {speedKmh != null ? speedKmh.toFixed(1) : "--"}

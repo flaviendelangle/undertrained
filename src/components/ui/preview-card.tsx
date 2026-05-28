@@ -38,7 +38,18 @@ function PreviewCardContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
-        className="isolate z-60"
+        // Pin the positioner to the popup's width. With a Viewport, Base UI's
+        // auto-resize anchors the popup `position: absolute` for top/left sides
+        // so it grows from the anchored edge — which takes it out of the
+        // positioner's flow, collapsing the positioner's measured width to 0.
+        // Floating UI measures the positioner, so a 0 width makes it think the
+        // card always fits and it never flips/shifts: a card on a trigger near
+        // the right edge (e.g. the week view's last day) then overflows the
+        // viewport and adds a horizontal page scrollbar. `--positioner-width` is
+        // the popup width Base UI measures (so this tracks both the default
+        // `w-64` and callers that widen the popup); the fallback covers the
+        // first frame before it's set.
+        className="isolate z-60 w-[var(--positioner-width,16rem)]"
       >
         <PreviewCardPrimitive.Popup
           data-slot="preview-card-content"

@@ -19,6 +19,8 @@ import { useGroupActivitiesByTimeSlice } from "~/hooks/useGroupActivitiesByTimeS
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { SlicePrecision, useTimeSlices } from "~/hooks/useTimeSlices";
+import { sportTypeLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import {
   AXIS_SIZE,
   CHART_MARGINS,
@@ -26,7 +28,7 @@ import {
   useChartTokens,
 } from "~/lib/chartTokens";
 import { formatSlice } from "~/utils/dateUtils";
-import { formatActivityType, formatCompactDuration } from "~/utils/format";
+import { formatCompactDuration } from "~/utils/format";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
 import { METRICS, type MetricContext, MetricSelect } from "../../MetricSelect";
@@ -39,6 +41,7 @@ const TIME_AXIS_ID = "time";
 const DEFAULT_ZOOM_STEPS = 12;
 
 export default function ActivitiesTimeline() {
+  const t = useT();
   const [metric, setMetric] = React.useState("movingTime");
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>([]);
   const tokens = useChartTokens();
@@ -144,7 +147,7 @@ export default function ActivitiesTimeline() {
     });
 
     return Array.from(activityTypes).map((activityType) => ({
-      label: formatActivityType(activityType),
+      label: sportTypeLabel(activityType, t),
       data: groupedActivities.map((group) =>
         group.activities.reduce((acc, activity) => {
           if (activity.type === activityType) {
@@ -162,6 +165,7 @@ export default function ActivitiesTimeline() {
     metricContext,
     activitiesQuery.data,
     formatValue,
+    t,
   ]);
 
   const actions = (
@@ -192,17 +196,19 @@ export default function ActivitiesTimeline() {
           className="flex flex-col gap-3 sm:w-56"
         >
           <ResponsivePopoverHeader>
-            <ResponsivePopoverTitle>Display options</ResponsivePopoverTitle>
+            <ResponsivePopoverTitle>
+              {t("charts.displayOptions")}
+            </ResponsivePopoverTitle>
           </ResponsivePopoverHeader>
           <div className="flex flex-col gap-1.5">
             <span className="text-muted-foreground text-xs font-medium">
-              Metric
+              {t("charts.metric")}
             </span>
             <MetricSelect value={metric} onValueChange={setMetric} />
           </div>
           <div className="flex flex-col gap-1.5">
             <span className="text-muted-foreground text-xs font-medium">
-              Precision
+              {t("charts.precision")}
             </span>
             <PrecisionSelect value={precision} onValueChange={setPrecision} />
           </div>
@@ -225,7 +231,7 @@ export default function ActivitiesTimeline() {
 
   return (
     <ChartThemeProvider>
-      <ChartCard title="Activities Timeline" actions={actions}>
+      <ChartCard title={t("charts.activitiesTimeline.title")} actions={actions}>
         <ChartTooltipTotalProvider formatTotal={formatValue}>
           <BarChartPremium
             renderer="webgl"

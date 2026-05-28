@@ -120,6 +120,13 @@
       "when": 1779795831730,
       "tag": "0016_orange_micromax",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1779886261097,
+      "tag": "0017_furry_hobgoblin",
+      "breakpoints": true
     }
   ]
 }
