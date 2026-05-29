@@ -45,6 +45,11 @@ export default {
         destination: "/journal",
         permanent: false,
       },
+      {
+        source: "/map",
+        destination: "/map/heatmap",
+        permanent: false,
+      },
     ];
   },
   async headers() {

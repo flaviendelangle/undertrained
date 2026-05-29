@@ -347,6 +347,34 @@ function InitialView({
   return null;
 }
 
+/**
+ * Re-fits the view to `points` each time `token` changes (skipping the value
+ * it had when this component first mounted). Lets the parent force a refit on
+ * discrete events — currently used after a GPX is loaded — without re-fitting
+ * on every ORS snap (which would yank the map mid-edit).
+ */
+function FitToken({
+  token,
+  points,
+}: {
+  token: number;
+  points: LatLngTuple[] | null;
+}) {
+  const map = useMap();
+  const lastTokenRef = React.useRef(token);
+  React.useEffect(() => {
+    if (token === lastTokenRef.current) return;
+    lastTokenRef.current = token;
+    if (!points || points.length === 0) return;
+    if (points.length === 1) {
+      map.setView(points[0], DEFAULT_ZOOM);
+    } else {
+      map.fitBounds(points, { padding: [32, 32] });
+    }
+  }, [token, points, map]);
+  return null;
+}
+
 export interface RouteBuilderMapProps {
   waypoints: LatLngTuple[];
   /** Road-snapped geometry to draw; falls back to straight lines while loading. */
@@ -355,6 +383,8 @@ export interface RouteBuilderMapProps {
   routeWayPoints: number[] | null;
   /** Position to highlight (e.g. from hovering the elevation profile), or null. */
   highlightPosition: LatLngTuple | null;
+  /** Bumped by the parent to force a refit (e.g. after loading a GPX). */
+  fitToken: number;
   onAddWaypoint: (point: LatLngTuple) => void;
   onMoveWaypoint: (index: number, point: LatLngTuple) => void;
   onInsertWaypoint: (index: number, point: LatLngTuple) => void;
@@ -366,6 +396,7 @@ export default function RouteBuilderMap({
   routePoints,
   routeWayPoints,
   highlightPosition,
+  fitToken,
   onAddWaypoint,
   onMoveWaypoint,
   onInsertWaypoint,
@@ -389,6 +420,7 @@ export default function RouteBuilderMap({
       <AttributionControl position="bottomleft" prefix="Leaflet" />
       <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
       <InitialView waypoints={waypoints} hasSavedView={savedView != null} />
+      <FitToken token={fitToken} points={routePoints} />
       <PersistView />
 
       {hasRoute ? (

@@ -10,6 +10,15 @@ import {
 } from "@mui/x-charts-pro";
 
 import { FeatureHint } from "~/components/primitives/FeatureHint";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
@@ -20,7 +29,7 @@ import {
   findPowerZone,
 } from "~/sensors/types";
 import { formatElapsed } from "~/utils/format";
-import { getSportConfig } from "~/utils/sportConfig";
+import { type SportConfig, getSportConfig } from "~/utils/sportConfig";
 
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { findRunningPaceZone } from "./lapZones";
@@ -68,9 +77,8 @@ export default function ActivityLaps(props: ActivityLapsProps) {
   const { activityType, startDate, laps } = props;
   const t = useT();
   const tokens = useChartTokens();
-  const isMobile = useIsMobile();
   const { resolveForDate } = useRiderSettingsTimeline();
-  const [hover, setHover] = React.useState<HoverState | null>(null);
+  const [view, setView] = React.useState<"chart" | "table">("chart");
 
   const sportConfig = getSportConfig(activityType);
 
@@ -117,10 +125,6 @@ export default function ActivityLaps(props: ActivityLapsProps) {
     };
   });
 
-  const maxValue = Math.max(...bars.map((b) => b.value));
-  // Nothing to plot when no lap carries the primary metric (e.g. powerless ride).
-  if (totalDuration <= 0 || maxValue <= 0) return null;
-
   const valueLabel = usePower ? t("charts.laps.power") : sportConfig.speedLabel;
 
   return (
@@ -147,53 +151,155 @@ export default function ActivityLaps(props: ActivityLapsProps) {
                 : ""}{" "}
             {t("charts.laps.hintFallback")}
           </FeatureHint>
-        </div>
-        <div className="relative min-h-0 flex-1">
-          <ChartsContainerPro
-            series={[]}
-            margin={
-              isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
-            }
-            xAxis={[
-              {
-                id: X_AXIS_ID,
-                scaleType: "linear",
-                min: 0,
-                max: totalDuration,
-                valueFormatter: (v: number) => formatElapsed(v),
-                height: isMobile
-                  ? AXIS_SIZE.mobile.height
-                  : AXIS_SIZE.desktop.height,
-              },
-            ]}
-            yAxis={[
-              {
-                id: Y_AXIS_ID,
-                scaleType: "linear",
-                min: 0,
-                max: maxValue * 1.08,
-                valueFormatter: (v: number) => formatValue(v),
-                width: isMobile
-                  ? AXIS_SIZE.mobile.width
-                  : AXIS_SIZE.desktop.width,
-              },
-            ]}
-          >
-            <ChartsGrid horizontal />
-            <LapBars bars={bars} onHover={setHover} />
-            <ChartsXAxis
-              axisId={X_AXIS_ID}
-              label={isMobile ? undefined : t("charts.laps.timeAxis")}
+          <div className="ml-auto">
+            <SegmentedToggle
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "chart", label: t("charts.laps.viewChart") },
+                { value: "table", label: t("charts.laps.viewTable") },
+              ]}
             />
-            <ChartsYAxis
-              axisId={Y_AXIS_ID}
-              label={isMobile ? undefined : valueLabel}
-            />
-          </ChartsContainerPro>
-          {hover && <LapTooltip hover={hover} />}
+          </div>
         </div>
+        {view === "chart" ? (
+          <LapsChart
+            bars={bars}
+            totalDuration={totalDuration}
+            formatValue={formatValue}
+            valueLabel={valueLabel}
+          />
+        ) : (
+          <LapsTable
+            laps={laps}
+            usePower={usePower}
+            sportConfig={sportConfig}
+            valueLabel={valueLabel}
+          />
+        )}
       </div>
     </ChartThemeProvider>
+  );
+}
+
+function LapsChart(props: {
+  bars: LapBar[];
+  totalDuration: number;
+  formatValue: (v: number) => string;
+  valueLabel: string;
+}) {
+  const { bars, totalDuration, formatValue, valueLabel } = props;
+  const t = useT();
+  const isMobile = useIsMobile();
+  const [hover, setHover] = React.useState<HoverState | null>(null);
+
+  const maxValue = Math.max(...bars.map((b) => b.value));
+  // Nothing to plot when no lap carries the primary metric (e.g. powerless ride).
+  if (totalDuration <= 0 || maxValue <= 0) return null;
+
+  return (
+    <div className="relative min-h-0 flex-1">
+      <ChartsContainerPro
+        series={[]}
+        margin={isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard}
+        xAxis={[
+          {
+            id: X_AXIS_ID,
+            scaleType: "linear",
+            min: 0,
+            max: totalDuration,
+            valueFormatter: (v: number) => formatElapsed(v),
+            height: isMobile
+              ? AXIS_SIZE.mobile.height
+              : AXIS_SIZE.desktop.height,
+          },
+        ]}
+        yAxis={[
+          {
+            id: Y_AXIS_ID,
+            scaleType: "linear",
+            min: 0,
+            max: maxValue * 1.08,
+            valueFormatter: (v: number) => formatValue(v),
+            width: isMobile
+              ? AXIS_SIZE.mobile.width
+              : AXIS_SIZE.desktop.width,
+          },
+        ]}
+      >
+        <ChartsGrid horizontal />
+        <LapBars bars={bars} onHover={setHover} />
+        <ChartsXAxis
+          axisId={X_AXIS_ID}
+          label={isMobile ? undefined : t("charts.laps.timeAxis")}
+        />
+        <ChartsYAxis
+          axisId={Y_AXIS_ID}
+          label={isMobile ? undefined : valueLabel}
+        />
+      </ChartsContainerPro>
+      {hover && <LapTooltip hover={hover} />}
+    </div>
+  );
+}
+
+function LapsTable(props: {
+  laps: readonly LapDatum[];
+  usePower: boolean;
+  sportConfig: SportConfig;
+  valueLabel: string;
+}) {
+  const { laps, usePower, sportConfig, valueLabel } = props;
+  const t = useT();
+
+  const formatMetric = (lap: LapDatum) => {
+    if (usePower) {
+      const w = lap.averageWatts;
+      return w != null && w > 0 ? `${Math.round(w)} W` : "—";
+    }
+    return lap.averageSpeed > 0 ? sportConfig.formatSpeed(lap.averageSpeed) : "—";
+  };
+
+  const formatHr = (hr: number | null | undefined) =>
+    hr != null && hr > 0 ? `${Math.round(hr)} bpm` : "—";
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-12 text-right">
+              {t("charts.laps.lap")}
+            </TableHead>
+            <TableHead className="text-right">
+              {t("charts.laps.duration")}
+            </TableHead>
+            <TableHead className="text-right">{valueLabel}</TableHead>
+            <TableHead className="text-right">
+              {t("charts.laps.heartRate")}
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {laps.map((lap, i) => (
+            <TableRow key={lap.index}>
+              <TableCell className="text-muted-foreground text-right font-mono">
+                {i + 1}
+              </TableCell>
+              <TableCell className="text-right font-mono">
+                {formatElapsed(lap.elapsedTime)}
+              </TableCell>
+              <TableCell className="text-right font-mono">
+                {formatMetric(lap)}
+              </TableCell>
+              <TableCell className="text-right font-mono">
+                {formatHr(lap.averageHeartrate)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 

@@ -7,6 +7,7 @@ import { DismissedHintsProvider } from "~/hooks/useDismissedHints";
 import { ErgModeProvider } from "~/hooks/useErgMode";
 import { ExplorerTilesProvider } from "~/hooks/useExplorerTilesToggle";
 import { RiderSettingsProvider } from "~/hooks/useRiderSettings";
+import { TileStyleProvider } from "~/hooks/useTileStyle";
 
 import { SharedLayout } from "../SharedLayout";
 import { MobileBottomBar, NavBar } from "./NavBar";
@@ -40,19 +41,21 @@ export const LoggedInLayout = (props: LoggedInLayoutProps) => {
   return (
     <SharedLayout>
       <ExplorerTilesProvider>
-        <RiderSettingsProvider>
-          <DismissedHintsProvider>
-            <ErgModeProvider>
-              <div className="flex h-screen">
-                <NavBar />
-                <main className="flex flex-1 flex-col overflow-hidden pb-14 md:pb-0">
-                  {children}
-                </main>
-                <MobileBottomBar />
-              </div>
-            </ErgModeProvider>
-          </DismissedHintsProvider>
-        </RiderSettingsProvider>
+        <TileStyleProvider>
+          <RiderSettingsProvider>
+            <DismissedHintsProvider>
+              <ErgModeProvider>
+                <div className="flex h-screen">
+                  <NavBar />
+                  <main className="flex flex-1 flex-col overflow-hidden pb-14 md:pb-0">
+                    {children}
+                  </main>
+                  <MobileBottomBar />
+                </div>
+              </ErgModeProvider>
+            </DismissedHintsProvider>
+          </RiderSettingsProvider>
+        </TileStyleProvider>
       </ExplorerTilesProvider>
     </SharedLayout>
   );

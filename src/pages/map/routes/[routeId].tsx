@@ -1,13 +1,15 @@
 import type { GetServerSideProps } from "next";
-import { RouteIcon } from "lucide-react";
 import { useRouter } from "next/router";
 
+import { MapToolbar } from "~/components/Map/MapToolbar";
 import { RouteBuilder } from "~/components/routes/RouteBuilder";
-import { Toolbar } from "~/components/settings/SettingsToolbar";
+import { SendToDeviceMenu } from "~/components/routes/SendToDeviceMenu";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
 import { isRoutesEnabled } from "~/lib/features";
 import type { NextPageWithLayout } from "~/pages/_app";
+import { decode } from "~/utils/polyline";
+import type { RouteSport } from "~/utils/routeProfiles";
 import { trpc } from "~/utils/trpc";
 
 export const getServerSideProps: GetServerSideProps = async () => {
@@ -28,10 +30,22 @@ const EditRoutePage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar>
-        <RouteIcon className="size-4" />
-        <span className="font-semibold">{route?.name ?? t("routes.editRoute")}</span>
-      </Toolbar>
+      <MapToolbar
+        section="routeDetail"
+        routeName={route?.name}
+        actions={
+          route && (
+            <SendToDeviceMenu
+              inToolbar
+              name={route.name}
+              sport={route.sport as RouteSport}
+              points={decode(route.mapPolyline)}
+              elevation={[]}
+              distance={route.distance}
+            />
+          )
+        }
+      />
       <div className="relative flex-1 overflow-hidden">
         {route ? (
           // Remount on id change so the builder re-seeds its state from the route.

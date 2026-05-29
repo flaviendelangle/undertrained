@@ -78,7 +78,7 @@ const StatisticsPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar actions={<SyncPanel />}>
+      <Toolbar label={t("statistics.title")} actions={<SyncPanel />}>
         <BarChart3Icon className="size-4" />
         <span className="font-semibold">{t("statistics.title")}</span>
       </Toolbar>

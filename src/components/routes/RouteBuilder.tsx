@@ -1,7 +1,6 @@
 import * as React from "react";
 
 import {
-  DownloadIcon,
   LocateFixedIcon,
   RotateCcwIcon,
   SaveIcon,
@@ -9,8 +8,17 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/router";
 
+import { GpxDropZone } from "~/components/Map/GpxDropZone";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "~/components/ui/responsive-dialog";
 import {
   Select,
   SelectContent,
@@ -23,8 +31,13 @@ import type { AppMessageKey } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
 import type { Route } from "@server/db/types";
 import { formatKm } from "~/utils/format";
-import { buildGpx, downloadFile } from "~/utils/gpx";
-import { decode, type LatLngTuple } from "~/utils/polyline";
+import {
+  elevationAscent,
+  type ParsedGpx,
+  polylineDistance,
+} from "~/utils/gpx";
+import { takePendingGpx } from "~/utils/pendingGpx";
+import { decode, encode, type LatLngTuple } from "~/utils/polyline";
 import {
   DEFAULT_PROFILE_BY_SPORT,
   ROUTE_PROFILES,
@@ -34,6 +47,25 @@ import { trpc } from "~/utils/trpc";
 
 import { ElevationProfile } from "./ElevationProfile";
 import { RouteBuilderMap } from "./LazyRouteBuilderMap";
+import { SendToDeviceMenu } from "./SendToDeviceMenu";
+
+// Picked to stay well under the 50-waypoint ORS cap while keeping enough
+// anchors for the re-snapped route to roughly trace an imported GPX.
+const GPX_WAYPOINT_COUNT = 12;
+
+/** Evenly-spaced subsample by index; returns the input as-is when shorter than `count`. */
+function sampleWaypoints(
+  points: LatLngTuple[],
+  count: number,
+): LatLngTuple[] {
+  if (points.length <= count) return points;
+  const result: LatLngTuple[] = [];
+  for (let i = 0; i < count; i++) {
+    const idx = Math.round((i / (count - 1)) * (points.length - 1));
+    result.push(points[idx]);
+  }
+  return result;
+}
 
 /** Translation keys for each ORS routing profile (labels live in routeProfiles). */
 const PROFILE_LABEL_KEY: Record<string, AppMessageKey> = {
@@ -90,21 +122,28 @@ export function RouteBuilder({ route }: { route?: Route }) {
   const createMutation = trpc.routes.create.useMutation({
     onSuccess: () => {
       void utils.routes.list.invalidate();
-      void router.push("/routes");
+      void router.push("/map/routes");
     },
   });
   const updateMutation = trpc.routes.update.useMutation({
     onSuccess: () => {
       void utils.routes.invalidate();
-      void router.push("/routes");
+      void router.push("/map/routes");
     },
   });
 
   // Snap to roads whenever the anchors or profile change (debounced). We keep
   // the previous geometry on screen until the new snap returns to avoid flicker.
+  // After loading a GPX, the first snap is skipped so the imported geometry
+  // stays visible until the user explicitly edits a waypoint.
+  const skipNextSnapRef = React.useRef(false);
   const mutate = previewMutation.mutate;
   React.useEffect(() => {
     if (!athleteId || waypoints.length < 2) {
+      return;
+    }
+    if (skipNextSnapRef.current) {
+      skipNextSnapRef.current = false;
       return;
     }
     const handle = setTimeout(() => {
@@ -125,6 +164,56 @@ export function RouteBuilder({ route }: { route?: Route }) {
     }, 400);
     return () => clearTimeout(handle);
   }, [athleteId, profile, waypoints, mutate]);
+
+  // Bumped on every GPX load to force the map to re-fit to the new geometry.
+  // The fit must always happen on a drop, even mid-edit, so the user sees
+  // the route they just imported.
+  const [fitToken, setFitToken] = React.useState(0);
+
+  const loadFromGpx = React.useCallback((gpx: ParsedGpx) => {
+    if (gpx.points.length < 2) return;
+    const sampled = sampleWaypoints(gpx.points, GPX_WAYPOINT_COUNT);
+    const distance = polylineDistance(gpx.points);
+    const ascent = gpx.elevation ? elevationAscent(gpx.elevation) : 0;
+    skipNextSnapRef.current = true;
+    setHistory([]);
+    setWaypoints(sampled);
+    setPreview({
+      encodedPolyline: encode(gpx.points),
+      points: gpx.points,
+      elevation: gpx.elevation ?? [],
+      wayPoints: [],
+      distance,
+      ascent,
+    });
+    if (gpx.name) setName(gpx.name);
+    setFitToken((token) => token + 1);
+  }, []);
+
+  // Confirm before replacing any existing route geometry (saved or in-progress).
+  // Dropping a GPX over a drawn route is easy to do by accident and discards
+  // the prior shape with no undo.
+  const [pendingDroppedGpx, setPendingDroppedGpx] =
+    React.useState<ParsedGpx | null>(null);
+  const handleGpxDrop = React.useCallback(
+    (gpx: ParsedGpx) => {
+      if (waypoints.length > 0) {
+        setPendingDroppedGpx(gpx);
+      } else {
+        loadFromGpx(gpx);
+      }
+    },
+    [waypoints.length, loadFromGpx],
+  );
+
+  // If a GPX was stashed by the heatmap before navigating here, load it now.
+  // Editing a saved route ignores any pending stash — the saved route wins.
+  React.useEffect(() => {
+    if (route) return;
+    const gpx = takePendingGpx();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (gpx) loadFromGpx(gpx);
+  }, [route, loadFromGpx]);
 
   const handleSportChange = (next: RouteSport) => {
     setSport(next);
@@ -184,48 +273,71 @@ export function RouteBuilder({ route }: { route?: Route }) {
     }
   };
 
-  const exportGpx = () => {
-    if (!activePreview) return;
-    const gpx = buildGpx(
-      name || t("routes.defaultName"),
-      activePreview.points,
-      activePreview.elevation,
-    );
-    downloadFile(
-      `${(name || "route").replace(/[^\w-]+/g, "_")}.gpx`,
-      gpx,
-      "application/gpx+xml",
-    );
-  };
-
   const profilesForSport = ROUTE_PROFILES.filter((p) => p.sport === sport);
 
   return (
     <div className="flex h-full flex-col md:flex-row">
       {/* Map */}
       <div className="relative min-h-[45vh] flex-1 md:min-h-0">
-        <RouteBuilderMap
-          waypoints={waypoints}
-          routePoints={activePreview?.points ?? null}
-          routeWayPoints={activePreview?.wayPoints ?? null}
-          highlightPosition={highlightPosition}
-          onAddWaypoint={(p) => commitWaypoints([...waypoints, p])}
-          onMoveWaypoint={(i, p) =>
-            commitWaypoints(waypoints.map((w, idx) => (idx === i ? p : w)))
-          }
-          onInsertWaypoint={(i, p) =>
-            commitWaypoints([...waypoints.slice(0, i), p, ...waypoints.slice(i)])
-          }
-          onRemoveWaypoint={(i) =>
-            commitWaypoints(waypoints.filter((_, idx) => idx !== i))
-          }
-        />
-        {previewMutation.isPending && (
-          <div className="bg-background/90 text-muted-foreground absolute top-3 left-3 z-400 rounded-md px-2.5 py-1 text-xs shadow">
-            {t("routes.routing")}
-          </div>
-        )}
+        <GpxDropZone onDrop={handleGpxDrop}>
+          <RouteBuilderMap
+            waypoints={waypoints}
+            routePoints={activePreview?.points ?? null}
+            routeWayPoints={activePreview?.wayPoints ?? null}
+            highlightPosition={highlightPosition}
+            fitToken={fitToken}
+            onAddWaypoint={(p) => commitWaypoints([...waypoints, p])}
+            onMoveWaypoint={(i, p) =>
+              commitWaypoints(waypoints.map((w, idx) => (idx === i ? p : w)))
+            }
+            onInsertWaypoint={(i, p) =>
+              commitWaypoints([...waypoints.slice(0, i), p, ...waypoints.slice(i)])
+            }
+            onRemoveWaypoint={(i) =>
+              commitWaypoints(waypoints.filter((_, idx) => idx !== i))
+            }
+          />
+          {previewMutation.isPending && (
+            <div className="bg-background/90 text-muted-foreground absolute top-3 left-3 z-400 rounded-md px-2.5 py-1 text-xs shadow">
+              {t("routes.routing")}
+            </div>
+          )}
+        </GpxDropZone>
       </div>
+
+      <ResponsiveDialog
+        open={pendingDroppedGpx != null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDroppedGpx(null);
+        }}
+      >
+        <ResponsiveDialogContent className="sm:max-w-sm">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>
+              {t("routes.replaceGpxTitle")}
+            </ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
+              {t("routes.replaceGpxBody")}
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
+          <ResponsiveDialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingDroppedGpx(null)}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              onClick={() => {
+                if (pendingDroppedGpx) loadFromGpx(pendingDroppedGpx);
+                setPendingDroppedGpx(null);
+              }}
+            >
+              {t("routes.replaceGpxConfirm")}
+            </Button>
+          </ResponsiveDialogFooter>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
 
       {/* Side panel */}
       <div className="border-border flex w-full shrink-0 flex-col gap-4 overflow-y-auto border-t p-4 md:w-80 md:border-t-0 md:border-l">
@@ -322,7 +434,7 @@ export function RouteBuilder({ route }: { route?: Route }) {
         )}
 
         {/* Actions */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -339,14 +451,13 @@ export function RouteBuilder({ route }: { route?: Route }) {
           >
             <Trash2Icon /> {t("routes.clear")}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={exportGpx}
-            disabled={!activePreview}
-          >
-            <DownloadIcon /> GPX
-          </Button>
+          <SendToDeviceMenu
+            name={name}
+            sport={sport}
+            points={activePreview?.points ?? []}
+            elevation={activePreview?.elevation ?? []}
+            distance={activePreview?.distance ?? 0}
+          />
         </div>
 
         <Button onClick={save} disabled={!canSave || isSaving} className="mt-auto">

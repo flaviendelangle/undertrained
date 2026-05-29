@@ -40,7 +40,7 @@ const SettingsPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar>
+      <Toolbar label={t("settings.title")}>
         <SettingsIcon className="size-4" />
         <span className="font-semibold">{t("settings.title")}</span>
       </Toolbar>

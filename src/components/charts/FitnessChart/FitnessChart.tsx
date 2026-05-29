@@ -24,6 +24,7 @@ const TIME_AXIS_ID = "time";
 const LOAD_AXIS_ID = "load";
 const FORM_AXIS_ID = "form";
 const DEFAULT_ZOOM_DAYS = 90;
+const MIN_ZOOM_DAYS = 21;
 
 export default function FitnessChart() {
   const t = useT();
@@ -95,13 +96,12 @@ export default function FitnessChart() {
     ];
   }, [xData.length]);
 
-  // Cap the maximum zoom-in so the tightest window is ~3 months — zooming
-  // closer just shows noise and drops the monthly axis ticks.
+  // Cap the maximum zoom-in so the tightest window is ~3 weeks.
   const minZoomSpan = React.useMemo(() => {
-    if (xData.length <= DEFAULT_ZOOM_DAYS) {
+    if (xData.length <= MIN_ZOOM_DAYS) {
       return 100;
     }
-    return Math.min(100, (DEFAULT_ZOOM_DAYS / xData.length) * 100);
+    return Math.min(100, (MIN_ZOOM_DAYS / xData.length) * 100);
   }, [xData.length]);
 
   const [zoomData, setZoomData] = React.useState<ZoomData[]>(defaultZoom);

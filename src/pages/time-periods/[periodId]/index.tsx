@@ -10,6 +10,8 @@ import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
+import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
+
 import { ActivitiesTable } from "~/components/ActivitiesTable";
 import { PageTitle } from "~/components/PageTitle";
 import { TimePeriodForm } from "~/components/periods/TimePeriodForm";
@@ -98,13 +100,14 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
   return (
     <>
       <PageTitle title={period.name} />
-      <Toolbar>
-        <Link
-          href="/time-periods"
+      <Toolbar label={period.name}>
+        <ToolbarPrimitive.Link
+          render={<Link href="/time-periods" />}
+          aria-label={t("common.back")}
           className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 items-center justify-center rounded-lg transition-colors"
         >
           <ArrowLeftIcon className="size-4" />
-        </Link>
+        </ToolbarPrimitive.Link>
         <span className="min-w-0 truncate font-semibold">{period.name}</span>
         <span className="bg-accent text-accent-foreground inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium">
           <CalendarIcon className="size-3.5" />
@@ -255,9 +258,10 @@ function DeletePeriodButton({
 // ──────────────────────────────────────────────
 
 function TimePeriodPageSkeleton() {
+  const t = useT();
   return (
     <>
-      <Toolbar>
+      <Toolbar label={t("common.loading")}>
         <div className="bg-accent size-8 animate-pulse rounded-lg" />
         <div className="bg-accent h-6 w-48 animate-pulse rounded" />
         <div className="bg-accent h-5 w-40 animate-pulse rounded-md" />

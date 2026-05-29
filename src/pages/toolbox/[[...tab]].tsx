@@ -11,6 +11,8 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
+import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
+
 import { LoggedInLayout } from "~/components/layouts/LoggedInLayout";
 import { SharedLayout } from "~/components/layouts/SharedLayout";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
@@ -69,15 +71,16 @@ const ToolboxPage: NextPageWithLayout = () => {
   return (
     <>
       <Toolbar
+        label={t("nav.toolbox")}
         actions={
           status !== "authenticated" ? (
-            <Link
-              href="/login"
+            <ToolbarPrimitive.Link
+              render={<Link href="/login" />}
               className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm font-medium transition-colors"
             >
               <ActivityIcon className="size-4" />
               {t("toolbox.signIn")}
-            </Link>
+            </ToolbarPrimitive.Link>
           ) : undefined
         }
       >
@@ -87,7 +90,7 @@ const ToolboxPage: NextPageWithLayout = () => {
             value={activeTool}
             onValueChange={(val) => router.push(`/toolbox/${val}`)}
           >
-            <SelectTrigger size="sm">
+            <SelectTrigger size="sm" render={<ToolbarPrimitive.Button />}>
               <SelectValue>
                 {(() => {
                   const tool = TOOLS.find((t) => t.id === activeTool)!;
@@ -124,12 +127,17 @@ const ToolboxPage: NextPageWithLayout = () => {
                 key={tool.id}
                 variant="ghost"
                 size="sm"
+                nativeButton={false}
                 className={
                   activeTool === tool.id
                     ? "bg-primary/10 text-primary"
                     : undefined
                 }
-                render={<Link href={`/toolbox/${tool.id}`} />}
+                render={
+                  <ToolbarPrimitive.Link
+                    render={<Link href={`/toolbox/${tool.id}`} />}
+                  />
+                }
               >
                 <Icon className="size-4" />
                 {toolLabels[tool.id]}

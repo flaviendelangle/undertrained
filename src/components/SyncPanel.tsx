@@ -12,6 +12,8 @@ import {
   SearchIcon,
 } from "lucide-react";
 
+import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
+
 import { Button } from "~/components/ui/button";
 import {
   Popover,
@@ -415,37 +417,38 @@ export function SyncPanel() {
     <>
       <Popover>
         <PopoverTrigger
-          nativeButton={false}
           render={
-            <div className="relative">
-              {neverSynced && (
-                <span className="absolute -top-1 -right-1 flex size-2.5">
-                  <span className="bg-primary absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" />
-                  <span className="bg-primary relative inline-flex size-2.5 rounded-full" />
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  "gap-1.5",
-                  neverSynced ? "text-primary/70" : "text-muted-foreground",
-                )}
-              >
-                {isInProgress ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <RefreshCwIcon className="size-3.5" />
-                )}
-                <span>{t("sync.label")}</span>
-                {isInProgress && (
-                  <span className="bg-primary/20 text-primary-foreground size-1.5 rounded-full" />
-                )}
-                {syncJob?.status === "failed" && (
-                  <span className="size-1.5 rounded-full bg-red-500" />
-                )}
-              </Button>
-            </div>
+            <ToolbarPrimitive.Button
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    "relative gap-1.5",
+                    neverSynced ? "text-primary/70" : "text-muted-foreground",
+                  )}
+                >
+                  {neverSynced && (
+                    <span className="absolute -top-1 -right-1 flex size-2.5">
+                      <span className="bg-primary absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" />
+                      <span className="bg-primary relative inline-flex size-2.5 rounded-full" />
+                    </span>
+                  )}
+                  {isInProgress ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCwIcon className="size-3.5" />
+                  )}
+                  <span>{t("sync.label")}</span>
+                  {isInProgress && (
+                    <span className="bg-primary/20 text-primary-foreground size-1.5 rounded-full" />
+                  )}
+                  {syncJob?.status === "failed" && (
+                    <span className="size-1.5 rounded-full bg-red-500" />
+                  )}
+                </Button>
+              }
+            />
           }
         />
         <PopoverContent align="end" className="w-72 p-3">

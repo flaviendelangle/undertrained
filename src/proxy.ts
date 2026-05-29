@@ -19,7 +19,7 @@ export async function proxy(request: NextRequest) {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: tile.openstreetmap.org *.tile.openstreetmap.org",
+    "img-src 'self' data: blob: tile.openstreetmap.org *.tile.openstreetmap.org server.arcgisonline.com",
     "connect-src 'self' www.strava.com",
     "font-src 'self'",
     "frame-ancestors 'none'",

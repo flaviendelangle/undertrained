@@ -290,7 +290,7 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
 
   return (
     <ChartCard
-      title={t("charts.powerCurve.cardTitle")}
+      title={t("charts.powerCurve.activityCardTitle")}
       actions={
         <Toolbar
           ranges={ranges}
@@ -749,7 +749,7 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
 function EmptyChart() {
   const t = useT();
   return (
-    <ChartCard title={t("charts.powerCurve.cardTitle")}>
+    <ChartCard title={t("charts.powerCurve.activityCardTitle")}>
       <div className="text-muted-foreground flex h-full items-center justify-center">
         {t("charts.powerCurve.empty")}
       </div>

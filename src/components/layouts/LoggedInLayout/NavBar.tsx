@@ -12,7 +12,6 @@ import {
   MenuIcon,
   MoonIcon,
   PlayCircleIcon,
-  RouteIcon,
   SettingsIcon,
   ShieldCheckIcon,
   SunIcon,
@@ -28,7 +27,7 @@ import { Tooltip, TooltipProps } from "~/components/primitives/Tooltip";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { useT } from "~/i18n/useT";
-import { isLiveTrainingEnabled, isRoutesEnabled } from "~/lib/features";
+import { isLiveTrainingEnabled } from "~/lib/features";
 import { cn } from "~/lib/utils";
 
 import { NavBarContext } from "./NavBarContext";
@@ -37,13 +36,20 @@ interface NavBarLinkProps {
   icon: React.ElementType;
   label: string;
   href: string;
+  activeFor?: string;
   badge?: React.ReactNode;
 }
 
-function NavBarLink({ icon: Icon, label, href, badge }: NavBarLinkProps) {
+function NavBarLink({
+  icon: Icon,
+  label,
+  href,
+  activeFor,
+  badge,
+}: NavBarLinkProps) {
   const { isMenuExpanded } = React.useContext(NavBarContext);
   const pathname = usePathname();
-  const isActive = (pathname ?? "").startsWith(href);
+  const isActive = (pathname ?? "").startsWith(activeFor ?? href);
 
   return (
     <Link
@@ -179,18 +185,10 @@ export function NavBar() {
             <NavBarLink
               icon={MapIcon}
               label={t("nav.map")}
-              href="/map"
+              href="/map/heatmap"
+              activeFor="/map"
             />
           </TooltipIfMenuCollapsed>
-          {isRoutesEnabled && (
-            <TooltipIfMenuCollapsed label={t("nav.routes")}>
-              <NavBarLink
-                icon={RouteIcon}
-                label={t("nav.routes")}
-                href="/routes"
-              />
-            </TooltipIfMenuCollapsed>
-          )}
           <TooltipIfMenuCollapsed label={t("nav.statistics")}>
             <NavBarLink
               icon={BarChart3Icon}
@@ -267,11 +265,17 @@ interface MobileTabLinkProps {
   icon: React.ElementType;
   label: string;
   href: string;
+  activeFor?: string;
 }
 
-function MobileTabLink({ icon: Icon, label, href }: MobileTabLinkProps) {
+function MobileTabLink({
+  icon: Icon,
+  label,
+  href,
+  activeFor,
+}: MobileTabLinkProps) {
   const pathname = usePathname();
-  const isActive = (pathname ?? "").startsWith(href);
+  const isActive = (pathname ?? "").startsWith(activeFor ?? href);
 
   return (
     <Link
@@ -321,16 +325,6 @@ export function MobileBottomBar() {
             <CalendarIcon className="size-4" />
             {t("nav.timePeriods")}
           </Link>
-          {isRoutesEnabled && (
-            <Link
-              href="/routes"
-              className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-              onClick={() => setMoreOpen(false)}
-            >
-              <RouteIcon className="size-4" />
-              {t("nav.routes")}
-            </Link>
-          )}
           <Link
             href="/toolbox"
             className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
@@ -407,7 +401,8 @@ export function MobileBottomBar() {
         <MobileTabLink
           icon={MapIcon}
           label={t("nav.map")}
-          href="/map"
+          href="/map/heatmap"
+          activeFor="/map"
         />
         <MobileTabLink
           icon={BarChart3Icon}

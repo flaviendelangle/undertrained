@@ -5,6 +5,7 @@ import {
   AttributionControl,
   CircleMarker,
   MapContainer,
+  Pane,
   Polyline,
   TileLayer,
   useMap,
@@ -15,17 +16,12 @@ import type { ListActivity } from "@server/db/types";
 
 import { useExplorerTiles } from "~/hooks/useExplorerTiles";
 import { useExplorerTilesToggle } from "~/hooks/useExplorerTilesToggle";
+import { TILE_PROVIDERS, useTileStyle } from "~/hooks/useTileStyle";
 import { decode } from "~/utils/polyline";
 
 import { ExplorerTilesLayer } from "./ExplorerTilesLayer";
 import { ExplorerTilesStats } from "./ExplorerTilesStats";
 import { HeatmapActivityTooltip } from "./HeatmapActivityTooltip";
-
-// List available here: https://wiki.openstreetmap.org/wiki/Raster_tile_providers
-const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-
-const TILE_ATTRIBUTION =
-  'Map data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 interface FitBoundsProps {
   polylines: { id: string; polyline: [number, number][] }[];
@@ -39,6 +35,11 @@ function DismissOnMapMove({ onDismiss }: { onDismiss: () => void }) {
   });
   return null;
 }
+
+// Leaflet draws all tile layers in `tilePane` (z-index 200), which sits below
+// the polylines in `overlayPane` (400). To render labels above the heatmap, we
+// create a dedicated pane above the polylines but below markers/tooltips.
+const LABELS_PANE = "satellite-labels";
 
 function FitBounds(props: FitBoundsProps) {
   const { polylines, onFitted } = props;
@@ -81,6 +82,8 @@ export default function Map(props: MapProps) {
     zoomControl = true,
   } = props;
   const { showExplorerTiles } = useExplorerTilesToggle();
+  const { tileStyle } = useTileStyle();
+  const tileProvider = TILE_PROVIDERS[tileStyle];
 
   // The map is "ready" once the view has been fitted to the routes AND the
   // tiles for that view have finished loading. We track both signals and fire
@@ -183,10 +186,18 @@ export default function Map(props: MapProps) {
       >
         <AttributionControl position="bottomleft" prefix="Leaflet" />
         <TileLayer
-          url={TILE_URL}
-          attribution={TILE_ATTRIBUTION}
+          url={tileProvider.url}
+          attribution={tileProvider.attribution}
           eventHandlers={{ load: handleTilesLoaded }}
         />
+        {tileProvider.labelsUrl && (
+          <Pane
+            name={LABELS_PANE}
+            style={{ zIndex: 450, pointerEvents: "none" }}
+          >
+            <TileLayer url={tileProvider.labelsUrl} />
+          </Pane>
+        )}
         {enableExplorerTiles && (
           <ExplorerTilesLayer
             tilesData={explorerTilesData}

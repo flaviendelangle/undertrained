@@ -5,6 +5,10 @@ import { scaleLinear, scaleLog } from "d3-scale";
 
 import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import {
+  filterVisibleLabels,
+  measureTickLabels,
+} from "~/lib/chartTicks/visibleLabels";
+import {
   WebGLChartRenderer,
   type PanelRenderData,
   buildLineStripMesh,
@@ -30,6 +34,7 @@ const MARGIN = {
   left: 46,
 };
 const LINE_HALF_WIDTH = 0.75;
+const X_AXIS_LABEL_STYLE = { fontSize: 11 };
 
 /** Well-known reference durations for X-axis tick marks. */
 const X_AXIS_TICKS = [
@@ -176,12 +181,36 @@ export function PowerCurveWebGLChart({
     return ticks;
   }, [yMax, mode]);
 
-  // X ticks (filtered to domain)
+  // X ticks (filtered to domain). Tick marks + gridlines render for every entry
+  // here; label visibility is filtered separately below to avoid overlap at
+  // narrow widths.
   const xTicks = React.useMemo(() => {
     if (xData.length < 2) return [];
     const [dMin, dMax] = xScale.domain();
     return X_AXIS_TICKS.filter((t) => t >= dMin && t <= dMax);
   }, [xData, xScale]);
+
+  const xTickLabels = React.useMemo(
+    () =>
+      xTicks.map((t) => ({
+        value: t,
+        label: formatDuration(t),
+        position: xScale(t),
+      })),
+    [xTicks, xScale],
+  );
+
+  const visibleXLabels = React.useMemo(() => {
+    const sizes = measureTickLabels(
+      xTickLabels.map((t) => t.label),
+      X_AXIS_LABEL_STYLE,
+    );
+    return filterVisibleLabels(xTickLabels, {
+      getPosition: (t) => t.position,
+      getLabel: (t) => t.label,
+      sizes,
+    });
+  }, [xTickLabels]);
 
   // Resize WebGL canvas
   React.useEffect(() => {
@@ -472,22 +501,21 @@ export function PowerCurveWebGLChart({
             stroke={tokens.gridStrong.hex}
             strokeWidth={1}
           />
-          {xTicks.map((tick) => {
-            const x = xScale(tick);
-            return (
-              <g key={tick} transform={`translate(${x}, 0)`}>
-                <line y1={0} y2={5} stroke={tokens.gridStrong.hex} />
+          {xTickLabels.map((item) => (
+            <g key={item.value} transform={`translate(${item.position}, 0)`}>
+              <line y1={0} y2={5} stroke={tokens.gridStrong.hex} />
+              {visibleXLabels.has(item) && (
                 <text
                   y={18}
                   textAnchor="middle"
                   fill={tokens.axisLabel}
                   fontSize={11}
                 >
-                  {formatDuration(tick)}
+                  {item.label}
                 </text>
-              </g>
-            );
-          })}
+              )}
+            </g>
+          ))}
         </g>
 
         {/* Crosshair */}

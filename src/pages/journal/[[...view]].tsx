@@ -9,6 +9,7 @@ import { ActivityFilterPopover } from "~/components/settings/ActivityFilterPopov
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useInitialLoadComplete } from "~/hooks/useInitialLoadComplete";
+import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 
 // Shared loader for `nextDynamic` (lazy render) and the preload effect below
@@ -19,6 +20,7 @@ const loadJournal = () =>
 const Journal = nextDynamic(loadJournal, { ssr: false });
 
 const JournalPage: NextPageWithLayout = () => {
+  const t = useT();
   // Prefetch the journal's primary dataset from the (non-lazy) page itself so
   // the request overlaps with the Journal module loading; the component then
   // mounts already populated. Harmless on SPA navigation — the cache is warm,
@@ -48,6 +50,7 @@ const JournalPage: NextPageWithLayout = () => {
   return (
     <>
       <Toolbar
+        label={t("nav.journal")}
         actions={
           <>
             <ActivityFilterPopover />
@@ -56,7 +59,7 @@ const JournalPage: NextPageWithLayout = () => {
         }
       >
         <CalendarDaysIcon className="size-4" />
-        <span className="font-semibold">Journal</span>
+        <span className="font-semibold">{t("nav.journal")}</span>
       </Toolbar>
 
       <div className="relative flex min-h-0 flex-1 flex-col">

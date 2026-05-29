@@ -4,6 +4,10 @@ import { bisector } from "d3-array";
 import { scaleLinear } from "d3-scale";
 
 import { useIsMobile } from "~/hooks/useIsMobile";
+import {
+  filterVisibleLabels,
+  measureTickLabels,
+} from "~/lib/chartTicks/visibleLabels";
 import { useChartTokens } from "~/lib/chartTokens";
 import { formatElapsed } from "~/utils/format";
 import type { SportConfig } from "~/utils/sportConfig";
@@ -26,6 +30,7 @@ const MARGIN = { top: 8, right: 72, bottom: 36, left: 84 };
 const LEFT_LABEL_X = 8 - MARGIN.left; // left-aligned in the gutter, 8px from edge
 const Y_AXIS_TICKS = 4;
 const X_AXIS_TICKS = 8;
+const X_AXIS_LABEL_STYLE = { fontSize: 11 };
 const LINE_HALF_WIDTH = 0.75; // 1.5px total line width
 // Minimum horizontal drag (px) that counts as a zoom selection rather than a
 // click. Doubles as the guard against degenerate (zero-width) zoom ranges.
@@ -361,14 +366,35 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     [xAxisMode, sportConfig],
   );
 
+  // X-axis tick labels. d3 picks a count-based set; we still filter labels
+  // separately so long strings (e.g. precise distances) or narrow zoom windows
+  // don't produce overlap. Tick marks render for every entry.
+  const xTickLabels = React.useMemo(() => {
+    if (drawingWidth <= 0) return [];
+    return xScale.ticks(X_AXIS_TICKS).map((t) => ({
+      value: t,
+      label: formatX(t),
+      position: xScale(t),
+    }));
+  }, [xScale, drawingWidth, formatX]);
+
+  const visibleXLabels = React.useMemo(() => {
+    const sizes = measureTickLabels(
+      xTickLabels.map((t) => t.label),
+      X_AXIS_LABEL_STYLE,
+    );
+    return filterVisibleLabels(xTickLabels, {
+      getPosition: (t) => t.position,
+      getLabel: (t) => t.label,
+      sizes,
+    });
+  }, [xTickLabels]);
+
   if (width === 0 || streams.length === 0) {
     return (
       <div ref={containerRef} className="w-full" style={{ minHeight: 200 }} />
     );
   }
-
-  // Compute x-axis ticks
-  const xTicks = xScale.ticks(X_AXIS_TICKS);
 
   // Compute crosshair x position
   const crosshairX =
@@ -515,22 +541,21 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
             stroke={tokens.gridStrong.hex}
             strokeWidth={1}
           />
-          {xTicks.map((tick) => {
-            const x = xScale(tick);
-            return (
-              <g key={tick} transform={`translate(${x}, 0)`}>
-                <line y1={0} y2={5} stroke={tokens.gridStrong.hex} />
+          {xTickLabels.map((item) => (
+            <g key={item.value} transform={`translate(${item.position}, 0)`}>
+              <line y1={0} y2={5} stroke={tokens.gridStrong.hex} />
+              {visibleXLabels.has(item) && (
                 <text
                   y={18}
                   textAnchor="middle"
                   fill={tokens.axisLabel}
                   fontSize={11}
                 >
-                  {formatX(tick)}
+                  {item.label}
                 </text>
-              </g>
-            );
-          })}
+              )}
+            </g>
+          ))}
         </g>
 
         {/* Drag-to-zoom selection band. Spans the full chart height down to the

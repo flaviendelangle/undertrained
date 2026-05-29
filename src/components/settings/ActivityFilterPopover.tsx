@@ -1,5 +1,7 @@
 import { FilterIcon } from "lucide-react";
 
+import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
+
 import { Button } from "~/components/ui/button";
 import {
   ResponsiveDialog,
@@ -26,19 +28,23 @@ export function ActivityFilterPopover({
     <ResponsiveDialog>
       <ResponsiveDialogTrigger
         render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground gap-1.5"
-          >
-            <FilterIcon className="size-3.5" />
-            <span>{t("settings.filter.trigger")}</span>
-            {activeFilterCount > 0 && (
-              <span className="bg-primary/20 text-primary-foreground rounded px-1 text-xs">
-                {activeFilterCount}
-              </span>
-            )}
-          </Button>
+          <ToolbarPrimitive.Button
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground gap-1.5"
+              >
+                <FilterIcon className="size-3.5" />
+                <span>{t("settings.filter.trigger")}</span>
+                {activeFilterCount > 0 && (
+                  <span className="bg-primary/20 text-primary-foreground rounded px-1 text-xs">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+            }
+          />
         }
       />
       <ResponsiveDialogContent className="sm:max-w-sm">

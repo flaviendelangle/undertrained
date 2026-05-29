@@ -5,13 +5,15 @@ import { PlusIcon, RouteIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 
 import { Map } from "~/components/Map";
-import { Toolbar } from "~/components/settings/SettingsToolbar";
+import { MapToolbar } from "~/components/Map/MapToolbar";
+import { SendToDeviceMenu } from "~/components/routes/SendToDeviceMenu";
 import { Button } from "~/components/ui/button";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
 import { isRoutesEnabled } from "~/lib/features";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { decode } from "~/utils/polyline";
+import type { RouteSport } from "~/utils/routeProfiles";
 import { trpc } from "~/utils/trpc";
 
 // Routes is opt-in (see next.config.ts). When disabled, a direct visit 404s.
@@ -27,6 +29,7 @@ function RouteCard({
   route: {
     id: number;
     name: string;
+    sport: string;
     distance: number;
     elevationGain: number | null;
     mapPolyline: string;
@@ -41,7 +44,7 @@ function RouteCard({
 
   return (
     <div className="border-border bg-card flex flex-col overflow-hidden rounded-lg border">
-      <Link href={`/routes/${route.id}`} className="block h-36 w-full">
+      <Link href={`/map/routes/${route.id}`} className="block h-36 w-full">
         <Map
           activities={null}
           routePositions={positions}
@@ -52,7 +55,7 @@ function RouteCard({
       <div className="flex items-center justify-between gap-2 p-3">
         <div className="min-w-0">
           <Link
-            href={`/routes/${route.id}`}
+            href={`/map/routes/${route.id}`}
             className="hover:text-primary block truncate text-sm font-medium"
           >
             {route.name}
@@ -63,14 +66,24 @@ function RouteCard({
               ` · ${Math.round(route.elevationGain)} m`}
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t("routes.deleteRoute")}
-          onClick={() => onDelete(route.id)}
-        >
-          <Trash2Icon className="text-muted-foreground size-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <SendToDeviceMenu
+            iconOnly
+            name={route.name}
+            sport={route.sport as RouteSport}
+            points={positions}
+            elevation={[]}
+            distance={route.distance}
+          />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("routes.deleteRoute")}
+            onClick={() => onDelete(route.id)}
+          >
+            <Trash2Icon className="text-muted-foreground size-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -97,23 +110,14 @@ const RoutesPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar
-        actions={
-          <Button size="sm" render={<Link href="/routes/new" />}>
-            <PlusIcon /> {t("routes.newRoute")}
-          </Button>
-        }
-      >
-        <RouteIcon className="size-4" />
-        <span className="font-semibold">{t("nav.routes")}</span>
-      </Toolbar>
+      <MapToolbar section="routes" />
 
       <div className="relative flex-1 overflow-y-auto p-3 sm:p-4">
         {routes?.length === 0 ? (
           <div className="text-muted-foreground flex flex-col items-center gap-3 py-16 text-center text-sm">
             <RouteIcon className="size-8 opacity-50" />
             <p>{t("routes.empty")}</p>
-            <Button size="sm" render={<Link href="/routes/new" />}>
+            <Button size="sm" nativeButton={false} render={<Link href="/map/new" />}>
               <PlusIcon /> {t("routes.createFirst")}
             </Button>
           </div>

@@ -16,6 +16,7 @@ const ActivitiesPage: NextPageWithLayout = () => {
   return (
     <>
       <Toolbar
+        label={t("activities.pageTitle")}
         actions={
           <>
             <ActivityFilterPopover

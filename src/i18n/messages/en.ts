@@ -17,6 +17,7 @@ const en = {
     loading: "Loading…",
     search: "Search",
     home: "Home",
+    back: "Back",
     openSettings: "Open Settings",
     notFound: "Page not found",
   },
@@ -29,7 +30,6 @@ const en = {
     settings: "Settings",
     map: "Map",
     personalBests: "Personal Bests",
-    routes: "Routes",
     liveTraining: "Live Training",
     logout: "Log out",
     privacy: "Privacy",
@@ -375,6 +375,7 @@ const en = {
     powerCurve: {
       title: "Power Curve",
       cardTitle: "Cycling Power Curve",
+      activityCardTitle: "Cycling Power",
       hint: "Your best sustained power efforts at each duration. Add date ranges to compare this activity against your historical bests and spot improvements.",
       empty: "No power data available",
       thisActivity: "This Activity",
@@ -428,6 +429,11 @@ const en = {
       power: "Power",
       pace: "pace",
       timeAxis: "Time",
+      viewChart: "Chart",
+      viewTable: "Table",
+      lap: "#",
+      duration: "Duration",
+      heartRate: "HR",
       hintIntro:
         "Each lap (interval) as a bar — width is its duration, height its average {metric}",
       hintColorPace: ", colored by intervals.icu pace zone",
@@ -712,16 +718,26 @@ const en = {
     },
   },
   map: {
+    layers: "Layers",
+    menu: "Map menu",
+    heatmap: "Heatmap",
     tiles: "Tiles",
     explorerTiles: "Explorer Tiles",
+    tileStyle: "Tile style",
+    style: {
+      street: "Street",
+      satellite: "Satellite",
+    },
     visited: "Visited: {count}",
     maxSquare: "Max square: {side}",
     largestCluster: "Largest cluster: {count}",
     clusters: "Clusters: {count}",
     elevationShort: "{value}m elev.",
     viewActivity: "View activity",
+    dropGpx: "Drop GPX file",
   },
   routes: {
+    myRoutes: "My routes",
     newRoute: "New route",
     editRoute: "Edit route",
     deleteRoute: "Delete route",
@@ -745,12 +761,49 @@ const en = {
     saveRoute: "Save route",
     updateRoute: "Update route",
     defaultName: "Route",
+    replaceGpxTitle: "Replace current route?",
+    replaceGpxBody:
+      "Dropping this GPX will overwrite the current route's geometry. This can't be undone.",
+    replaceGpxConfirm: "Replace",
     profile: {
       cyclingRegular: "Cycling — regular",
       cyclingRoad: "Cycling — road",
       cyclingMountain: "Cycling — mountain",
       footWalking: "Running / walking",
       footHiking: "Trail running / hiking",
+    },
+    send: {
+      trigger: "Send to device",
+      downloadGpx: "Download GPX",
+      downloadFit: "Download FIT Course (Garmin)",
+      uploadTo: "Upload to…",
+      platforms: {
+        garmin: {
+          label: "Garmin Connect",
+          instructions:
+            "In Garmin Connect, open Training & Planning → Courses → Import. Upload the FIT Course for best on-device turn cues, or GPX as a fallback.",
+        },
+        wahoo: {
+          label: "Wahoo",
+          instructions:
+            "Wahoo ELEMNT / BOLT / ROAM don't accept direct uploads. Upload the GPX to Komoot, Ride with GPS, or Strava, then enable that integration in the Wahoo mobile app — routes sync automatically.",
+        },
+        komoot: {
+          label: "Komoot",
+          instructions:
+            "Upload the GPX to komoot.com → Plan → Import. From there you can sync to your Garmin or Wahoo head unit via Komoot's device integration.",
+        },
+        rwgps: {
+          label: "Ride with GPS",
+          instructions:
+            "Upload the GPX at ridewithgps.com → Upload → Route. Push to your head unit via the Ride with GPS mobile app sync.",
+        },
+        strava: {
+          label: "Strava",
+          instructions:
+            "On strava.com, open Dashboard → My Routes → Upload Route (GPX). Strava can then sync the route to compatible Garmin / Wahoo / Hammerhead devices.",
+        },
+      },
     },
   },
   liveTraining: {

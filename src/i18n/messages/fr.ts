@@ -15,6 +15,7 @@ const fr: Messages = {
     loading: "Chargement…",
     search: "Rechercher",
     home: "Accueil",
+    back: "Retour",
     openSettings: "Ouvrir les réglages",
     notFound: "Page introuvable",
   },
@@ -27,7 +28,6 @@ const fr: Messages = {
     settings: "Réglages",
     map: "Carte",
     personalBests: "Records personnels",
-    routes: "Parcours",
     liveTraining: "Entraînement en direct",
     logout: "Déconnexion",
     privacy: "Confidentialité",
@@ -382,7 +382,8 @@ const fr: Messages = {
     },
     powerCurve: {
       title: "Courbe de puissance",
-      cardTitle: "Courbe de puissance cyclisme",
+      cardTitle: "Puissance en cyclisme",
+      activityCardTitle: "Puissance",
       hint: "Vos meilleurs efforts de puissance soutenue pour chaque durée. Ajoutez des plages de dates pour comparer cette activité à vos records historiques et repérer vos progrès.",
       empty: "Aucune donnée de puissance disponible",
       thisActivity: "Cette activité",
@@ -438,6 +439,11 @@ const fr: Messages = {
       power: "Puissance",
       pace: "allure",
       timeAxis: "Temps",
+      viewChart: "Graphique",
+      viewTable: "Tableau",
+      lap: "#",
+      duration: "Durée",
+      heartRate: "FC",
       hintIntro:
         "Chaque tour (intervalle) sous forme de barre — la largeur correspond à sa durée, la hauteur à sa {metric} moyenne",
       hintColorPace: ", coloré selon la zone d'allure intervals.icu",
@@ -729,16 +735,26 @@ const fr: Messages = {
     },
   },
   map: {
+    layers: "Calques",
+    menu: "Menu carte",
+    heatmap: "Heatmap",
     tiles: "Tuiles",
     explorerTiles: "Tuiles d'exploration",
+    tileStyle: "Style de tuile",
+    style: {
+      street: "Plan",
+      satellite: "Satellite",
+    },
     visited: "Visitées : {count}",
     maxSquare: "Plus grand carré : {side}",
     largestCluster: "Plus grand cluster : {count}",
     clusters: "Clusters : {count}",
     elevationShort: "{value} m dén.",
     viewActivity: "Voir l'activité",
+    dropGpx: "Déposez le fichier GPX",
   },
   routes: {
+    myRoutes: "Mes parcours",
     newRoute: "Nouveau parcours",
     editRoute: "Modifier le parcours",
     deleteRoute: "Supprimer le parcours",
@@ -762,12 +778,49 @@ const fr: Messages = {
     saveRoute: "Enregistrer le parcours",
     updateRoute: "Mettre à jour le parcours",
     defaultName: "Parcours",
+    replaceGpxTitle: "Remplacer le parcours actuel ?",
+    replaceGpxBody:
+      "Déposer ce GPX écrasera la géométrie du parcours actuel. Cette action est irréversible.",
+    replaceGpxConfirm: "Remplacer",
     profile: {
       cyclingRegular: "Vélo — standard",
       cyclingRoad: "Vélo — route",
       cyclingMountain: "Vélo — VTT",
       footWalking: "Course / marche",
       footHiking: "Trail / randonnée",
+    },
+    send: {
+      trigger: "Envoyer vers l'appareil",
+      downloadGpx: "Télécharger GPX",
+      downloadFit: "Télécharger FIT Course (Garmin)",
+      uploadTo: "Envoyer vers…",
+      platforms: {
+        garmin: {
+          label: "Garmin Connect",
+          instructions:
+            "Dans Garmin Connect, ouvrez Entraînement & planification → Parcours → Importer. Utilisez le FIT Course pour de meilleures indications de virage sur l'appareil, ou le GPX en alternative.",
+        },
+        wahoo: {
+          label: "Wahoo",
+          instructions:
+            "Les Wahoo ELEMNT / BOLT / ROAM n'acceptent pas d'upload direct. Importez le GPX sur Komoot, Ride with GPS ou Strava, puis activez cette intégration dans l'app mobile Wahoo — les parcours se synchronisent automatiquement.",
+        },
+        komoot: {
+          label: "Komoot",
+          instructions:
+            "Importez le GPX sur komoot.com → Planifier → Importer. Vous pouvez ensuite synchroniser vers votre Garmin ou Wahoo via l'intégration appareil de Komoot.",
+        },
+        rwgps: {
+          label: "Ride with GPS",
+          instructions:
+            "Importez le GPX sur ridewithgps.com → Upload → Route. Envoyez-le sur votre compteur via la synchronisation de l'app mobile Ride with GPS.",
+        },
+        strava: {
+          label: "Strava",
+          instructions:
+            "Sur strava.com, ouvrez Tableau de bord → Mes itinéraires → Importer un itinéraire (GPX). Strava peut ensuite synchroniser l'itinéraire vers les compteurs Garmin / Wahoo / Hammerhead compatibles.",
+        },
+      },
     },
   },
   liveTraining: {

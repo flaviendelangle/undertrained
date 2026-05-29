@@ -31,7 +31,7 @@ const PeriodsPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar>
+      <Toolbar label={t("periods.pageTitle")}>
         <CalendarIcon className="size-4" />
         <span className="font-semibold">{t("periods.pageTitle")}</span>
       </Toolbar>

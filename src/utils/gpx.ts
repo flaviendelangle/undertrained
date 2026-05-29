@@ -41,3 +41,90 @@ export function downloadFile(filename: string, content: string, type: string) {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+export interface ParsedGpx {
+  /** Track name if present, otherwise the document's `<metadata><name>`. */
+  name: string | null;
+  points: LatLngTuple[];
+  /** Per-point elevation in meters. `null` when the GPX has no `<ele>` tags. */
+  elevation: number[] | null;
+}
+
+/**
+ * Parses GPX 1.0/1.1 track XML into a flat list of `<trkpt>` positions and an
+ * elevation array (or `null` when no `<ele>` tags are present). Throws when the
+ * document is unparsable or contains no track points.
+ */
+export function parseGpx(xml: string): ParsedGpx {
+  const doc = new DOMParser().parseFromString(xml, "application/xml");
+  if (doc.querySelector("parsererror")) {
+    throw new Error("Invalid GPX: XML parse error");
+  }
+  const trkpts = doc.querySelectorAll("trkpt");
+  if (trkpts.length === 0) {
+    throw new Error("Invalid GPX: no <trkpt> elements");
+  }
+
+  const points: LatLngTuple[] = [];
+  const elevation: number[] = [];
+  let anyElevation = false;
+
+  for (const pt of trkpts) {
+    const lat = Number(pt.getAttribute("lat"));
+    const lon = Number(pt.getAttribute("lon"));
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    points.push([lat, lon]);
+    const eleEl = pt.querySelector("ele");
+    const ele = eleEl ? Number(eleEl.textContent) : NaN;
+    if (Number.isFinite(ele)) {
+      anyElevation = true;
+      elevation.push(ele);
+    } else {
+      elevation.push(0);
+    }
+  }
+
+  if (points.length === 0) {
+    throw new Error("Invalid GPX: no valid coordinates");
+  }
+
+  // Prefer the track name (more specific) over the document metadata name.
+  const trkName = doc.querySelector("trk > name")?.textContent?.trim();
+  const metaName = doc.querySelector("metadata > name")?.textContent?.trim();
+  const name = trkName || metaName || null;
+
+  return { name, points, elevation: anyElevation ? elevation : null };
+}
+
+/** Haversine distance between two lat/lon pairs (returns meters). */
+export function haversine(a: LatLngTuple, b: LatLngTuple): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b[0] - a[0]);
+  const dLon = toRad(b[1] - a[1]);
+  const lat1 = toRad(a[0]);
+  const lat2 = toRad(b[0]);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+/** Total length of a polyline in meters. */
+export function polylineDistance(points: LatLngTuple[]): number {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += haversine(points[i - 1], points[i]);
+  }
+  return total;
+}
+
+/** Sum of positive elevation deltas in meters. */
+export function elevationAscent(elevation: number[]): number {
+  let total = 0;
+  for (let i = 1; i < elevation.length; i++) {
+    const d = elevation[i] - elevation[i - 1];
+    if (d > 0) total += d;
+  }
+  return total;
+}

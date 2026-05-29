@@ -1,9 +1,7 @@
 import type { GetServerSideProps } from "next";
-import { RouteIcon } from "lucide-react";
 
+import { MapToolbar } from "~/components/Map/MapToolbar";
 import { RouteBuilder } from "~/components/routes/RouteBuilder";
-import { Toolbar } from "~/components/settings/SettingsToolbar";
-import { useT } from "~/i18n/useT";
 import { isRoutesEnabled } from "~/lib/features";
 import type { NextPageWithLayout } from "~/pages/_app";
 
@@ -13,13 +11,9 @@ export const getServerSideProps: GetServerSideProps = async () => {
 };
 
 const NewRoutePage: NextPageWithLayout = () => {
-  const t = useT();
   return (
     <>
-      <Toolbar>
-        <RouteIcon className="size-4" />
-        <span className="font-semibold">{t("routes.newRoute")}</span>
-      </Toolbar>
+      <MapToolbar section="new" />
       <div className="relative flex-1 overflow-hidden">
         <RouteBuilder />
       </div>

@@ -17,7 +17,7 @@ const RecordsPage: NextPageWithLayout = () => {
   const t = useT();
   return (
     <>
-      <Toolbar actions={<SyncPanel />}>
+      <Toolbar label={t("nav.personalBests")} actions={<SyncPanel />}>
         <TrophyIcon className="size-4" />
         <span className="font-semibold">{t("nav.personalBests")}</span>
       </Toolbar>

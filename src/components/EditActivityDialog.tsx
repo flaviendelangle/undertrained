@@ -4,6 +4,8 @@ import { Pencil } from "lucide-react";
 
 import type { Activity } from "@server/db/types";
 
+import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
+
 import { SportPicker } from "~/components/SportPicker";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
@@ -46,15 +48,19 @@ export function EditActivityButton({ activity }: { activity: Activity }) {
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="text-muted-foreground"
-        onClick={() => setOpen(true)}
-        aria-label={t("activities.edit.button")}
-      >
-        <Pencil className="size-3.5" />
-      </Button>
+      <ToolbarPrimitive.Button
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            onClick={() => setOpen(true)}
+            aria-label={t("activities.edit.button")}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+        }
+      />
       <ResponsiveDialog open={open} onOpenChange={setOpen}>
         <ResponsiveDialogContent>
           <ResponsiveDialogHeader>

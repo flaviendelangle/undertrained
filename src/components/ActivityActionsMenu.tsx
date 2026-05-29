@@ -1,6 +1,8 @@
 import * as React from "react";
 
-import { EllipsisVertical, ExternalLink, RefreshCw } from "lucide-react";
+import { EllipsisIcon, ExternalLink, RefreshCw } from "lucide-react";
+
+import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -26,18 +28,22 @@ export function ActivityActionsMenu(props: ActivityActionsMenuProps) {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground"
-            disabled={loading}
-          >
-            {loading ? (
-              <RefreshCw className="size-3.5 animate-spin" />
-            ) : (
-              <EllipsisVertical className="size-3.5" />
-            )}
-          </Button>
+          <ToolbarPrimitive.Button
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                disabled={loading}
+              >
+                {loading ? (
+                  <RefreshCw className="size-4 animate-spin" />
+                ) : (
+                  <EllipsisIcon className="size-4" />
+                )}
+              </Button>
+            }
+          />
         }
       />
       <DropdownMenuContent align="end" className="w-auto whitespace-nowrap">
