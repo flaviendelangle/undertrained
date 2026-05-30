@@ -5,6 +5,15 @@ import type { JournalActivity, JournalDay } from "./useJournalWeeks";
 /** Pixel height of a single hour row in the week time-grid. */
 export const HOUR_HEIGHT = 48;
 
+/** Pixel width of the sticky hour-axis gutter (numeric form of `3.25rem`). */
+export const GUTTER_WIDTH_PX = 52;
+
+/** Pixel height of the sticky week-header row (day names + week picker). */
+export const HEADER_HEIGHT_PX = 60;
+
+/** Hour offsets 0..23, used by both the time-axis labels and the column gridlines. */
+export const HOURS = Array.from({ length: 24 }, (_, h) => h);
+
 /** Total minutes in a day, the vertical extent of the grid. */
 export const MINUTES_PER_DAY = 24 * 60;
 
@@ -92,7 +101,7 @@ export function buildDayEvents(day: JournalDay): WeekEvent[] {
       id: `activity-${activity.stravaId}`,
       activity,
       startMinutes: start,
-      endMinutes: Math.min(MINUTES_PER_DAY, start + activity.movingTime / 60),
+      endMinutes: Math.min(MINUTES_PER_DAY, start + activity.elapsedTime / 60),
     });
   }
   for (const training of day.plannedTrainings) {

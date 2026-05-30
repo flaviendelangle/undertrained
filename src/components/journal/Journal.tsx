@@ -295,6 +295,8 @@ export function Journal() {
             <JournalWeekView
               week={activeWeek}
               weeks={weeks}
+              dayLoadScale={dayLoadScale}
+              scrollNonce={scrollNonce}
               onSelectWeek={onSelectWeek}
             />
           ) : (

@@ -4,6 +4,7 @@ import { addDays, format, isSameMonth } from "date-fns";
 import { ChevronDownIcon } from "lucide-react";
 
 import { Select as SelectPrimitive } from "@base-ui/react/select";
+import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 import { PointerActivationConstraints } from "@dnd-kit/dom";
 import {
   DragDropProvider,
@@ -13,7 +14,6 @@ import {
   type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
-  useDroppable,
 } from "@dnd-kit/react";
 import type { PlannedTraining } from "@server/db/types";
 
@@ -27,36 +27,28 @@ import { useReschedulePlannedTraining } from "~/hooks/useReschedulePlannedTraini
 import { useLocale, useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
-import {
-  WeekActivityBlock,
-  WeekPlannedBlock,
-  WeekPlannedBlockGhost,
-} from "./WeekEventBlock";
-import { useJournalPlanner } from "./journalPlanner";
+import { WeekBlock, type DropPreview, earliestMinutesOfWeek } from "./WeekBlock";
 import { buildWeekGroups } from "./journalView";
 import type { JournalWeek } from "./useJournalWeeks";
+import { useWeekHorizontalVirtualizer } from "./useWeekHorizontalVirtualizer";
 import {
-  COMPACT_BLOCK_HEIGHT,
+  GUTTER_WIDTH_PX,
+  HEADER_HEIGHT_PX,
   HOUR_HEIGHT,
+  HOURS,
   MINUTES_PER_DAY,
   MINUTES_PER_PIXEL,
-  MIN_BLOCK_HEIGHT,
-  type PositionedEvent,
-  buildDayEvents,
   minutesToTimeLabel,
-  packDayEvents,
   snapMinutes,
 } from "./weekGrid";
 
-/** Shared grid template: a fixed hour-axis gutter, then 7 equal day columns. */
-const GRID_TEMPLATE = "3.25rem repeat(7, minmax(0, 1fr))";
+const TOTAL_HEIGHT = (MINUTES_PER_DAY / 60) * HOUR_HEIGHT;
 
 /** Hour the grid scrolls to when the week has no events to anchor on. */
 const DEFAULT_SCROLL_HOUR = 6;
 
-const TOTAL_HEIGHT = (MINUTES_PER_DAY / 60) * HOUR_HEIGHT;
-
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
+/** Fallback URL-sync timeout when `scrollend` isn't supported (Safari < 17.4). */
+const SCROLL_END_FALLBACK_MS = 150;
 
 // Start a drag after a small move (no delay) so a click still opens the editor.
 // `preventActivation: () => false` is essential here: the draggable is a
@@ -76,13 +68,6 @@ const SENSORS = [
 /** Matches a droppable id (`yyyy-MM-dd`). */
 const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Live drop preview: which day and the snapped start minute, plus the training. */
-interface DropPreview {
-  dayKey: string;
-  minutes: number;
-  training: PlannedTraining;
-}
-
 /** The fixed left column of hour labels, aligned to the grid's hour lines. */
 function TimeAxis() {
   return (
@@ -100,160 +85,67 @@ function TimeAxis() {
   );
 }
 
-/** The snapped, full-opacity drop target shown in a day column while dragging. */
-function PreviewGhost({ preview }: { preview: DropPreview }) {
-  const durationMinutes = preview.training.durationSeconds / 60;
-  const height = Math.max(
-    MIN_BLOCK_HEIGHT,
-    (durationMinutes / 60) * HOUR_HEIGHT,
-  );
-  return (
-    <div
-      className="pointer-events-none absolute right-0 left-0 z-20 pr-1.5"
-      style={{ top: (preview.minutes / 60) * HOUR_HEIGHT, height }}
-    >
-      <WeekPlannedBlockGhost
-        training={preview.training}
-        time={minutesToTimeLabel(preview.minutes)}
-        compact={height < COMPACT_BLOCK_HEIGHT}
-      />
-    </div>
-  );
-}
-
-/**
- * One day's column in the time-grid: a drop target carrying its date, with
- * hour gridlines and the day's events positioned by time (overlaps packed
- * side-by-side). Activities render as solid blocks, planned trainings as
- * draggable dashed blocks.
- */
-function DayColumn({
-  date,
-  positioned,
-  preview,
-}: {
-  date: Date;
-  positioned: PositionedEvent[];
-  /** Snapped ghost shown while a drag hovers this day (null otherwise). */
-  preview: DropPreview | null;
-}) {
-  const { ref, isDropTarget } = useDroppable({
-    id: format(date, "yyyy-MM-dd"),
-  });
-  const planner = useJournalPlanner();
-
-  // Double-click an empty slot to plan a training on this day, prefilled to the
-  // time under the cursor (snapped to the grid).
-  const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const top = e.currentTarget.getBoundingClientRect().top;
-    const minutes = snapMinutes((e.clientY - top) * MINUTES_PER_PIXEL);
-    const date2 = new Date(date);
-    date2.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-    planner?.onCreatePlanned(date2);
-  };
-
-  return (
-    <div
-      ref={ref}
-      onDoubleClick={handleDoubleClick}
-      className={cn(
-        "border-border relative border-l transition-colors",
-        isDropTarget && "bg-primary/5",
-      )}
-      style={{ height: TOTAL_HEIGHT }}
-    >
-      {HOURS.map((hour) => (
-        <div
-          key={hour}
-          aria-hidden
-          className={cn(
-            "border-border/60 absolute inset-x-0",
-            hour > 0 && "border-t",
-          )}
-          style={{ top: hour * HOUR_HEIGHT }}
-        />
-      ))}
-      {preview != null && <PreviewGhost preview={preview} />}
-      {positioned.map(({ event, top, height, leftPct, widthPct }) => (
-        <div
-          key={event.id}
-          // Double-clicking an existing event shouldn't also open the planner.
-          onDoubleClick={(e) => e.stopPropagation()}
-          className="absolute pr-1.5"
-          style={{
-            top,
-            height,
-            left: `${leftPct}%`,
-            width: `${widthPct}%`,
-          }}
-        >
-          {event.kind === "activity" ? (
-            <WeekActivityBlock
-              activity={event.activity}
-              compact={height < COMPACT_BLOCK_HEIGHT}
-            />
-          ) : (
-            <WeekPlannedBlock
-              training={event.training}
-              compact={height < COMPACT_BLOCK_HEIGHT}
-            />
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function JournalWeekViewImpl({
   week,
   weeks,
+  dayLoadScale,
+  scrollNonce,
   onSelectWeek,
 }: {
+  /** The anchor week (URL `?week=`); horizontal scroll mounts onto it. */
   week: JournalWeek;
   weeks: JournalWeek[];
-  /** Navigate the week view to the week starting on the given Monday. */
+  /** Reference busy day used to bucket each day into a load-intensity tier. */
+  dayLoadScale: number;
+  /** Bumped by the parent to request a (re)scroll to the anchor week. */
+  scrollNonce: number;
+  /** Navigate the URL to the given week's Monday (debounced via the parent). */
   onSelectWeek: (weekStart: Date) => void;
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
-  const bodyRef = React.useRef<HTMLDivElement>(null);
   const reschedule = useReschedulePlannedTraining();
   const t = useT();
   const { dateLocale } = useLocale();
   const localeOptions = { locale: dateLocale };
 
-  // The corner week picker: every loaded week, newest first, grouped under its
-  // month for scannability. One item per week, jumping straight to it.
+  // `pinnedIndex`: the destination of an in-flight programmatic jump. Forces
+  // the target week to render even when it falls outside the virtualizer's
+  // normal range, so the mandatory scroll-snap engine can find its snap-area
+  // at the landing position instead of smoothly snapping back to whichever
+  // overscan item happens to be nearest in the DOM.
+  const [pinnedIndex, setPinnedIndex] = React.useState<number | null>(null);
+  const { virtualizer, weekWidth, containerWidth, activeIndex } =
+    useWeekHorizontalVirtualizer({
+      count: weeks.length,
+      scrollRef,
+      pinnedIndex,
+    });
+
+  // The week the picker label shows = whichever week the user has most centered
+  // in the viewport, not the URL anchor (which only updates on scroll-stop).
+  const activeWeek = weeks[activeIndex] ?? week;
+
+  // Corner picker contents: every loaded week, newest first, grouped under its
+  // month for scannability.
   const weekGroups = React.useMemo(() => buildWeekGroups(weeks), [weeks]);
-  // Live ghost shown at the prospective drop slot (Google-Calendar style); the
-  // floating drag clone is disabled via the Feedback plugin below.
+
+  // Live ghost shown at the prospective drop slot (Google-Calendar style).
   const [preview, setPreview] = React.useState<DropPreview | null>(null);
 
-  // Per-day positioned events (overlaps packed), plus the earliest start minute
-  // across the week so the grid can open on the first event rather than midnight.
-  const { dayEvents, earliestMinutes } = React.useMemo(() => {
-    const perDayEvents = week.days.map((day) => buildDayEvents(day));
-    const starts = perDayEvents.flatMap((events) =>
-      events.map((event) => event.startMinutes),
-    );
-    return {
-      dayEvents: perDayEvents.map((events) => packDayEvents(events)),
-      earliestMinutes: starts.length > 0 ? Math.min(...starts) : Infinity,
-    };
-  }, [week]);
-
-  // Open the grid near the first event of the week (or 06:00 when empty).
-  React.useLayoutEffect(() => {
-    const scroller = scrollRef.current;
-    const body = bodyRef.current;
-    if (!scroller || !body) {
-      return;
+  // All planned trainings by id, so a drag starting in a virtualized neighbour
+  // week resolves regardless of which week the active anchor sits on. Cheap to
+  // build — at most a few weeks worth of trainings.
+  const trainingsById = React.useMemo(() => {
+    const map = new Map<number, PlannedTraining>();
+    for (const w of weeks) {
+      for (const day of w.days) {
+        for (const training of day.plannedTrainings) {
+          map.set(training.id, training);
+        }
+      }
     }
-    const startMinutes = Number.isFinite(earliestMinutes)
-      ? earliestMinutes
-      : DEFAULT_SCROLL_HOUR * 60;
-    const eventTop = (startMinutes / 60) * HOUR_HEIGHT;
-    scroller.scrollTop = body.offsetTop + Math.max(0, eventTop - HOUR_HEIGHT);
-  }, [earliestMinutes, week.weekStart]);
+    return map;
+  }, [weeks]);
 
   // Resolve a drag operation to its target day + snapped start minute. The
   // draggable id is `planned-<id>` and the droppable (column) id is `yyyy-MM-dd`;
@@ -269,9 +161,7 @@ function JournalWeekViewImpl({
       return null;
     }
     const trainingId = Number(sourceId.slice("planned-".length));
-    const training = week.days
-      .flatMap((day) => day.plannedTrainings)
-      .find((item) => item.id === trainingId);
+    const training = trainingsById.get(trainingId);
     if (training == null) {
       return null;
     }
@@ -321,9 +211,261 @@ function JournalWeekViewImpl({
     );
   };
 
+  // ---- Horizontal scroll: mount, resize, and explicit re-anchor ("Today") ----
+
+  const anchorWeekTime = week.weekStart.getTime();
+
+  // Two-phase jump. Calling `scrollToIndex` and `setPinnedIndex` in the same
+  // synchronous block would be racy: with `scroll-snap-type: x mandatory` the
+  // snap engine evaluates the moment `scrollLeft` changes, but the React
+  // commit that mounts the pinned target hasn't run yet — so snap smoothly
+  // reverts to whichever overscan item is in the DOM (initially `[0..2]`,
+  // which is why the calendar slid to index 2). Splitting the work means:
+  //   1. `jumpToWeek(n)` records the pending target in `pendingScrollTarget`.
+  //   2. React re-renders with the target included in the virtualizer's range
+  //      and commits the target's `WeekBlock` to the DOM.
+  //   3. The `useLayoutEffect` below sees the new target, calls
+  //      `scrollToIndex` (now snap-safe because the target is mounted), and
+  //      registers a `scrollend` listener to drop the pin once the
+  //      virtualizer's natural range has caught up.
+  const [pendingScrollTarget, setPendingScrollTarget] = React.useState<
+    number | null
+  >(null);
+  const jumpToWeek = React.useCallback((index: number) => {
+    setPendingScrollTarget(index);
+    setPinnedIndex(index);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (pendingScrollTarget == null) {
+      return;
+    }
+    virtualizer.scrollToIndex(pendingScrollTarget, {
+      align: "start",
+      behavior: "instant",
+    });
+    setPendingScrollTarget(null);
+    const scroller = scrollRef.current;
+    if (!scroller) {
+      return;
+    }
+    const onScrollEnd = () => setPinnedIndex(null);
+    scroller.addEventListener("scrollend", onScrollEnd, { once: true });
+    return () => scroller.removeEventListener("scrollend", onScrollEnd);
+  }, [pendingScrollTarget, virtualizer]);
+
+  // On mount, land on the anchor week. Once the scroll has settled, open URL
+  // reporting so the next sync comes from a genuine user scroll.
+  const didInitialHorizontalScroll = React.useRef(false);
+  const allowReport = React.useRef(false);
+  // Baseline `weekWidth` the resize effect compares against. Seeded with the
+  // dummy initial render value (before the container is measured) and rebased
+  // to the measured value inside the initial-scroll effect — without that
+  // rebase, the resize effect would fire in the same commit as the initial
+  // scroll, see `weekWidth ≠ 1`, and re-anchor to `activeIndex=0` (scrollOffset
+  // hasn't been updated yet), undoing the anchor we just set.
+  const prevWeekWidth = React.useRef(weekWidth);
+  React.useLayoutEffect(() => {
+    if (didInitialHorizontalScroll.current) {
+      return;
+    }
+    if (weeks.length === 0 || containerWidth === 0) {
+      return;
+    }
+    didInitialHorizontalScroll.current = true;
+    prevWeekWidth.current = weekWidth;
+    const index = weeks.findIndex(
+      (w) => w.weekStart.getTime() === anchorWeekTime,
+    );
+    if (index > 0) {
+      jumpToWeek(index);
+    }
+    const raf = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        allowReport.current = true;
+      }),
+    );
+    return () => cancelAnimationFrame(raf);
+  }, [weeks, anchorWeekTime, jumpToWeek, containerWidth, weekWidth]);
+
+  // Re-anchor after a width change so the visible week stays glued under the
+  // user's eye (otherwise a window resize visibly shifts the calendar).
+  // Reads `el.scrollLeft` against the previous `weekWidth` to recover the
+  // current week index — `activeIndex` (from `virtualizer.scrollOffset`) lags
+  // here, since the virtualizer only updates on scroll events. On mount the
+  // initial `jumpToWeek` synchronously sets `scrollLeft`, but the vertical
+  // scrollbar appearing immediately afterwards re-fires `ResizeObserver`
+  // before the scroll event lands, so this effect would otherwise see
+  // `activeIndex=0` and yank the view back to today.
+  React.useLayoutEffect(() => {
+    if (!didInitialHorizontalScroll.current) {
+      return;
+    }
+    const previousWeekWidth = prevWeekWidth.current;
+    if (weekWidth === previousWeekWidth) {
+      return;
+    }
+    prevWeekWidth.current = weekWidth;
+    const el = scrollRef.current;
+    if (!el || previousWeekWidth <= 0) {
+      return;
+    }
+    const currentIndex = Math.round(el.scrollLeft / previousWeekWidth);
+    virtualizer.scrollToIndex(currentIndex, { align: "start" });
+  }, [weekWidth, virtualizer]);
+
+  // Re-anchor the scroll to the URL week whenever its index in `weeks` shifts.
+  // `useJournalWeeks` rebuilds the array when data trickles in (activities and
+  // planned trainings are separate queries); a planned training in the future
+  // extends `weeks` at the front (newest-first), pushing every existing week
+  // — including the URL anchor — to a higher index. Without this re-anchor the
+  // user's `scrollLeft = oldIndex * weekWidth` keeps pointing at the slot that
+  // now holds a *different* week (typically closer to today), looking exactly
+  // like the calendar quietly slid away from the URL anchor to today's week.
+  // Tracking `lastSyncedAnchorIndex` makes user-scroll → URL-sync round-trips a
+  // no-op: the index matches what we last synced to, so we don't fight a fresh
+  // scroll the user just made.
+  const lastSyncedAnchorIndex = React.useRef<number | null>(null);
+  React.useLayoutEffect(() => {
+    if (!didInitialHorizontalScroll.current) {
+      return;
+    }
+    const index = weeks.findIndex(
+      (w) => w.weekStart.getTime() === anchorWeekTime,
+    );
+    if (index < 0) {
+      return;
+    }
+    if (index === lastSyncedAnchorIndex.current) {
+      return;
+    }
+    const previous = lastSyncedAnchorIndex.current;
+    lastSyncedAnchorIndex.current = index;
+    // Initial-scroll path already landed on this index; just record it.
+    if (previous == null) {
+      return;
+    }
+    const el = scrollRef.current;
+    if (el && Math.round(el.scrollLeft / weekWidth) === index) {
+      return;
+    }
+    jumpToWeek(index);
+  }, [weeks, anchorWeekTime, weekWidth, jumpToWeek]);
+
+  // Re-scroll on explicit request (e.g. the "Today" menu item bumps the nonce);
+  // the initial nonce is skipped so this never double-fires with the mount.
+  const initialNonce = React.useRef(scrollNonce);
+  React.useEffect(() => {
+    if (scrollNonce === initialNonce.current || weeks.length === 0) {
+      return;
+    }
+    const index = weeks.findIndex(
+      (w) => w.weekStart.getTime() === anchorWeekTime,
+    );
+    if (index >= 0) {
+      jumpToWeek(index);
+    }
+  }, [scrollNonce, weeks, anchorWeekTime, jumpToWeek]);
+
+  // ---- Vertical scroll: only once on mount, not on every cross-week snap ----
+
+  // Open the grid near the first event of the anchor week (or 06:00 if empty);
+  // gated by a ref so cross-week scrolls preserve the user's vertical position.
+  const earliestMinutes = React.useMemo(
+    () => earliestMinutesOfWeek(week),
+    [week],
+  );
+  const didInitialVerticalScroll = React.useRef(false);
+  React.useLayoutEffect(() => {
+    if (didInitialVerticalScroll.current) {
+      return;
+    }
+    const scroller = scrollRef.current;
+    if (!scroller || weeks.length === 0) {
+      return;
+    }
+    didInitialVerticalScroll.current = true;
+    const startMinutes = Number.isFinite(earliestMinutes)
+      ? earliestMinutes
+      : DEFAULT_SCROLL_HOUR * 60;
+    const eventTop = (startMinutes / 60) * HOUR_HEIGHT;
+    scroller.scrollTop = HEADER_HEIGHT_PX + Math.max(0, eventTop - HOUR_HEIGHT);
+  }, [earliestMinutes, weeks.length]);
+
+  // ---- URL sync: only after the user stops scrolling horizontally ----
+
+  // `scrollend` fires once per scroll gesture (Chrome 114+, FF 109+, Safari
+  // 17.4+); the 150 ms idle timer covers older browsers and lazy trackpad
+  // settles where `scrollend` is delayed.
+  const onSelectWeekRef = useValueAsRef(onSelectWeek);
+  const weeksRef = useValueAsRef(weeks);
+  const weekWidthRef = useValueAsRef(weekWidth);
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) {
+      return;
+    }
+    let timer: number | null = null;
+    const fire = () => {
+      if (!allowReport.current) {
+        return;
+      }
+      const width = weekWidthRef.current;
+      if (width <= 0) {
+        return;
+      }
+      const list = weeksRef.current;
+      const i = Math.min(
+        list.length - 1,
+        Math.max(0, Math.round(el.scrollLeft / width)),
+      );
+      const target = list[i]?.weekStart;
+      if (target) {
+        onSelectWeekRef.current(target);
+      }
+    };
+    const onScroll = () => {
+      if (timer != null) {
+        window.clearTimeout(timer);
+      }
+      timer = window.setTimeout(fire, SCROLL_END_FALLBACK_MS);
+    };
+    const onScrollEnd = () => {
+      if (timer != null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      fire();
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    el.addEventListener("scrollend", onScrollEnd);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("scrollend", onScrollEnd);
+      if (timer != null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [onSelectWeekRef, weeksRef, weekWidthRef]);
+
+  const totalSize = virtualizer.getTotalSize();
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className={cn(
+          "relative min-h-0 flex-1 overflow-auto",
+          // Programmatic scrollToIndex glides; users who prefer reduced motion
+          // get an instant jump.
+          "motion-safe:[scroll-behavior:smooth]",
+          // Snap one week per page so the view always rests on a clean week
+          // boundary; scroll-padding accounts for the sticky hour-axis gutter
+          // so the first day column sits flush against it after a snap.
+          "[scroll-snap-type:x_mandatory]",
+        )}
+        style={{ scrollPaddingLeft: GUTTER_WIDTH_PX }}
+      >
         <DragDropProvider
           sensors={SENSORS}
           onDragStart={handleDragStart}
@@ -331,108 +473,121 @@ function JournalWeekViewImpl({
           onDragEnd={handleDragEnd}
         >
           <div
-            className="bg-accent border-border sticky top-0 z-20 grid border-b"
-            style={{ gridTemplateColumns: GRID_TEMPLATE }}
+            className="flex"
+            style={{
+              width: GUTTER_WIDTH_PX + totalSize,
+              height: HEADER_HEIGHT_PX + TOTAL_HEIGHT,
+            }}
           >
-            <SelectPrimitive.Root
-              value={format(week.weekStart, "yyyy-MM-dd")}
-              onValueChange={(value) => {
-                const target = weeks.find(
-                  (item) => format(item.weekStart, "yyyy-MM-dd") === value,
-                );
-                if (target != null) {
-                  onSelectWeek(target.weekStart);
-                }
+            {/* Left gutter: sticky-left pins the column. Inside, the week
+                picker is sticky-top so it also pins to the corner; the time
+                axis scrolls vertically with the body. The z-index sits above
+                each WeekBlock's sticky day-header strip (z-30) so the corner
+                picker stays on top; the opaque background keeps day columns
+                of neighbour weeks from bleeding through during horizontal
+                scroll. */}
+            <div
+              className="bg-background sticky left-0 z-40 shrink-0"
+              style={{ width: GUTTER_WIDTH_PX }}
+            >
+              {/* `modal={false}`: a modal popup locks `<body>` scroll, which
+                  swings the body width by the scrollbar gutter on open/close.
+                  Here that swing propagates into our `clientWidth` and shifts
+                  `weekWidth`, firing the resize re-anchor mid-scroll and
+                  hijacking the click-triggered scroll to the in-flight
+                  `activeIndex` instead of the picked week. */}
+              <SelectPrimitive.Root
+                modal={false}
+                value={format(activeWeek.weekStart, "yyyy-MM-dd")}
+                onValueChange={(value) => {
+                  const targetIndex = weeks.findIndex(
+                    (item) => format(item.weekStart, "yyyy-MM-dd") === value,
+                  );
+                  if (targetIndex >= 0) {
+                    jumpToWeek(targetIndex);
+                  }
+                }}
+              >
+                <SelectPrimitive.Trigger
+                  title={t("journal.jumpToWeek")}
+                  className="bg-accent border-border hover:bg-background/60 sticky top-0 z-40 flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-b transition-colors outline-none"
+                  style={{ height: HEADER_HEIGHT_PX }}
+                >
+                  <span className="text-foreground flex items-center gap-0.5 text-[11px] leading-none font-semibold">
+                    <SelectPrimitive.Value>
+                      {() =>
+                        format(activeWeek.weekStart, "'W'w", localeOptions)
+                      }
+                    </SelectPrimitive.Value>
+                    <ChevronDownIcon className="size-3" />
+                  </span>
+                  <span className="text-muted-foreground text-[10px] leading-none tabular-nums">
+                    {format(activeWeek.weekStart, "yyyy")}
+                  </span>
+                </SelectPrimitive.Trigger>
+                <SelectContent align="start" className="max-h-80 w-52">
+                  {weekGroups.map((group) => (
+                    <SelectGroup key={group.month.toISOString()}>
+                      <SelectLabel>
+                        {format(group.month, "MMMM yyyy", localeOptions)}
+                      </SelectLabel>
+                      {group.weeks.map((item) => {
+                        const end = addDays(item.weekStart, 6);
+                        const range = isSameMonth(item.weekStart, end)
+                          ? `${format(item.weekStart, "d")}–${format(end, "d MMM", localeOptions)}`
+                          : `${format(item.weekStart, "d MMM", localeOptions)} – ${format(end, "d MMM", localeOptions)}`;
+                        return (
+                          <SelectItem
+                            key={item.weekStart.toISOString()}
+                            value={format(item.weekStart, "yyyy-MM-dd")}
+                            className="tabular-nums"
+                          >
+                            <span>
+                              {format(item.weekStart, "'W'w", localeOptions)}
+                            </span>
+                            <span className="text-muted-foreground ml-auto text-xs">
+                              {range}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </SelectPrimitive.Root>
+              <TimeAxis />
+            </div>
+
+            {/* Right: virtualized week blocks, each absolute-positioned at the
+                slot the virtualizer assigned. */}
+            <div
+              style={{
+                position: "relative",
+                width: totalSize,
+                height: HEADER_HEIGHT_PX + TOTAL_HEIGHT,
               }}
             >
-              <SelectPrimitive.Trigger
-                title={t("journal.jumpToWeek")}
-                className="hover:bg-background/60 flex cursor-pointer flex-col items-center justify-center gap-0.5 py-2 transition-colors outline-none"
-              >
-                <span className="text-foreground flex items-center gap-0.5 text-[11px] leading-none font-semibold">
-                  <SelectPrimitive.Value>
-                    {() => format(week.weekStart, "'W'w", localeOptions)}
-                  </SelectPrimitive.Value>
-                  <ChevronDownIcon className="size-3" />
-                </span>
-                <span className="text-muted-foreground text-[10px] leading-none tabular-nums">
-                  {format(week.weekStart, "yyyy")}
-                </span>
-              </SelectPrimitive.Trigger>
-              <SelectContent align="start" className="max-h-80 w-52">
-                {weekGroups.map((group) => (
-                  <SelectGroup key={group.month.toISOString()}>
-                    <SelectLabel>
-                      {format(group.month, "MMMM yyyy", localeOptions)}
-                    </SelectLabel>
-                    {group.weeks.map((item) => {
-                      const end = addDays(item.weekStart, 6);
-                      const range = isSameMonth(item.weekStart, end)
-                        ? `${format(item.weekStart, "d")}–${format(end, "d MMM", localeOptions)}`
-                        : `${format(item.weekStart, "d MMM", localeOptions)} – ${format(end, "d MMM", localeOptions)}`;
-                      return (
-                        <SelectItem
-                          key={item.weekStart.toISOString()}
-                          value={format(item.weekStart, "yyyy-MM-dd")}
-                          className="tabular-nums"
-                        >
-                          <span>
-                            {format(item.weekStart, "'W'w", localeOptions)}
-                          </span>
-                          <span className="text-muted-foreground ml-auto text-xs">
-                            {range}
-                          </span>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </SelectPrimitive.Root>
-            {week.days.map((day) => (
-              <div
-                key={day.date.toISOString()}
-                className="border-border flex flex-col items-center gap-1 border-l py-2"
-              >
-                <span
-                  className={cn(
-                    "text-[10px] font-medium tracking-wide uppercase",
-                    day.isToday ? "text-primary" : "text-muted-foreground",
-                  )}
-                >
-                  {format(day.date, "EEE", localeOptions)}
-                </span>
-                <span
-                  className={cn(
-                    "flex size-7 items-center justify-center rounded-full text-sm font-semibold tabular-nums",
-                    day.isToday
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground",
-                  )}
-                >
-                  {format(day.date, "d")}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div
-            ref={bodyRef}
-            className="grid"
-            style={{ gridTemplateColumns: GRID_TEMPLATE }}
-          >
-            <TimeAxis />
-            {week.days.map((day, index) => {
-              const dayKey = format(day.date, "yyyy-MM-dd");
-              return (
-                <DayColumn
-                  key={day.date.toISOString()}
-                  date={day.date}
-                  positioned={dayEvents[index]}
-                  preview={preview?.dayKey === dayKey ? preview : null}
-                />
-              );
-            })}
+              {virtualizer.getVirtualItems().map((item) => {
+                const w = weeks[item.index];
+                return (
+                  <WeekBlock
+                    key={w.weekStart.toISOString()}
+                    week={w}
+                    dayLoadScale={dayLoadScale}
+                    preview={preview}
+                    dateLocale={dateLocale}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: item.start,
+                      width: item.size,
+                      height: HEADER_HEIGHT_PX + TOTAL_HEIGHT,
+                      scrollSnapAlign: "start",
+                    }}
+                  />
+                );
+              })}
+            </div>
           </div>
 
           {/* Empty overlay: suppresses the floating drag clone (and its

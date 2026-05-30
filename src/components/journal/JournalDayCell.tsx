@@ -58,7 +58,7 @@ export const TIER_STYLE: Record<Exclude<LoadTier, "none">, { bar: string }> = {
  * (`scale` ≈ their 90th-percentile day): up to half of that is easy, up to a
  * full busy day is moderate, beyond it is hard.
  */
-function getLoadTier(totalLoad: number, scale: number): LoadTier {
+export function getLoadTier(totalLoad: number, scale: number): LoadTier {
   if (totalLoad <= 0) {
     return "none";
   }

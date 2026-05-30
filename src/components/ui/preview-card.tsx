@@ -49,7 +49,14 @@ function PreviewCardContent({
         // the popup width Base UI measures (so this tracks both the default
         // `w-64` and callers that widen the popup); the fallback covers the
         // first frame before it's set.
-        className="isolate z-60 w-[var(--positioner-width,16rem)]"
+        //
+        // `data-anchor-hidden` covers the detached-trigger + virtualization
+        // case: when the active trigger unmounts while the card is open, Base
+        // UI leaves a stale reference to the detached node and the popup gets
+        // repositioned to (0,0). The `hide` middleware sets this attribute when
+        // the rect collapses, so hiding the positioner here keeps the card
+        // from flashing into the top-left of the page.
+        className="isolate z-60 w-[var(--positioner-width,16rem)] data-anchor-hidden:invisible data-anchor-hidden:pointer-events-none"
       >
         <PreviewCardPrimitive.Popup
           data-slot="preview-card-content"

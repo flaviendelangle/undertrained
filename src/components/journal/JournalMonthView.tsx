@@ -179,6 +179,7 @@ function JournalMonthViewImpl({
           )}
         >
           <SelectPrimitive.Root
+            modal={false}
             value={visibleMonthValue}
             onValueChange={(value) => {
               if (value != null) {
