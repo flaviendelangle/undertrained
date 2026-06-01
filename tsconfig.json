@@ -2,7 +2,7 @@
   "compilerOptions": {
     /* Base Options: */
     "skipLibCheck": true,
-    "target": "es2022",
+    "target": "es2023",
     "allowJs": true,
     "moduleDetection": "force",
     "isolatedModules": true,
@@ -11,7 +11,7 @@
     "checkJs": true,
     "allowImportingTsExtensions": true,
     /* Bundled projects */
-    "lib": ["dom", "dom.iterable", "ES2022"],
+    "lib": ["dom", "dom.iterable", "ES2023"],
     "noEmit": true,
     "module": "Preserve",
     "moduleResolution": "bundler",

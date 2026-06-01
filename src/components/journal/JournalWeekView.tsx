@@ -108,12 +108,7 @@ function JournalWeekViewImpl({
   const { dateLocale } = useLocale();
   const localeOptions = { locale: dateLocale };
 
-  // Visual order is oldest → newest, left → right, so the across-week direction
-  // matches the within-week Mon → Sun direction. `useJournalWeeks` still hands
-  // us a newest-first array (the trend / verdict / month-flag math and the
-  // Month view both rely on that contract), so we reverse a copy locally for
-  // every index/order-sensitive operation in this view.
-  const renderedWeeks = React.useMemo(() => weeks.slice().reverse(), [weeks]);
+  const renderedWeeks = React.useMemo(() => weeks.toReversed(), [weeks]);
 
   // `pinnedIndex`: the destination of an in-flight programmatic jump. Forces
   // the target week to render even when it falls outside the virtualizer's
