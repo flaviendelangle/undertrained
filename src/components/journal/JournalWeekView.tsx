@@ -108,6 +108,8 @@ function JournalWeekViewImpl({
   const { dateLocale } = useLocale();
   const localeOptions = { locale: dateLocale };
 
+  const renderedWeeks = React.useMemo(() => weeks.toReversed(), [weeks]);
+
   // `pinnedIndex`: the destination of an in-flight programmatic jump. Forces
   // the target week to render even when it falls outside the virtualizer's
   // normal range, so the mandatory scroll-snap engine can find its snap-area
@@ -116,14 +118,14 @@ function JournalWeekViewImpl({
   const [pinnedIndex, setPinnedIndex] = React.useState<number | null>(null);
   const { virtualizer, weekWidth, containerWidth, activeIndex } =
     useWeekHorizontalVirtualizer({
-      count: weeks.length,
+      count: renderedWeeks.length,
       scrollRef,
       pinnedIndex,
     });
 
   // The week the picker label shows = whichever week the user has most centered
   // in the viewport, not the URL anchor (which only updates on scroll-stop).
-  const activeWeek = weeks[activeIndex] ?? week;
+  const activeWeek = renderedWeeks[activeIndex] ?? week;
 
   // Corner picker contents: every loaded week, newest first, grouped under its
   // month for scannability.
@@ -241,7 +243,7 @@ function JournalWeekViewImpl({
       return;
     }
     virtualizer.scrollToIndex(pendingScrollTarget, {
-      align: "start",
+      align: "end",
       behavior: "instant",
     });
     setPendingScrollTarget(null);
@@ -269,15 +271,15 @@ function JournalWeekViewImpl({
     if (didInitialHorizontalScroll.current) {
       return;
     }
-    if (weeks.length === 0 || containerWidth === 0) {
+    if (renderedWeeks.length === 0 || containerWidth === 0) {
       return;
     }
     didInitialHorizontalScroll.current = true;
     prevWeekWidth.current = weekWidth;
-    const index = weeks.findIndex(
+    const index = renderedWeeks.findIndex(
       (w) => w.weekStart.getTime() === anchorWeekTime,
     );
-    if (index > 0) {
+    if (index >= 0) {
       jumpToWeek(index);
     }
     const raf = requestAnimationFrame(() =>
@@ -286,7 +288,7 @@ function JournalWeekViewImpl({
       }),
     );
     return () => cancelAnimationFrame(raf);
-  }, [weeks, anchorWeekTime, jumpToWeek, containerWidth, weekWidth]);
+  }, [renderedWeeks, anchorWeekTime, jumpToWeek, containerWidth, weekWidth]);
 
   // Re-anchor after a width change so the visible week stays glued under the
   // user's eye (otherwise a window resize visibly shifts the calendar).
@@ -311,26 +313,27 @@ function JournalWeekViewImpl({
       return;
     }
     const currentIndex = Math.round(el.scrollLeft / previousWeekWidth);
-    virtualizer.scrollToIndex(currentIndex, { align: "start" });
+    virtualizer.scrollToIndex(currentIndex, { align: "end" });
   }, [weekWidth, virtualizer]);
 
-  // Re-anchor the scroll to the URL week whenever its index in `weeks` shifts.
-  // `useJournalWeeks` rebuilds the array when data trickles in (activities and
-  // planned trainings are separate queries); a planned training in the future
-  // extends `weeks` at the front (newest-first), pushing every existing week
-  // — including the URL anchor — to a higher index. Without this re-anchor the
-  // user's `scrollLeft = oldIndex * weekWidth` keeps pointing at the slot that
-  // now holds a *different* week (typically closer to today), looking exactly
-  // like the calendar quietly slid away from the URL anchor to today's week.
-  // Tracking `lastSyncedAnchorIndex` makes user-scroll → URL-sync round-trips a
-  // no-op: the index matches what we last synced to, so we don't fight a fresh
-  // scroll the user just made.
+  // Re-anchor the scroll to the URL week whenever its index in `renderedWeeks`
+  // shifts. `useJournalWeeks` rebuilds the array when data trickles in
+  // (activities and planned trainings are separate queries); an activity older
+  // than anything we'd seen extends `renderedWeeks` at the front, pushing every
+  // existing week — including the URL anchor — to a higher index. Without this
+  // re-anchor the user's `scrollLeft = oldIndex * weekWidth` keeps pointing at
+  // the slot that now holds a *different* week, looking exactly like the
+  // calendar quietly slid away from the URL anchor. Future-planned trainings
+  // extend `renderedWeeks` at the END, so they don't shift indices and this
+  // effect no-ops for that case. Tracking `lastSyncedAnchorIndex` makes
+  // user-scroll → URL-sync round-trips a no-op: the index matches what we last
+  // synced to, so we don't fight a fresh scroll the user just made.
   const lastSyncedAnchorIndex = React.useRef<number | null>(null);
   React.useLayoutEffect(() => {
     if (!didInitialHorizontalScroll.current) {
       return;
     }
-    const index = weeks.findIndex(
+    const index = renderedWeeks.findIndex(
       (w) => w.weekStart.getTime() === anchorWeekTime,
     );
     if (index < 0) {
@@ -350,22 +353,22 @@ function JournalWeekViewImpl({
       return;
     }
     jumpToWeek(index);
-  }, [weeks, anchorWeekTime, weekWidth, jumpToWeek]);
+  }, [renderedWeeks, anchorWeekTime, weekWidth, jumpToWeek]);
 
   // Re-scroll on explicit request (e.g. the "Today" menu item bumps the nonce);
   // the initial nonce is skipped so this never double-fires with the mount.
   const initialNonce = React.useRef(scrollNonce);
   React.useEffect(() => {
-    if (scrollNonce === initialNonce.current || weeks.length === 0) {
+    if (scrollNonce === initialNonce.current || renderedWeeks.length === 0) {
       return;
     }
-    const index = weeks.findIndex(
+    const index = renderedWeeks.findIndex(
       (w) => w.weekStart.getTime() === anchorWeekTime,
     );
     if (index >= 0) {
       jumpToWeek(index);
     }
-  }, [scrollNonce, weeks, anchorWeekTime, jumpToWeek]);
+  }, [scrollNonce, renderedWeeks, anchorWeekTime, jumpToWeek]);
 
   // ---- Vertical scroll: only once on mount, not on every cross-week snap ----
 
@@ -398,7 +401,7 @@ function JournalWeekViewImpl({
   // 17.4+); the 150 ms idle timer covers older browsers and lazy trackpad
   // settles where `scrollend` is delayed.
   const onSelectWeekRef = useValueAsRef(onSelectWeek);
-  const weeksRef = useValueAsRef(weeks);
+  const renderedWeeksRef = useValueAsRef(renderedWeeks);
   const weekWidthRef = useValueAsRef(weekWidth);
   React.useEffect(() => {
     const el = scrollRef.current;
@@ -414,7 +417,7 @@ function JournalWeekViewImpl({
       if (width <= 0) {
         return;
       }
-      const list = weeksRef.current;
+      const list = renderedWeeksRef.current;
       const i = Math.min(
         list.length - 1,
         Math.max(0, Math.round(el.scrollLeft / width)),
@@ -446,7 +449,7 @@ function JournalWeekViewImpl({
         window.clearTimeout(timer);
       }
     };
-  }, [onSelectWeekRef, weeksRef, weekWidthRef]);
+  }, [onSelectWeekRef, renderedWeeksRef, weekWidthRef]);
 
   const totalSize = virtualizer.getTotalSize();
 
@@ -460,11 +463,11 @@ function JournalWeekViewImpl({
           // get an instant jump.
           "motion-safe:[scroll-behavior:smooth]",
           // Snap one week per page so the view always rests on a clean week
-          // boundary; scroll-padding accounts for the sticky hour-axis gutter
-          // so the first day column sits flush against it after a snap.
+          // boundary. Each WeekBlock is `scroll-snap-align: end`, so the snap
+          // engine targets the right edge of the viewport — which has no
+          // sticky obstruction, so no scroll-padding is needed.
           "[scroll-snap-type:x_mandatory]",
         )}
-        style={{ scrollPaddingLeft: GUTTER_WIDTH_PX }}
       >
         <DragDropProvider
           sensors={SENSORS}
@@ -500,7 +503,7 @@ function JournalWeekViewImpl({
                 modal={false}
                 value={format(activeWeek.weekStart, "yyyy-MM-dd")}
                 onValueChange={(value) => {
-                  const targetIndex = weeks.findIndex(
+                  const targetIndex = renderedWeeks.findIndex(
                     (item) => format(item.weekStart, "yyyy-MM-dd") === value,
                   );
                   if (targetIndex >= 0) {
@@ -568,7 +571,7 @@ function JournalWeekViewImpl({
               }}
             >
               {virtualizer.getVirtualItems().map((item) => {
-                const w = weeks[item.index];
+                const w = renderedWeeks[item.index];
                 return (
                   <WeekBlock
                     key={w.weekStart.toISOString()}
@@ -582,7 +585,7 @@ function JournalWeekViewImpl({
                       left: item.start,
                       width: item.size,
                       height: HEADER_HEIGHT_PX + TOTAL_HEIGHT,
-                      scrollSnapAlign: "start",
+                      scrollSnapAlign: "end",
                     }}
                   />
                 );
