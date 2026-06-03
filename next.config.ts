@@ -24,6 +24,10 @@ const routesEnabled = process.env.ROUTES_ENABLED === "true";
  */
 export default {
   output: "standalone",
+  // PostHog's ingestion endpoints use trailing slashes (e.g. /e/). Without this,
+  // Next.js's automatic trailing-slash redirect would break event capture sent
+  // through the /ingest reverse proxy below.
+  skipTrailingSlashRedirect: true,
   // Disables the dev-mode static/dynamic indicator badge. It's purely cosmetic,
   // and the Pages Router HMR client crashes updating it (reads
   // `window.next.router.components` without a null guard before the router has
@@ -49,6 +53,27 @@ export default {
         source: "/map",
         destination: "/map/heatmap",
         permanent: false,
+      },
+    ];
+  },
+  // PostHog analytics reverse proxy (EU region). Routing analytics through our
+  // own origin under /ingest/* means the strict CSP in src/proxy.ts needs no
+  // external hosts (everything stays 'self') and tracker blockers can't block
+  // it. The /static and /array rewrites MUST come before the catch-all.
+  // See https://posthog.com/docs/advanced/proxy/nextjs
+  async rewrites() {
+    return [
+      {
+        source: "/ingest/static/:path*",
+        destination: "https://eu-assets.i.posthog.com/static/:path*",
+      },
+      {
+        source: "/ingest/array/:path*",
+        destination: "https://eu-assets.i.posthog.com/array/:path*",
+      },
+      {
+        source: "/ingest/:path*",
+        destination: "https://eu.i.posthog.com/:path*",
       },
     ];
   },

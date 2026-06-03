@@ -11,6 +11,7 @@ import { CookiesProvider } from "react-cookie";
 import { LicenseInfo } from "@mui/x-license";
 
 import { ErrorBoundary } from "~/components/ErrorBoundary";
+import { PostHogProvider } from "~/components/PostHogProvider";
 import { LoggedInLayout } from "~/components/layouts/LoggedInLayout";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import "~/styles/globals.css";
@@ -45,11 +46,13 @@ const App = (({
       </Head>
       <CookiesProvider>
         <SessionProvider session={session}>
-          <TooltipProvider>
-            <ErrorBoundary>
-              {getLayout(<Component {...pageProps} />)}
-            </ErrorBoundary>
-          </TooltipProvider>
+          <PostHogProvider>
+            <TooltipProvider>
+              <ErrorBoundary>
+                {getLayout(<Component {...pageProps} />)}
+              </ErrorBoundary>
+            </TooltipProvider>
+          </PostHogProvider>
         </SessionProvider>
       </CookiesProvider>
     </ThemeProvider>
