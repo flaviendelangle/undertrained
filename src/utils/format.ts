@@ -70,3 +70,25 @@ export function formatNumber(value: number, decimals = 1): string {
 export function formatActivityType(activityType: string): string {
   return activityType.replace(/([A-Z])/g, " $1").trim();
 }
+
+const EN_ORDINAL_SUFFIX: Record<Intl.LDMLPluralRule, string> = {
+  one: "st",
+  two: "nd",
+  few: "rd",
+  other: "th",
+  zero: "th",
+  many: "th",
+};
+const enOrdinalRules = new Intl.PluralRules("en-US", { type: "ordinal" });
+
+/**
+ * Locale-aware ordinal, e.g. "4th" (en) / "4e" (fr). English suffixes follow
+ * `Intl.PluralRules` (1st/2nd/3rd/4th…); French uses "1er" then "Ne".
+ */
+export function formatOrdinal(n: number): string {
+  const lang = getActiveDateLocale().code.split("-")[0];
+  if (lang === "fr") {
+    return n === 1 ? "1er" : `${n}e`;
+  }
+  return `${n}${EN_ORDINAL_SUFFIX[enOrdinalRules.select(n)]}`;
+}

@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 
 import {
   ChartsReferenceLine,
@@ -159,11 +159,15 @@ export default function FitnessChart() {
                   // tooltip still shows the exact day on hover.
                   tickInterval: (value: Date) => value.getDate() === 1,
                   valueFormatter: (value: Date, ctx) =>
-                    ctx?.location === "tick"
-                      ? format(value, "MMM yyyy", { locale: getActiveDateLocale() })
-                      : format(value, "d MMM yyyy", {
-                          locale: getActiveDateLocale(),
-                        }),
+                    !isValid(value)
+                      ? ""
+                      : ctx?.location === "tick"
+                        ? format(value, "MMM yyyy", {
+                            locale: getActiveDateLocale(),
+                          })
+                        : format(value, "d MMM yyyy", {
+                            locale: getActiveDateLocale(),
+                          }),
                   zoom: {
                     filterMode: "keep",
                     minSpan: minZoomSpan,

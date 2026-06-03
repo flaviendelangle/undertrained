@@ -60,6 +60,60 @@ const createRunningMetricLabels = (
 const LONGEST_MEASURES = ["distance", "duration", "load"] as const;
 type LongestMeasure = (typeof LONGEST_MEASURES)[number];
 
+const CYCLING_METRICS: readonly CyclingMetric[] = [
+  "power",
+  "speed",
+  "elevation_total",
+  "biggest_climb",
+  "heartrate",
+  "distance",
+  "duration",
+  "load",
+];
+const RUNNING_METRICS: readonly RunningMetric[] = [
+  "pace",
+  "heartrate",
+  "distance",
+  "duration",
+  "load",
+];
+
+/**
+ * Initial selection deep-linked via query params (e.g. from the activity-detail
+ * "Personal records" card): `?sport=cycling&metric=power&duration=1200`. Read
+ * once from the URL — the explorer page is client-only, so `window` is present.
+ */
+function readUrlSelection(): {
+  sport?: Sport;
+  metric?: string;
+  duration?: number;
+  distance?: number;
+  name?: string;
+} {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  const p = new URLSearchParams(window.location.search);
+  const sportParam = p.get("sport");
+  // Treat malformed numerics as absent (fall back to the default) rather than
+  // seeding NaN into state — `NaN ?? default` is NaN, which the server rejects.
+  const positiveInt = (raw: string | null): number | undefined => {
+    if (!raw) return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  return {
+    sport:
+      sportParam === "cycling" || sportParam === "running"
+        ? sportParam
+        : undefined,
+    metric: p.get("metric") ?? undefined,
+    duration: positiveInt(p.get("duration")),
+    distance: positiveInt(p.get("distance")),
+    name: p.get("name") ?? undefined,
+  };
+}
+
 /** One normalised leaderboard row, ready to render regardless of metric. */
 export interface Entry {
   stravaId: number;
@@ -146,14 +200,31 @@ export function useRecordsExplorer(): RecordsExplorer {
     return opts;
   }, [options]);
 
-  const [sport, setSport] = React.useState<Sport>("cycling");
-  const [cyclingMetric, setCyclingMetric] =
-    React.useState<CyclingMetric>("power");
-  const [runningMetric, setRunningMetric] =
-    React.useState<RunningMetric>("pace");
-  const [duration, setDuration] = React.useState(1200); // power/HR: 20 min
-  const [speedDistance, setSpeedDistance] = React.useState(40000); // speed: 40 km
-  const [distanceName, setDistanceName] = React.useState<string | null>(null);
+  const [urlSelection] = React.useState(readUrlSelection);
+  const [sport, setSport] = React.useState<Sport>(
+    urlSelection.sport ?? "cycling",
+  );
+  const [cyclingMetric, setCyclingMetric] = React.useState<CyclingMetric>(() =>
+    urlSelection.sport === "cycling" &&
+    (CYCLING_METRICS as readonly string[]).includes(urlSelection.metric ?? "")
+      ? (urlSelection.metric as CyclingMetric)
+      : "power",
+  );
+  const [runningMetric, setRunningMetric] = React.useState<RunningMetric>(() =>
+    urlSelection.sport === "running" &&
+    (RUNNING_METRICS as readonly string[]).includes(urlSelection.metric ?? "")
+      ? (urlSelection.metric as RunningMetric)
+      : "pace",
+  );
+  const [duration, setDuration] = React.useState(
+    urlSelection.duration ?? 1200, // power/HR: 20 min
+  );
+  const [speedDistance, setSpeedDistance] = React.useState(
+    urlSelection.distance ?? 40000, // speed: 40 km
+  );
+  const [distanceName, setDistanceName] = React.useState<string | null>(
+    urlSelection.name ?? null,
+  );
 
   // Adjust dependent state when `options` load (during render rather than in an
   // effect, to avoid an extra render pass).

@@ -119,6 +119,25 @@ describe("computeFitnessSeries", () => {
     };
     expect(computeFitnessSeries([noLoad], PREFS)).toEqual([]);
   });
+
+  it("skips activities with an unparseable local date instead of collapsing to empty", () => {
+    const corrupt: FitnessActivity = {
+      type: "Ride",
+      tss: 100,
+      hrss: null,
+      startDateLocal: "",
+    };
+    const series = computeFitnessSeries(
+      [corrupt, ride("2024-01-01", 100), ride("2024-01-03", 100)],
+      PREFS,
+      { endDate: new Date(2024, 0, 3) },
+    );
+
+    // The corrupt row is dropped; the rest still produce a normal span.
+    expect(series).toHaveLength(3);
+    expect(localDay(series[0].date)).toBe("2024-01-01");
+    expect(localDay(series[2].date)).toBe("2024-01-03");
+  });
 });
 
 describe("classifyForm", () => {

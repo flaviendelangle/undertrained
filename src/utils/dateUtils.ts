@@ -12,6 +12,7 @@ import {
   isSameQuarter,
   isSameWeek,
   isSameYear,
+  isValid,
   startOfMonth,
   startOfQuarter,
   startOfWeek,
@@ -72,6 +73,14 @@ export function addUnit(
  * week's start day rather than just "MM/yyyy").
  */
 export function formatSlice(date: Date, precision: SlicePrecision): string {
+  // Defensive: an unparseable activity date can flow through to a slice and
+  // reach this axis formatter. date-fns `format` throws "Invalid time value"
+  // on an invalid Date, which (uncaught in a chart valueFormatter) takes down
+  // the whole Statistics page via the error boundary. Render a blank tick
+  // instead. The upstream hooks now drop such activities, so this is a backstop.
+  if (!isValid(date)) {
+    return "";
+  }
   switch (precision) {
     case "year":
       return format(date, "yyyy", localeOptions());

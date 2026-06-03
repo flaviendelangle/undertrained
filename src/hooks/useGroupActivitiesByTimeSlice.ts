@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { isAfter } from "date-fns";
+import { isAfter, isValid } from "date-fns";
 
 import type { ListActivity } from "@server/db/types";
 
@@ -45,10 +45,13 @@ export const useGroupActivitiesByTimeSlice = ({
     }
 
     for (const activity of activities ?? []) {
-      const normalizedKey = startOf(
-        new Date(activity.startDate),
-        precision,
-      ).toISOString();
+      const activityDate = new Date(activity.startDate);
+      // An unparseable `startDate` yields an Invalid Date whose `.toISOString()`
+      // throws "Invalid time value", crashing the Statistics page. Drop the row.
+      if (!isValid(activityDate)) {
+        continue;
+      }
+      const normalizedKey = startOf(activityDate, precision).toISOString();
       const slice = sliceByKey.get(normalizedKey);
       if (slice) {
         temp[slice.toISOString()].activities.push(activity);

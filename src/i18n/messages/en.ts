@@ -447,6 +447,19 @@ const en = {
           "No records computed yet — run a sync (or recompute scores) to build them from your rides.",
       },
     },
+    personalRecords: {
+      title: "Personal Records",
+      hint: "Every ranking where this activity lands in your all-time top 25.",
+      allTimeBest: "All-time best",
+      group: {
+        power: "Power",
+        speed: "Speed",
+        heartRate: "Heart rate",
+        climbing: "Climbing",
+        overall: "Volume",
+        bestEfforts: "Best efforts",
+      },
+    },
     laps: {
       title: "Laps",
       power: "Power",

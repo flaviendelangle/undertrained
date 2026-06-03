@@ -1,14 +1,19 @@
 import type { SQL } from "drizzle-orm";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "../../db";
-import { riderSettings } from "../../db/schema";
+import { activities, riderSettings } from "../../db/schema";
 import { CYCLING_POWER_DURATIONS } from "../../../utils/cyclingPowerDurations";
+import { CYCLING_SPEED_DISTANCE_METERS } from "../../../utils/cyclingRecordDistances";
 import { getActivityTypesByCategory } from "../../../utils/sportConfig";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 const DEFAULT_LIMIT = 25;
+// The curated duration set the Personal Bests explorer offers for power & HR.
+const CYCLING_POWER_DURATION_SECONDS = CYCLING_POWER_DURATIONS.map(
+  (d) => d.seconds,
+);
 const CYCLING_TYPES = getActivityTypesByCategory("cycling");
 const RUNNING_TYPES = getActivityTypesByCategory("running");
 // Speed/elevation records exclude virtual rides (simulated distance/altitude).
@@ -73,6 +78,94 @@ const leaderboardInput = z.object({
   athleteId: z.number(),
   limit: z.number().int().positive().max(100).default(DEFAULT_LIMIT),
 });
+
+/** Which leaderboard a single {@link ActivityRanking} belongs to. */
+type RankingCategory =
+  | "power"
+  | "speed"
+  | "heartrate"
+  | "biggestClimb"
+  | "totalElevation"
+  | "distance"
+  | "duration"
+  | "load"
+  | "runEffort";
+
+/** One leaderboard placing held by a single activity (rank ≤ limit). */
+interface ActivityRanking {
+  category: RankingCategory;
+  /**
+   * The metric's parameter: duration (s) for power/HR, distance (m) for speed,
+   * the best-effort name (e.g. "10K") for run efforts, or `null` for the
+   * whole-activity scalars (distance/duration/load/elevation).
+   */
+  paramKey: number | string | null;
+  /** 1-based rank among the athlete's activities (ties share a place). */
+  rank: number;
+  /** Raw value behind the rank: watts / seconds / bpm / meters / load points. */
+  value: number;
+  /** Distance (m) for speed & run efforts, so the client can derive a pace/speed sub-label. */
+  distance?: number;
+}
+
+/**
+ * Ranks a single activity within every key of a jsonb `_bests` column at once —
+ * the windowed `jsonb_each_text` pattern from {@link analyticsRouter.getPowerCurve},
+ * but filtered to one activity and kept only where it places in the top `limit`.
+ * One query covers all durations/distances (vs one query per key).
+ */
+async function rankJsonbBests(
+  db: Database,
+  opts: {
+    athleteId: number;
+    stravaId: number;
+    column: SQL;
+    order: SQL;
+    typeFilter?: SQL;
+    /** Only rank these keys (the curated durations/distances the explorer offers). */
+    keys?: readonly number[];
+    limit: number;
+  },
+): Promise<{ param: number; value: number; rank: number }[]> {
+  // Restrict to the curated key set so the card mirrors the Personal Bests page
+  // exactly (it never offers ad-hoc durations like 9:30). Filtering keys can't
+  // change a kept duration's rank — ranking is partitioned per key.
+  const keyFilter =
+    opts.keys && opts.keys.length > 0
+      ? sql`AND (kv.key)::int IN (${sql.join(
+          opts.keys.map((k) => sql`${k}`),
+          sql`, `,
+        )})`
+      : sql``;
+  const rows = await db.execute<{ param: string; value: string; rank: string }>(sql`
+    WITH unnested AS (
+      SELECT a.strava_id, (kv.key)::int AS param, (kv.value)::int AS value
+      FROM activities a,
+      LATERAL jsonb_each_text(${opts.column}) AS kv(key, value)
+      WHERE a.athlete = ${opts.athleteId}
+        AND ${opts.column} IS NOT NULL
+        ${opts.typeFilter ?? sql``}
+        ${keyFilter}
+    ),
+    ranked AS (
+      SELECT
+        strava_id,
+        param,
+        value,
+        RANK() OVER (PARTITION BY param ORDER BY value ${opts.order}) AS rn
+      FROM unnested
+    )
+    SELECT param, value, rn AS rank
+    FROM ranked
+    WHERE strava_id = ${opts.stravaId} AND rn <= ${opts.limit}
+    ORDER BY param
+  `);
+  return rows.map((r) => ({
+    param: Number(r.param),
+    value: Number(r.value),
+    rank: Number(r.rank),
+  }));
+}
 
 export const recordsRouter = router({
   /**
@@ -239,6 +332,243 @@ export const recordsRouter = router({
         stravaId,
         records,
       }));
+    }),
+
+  /**
+   * Every leaderboard on which a single activity places in the all-time top
+   * {@link DEFAULT_LIMIT} — backs the activity-detail "Personal records" card.
+   *
+   * Cost: one windowed query per metric *family* (power/speed/HR each rank all
+   * their durations/distances in a single pass — the getPowerCurve pattern), one
+   * bundled COUNT query for the whole-activity scalars, and one window over
+   * `best_efforts` for runs. The applicable families are dispatched concurrently
+   * (one round-trip each) to overlap latency, so the cost stays close to a
+   * single getPowerCurve rather than one query per duration.
+   *
+   * Ranks use RANK() (exact-value ties share a place) so they read as "4th";
+   * this can differ from the explorer's `ORDER BY … LIMIT` tie-break on the rare
+   * tie, but matches the intuitive "are you top 25 by this value" question.
+   */
+  getActivityRankings: protectedProcedure
+    .input(z.object({ athleteId: z.number(), stravaId: z.number() }))
+    .use(validateAthleteOwnership)
+    .query(async ({ ctx, input }): Promise<ActivityRanking[]> => {
+      const limit = DEFAULT_LIMIT;
+
+      // Only the scalar columns are needed here — skip the heavy `_bests` jsonb.
+      const [activity] = await ctx.db
+        .select({
+          type: activities.type,
+          distance: activities.distance,
+          movingTime: activities.movingTime,
+          biggestClimb: activities.biggestClimb,
+          totalElevationGain: activities.totalElevationGain,
+          tss: activities.tss,
+          hrss: activities.hrss,
+        })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.stravaId, input.stravaId),
+            eq(activities.athlete, input.athleteId),
+          ),
+        )
+        .limit(1);
+
+      const isCycling = activity ? CYCLING_TYPES.includes(activity.type) : false;
+      const isRunning = activity ? RUNNING_TYPES.includes(activity.type) : false;
+      // Records only exist for cycling/running; bail for anything else.
+      if (!activity || (!isCycling && !isRunning)) {
+        return [];
+      }
+      const isNonVirtualCycling = NON_VIRTUAL_CYCLING_TYPES.includes(
+        activity.type,
+      );
+      const sportTypes = typeList(isCycling ? CYCLING_TYPES : RUNNING_TYPES);
+
+      // `load` ranking mirrors getLongestActivityLeaderboard: rank by the
+      // athlete's preferred per-sport score, falling back to the other.
+      const settings = await ctx.db.query.riderSettings.findFirst({
+        where: eq(riderSettings.athlete, input.athleteId),
+      });
+      const algorithm = isCycling
+        ? settings?.cyclingLoadAlgorithm
+        : settings?.runningLoadAlgorithm;
+      const loadExpr =
+        algorithm === "hrss"
+          ? sql`COALESCE(a.hrss, a.tss)`
+          : sql`COALESCE(a.tss, a.hrss)`;
+      const targetLoad =
+        algorithm === "hrss"
+          ? (activity.hrss ?? activity.tss)
+          : (activity.tss ?? activity.hrss);
+
+      const tasks: Promise<ActivityRanking[]>[] = [];
+
+      // ── Whole-activity scalars: one round-trip, each a COUNT(strictly-better)+1.
+      // Disabled metrics select NULL; elevation is non-virtual-cycling only. This
+      // avoids any sort — just indexed athlete scans — so it's the cheapest family.
+      tasks.push(
+        (async () => {
+          const rankExpr = (typesSql: SQL, valueExpr: SQL, target: number) =>
+            sql`(SELECT COUNT(*) FROM activities a WHERE a.athlete = ${input.athleteId} AND a.type IN (${typesSql}) AND ${valueExpr} > ${target}) + 1`;
+          const orNull = (
+            enabled: boolean,
+            typesSql: SQL,
+            valueExpr: SQL,
+            target: number,
+          ) => (enabled ? rankExpr(typesSql, valueExpr, target) : sql`NULL`);
+
+          const nonVirtual = typeList(NON_VIRTUAL_CYCLING_TYPES);
+          const wantLoad = targetLoad != null && targetLoad > 0;
+          const wantClimb = isNonVirtualCycling && (activity.biggestClimb ?? 0) > 0;
+          const wantTotalElev =
+            isNonVirtualCycling && activity.totalElevationGain > 0;
+
+          const [row] = await ctx.db.execute<{
+            distance_rank: string | null;
+            duration_rank: string | null;
+            load_rank: string | null;
+            climb_rank: string | null;
+            total_elev_rank: string | null;
+          }>(sql`
+            SELECT
+              ${orNull(activity.distance > 0, sportTypes, sql`a.distance`, activity.distance)} AS distance_rank,
+              ${orNull(activity.movingTime > 0, sportTypes, sql`a.moving_time`, activity.movingTime)} AS duration_rank,
+              ${orNull(wantLoad, sportTypes, loadExpr, targetLoad ?? 0)} AS load_rank,
+              ${orNull(wantClimb, nonVirtual, sql`a.biggest_climb`, activity.biggestClimb ?? 0)} AS climb_rank,
+              ${orNull(wantTotalElev, nonVirtual, sql`a.total_elevation_gain`, activity.totalElevationGain)} AS total_elev_rank
+          `);
+
+          const out: ActivityRanking[] = [];
+          const add = (
+            category: RankingCategory,
+            rankStr: string | null | undefined,
+            value: number,
+          ) => {
+            if (rankStr == null) return;
+            const rank = Number(rankStr);
+            if (rank <= limit) {
+              out.push({ category, paramKey: null, rank, value });
+            }
+          };
+          add("distance", row?.distance_rank, activity.distance);
+          add("duration", row?.duration_rank, activity.movingTime);
+          if (wantLoad) add("load", row?.load_rank, targetLoad);
+          add("biggestClimb", row?.climb_rank, activity.biggestClimb ?? 0);
+          add("totalElevation", row?.total_elev_rank, activity.totalElevationGain);
+          return out;
+        })(),
+      );
+
+      // ── Heart rate (both sports), all durations at once.
+      tasks.push(
+        rankJsonbBests(ctx.db, {
+          athleteId: input.athleteId,
+          stravaId: input.stravaId,
+          column: sql`a.heartrate_bests`,
+          order: sql`DESC`,
+          typeFilter: sql`AND a.type IN (${sportTypes})`,
+          keys: CYCLING_POWER_DURATION_SECONDS,
+          limit,
+        }).then((rows) =>
+          rows.map((r) => ({
+            category: "heartrate" as const,
+            paramKey: r.param,
+            rank: r.rank,
+            value: r.value,
+          })),
+        ),
+      );
+
+      if (isCycling) {
+        // Power — cycling types, all durations at once.
+        tasks.push(
+          rankJsonbBests(ctx.db, {
+            athleteId: input.athleteId,
+            stravaId: input.stravaId,
+            column: sql`a.power_bests`,
+            order: sql`DESC`,
+            typeFilter: sql`AND a.type IN (${typeList(CYCLING_TYPES)})`,
+            keys: CYCLING_POWER_DURATION_SECONDS,
+            limit,
+          }).then((rows) =>
+            rows.map((r) => ({
+              category: "power" as const,
+              paramKey: r.param,
+              rank: r.rank,
+              value: r.value,
+            })),
+          ),
+        );
+        // Speed — no type filter (mirrors getCyclingSpeedLeaderboard); fastest = ASC.
+        tasks.push(
+          rankJsonbBests(ctx.db, {
+            athleteId: input.athleteId,
+            stravaId: input.stravaId,
+            column: sql`a.speed_efforts`,
+            order: sql`ASC`,
+            keys: CYCLING_SPEED_DISTANCE_METERS,
+            limit,
+          }).then((rows) =>
+            rows.map((r) => ({
+              category: "speed" as const,
+              paramKey: r.param,
+              rank: r.rank,
+              value: r.value,
+              distance: r.param,
+            })),
+          ),
+        );
+      }
+
+      if (isRunning) {
+        // Run best efforts — each distance label ranked by elapsed time (fastest first).
+        tasks.push(
+          (async () => {
+            const rows = await ctx.db.execute<{
+              name: string;
+              elapsed_time: string;
+              distance: string;
+              rank: string;
+            }>(sql`
+              WITH ranked AS (
+                SELECT
+                  be.name,
+                  a.strava_id,
+                  be.elapsed_time,
+                  be.distance,
+                  RANK() OVER (PARTITION BY be.name ORDER BY be.elapsed_time ASC) AS rn
+                FROM best_efforts be
+                JOIN activities a ON a.id = be.activity_id
+                WHERE a.athlete = ${input.athleteId}
+              )
+              SELECT name, elapsed_time, distance, rn AS rank
+              FROM ranked
+              WHERE strava_id = ${input.stravaId} AND rn <= ${limit}
+            `);
+            // One activity may log the same distance twice — keep its best rank.
+            const byName = new Map<string, ActivityRanking>();
+            for (const r of rows) {
+              const rank = Number(r.rank);
+              const existing = byName.get(r.name);
+              if (!existing || rank < existing.rank) {
+                byName.set(r.name, {
+                  category: "runEffort",
+                  paramKey: r.name,
+                  rank,
+                  value: Number(r.elapsed_time),
+                  distance: Number(r.distance),
+                });
+              }
+            }
+            return Array.from(byName.values());
+          })(),
+        );
+      }
+
+      const results = await Promise.all(tasks);
+      return results.flat();
     }),
 
   /**

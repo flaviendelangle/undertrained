@@ -458,6 +458,19 @@ const fr: Messages = {
           "Aucun record calculé pour l'instant — lancez une synchronisation (ou recalculez les scores) pour les générer à partir de vos sorties.",
       },
     },
+    personalRecords: {
+      title: "Records personnels",
+      hint: "Chaque classement où cette activité figure dans votre top 25 de tous les temps.",
+      allTimeBest: "Record absolu",
+      group: {
+        power: "Puissance",
+        speed: "Vitesse",
+        heartRate: "Fréquence cardiaque",
+        climbing: "Dénivelé",
+        overall: "Volume",
+        bestEfforts: "Meilleurs efforts",
+      },
+    },
     laps: {
       title: "Tours",
       power: "Puissance",

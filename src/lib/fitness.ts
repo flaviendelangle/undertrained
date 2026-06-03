@@ -1,4 +1,4 @@
-import { addDays, differenceInCalendarDays } from "date-fns";
+import { addDays, differenceInCalendarDays, isValid } from "date-fns";
 
 import { getActivityLoad, type LoadAlgorithmPreferences } from "~/utils/getActivityLoad";
 
@@ -163,6 +163,12 @@ export function computeFitnessSeries(
   const loadByDay = new Map<string, number>();
   for (const activity of activities) {
     const dayKey = activity.startDateLocal.slice(0, DAY_KEY_LENGTH);
+    // Drop activities with an unparseable local date: an invalid key would
+    // otherwise anchor `firstDay`/`lastDay` to an Invalid Date and collapse the
+    // whole series to empty (a blank Fitness chart from one corrupt row).
+    if (!isValid(parseDayKey(dayKey))) {
+      continue;
+    }
     const load = getActivityLoad(activity, preferences).value ?? 0;
     loadByDay.set(dayKey, (loadByDay.get(dayKey) ?? 0) + load);
   }

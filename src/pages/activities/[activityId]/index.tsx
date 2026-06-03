@@ -14,6 +14,7 @@ import { ElevationProfile } from "~/components/ElevationProfile";
 import { PageTitle } from "~/components/PageTitle";
 import { ActivityLaps } from "~/components/charts/ActivityLaps";
 import { ActivityStreams } from "~/components/charts/ActivityStreams";
+import { ActivityPersonalRecords } from "~/components/charts/PersonalRecords/ActivityPersonalRecords";
 import { PowerCurve } from "~/components/charts/PowerCurve";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
@@ -304,6 +305,10 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
               laps={activity.laps}
             />
             {hasPower && <PowerCurve stravaId={activity.stravaId} />}
+            <ActivityPersonalRecords
+              stravaId={activity.stravaId}
+              activityType={activity.type}
+            />
           </div>
         </ChartCardSurfaceProvider>
       </div>
