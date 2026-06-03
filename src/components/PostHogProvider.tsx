@@ -19,6 +19,10 @@ if (typeof window !== "undefined" && posthogKey) {
     // Modern defaults: SPA-aware $pageview (fires on history changes, so Pages
     // Router client navigations are tracked), $pageleave, and autocapture.
     defaults: "2025-05-24",
+    // Error tracking: auto-capture unhandled exceptions and promise rejections
+    // as $exception events. The handler script lazy-loads from /ingest/static
+    // (same origin), so the strict CSP needs no change.
+    capture_exceptions: true,
     // Don't create a person profile for anonymous, pre-login traffic; only
     // identified athletes get one. Keeps the person list and usage lean.
     person_profiles: "identified_only",

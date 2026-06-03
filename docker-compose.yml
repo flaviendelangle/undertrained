@@ -19,6 +19,12 @@ services:
       context: .
       args:
         NEXT_PUBLIC_MUI_X_LICENSE_KEY: ${NEXT_PUBLIC_MUI_X_LICENSE_KEY}
+        # PostHog: public token is inlined into the client bundle at build time;
+        # the personal API key + project id drive source-map upload during build.
+        # All read from this directory's .env (same as the MUI key above).
+        NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY}
+        POSTHOG_API_KEY: ${POSTHOG_API_KEY}
+        POSTHOG_PROJECT_ID: ${POSTHOG_PROJECT_ID}
     restart: unless-stopped
     depends_on:
       postgres:

@@ -6,6 +6,11 @@ FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
+# pnpm v10 blocks dependency build scripts by default. @posthog/cli's postinstall
+# downloads the binary that withPostHogConfig uses to upload source maps during
+# `pnpm build`; without it the build would fail when POSTHOG_API_KEY is set.
+# Rebuild it explicitly so the binary is present regardless of pnpm's allowlist.
+RUN pnpm rebuild @posthog/cli
 
 # ── Build ───────────────────────────────────────────────────────────────
 FROM base AS builder
@@ -14,6 +19,17 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ARG NEXT_PUBLIC_MUI_X_LICENSE_KEY
 ENV NEXT_PUBLIC_MUI_X_LICENSE_KEY=$NEXT_PUBLIC_MUI_X_LICENSE_KEY
+# PostHog public project token — a NEXT_PUBLIC_ var, so it must be present at
+# build time to be inlined into the client bundle (runtime env is too late).
+ARG NEXT_PUBLIC_POSTHOG_KEY
+ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
+# PostHog source-map upload credentials. Build-time only: these ARGs live in the
+# builder stage and are NOT carried into the runner image below. POSTHOG_API_KEY
+# is a personal API key scoped to error-tracking write.
+ARG POSTHOG_API_KEY
+ENV POSTHOG_API_KEY=$POSTHOG_API_KEY
+ARG POSTHOG_PROJECT_ID
+ENV POSTHOG_PROJECT_ID=$POSTHOG_PROJECT_ID
 RUN pnpm build
 
 # ── Runner ──────────────────────────────────────────────────────────────

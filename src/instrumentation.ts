@@ -1,3 +1,5 @@
+import type { Instrumentation } from "next";
+
 import { eq, inArray } from "drizzle-orm";
 
 import { db } from "./server/db";
@@ -48,4 +50,60 @@ export async function register() {
   // which only happens after register() resolves. ensureWebhookSubscription
   // handles its own errors, so a floating promise here is safe.
   void ensureWebhookSubscription();
+}
+
+/**
+ * Forward server-side errors (SSR render, page data fetching, non-tRPC API
+ * routes) to PostHog error tracking. tRPC failures are captured separately in
+ * the tRPC handler's onError with richer context; this is the catch-all for
+ * everything else that bubbles up to Next's request handling.
+ */
+export const onRequestError: Instrumentation.onRequestError = async (
+  err,
+  request,
+) => {
+  // posthog-node is Node-only; never attempt to load it in the edge runtime.
+  if (process.env.NEXT_RUNTIME !== "nodejs") {
+    return;
+  }
+  const { getPostHogServer } = await import("./server/posthog");
+  const posthog = getPostHogServer();
+  if (!posthog) {
+    return;
+  }
+  posthog.captureException(err, distinctIdFromCookie(request.headers.cookie), {
+    path: request.path,
+  });
+};
+
+/**
+ * Best-effort extraction of the PostHog distinct_id from the request cookies so
+ * server-side errors are attributed to the right person. posthog-js stores its
+ * state in a `ph_<project_key>_posthog` cookie holding JSON with `distinct_id`.
+ */
+function distinctIdFromCookie(
+  cookieHeader: string | string[] | undefined,
+): string | undefined {
+  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  if (!cookieHeader || !key) {
+    return undefined;
+  }
+  const cookie = Array.isArray(cookieHeader)
+    ? cookieHeader.join("; ")
+    : cookieHeader;
+  const name = `ph_${key}_posthog`;
+  const entry = cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+  if (!entry) {
+    return undefined;
+  }
+  try {
+    const value = decodeURIComponent(entry.slice(name.length + 1));
+    const parsed = JSON.parse(value) as { distinct_id?: string };
+    return parsed.distinct_id;
+  } catch {
+    return undefined;
+  }
 }

@@ -1,4 +1,5 @@
 // @ts-check
+import { withPostHogConfig } from "@posthog/nextjs-config";
 import { NextConfig } from "next";
 
 /**
@@ -22,7 +23,7 @@ const routesEnabled = process.env.ROUTES_ENABLED === "true";
 /**
  * @see https://nextjs.org/docs/api-reference/next.config.js/introduction
  */
-export default {
+const nextConfig = {
   output: "standalone",
   // PostHog's ingestion endpoints use trailing slashes (e.g. /e/). Without this,
   // Next.js's automatic trailing-slash redirect would break event capture sent
@@ -100,3 +101,29 @@ export default {
     ];
   },
 } satisfies NextConfig;
+
+/**
+ * Source-map upload for PostHog error tracking. withPostHogConfig injects chunk
+ * IDs and uploads source maps to PostHog during `next build` so exception stack
+ * traces are symbolicated back to original source (both browser and server
+ * bundles). `deleteAfterUpload` strips the maps afterwards so they aren't served
+ * publicly.
+ *
+ * Only enabled when POSTHOG_API_KEY (a *personal* API key, scoped to error
+ * tracking write) is present at build time — on the VPS it comes from
+ * ~/undertrained/.env via the Docker build args. Local/CI builds without it
+ * fall through to the plain config and skip upload entirely.
+ */
+const posthogApiKey = process.env.POSTHOG_API_KEY;
+
+export default posthogApiKey
+  ? withPostHogConfig(nextConfig, {
+      personalApiKey: posthogApiKey,
+      projectId: process.env.POSTHOG_PROJECT_ID,
+      host: "https://eu.posthog.com",
+      sourcemaps: {
+        enabled: true,
+        deleteAfterUpload: true,
+      },
+    })
+  : nextConfig;
