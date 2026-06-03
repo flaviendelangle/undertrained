@@ -71,9 +71,27 @@
     transform: translateX(400%);
   }
 }
+/* Shared calm entrance for chart bodies — one fade-up for every chart (MUI and
+   WebGL alike), so the charts feel like one product. Gated below on
+   prefers-reduced-motion. */
+@keyframes chart-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 @utility animate-breathe {
   animation: breathe 3s ease-in-out infinite;
+}
+@utility animate-chart-in {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: chart-in 0.2s ease-out;
+  }
 }
 @utility animate-slide-up {
   animation: slide-up 0.5s ease-out;
@@ -181,6 +199,13 @@
   --color-sport-strength: var(--sport-strength);
   --color-sport-hiking: var(--sport-hiking);
   --color-sport-other: var(--sport-other);
+  --color-zone-1: var(--zone-1);
+  --color-zone-2: var(--zone-2);
+  --color-zone-3: var(--zone-3);
+  --color-zone-4: var(--zone-4);
+  --color-zone-5: var(--zone-5);
+  --color-zone-6: var(--zone-6);
+  --color-zone-7: var(--zone-7);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -230,6 +255,14 @@
   --sport-strength: oklch(0.60 0.19 41.116);
   --sport-hiking: oklch(0.55 0.13 130);
   --sport-other: oklch(0.52 0.17 280);
+  /* Cool→hot zone ramp — keep in sync with chartTokens.ts zonesOklch (light). */
+  --zone-1: oklch(0.62 0.01 260);
+  --zone-2: oklch(0.60 0.16 256);
+  --zone-3: oklch(0.60 0.15 150);
+  --zone-4: oklch(0.72 0.15 85);
+  --zone-5: oklch(0.66 0.18 45);
+  --zone-6: oklch(0.60 0.20 25);
+  --zone-7: oklch(0.52 0.20 27);
   --sidebar: oklch(0.97 0.005 260);
   --sidebar-foreground: oklch(0.145 0.015 260);
   --sidebar-primary: oklch(0.45 0.15 170);
@@ -278,6 +311,14 @@
   --sport-strength: oklch(0.74 0.21 41.116);
   --sport-hiking: oklch(0.72 0.16 130);
   --sport-other: oklch(0.68 0.18 280);
+  /* Cool→hot zone ramp — keep in sync with chartTokens.ts zonesOklch (dark). */
+  --zone-1: oklch(0.70 0.01 260);
+  --zone-2: oklch(0.70 0.16 256);
+  --zone-3: oklch(0.72 0.15 150);
+  --zone-4: oklch(0.82 0.15 85);
+  --zone-5: oklch(0.74 0.18 45);
+  --zone-6: oklch(0.70 0.20 25);
+  --zone-7: oklch(0.62 0.21 27);
   --sidebar: oklch(0.21 0.012 265);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.65 0.15 170);

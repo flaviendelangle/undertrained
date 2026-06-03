@@ -10,22 +10,24 @@ export interface PaceZone {
   name: string;
   /** Inclusive upper bound, as a fraction of threshold-pace *speed* (1.0 = threshold). */
   maxRatio: number;
-  color: string;
+  /** Index into the shared zone ramp (chartTokens `tokens.zones`). */
+  ramp: number;
 }
 
 /**
  * intervals.icu Run pace zones, as % of threshold pace expressed by speed
  * (higher % = faster; 100% = threshold pace, the top of Z4). Bounds come from
  * the intervals.icu Run zone settings: 77.5 / 87.7 / 94.3 / 100 / 103.4 / 111.5.
+ * `ramp` maps each zone onto the shared cool→hot ramp (full 7-stop spread).
  */
 export const RUNNING_PACE_ZONES: PaceZone[] = [
-  { name: "Zone 1", maxRatio: 0.775, color: "#808080" },
-  { name: "Zone 2", maxRatio: 0.877, color: "#3B82F6" },
-  { name: "Zone 3", maxRatio: 0.943, color: "#22C55E" },
-  { name: "Zone 4", maxRatio: 1.0, color: "#EAB308" },
-  { name: "Zone 5a", maxRatio: 1.034, color: "#F97316" },
-  { name: "Zone 5b", maxRatio: 1.115, color: "#EF4444" },
-  { name: "Zone 5c", maxRatio: Infinity, color: "#DC2626" },
+  { name: "Zone 1", maxRatio: 0.775, ramp: 0 },
+  { name: "Zone 2", maxRatio: 0.877, ramp: 1 },
+  { name: "Zone 3", maxRatio: 0.943, ramp: 2 },
+  { name: "Zone 4", maxRatio: 1.0, ramp: 3 },
+  { name: "Zone 5a", maxRatio: 1.034, ramp: 4 },
+  { name: "Zone 5b", maxRatio: 1.115, ramp: 5 },
+  { name: "Zone 5c", maxRatio: Infinity, ramp: 6 },
 ];
 
 /**

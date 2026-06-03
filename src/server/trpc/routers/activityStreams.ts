@@ -74,7 +74,11 @@ export const activityStreamsRouter = router({
       }
 
       const streams = await ctx.db
-        .select()
+        .select({
+          type: activityStreams.type,
+          chunkIndex: activityStreams.chunkIndex,
+          data: activityStreams.data,
+        })
         .from(activityStreams)
         .where(
           and(

@@ -3,6 +3,7 @@ import * as React from "react";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 
 import { FeatureHint } from "~/components/primitives/FeatureHint";
+import { ChartCard } from "~/components/ui/chart-card";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { type TFunction } from "~/i18n/I18nProvider";
@@ -11,6 +12,7 @@ import { useChartTokens } from "~/lib/chartTokens";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
+import { ChartMessage } from "../ChartMessage";
 import { MultiPanelChart } from "./MultiPanelChart";
 import type { PreparedStream, StreamStats, XAxisMode } from "./types";
 
@@ -212,7 +214,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
           type: def.type,
           title:
             def.type === "velocity_smooth" && sportConfig
-              ? sportConfig.speedLabel
+              ? t(sportConfig.speedLabelKey)
               : def.title,
           unit:
             def.type === "cadence" && sportConfig
@@ -238,6 +240,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
     sportConfig,
     tokens.palette,
     tokens.paletteOklch.length,
+    t,
   ]);
   const distanceAvailable = distanceData != null;
 
@@ -254,47 +257,54 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 
   if (fetchError) {
     return (
-      <div className="md:bg-card p-4 text-red-400 md:rounded-sm">
-        {t("charts.streams.loadError", { error: fetchError })}
-      </div>
+      <ChartCard title={t("charts.streams.title")}>
+        <ChartMessage tone="error">
+          {t("charts.streams.loadError", { error: fetchError })}
+        </ChartMessage>
+      </ChartCard>
     );
   }
 
   if (isFetching || streamsData === undefined || streamsData === null) {
     return (
-      <div className="text-muted-foreground md:bg-card p-4 md:rounded-sm">
-        {t("charts.streams.loading")}
-      </div>
+      <ChartCard title={t("charts.streams.title")}>
+        <ChartMessage>{t("charts.streams.loading")}</ChartMessage>
+      </ChartCard>
     );
   }
 
   if (streams.length === 0) {
     return (
-      <div className="text-muted-foreground md:bg-card p-4 md:rounded-sm">
-        {t("charts.streams.empty")}
-      </div>
+      <ChartCard title={t("charts.streams.title")}>
+        <ChartMessage>{t("charts.streams.empty")}</ChartMessage>
+      </ChartCard>
     );
   }
 
   return (
-    <div className="md:bg-card flex flex-col md:rounded-sm">
-      <div className="border-border flex items-center gap-2 p-4 md:border-b">
-        <h3 className="text-lg font-semibold">{t("charts.streams.title")}</h3>
+    <ChartCard
+      title={t("charts.streams.title")}
+      headerSlot={
         <FeatureHint
           hintId="hint-activity-streams"
           title={t("charts.streams.title")}
         >
           {t("charts.streams.hint")}
         </FeatureHint>
-        <div className="flex-1" />
-        {xAxisOptions.length > 1 && (
-          <SegmentedToggle
-            value={xAxisMode}
-            onChange={setXAxisMode}
-            options={xAxisOptions}
-          />
-        )}
-      </div>
+      }
+      actions={
+        xAxisOptions.length > 1 ? (
+          <div className="ml-auto">
+            <SegmentedToggle
+              value={xAxisMode}
+              onChange={setXAxisMode}
+              options={xAxisOptions}
+            />
+          </div>
+        ) : undefined
+      }
+      height="auto"
+    >
       <MultiPanelChart
         streams={streams}
         xData={xData}
@@ -303,7 +313,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
         sportConfig={sportConfig}
         onHoverIndexChange={handleHoverIndexChange}
       />
-    </div>
+    </ChartCard>
   );
 }
 

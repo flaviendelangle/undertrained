@@ -204,7 +204,7 @@ function buildStats(
     stats.push({ label: t("journal.stat.power"), value: `${Math.round(watts)} W` });
   } else if (activity.averageSpeed > 0) {
     stats.push({
-      label: config.speedLabel,
+      label: t(config.speedLabelKey),
       value: config.formatSpeed(activity.averageSpeed),
     });
   }

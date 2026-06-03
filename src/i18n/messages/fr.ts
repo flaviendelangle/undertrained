@@ -143,6 +143,8 @@ const fr: Messages = {
     elevation: "Dénivelé",
     load: "Charge",
     elapsedTime: "Temps écoulé",
+    speedLabel: "Vitesse",
+    paceLabel: "Allure",
     avgLabel: "{label} moy.",
     maxLabel: "{label} max",
     avgHr: "FC moy.",
@@ -156,6 +158,8 @@ const fr: Messages = {
     intensityFactor: "Facteur d'intensité",
     restingHr: "FC au repos",
     settingsForDate: "Réglages pour le {date}",
+    normalizedPowerTooltip:
+      "Estimation de la puissance que vous auriez pu maintenir au même coût physiologique si votre effort avait été parfaitement constant. Elle pondère davantage les accélérations intenses que l'effort régulier, ce qui en fait une meilleure mesure de l'intensité réelle que la puissance moyenne.",
     ftpSettingsHint:
       "Configurez vos réglages athlète (FTP) pour activer cette métrique.",
     hrSettingsHint:
@@ -401,6 +405,26 @@ const fr: Messages = {
         last2Years: "2 dernières années",
         allTime: "Tout l'historique",
       },
+    },
+    power: {
+      tabCurve: "Courbe de puissance",
+      tabZones: "Temps par zone",
+      tabDistribution: "Distribution de la puissance",
+      settings: "Paramètres",
+      curveSettings: "Courbe de puissance",
+      distributionSettings: "Distribution de la puissance",
+      unit: "Unité",
+      compareWith: "Comparer avec",
+      years: "Années",
+      sliceWidth: "Largeur des tranches (W)",
+      sliceWidthHint:
+        "Regroupe la puissance par paliers de ce nombre de watts.",
+      weightedAvg: "Puissance moy. pondérée {watts} W",
+      wattsAxis: "Puissance",
+      timeAxis: "Temps",
+      basedOnFtp: "Basé sur un FTP de {ftp} W.",
+      empty: "Aucune donnée de puissance disponible",
+      loading: "Chargement des données de puissance…",
     },
     records: {
       sport: "Sport",

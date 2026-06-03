@@ -14,11 +14,20 @@ import { useIsMobile } from "~/hooks/useIsMobile";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { formZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
+import {
+  AXIS_SIZE,
+  CHART_MARGINS,
+  REFERENCE_LINE,
+  useChartTokens,
+} from "~/lib/chartTokens";
 import { classifyForm } from "~/lib/fitness";
 
+import { ChartMessage } from "../ChartMessage";
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { ChartTooltip } from "../ChartTooltip";
+
+/** Gradient id for the faint fill under the fitness (CTL) line. */
+const FITNESS_AREA_GRADIENT = "fitness-area-gradient";
 
 const TIME_AXIS_ID = "time";
 const LOAD_AXIS_ID = "load";
@@ -52,6 +61,9 @@ export default function FitnessChart() {
         yAxisId: LOAD_AXIS_ID,
         color: fitnessColor,
         showMark: false,
+        // A faint gradient under the primary (fitness) line — the app's
+        // signature "filled hero line" look. Styled via `sx` below.
+        area: true,
         curve: "monotoneX" as const,
         valueFormatter: (v: number | null) => (v == null ? "" : v.toFixed(0)),
       },
@@ -152,7 +164,6 @@ export default function FitnessChart() {
                       : format(value, "d MMM yyyy", {
                           locale: getActiveDateLocale(),
                         }),
-                  tickLabelStyle: { fontSize: 11 },
                   zoom: {
                     filterMode: "keep",
                     minSpan: minZoomSpan,
@@ -180,8 +191,14 @@ export default function FitnessChart() {
               series={seriesConfig}
               margin={CHART_MARGINS.standard}
               grid={{ horizontal: true }}
+              skipAnimation
               slots={{ tooltip: ChartTooltip }}
               slotProps={{ legend: { toggleVisibilityOnClick: true } }}
+              sx={{
+                [`& .MuiAreaElement-series-ctl`]: {
+                  fill: `url(#${FITNESS_AREA_GRADIENT})`,
+                },
+              }}
               onHiddenItemsChange={(hiddenItems) => {
                 setFitnessHidden(
                   hiddenItems.some((item) => item.seriesId === "ctl"),
@@ -191,14 +208,34 @@ export default function FitnessChart() {
                 );
               }}
             >
+              <defs>
+                <linearGradient
+                  id={FITNESS_AREA_GRADIENT}
+                  x1="0"
+                  x2="0"
+                  y1="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="0%"
+                    stopColor={fitnessColor}
+                    stopOpacity={0.25}
+                  />
+                  <stop
+                    offset="100%"
+                    stopColor={fitnessColor}
+                    stopOpacity={0}
+                  />
+                </linearGradient>
+              </defs>
               {targetFitness > 0 && !fitnessHidden && (
                 <ChartsReferenceLine
                   axisId={LOAD_AXIS_ID}
                   y={targetFitness}
                   lineStyle={{
                     stroke: fitnessColor,
-                    strokeDasharray: "4 4",
-                    strokeOpacity: 0.6,
+                    strokeDasharray: REFERENCE_LINE.dash,
+                    strokeOpacity: REFERENCE_LINE.opacity,
                   }}
                 />
               )}
@@ -208,8 +245,8 @@ export default function FitnessChart() {
                   y={0}
                   lineStyle={{
                     stroke: formColor,
-                    strokeDasharray: "4 4",
-                    strokeOpacity: 0.6,
+                    strokeDasharray: REFERENCE_LINE.dash,
+                    strokeOpacity: REFERENCE_LINE.opacity,
                   }}
                 />
               )}
@@ -267,7 +304,10 @@ function Readout({
         <span className="text-muted-foreground text-xs">
           {t("charts.fitness.series.form")}
         </span>
-        <span className="text-2xl font-semibold" style={{ color: zone.color }}>
+        <span
+          className="text-2xl font-semibold tabular-nums"
+          style={{ color: zone.color }}
+        >
           {current.tsb > 0 ? "+" : ""}
           {Math.round(current.tsb)}
         </span>
@@ -295,7 +335,7 @@ function Stat({
     <div className="flex flex-col gap-0.5">
       <span className="text-muted-foreground text-xs">{label}</span>
       <span
-        className="text-xl font-semibold"
+        className="text-xl font-semibold tabular-nums"
         style={color ? { color } : undefined}
       >
         {value}
@@ -307,8 +347,8 @@ function Stat({
 function EmptyState({ isLoading }: { isLoading: boolean }) {
   const t = useT();
   return (
-    <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+    <ChartMessage>
       {isLoading ? t("common.loading") : t("charts.fitness.empty")}
-    </div>
+    </ChartMessage>
   );
 }

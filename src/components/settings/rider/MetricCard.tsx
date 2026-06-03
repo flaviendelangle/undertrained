@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { format } from "date-fns";
 import { PlusIcon, TrendingDownIcon, TrendingUpIcon, XIcon } from "lucide-react";
+import dynamic from "next/dynamic";
 
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { Button } from "~/components/ui/button";
@@ -24,9 +25,15 @@ import {
   startFieldValue,
 } from "../timelineEdits";
 import { EditableValue } from "./EditableValue";
-import { MetricSparkline } from "./MetricSparkline";
 
 const DEFAULTS = DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues;
+
+// Lazy-load the sparkline so @mui/x-charts-pro stays out of the Settings entry
+// chunk — it only renders for fields that have actually changed over time.
+const MetricSparkline = dynamic(
+  () => import("./MetricSparkline").then((m) => m.MetricSparkline),
+  { ssr: false },
+);
 
 /** Matches the other settings sections: full-bleed on mobile, boxed card on desktop. */
 const CARD_CHROME = "md:border-border md:bg-card p-5 md:rounded-sm md:border";

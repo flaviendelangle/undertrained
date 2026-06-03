@@ -119,8 +119,12 @@ export class SportConfig {
 
   // ── Display labels & units ──────────────────────────────────
 
-  /** Display label for speed-related metrics — `"Speed"` for cycling, `"Pace"` for running/swimming. */
-  readonly speedLabel: string = "Speed";
+  /**
+   * i18n key for the speed-metric display label, resolved with `t(speedLabelKey)`
+   * at the rendering boundary — `"Speed"` for cycling/generic, `"Pace"` for
+   * running/swimming.
+   */
+  readonly speedLabelKey: AppMessageKey = "stats.speedLabel";
 
   /** Unit string for cadence display — `"rpm"` for cycling, `"spm"` for running/swimming. */
   readonly cadenceUnit: string = "rpm";
@@ -272,7 +276,7 @@ class RunSportConfig extends SportConfig {
     return `${minutes}:${String(Math.floor(timePerKm - minutes * 60)).padStart(2, "0")} /km`;
   }
 
-  override readonly speedLabel: string = "Pace";
+  override readonly speedLabelKey: AppMessageKey = "stats.paceLabel";
   override readonly cadenceUnit: string = "spm";
   override readonly heroThirdStat: "elevation" | "pace" = "pace";
 
@@ -331,7 +335,7 @@ class SwimSportConfig extends SportConfig {
     return `${meters.toFixed(0)} m`;
   }
 
-  override readonly speedLabel: string = "Pace";
+  override readonly speedLabelKey: AppMessageKey = "stats.paceLabel";
   override readonly cadenceUnit: string = "spm";
   override readonly heroThirdStat: "elevation" | "pace" = "pace";
 

@@ -1,3 +1,4 @@
+import { useChartTokens } from "~/lib/chartTokens";
 import { POWER_ZONES, getPowerZoneIndex } from "~/sensors/types";
 
 interface HudPowerGaugeProps {
@@ -30,6 +31,7 @@ function describeArc(startAngle: number, endAngle: number): string {
 }
 
 export function HudPowerGauge({ power, ftp, weightKg }: HudPowerGaugeProps) {
+  const tokens = useChartTokens();
   const currentZoneIdx = getPowerZoneIndex(power ?? 0, ftp);
   const wattsPerKg =
     power != null && weightKg ? (power / weightKg).toFixed(1) : null;
@@ -54,7 +56,7 @@ export function HudPowerGauge({ power, ftp, weightKg }: HudPowerGaugeProps) {
         key={zone.name}
         d={describeArc(arcStart, arcEnd)}
         fill="none"
-        stroke={zone.color}
+        stroke={tokens.zones[zone.ramp]}
         strokeWidth={STROKE_WIDTH}
         strokeLinecap="round"
         opacity={isActive ? 1 : 0.2}
@@ -86,7 +88,7 @@ export function HudPowerGauge({ power, ftp, weightKg }: HudPowerGaugeProps) {
         {power != null && (
           <span
             className="mt-1 text-lg font-semibold"
-            style={{ color: POWER_ZONES[currentZoneIdx].color }}
+            style={{ color: tokens.zones[POWER_ZONES[currentZoneIdx].ramp] }}
           >
             {POWER_ZONES[currentZoneIdx].name}
           </span>

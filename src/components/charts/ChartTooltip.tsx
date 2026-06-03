@@ -17,6 +17,12 @@ import {
 
 import { useT } from "~/i18n/useT";
 
+import {
+  ChartTooltipHeader,
+  ChartTooltipRow,
+  ChartTooltipSurface,
+} from "./ChartTooltipSurface";
+
 /**
  * Tracks the pointer position (in viewport coordinates) over the chart container.
  */
@@ -144,10 +150,7 @@ export function ChartTooltip() {
         zIndex: 70,
       }}
     >
-      <div
-        className="border-border bg-popover text-popover-foreground rounded-md border px-3 py-2 shadow-md"
-        style={{ pointerEvents: "none" }}
-      >
+      <ChartTooltipSurface className="pointer-events-none">
         {tooltipData.map(
           ({ axisId, axisFormattedValue, seriesItems, mainAxis }) => {
             // Sum the visible (non-null) series values for the "Total" row. Done
@@ -163,9 +166,7 @@ export function ChartTooltip() {
             return (
               <div key={axisId}>
                 {!mainAxis.hideTooltip && (
-                  <p className="text-muted-foreground mb-1 text-xs">
-                    {axisFormattedValue}
-                  </p>
+                  <ChartTooltipHeader>{axisFormattedValue}</ChartTooltipHeader>
                 )}
                 <div className="flex flex-col gap-1">
                   {seriesItems.map(
@@ -181,38 +182,31 @@ export function ChartTooltip() {
                       // actually in the stack instead of a long row of zeros.
                       if (!value || formattedValue == null) return null;
                       return (
-                        <div
+                        <ChartTooltipRow
                           key={seriesId}
-                          className="flex items-center gap-2 text-sm whitespace-nowrap"
-                        >
-                          <span
-                            className="inline-block size-2 shrink-0 rounded-full"
-                            style={{ backgroundColor: color }}
-                          />
-                          <span>{formattedLabel}</span>
-                          <span className="font-medium">{formattedValue}</span>
-                        </div>
+                          color={color}
+                          label={formattedLabel}
+                          value={formattedValue}
+                        />
                       );
                     },
                   )}
                   {showTotal && total > 0 && (
-                    <div className="border-border mt-1 flex items-center gap-2 border-t pt-1 text-sm whitespace-nowrap">
-                      {/* Spacer matching the series dot so labels line up. */}
-                      <span className="inline-block size-2 shrink-0" />
-                      <span>{t("charts.tooltip.total")}</span>
-                      <span className="font-medium">
-                        {formatTotal
-                          ? formatTotal(total)
-                          : total.toLocaleString()}
-                      </span>
-                    </div>
+                    // No color → a transparent spacer dot keeps "Total" aligned.
+                    <ChartTooltipRow
+                      className="border-border mt-1 border-t pt-1"
+                      label={t("charts.tooltip.total")}
+                      value={
+                        formatTotal ? formatTotal(total) : total.toLocaleString()
+                      }
+                    />
                   )}
                 </div>
               </div>
             );
           },
         )}
-      </div>
+      </ChartTooltipSurface>
     </div>,
     document.body,
   );

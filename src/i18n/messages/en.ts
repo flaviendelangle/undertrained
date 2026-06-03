@@ -143,6 +143,8 @@ const en = {
     elevation: "Elevation",
     load: "Load",
     elapsedTime: "Elapsed Time",
+    speedLabel: "Speed",
+    paceLabel: "Pace",
     avgLabel: "Avg {label}",
     maxLabel: "Max {label}",
     avgHr: "Avg HR",
@@ -156,6 +158,8 @@ const en = {
     intensityFactor: "Intensity Factor",
     restingHr: "Resting HR",
     settingsForDate: "Settings for {date}",
+    normalizedPowerTooltip:
+      "An estimate of the power you could have sustained for the same physiological cost if your effort had been perfectly steady. It weights hard surges more heavily than steady riding, making it a better measure of true intensity than average power.",
     ftpSettingsHint:
       "Configure your rider settings (FTP) to enable this metric.",
     hrSettingsHint:
@@ -375,7 +379,7 @@ const en = {
     powerCurve: {
       title: "Power Curve",
       cardTitle: "Cycling Power Curve",
-      activityCardTitle: "Cycling Power",
+      activityCardTitle: "Power",
       hint: "Your best sustained power efforts at each duration. Add date ranges to compare this activity against your historical bests and spot improvements.",
       empty: "No power data available",
       thisActivity: "This Activity",
@@ -393,6 +397,25 @@ const en = {
         last2Years: "Last 2 years",
         allTime: "All time",
       },
+    },
+    power: {
+      tabCurve: "Power curve",
+      tabZones: "Time in zones",
+      tabDistribution: "Power distribution",
+      settings: "Settings",
+      curveSettings: "Power curve",
+      distributionSettings: "Power distribution",
+      unit: "Unit",
+      compareWith: "Compare with",
+      years: "Years",
+      sliceWidth: "Slice width (W)",
+      sliceWidthHint: "Group power into bars of this many watts.",
+      weightedAvg: "Weighted avg power {watts} W",
+      wattsAxis: "Power",
+      timeAxis: "Time",
+      basedOnFtp: "Based on an FTP of {ftp} W.",
+      empty: "No power data available",
+      loading: "Loading power data…",
     },
     records: {
       sport: "Sport",

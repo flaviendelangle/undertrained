@@ -10,6 +10,7 @@ import {
 } from "@mui/x-charts-pro";
 
 import { FeatureHint } from "~/components/primitives/FeatureHint";
+import { ChartCard } from "~/components/ui/chart-card";
 import {
   Table,
   TableBody,
@@ -32,6 +33,11 @@ import { formatElapsed } from "~/utils/format";
 import { type SportConfig, getSportConfig } from "~/utils/sportConfig";
 
 import { ChartThemeProvider } from "../ChartThemeProvider";
+import {
+  ChartTooltipHeader,
+  ChartTooltipRow,
+  ChartTooltipSurface,
+} from "../ChartTooltipSurface";
 import { findRunningPaceZone } from "./lapZones";
 
 /** Subset of the stored lap shape consumed by the chart. */
@@ -120,19 +126,24 @@ export default function ActivityLaps(props: ActivityLapsProps) {
       durationSec: lap.elapsedTime,
       value,
       formattedValue: value > 0 ? formatValue(value) : "—",
-      color: zone?.color ?? tokens.palette[3],
+      color: zone != null ? tokens.zones[zone.ramp] : tokens.palette[3],
       zoneName: zone?.name ?? null,
     };
   });
 
-  const valueLabel = usePower ? t("charts.laps.power") : sportConfig.speedLabel;
+  const valueLabel = usePower
+    ? t("charts.laps.power")
+    : t(sportConfig.speedLabelKey);
 
   return (
     <ChartThemeProvider>
-      <div className="md:bg-card flex h-96 w-full flex-col md:rounded-sm">
-        <div className="border-border flex items-center gap-2 p-4 md:border-b">
-          <h3 className="text-lg font-semibold">{t("charts.laps.title")}</h3>
-          <FeatureHint hintId="hint-activity-laps" title={t("charts.laps.title")}>
+      <ChartCard
+        title={t("charts.laps.title")}
+        headerSlot={
+          <FeatureHint
+            hintId="hint-activity-laps"
+            title={t("charts.laps.title")}
+          >
             {t("charts.laps.hintIntro", {
               metric: usePower
                 ? t("charts.laps.power").toLowerCase()
@@ -151,6 +162,8 @@ export default function ActivityLaps(props: ActivityLapsProps) {
                 : ""}{" "}
             {t("charts.laps.hintFallback")}
           </FeatureHint>
+        }
+        actions={
           <div className="ml-auto">
             <SegmentedToggle
               value={view}
@@ -161,7 +174,9 @@ export default function ActivityLaps(props: ActivityLapsProps) {
               ]}
             />
           </div>
-        </div>
+        }
+        bodyClassName="flex flex-col"
+      >
         {view === "chart" ? (
           <LapsChart
             bars={bars}
@@ -177,7 +192,7 @@ export default function ActivityLaps(props: ActivityLapsProps) {
             valueLabel={valueLabel}
           />
         )}
-      </div>
+      </ChartCard>
     </ChartThemeProvider>
   );
 }
@@ -347,27 +362,26 @@ function LapTooltip({ hover }: { hover: HoverState }) {
       style={{ position: "fixed", left: hover.x, top: hover.y - 12 }}
       className="pointer-events-none z-50 -translate-x-1/2 -translate-y-full"
     >
-      <div className="border-border bg-popover text-popover-foreground rounded-md border px-3 py-2 text-sm whitespace-nowrap shadow-md">
-        <p className="text-muted-foreground mb-1 text-xs">
+      <ChartTooltipSurface className="whitespace-nowrap">
+        <ChartTooltipHeader>
           {hover.bar.name} · {formatElapsed(hover.bar.durationSec)}
-        </p>
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-block size-2 shrink-0 rounded-full"
-            style={{ backgroundColor: hover.bar.color }}
-          />
-          <span className="font-medium">{hover.bar.formattedValue}</span>
-          {hover.bar.zoneName && (
-            <span className="text-muted-foreground">{hover.bar.zoneName}</span>
-          )}
-        </div>
-      </div>
+        </ChartTooltipHeader>
+        <ChartTooltipRow
+          color={hover.bar.color}
+          value={hover.bar.formattedValue}
+          trailing={
+            hover.bar.zoneName && (
+              <span className="text-muted-foreground">{hover.bar.zoneName}</span>
+            )
+          }
+        />
+      </ChartTooltipSurface>
     </div>
   );
 }
 
 /**
- * Metric-matched zone for a lap, returning name + colour:
+ * Metric-matched zone for a lap, returning name + zone-ramp index:
  * - cycling → power zones (FTP),
  * - running → intervals.icu pace zones vs the run threshold pace (value is GAP),
  * - otherwise / when the primary metric is missing → heart-rate zones (Karvonen).
@@ -378,7 +392,7 @@ function resolveLapZone(opts: {
   isRunning: boolean;
   settings: RiderSettings;
   averageHeartrate: number | null;
-}): { name: string; color: string } | null {
+}): { name: string; ramp: number } | null {
   const { value, usePower, isRunning, settings, averageHeartrate } = opts;
 
   if (usePower && settings.ftp > 0 && value > 0) {

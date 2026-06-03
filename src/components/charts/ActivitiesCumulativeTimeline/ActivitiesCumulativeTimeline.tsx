@@ -15,7 +15,7 @@ import {
   ResponsivePopoverTitle,
   ResponsivePopoverTrigger,
 } from "~/components/ui/responsive-popover";
-import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
+import { useActivitiesFilteredByType } from "~/hooks/useActivitiesFilteredByType";
 import {
   GroupedActivities,
   useGroupActivitiesByTimeSlice,
@@ -48,7 +48,8 @@ export default function ActivitiesCumulativeTimeline() {
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>([]);
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
-  const activitiesQuery = useActivitiesQuery({ activityTypes: selectedTypes });
+  const activitiesQuery = useActivitiesFilteredByType(selectedTypes);
+  const activities = activitiesQuery.activities;
   const { timeline } = useRiderSettingsTimeline();
 
   const metricContext: MetricContext = React.useMemo(
@@ -58,11 +59,11 @@ export default function ActivitiesCumulativeTimeline() {
 
   const slices = useTimeSlices({
     precision: "month",
-    activities: activitiesQuery.data,
+    activities,
   });
 
   const groupedActivities = useGroupActivitiesByTimeSlice({
-    activities: activitiesQuery.data,
+    activities,
     slices,
     precision: "month",
   });

@@ -8,10 +8,11 @@ import {
   filterVisibleLabels,
   measureTickLabels,
 } from "~/lib/chartTicks/visibleLabels";
-import { useChartTokens } from "~/lib/chartTokens";
+import { CHART_FONT, useChartTokens } from "~/lib/chartTokens";
 import { formatElapsed } from "~/utils/format";
 import type { SportConfig } from "~/utils/sportConfig";
 
+import { CrosshairDot, CrosshairLine } from "../shared/Crosshair";
 import type { MultiPanelChartProps, PanelLayout } from "./types";
 import { colorToGLColor } from "~/lib/webgl/colors";
 import {
@@ -30,7 +31,7 @@ const MARGIN = { top: 8, right: 72, bottom: 36, left: 84 };
 const LEFT_LABEL_X = 8 - MARGIN.left; // left-aligned in the gutter, 8px from edge
 const Y_AXIS_TICKS = 4;
 const X_AXIS_TICKS = 8;
-const X_AXIS_LABEL_STYLE = { fontSize: 11 };
+const X_AXIS_LABEL_STYLE = { fontSize: CHART_FONT.tick };
 const LINE_HALF_WIDTH = 0.75; // 1.5px total line width
 // Minimum horizontal drag (px) that counts as a zoom selection rather than a
 // click. Doubles as the guard against degenerate (zero-width) zoom ranges.
@@ -62,6 +63,48 @@ function formatStreamValue(
 
 const d3BisectorObj = bisector<number, number>((d: number) => d);
 const d3Bisector = (arr: ArrayLike<number>, x: number) => d3BisectorObj.left(arr, x);
+
+// ~2 drawn points per horizontal pixel — anything denser is sub-pixel and
+// invisible.
+const POINTS_PER_PIXEL = 2;
+
+/**
+ * Indices of the samples to actually draw for the current viewport: those within
+ * the visible `domain` (padded one sample each side so the line enters/exits the
+ * viewport cleanly), then decimated to ~2 points per horizontal pixel. A 1 Hz
+ * multi-hour stream has tens of thousands of samples; drawing them all is mostly
+ * sub-pixel work, so this caps the count to the screen's resolution with no
+ * visible difference, and only processes the visible window when zoomed in.
+ * `activeXData` is monotonically increasing (elapsed time or cumulative distance).
+ */
+function visibleSampleIndices(
+  activeXData: number[],
+  sampleCount: number,
+  domain: [number, number],
+  drawingWidth: number,
+): number[] {
+  if (sampleCount === 0) return [];
+  const last = sampleCount - 1;
+  let lo = d3Bisector(activeXData, domain[0]) - 1;
+  let hi = d3Bisector(activeXData, domain[1]) + 1;
+  lo = clamp(lo, 0, last);
+  hi = clamp(hi, 0, last);
+  const visible = hi - lo + 1;
+  if (visible <= 0) return [];
+
+  const maxPoints = Math.max(2, Math.ceil(drawingWidth * POINTS_PER_PIXEL));
+  const step = Math.max(1, Math.floor(visible / maxPoints));
+
+  const indices: number[] = [];
+  for (let j = lo; j <= hi; j += step) {
+    indices.push(j);
+  }
+  // Always include the final visible sample so the line spans the full width.
+  if (indices[indices.length - 1] !== hi) {
+    indices.push(hi);
+  }
+  return indices;
+}
 
 export function MultiPanelChart(props: MultiPanelChartProps) {
   const {
@@ -202,17 +245,27 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   React.useEffect(() => {
     if (!renderer || drawingWidth <= 0) return;
 
+    // Decimate once for all panels — they share the x-axis, so the visible
+    // sample set (capped to ~2 points/pixel) is identical across panels.
+    const sampleIndices = visibleSampleIndices(
+      activeXData,
+      activeXData.length,
+      domain,
+      drawingWidth,
+    );
+    const len = sampleIndices.length;
+
     const panelRenderData: PanelRenderData[] = panels.map((panel, i) => {
       const yScale = yScales[i];
       const yTicks = yScale.ticks(Y_AXIS_TICKS);
 
-      // Pre-compute pixel coordinates
-      const n = panel.stream.yData.length;
-      const xs = new Float32Array(n);
-      const ys = new Float32Array(n);
-      for (let j = 0; j < n; j++) {
-        xs[j] = xScale(activeXData[j] ?? j);
-        ys[j] = yScale(panel.stream.yData[j]);
+      // Pre-compute pixel coordinates for the decimated, visible samples only.
+      const xs = new Float32Array(len);
+      const ys = new Float32Array(len);
+      for (let k = 0; k < len; k++) {
+        const j = sampleIndices[k];
+        xs[k] = xScale(activeXData[j] ?? j);
+        ys[k] = yScale(panel.stream.yData[j]);
       }
 
       const lineMesh = buildLineStripMesh(xs, ys, LINE_HALF_WIDTH);
@@ -250,7 +303,16 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
 
     panelRenderData.forEach((data, i) => renderer.updatePanelData(i, data));
     renderer.render(panelRenderData, MARGIN.left, MARGIN.top, drawingWidth);
-  }, [renderer, panels, xScale, yScales, activeXData, drawingWidth, tokens]);
+  }, [
+    renderer,
+    panels,
+    xScale,
+    yScales,
+    activeXData,
+    domain,
+    drawingWidth,
+    tokens,
+  ]);
 
   // Mouse handling
   /** Pointer x relative to the drawing area's left edge (un-clamped). */
@@ -476,28 +538,21 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
                 xScale={xScale}
                 yScale={yScales[i]}
                 activeXData={activeXData}
+                domain={domain}
                 drawingWidth={drawingWidth}
                 gridColor={tokens.grid.hex}
                 separatorColor={tokens.gridStrong.hex}
               />
             )}
 
-            {/* Title + summary stats (left gutter, always visible) */}
-            <text
-              x={LEFT_LABEL_X}
-              y={12}
-              fill={panel.stream.config.color}
-              fontSize={11}
-              fontWeight={500}
-            >
-              {panel.stream.config.title}
-            </text>
-            <text x={LEFT_LABEL_X} y={26} fill={tokens.axisLabel} fontSize={10}>
-              {`max ${formatStreamValue(panel.stream.stats.max, panel.stream.config.unit, sportConfig)}`}
-            </text>
-            <text x={LEFT_LABEL_X} y={38} fill={tokens.axisLabel} fontSize={10}>
-              {`avg ${formatStreamValue(panel.stream.stats.avg, panel.stream.config.unit, sportConfig)}`}
-            </text>
+            {/* Title + summary stats (left gutter, always visible) — memoized so
+                a hover (which updates hoverIndex every frame) doesn't re-render
+                them. */}
+            <PanelStaticLabels
+              panel={panel}
+              sportConfig={sportConfig}
+              axisLabelColor={tokens.axisLabel}
+            />
 
             {/* Live value at the hovered x (right gutter, fixed row per panel).
                 Hidden on mobile where hovering isn't possible. */}
@@ -507,8 +562,9 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
                 y={panel.height / 2}
                 textAnchor="end"
                 dominantBaseline="middle"
-                fontSize={12}
+                fontSize={CHART_FONT.readout}
                 fontWeight={hoverIndex !== null ? 600 : 400}
+                style={{ fontVariantNumeric: "tabular-nums" }}
                 fill={
                   hoverIndex !== null &&
                   panel.stream.yData[hoverIndex] !== undefined
@@ -529,33 +585,17 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
           </g>
         ))}
 
-        {/* X-axis (always SVG) */}
+        {/* X-axis (always SVG) — memoized so hover doesn't rebuild the ticks. */}
         <g
           transform={`translate(${MARGIN.left}, ${MARGIN.top + drawingHeight})`}
         >
-          <line
-            x1={0}
-            y1={0}
-            x2={drawingWidth}
-            y2={0}
-            stroke={tokens.gridStrong.hex}
-            strokeWidth={1}
+          <MultiPanelXAxis
+            xTickLabels={xTickLabels}
+            visibleXLabels={visibleXLabels}
+            drawingWidth={drawingWidth}
+            axisLineColor={tokens.gridStrong.hex}
+            axisLabelColor={tokens.axisLabel}
           />
-          {xTickLabels.map((item) => (
-            <g key={item.value} transform={`translate(${item.position}, 0)`}>
-              <line y1={0} y2={5} stroke={tokens.gridStrong.hex} />
-              {visibleXLabels.has(item) && (
-                <text
-                  y={18}
-                  textAnchor="middle"
-                  fill={tokens.axisLabel}
-                  fontSize={11}
-                >
-                  {item.label}
-                </text>
-              )}
-            </g>
-          ))}
         </g>
 
         {/* Drag-to-zoom selection band. Spans the full chart height down to the
@@ -602,30 +642,22 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
         {/* Crosshair (always SVG) */}
         {crosshairX !== null && hoverIndex !== null && (
           <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
-            <line
-              x1={crosshairX}
-              y1={0}
-              x2={crosshairX}
-              y2={drawingHeight}
-              stroke={tokens.crosshair}
-              strokeWidth={1}
-              strokeDasharray="3,3"
-              pointerEvents="none"
+            <CrosshairLine
+              x={crosshairX}
+              height={drawingHeight}
+              color={tokens.crosshair}
             />
             {panels.map((panel, i) => {
               const value = panel.stream.yData[hoverIndex];
               if (value === undefined) return null;
               const cy = panel.top + yScales[i](value);
               return (
-                <circle
+                <CrosshairDot
                   key={panel.stream.config.type}
                   cx={crosshairX}
                   cy={cy}
-                  r={3.5}
-                  fill={panel.stream.config.color}
-                  stroke={tokens.cardBg}
-                  strokeWidth={1.5}
-                  pointerEvents="none"
+                  color={panel.stream.config.color}
+                  ringColor={tokens.cardBg}
                 />
               );
             })}
@@ -635,11 +667,11 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
               y={drawingHeight + 18}
               textAnchor="middle"
               fill={tokens.crosshair}
-              fontSize={11}
+              fontSize={CHART_FONT.tick}
               fontWeight={600}
               stroke={tokens.cardBg}
               strokeWidth={3}
-              style={{ paintOrder: "stroke" }}
+              style={{ paintOrder: "stroke", fontVariantNumeric: "tabular-nums" }}
               pointerEvents="none"
             >
               {formatX(activeXData[hoverIndex] ?? hoverIndex)}
@@ -651,6 +683,99 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   );
 }
 
+// --- Static overlays (memoized to skip hover re-renders) ---
+
+interface PanelStaticLabelsProps {
+  panel: PanelLayout;
+  sportConfig: SportConfig | null;
+  axisLabelColor: string;
+}
+
+/** Per-panel left-gutter labels (title + max/avg) — never change on hover. */
+const PanelStaticLabels = React.memo(function PanelStaticLabels({
+  panel,
+  sportConfig,
+  axisLabelColor,
+}: PanelStaticLabelsProps) {
+  const { stream } = panel;
+  return (
+    <>
+      <text
+        x={LEFT_LABEL_X}
+        y={12}
+        fill={stream.config.color}
+        fontSize={CHART_FONT.axisLabel}
+        fontWeight={500}
+      >
+        {stream.config.title}
+      </text>
+      <text
+        x={LEFT_LABEL_X}
+        y={26}
+        fill={axisLabelColor}
+        fontSize={CHART_FONT.panelStat}
+      >
+        {`max ${formatStreamValue(stream.stats.max, stream.config.unit, sportConfig)}`}
+      </text>
+      <text
+        x={LEFT_LABEL_X}
+        y={38}
+        fill={axisLabelColor}
+        fontSize={CHART_FONT.panelStat}
+      >
+        {`avg ${formatStreamValue(stream.stats.avg, stream.config.unit, sportConfig)}`}
+      </text>
+    </>
+  );
+});
+
+type XTickLabel = { value: number; label: string; position: number };
+
+interface MultiPanelXAxisProps {
+  xTickLabels: XTickLabel[];
+  visibleXLabels: Set<XTickLabel>;
+  drawingWidth: number;
+  axisLineColor: string;
+  axisLabelColor: string;
+}
+
+/** X-axis line + tick labels — independent of hover. */
+const MultiPanelXAxis = React.memo(function MultiPanelXAxis({
+  xTickLabels,
+  visibleXLabels,
+  drawingWidth,
+  axisLineColor,
+  axisLabelColor,
+}: MultiPanelXAxisProps) {
+  return (
+    <>
+      <line
+        x1={0}
+        y1={0}
+        x2={drawingWidth}
+        y2={0}
+        stroke={axisLineColor}
+        strokeWidth={1}
+      />
+      {xTickLabels.map((item) => (
+        <g key={item.value} transform={`translate(${item.position}, 0)`}>
+          <line y1={0} y2={5} stroke={axisLineColor} />
+          {visibleXLabels.has(item) && (
+            <text
+              y={18}
+              textAnchor="middle"
+              fill={axisLabelColor}
+              fontSize={CHART_FONT.tick}
+            >
+              {item.label}
+            </text>
+          )}
+        </g>
+      ))}
+    </>
+  );
+});
+
 // --- SVG Fallback Panel (only used when WebGL is unavailable) ---
 
 interface SVGFallbackPanelProps {
@@ -659,6 +784,7 @@ interface SVGFallbackPanelProps {
   xScale: ReturnType<typeof scaleLinear<number, number>>;
   yScale: ReturnType<typeof scaleLinear<number, number>>;
   activeXData: number[];
+  domain: [number, number];
   drawingWidth: number;
   gridColor: string;
   separatorColor: string;
@@ -673,43 +799,60 @@ const SVGFallbackPanel = React.memo(function SVGFallbackPanel(
     xScale,
     yScale,
     activeXData,
+    domain,
     drawingWidth,
     gridColor,
     separatorColor,
   } = props;
   const { stream } = panel;
 
-  // Build SVG path from data points (straight segments)
+  // Decimate once: the line and the optional area beneath it walk the same
+  // visible, sub-pixel-capped sample set.
+  const indices = React.useMemo(
+    () =>
+      visibleSampleIndices(
+        activeXData,
+        stream.yData.length,
+        domain,
+        drawingWidth,
+      ),
+    [activeXData, stream.yData.length, domain, drawingWidth],
+  );
+
+  // Build SVG path from the decimated, visible data points (straight segments).
   const linePath = React.useMemo(() => {
-    const n = stream.yData.length;
-    if (n === 0) return "";
+    if (indices.length === 0) return "";
     const parts: string[] = [];
-    for (let i = 0; i < n; i++) {
+    for (let k = 0; k < indices.length; k++) {
+      const i = indices[k];
       const x = xScale(activeXData[i] ?? i);
       const y = yScale(stream.yData[i]);
-      parts.push(i === 0 ? `M${x},${y}` : `L${x},${y}`);
+      parts.push(k === 0 ? `M${x},${y}` : `L${x},${y}`);
     }
     return parts.join("");
-  }, [stream.yData, xScale, yScale, activeXData]);
+  }, [indices, stream.yData, xScale, yScale, activeXData]);
 
   const areaPath = React.useMemo(() => {
     if (!stream.config.area) return null;
-    const n = stream.yData.length;
-    if (n === 0) return null;
+    if (indices.length === 0) return null;
     const parts: string[] = [];
-    for (let i = 0; i < n; i++) {
+    for (let k = 0; k < indices.length; k++) {
+      const i = indices[k];
       const x = xScale(activeXData[i] ?? i);
       const y = yScale(stream.yData[i]);
-      parts.push(i === 0 ? `M${x},${y}` : `L${x},${y}`);
+      parts.push(k === 0 ? `M${x},${y}` : `L${x},${y}`);
     }
     // Close area to baseline
-    const lastX = xScale(activeXData[n - 1] ?? n - 1);
-    const firstX = xScale(activeXData[0] ?? 0);
+    const lastI = indices[indices.length - 1];
+    const firstI = indices[0];
+    const lastX = xScale(activeXData[lastI] ?? lastI);
+    const firstX = xScale(activeXData[firstI] ?? firstI);
     parts.push(`L${lastX},${panel.height}`);
     parts.push(`L${firstX},${panel.height}`);
     parts.push("Z");
     return parts.join("");
   }, [
+    indices,
     stream.yData,
     stream.config.area,
     xScale,

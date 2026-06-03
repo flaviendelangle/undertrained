@@ -2,6 +2,11 @@ import * as React from "react";
 
 import Link from "next/link";
 
+import {
+  ChartTooltipHeader,
+  ChartTooltipRow,
+  ChartTooltipSurface,
+} from "../ChartTooltipSurface";
 import { formatDuration } from "./formatDuration";
 import type { ActivityInfo } from "./types";
 
@@ -39,9 +44,7 @@ export const PowerCurveTooltip = React.memo(function PowerCurveTooltip({
   const [clampedLeft, setClampedLeft] = React.useState(clientX);
 
   React.useLayoutEffect(() => {
-    setContainerTop(
-      containerRef.current?.getBoundingClientRect().top ?? 0,
-    );
+    setContainerTop(containerRef.current?.getBoundingClientRect().top ?? 0);
     const tooltipWidth = tooltipRef.current?.offsetWidth ?? 0;
     const halfWidth = tooltipWidth / 2;
     const minLeft = halfWidth;
@@ -52,7 +55,7 @@ export const PowerCurveTooltip = React.memo(function PowerCurveTooltip({
   return (
     <div
       ref={tooltipRef}
-      className="border-border bg-popover/95 fixed z-50 rounded-md border px-3 py-2 text-xs shadow-lg backdrop-blur-sm"
+      className="fixed z-50"
       style={{
         left: clampedLeft,
         top: containerTop + 16,
@@ -60,37 +63,32 @@ export const PowerCurveTooltip = React.memo(function PowerCurveTooltip({
         pointerEvents: frozen ? "auto" : "none",
       }}
     >
-      <p className="text-muted-foreground mb-1 text-xs">
-        {formatDuration(duration)}
-      </p>
-      <div className="flex flex-col gap-1">
-        {entries.map((entry) => {
-          if (entry.value == null) return null;
-          return (
-            <div
-              key={entry.id}
-              className="flex items-center gap-2 text-sm whitespace-nowrap"
-            >
-              <span
-                className="inline-block size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: entry.color }}
+      <ChartTooltipSurface>
+        <ChartTooltipHeader>{formatDuration(duration)}</ChartTooltipHeader>
+        <div className="flex flex-col gap-1">
+          {entries.map((entry) => {
+            if (entry.value == null) return null;
+            return (
+              <ChartTooltipRow
+                key={entry.id}
+                color={entry.color}
+                label={entry.label}
+                value={formatValue(entry.value, entry.unit)}
+                trailing={
+                  entry.activity && (
+                    <Link
+                      href={`/activities/${entry.activity.activityStravaId}`}
+                      className="text-muted-foreground hover:text-foreground text-xs underline"
+                    >
+                      {entry.activity.activityName}
+                    </Link>
+                  )
+                }
               />
-              <span>{entry.label}</span>
-              <span className="font-medium">
-                {formatValue(entry.value, entry.unit)}
-              </span>
-              {entry.activity && (
-                <Link
-                  href={`/activities/${entry.activity.activityStravaId}`}
-                  className="text-muted-foreground hover:text-foreground text-xs underline"
-                >
-                  {entry.activity.activityName}
-                </Link>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </ChartTooltipSurface>
     </div>
   );
 });

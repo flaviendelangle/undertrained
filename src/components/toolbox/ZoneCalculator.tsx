@@ -23,6 +23,7 @@ import {
 import { useRiderSettings } from "~/hooks/useRiderSettings";
 import { type AppMessageKey, type TFunction } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
+import { useChartTokens } from "~/lib/chartTokens";
 import {
   HR_ZONES,
   POWER_ZONES,
@@ -541,6 +542,7 @@ function PowerZonesTable({
   weightKg: number | null;
 }) {
   const t = useT();
+  const tokens = useChartTokens();
   const showWkg = weightKg != null && weightKg > 0;
 
   return (
@@ -581,7 +583,7 @@ function PowerZonesTable({
                   <div className="flex items-center gap-2">
                     <span
                       className="inline-block size-3 rounded-sm"
-                      style={{ backgroundColor: zone.color }}
+                      style={{ backgroundColor: tokens.zones[zone.ramp] }}
                     />
                     <span>Z{i + 1}</span>
                   </div>
@@ -619,6 +621,7 @@ function HrZonesTable({
   restingHr: number;
 }) {
   const t = useT();
+  const tokens = useChartTokens();
   // Karvonen formula: target HR = resting + (max - resting) * intensity%
   const hrReserve = maxHr - restingHr;
 
@@ -657,7 +660,7 @@ function HrZonesTable({
                   <div className="flex items-center gap-2">
                     <span
                       className="inline-block size-3 rounded-sm"
-                      style={{ backgroundColor: zone.color }}
+                      style={{ backgroundColor: tokens.zones[zone.ramp] }}
                     />
                     <span>Z{i + 1}</span>
                   </div>
@@ -680,6 +683,7 @@ function HrZonesTable({
 
 function RunningPaceZonesTable({ vdot }: { vdot: number }) {
   const t = useT();
+  const tokens = useChartTokens();
   const zones = React.useMemo(() => computeRunningZones(vdot), [vdot]);
 
   return (
@@ -712,7 +716,7 @@ function RunningPaceZonesTable({ vdot }: { vdot: number }) {
                   <div className="flex items-center gap-2">
                     <span
                       className="inline-block size-3 rounded-sm"
-                      style={{ backgroundColor: zone.color }}
+                      style={{ backgroundColor: tokens.zones[zone.ramp] }}
                     />
                     <span>{zone.name}</span>
                   </div>

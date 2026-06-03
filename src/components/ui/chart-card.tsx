@@ -41,12 +41,23 @@ interface ChartCardProps {
   /** Optional info tooltip rendered as an icon next to the title. */
   info?: string;
   /**
+   * Rich header content between the title/info and the `actions` — e.g. a
+   * {@link FeatureHint}. Use this when a simple `info` tooltip isn't enough,
+   * rather than hand-rolling the whole card chrome.
+   */
+  headerSlot?: React.ReactNode;
+  /**
    * Header content after the title/info. The caller owns its layout (spacers,
    * `ml-auto`, responsive controls) so existing toolbars move over verbatim.
    */
   actions?: React.ReactNode;
   /** Extra classes for the body wrapper (e.g. `flex` for a side readout). */
   bodyClassName?: string;
+  /**
+   * "fixed" (default) keeps the standard `h-96` column; "auto" lets the body
+   * size to the chart's own height (e.g. the multi-panel streams chart).
+   */
+  height?: "fixed" | "auto";
   /** The chart itself. */
   children: React.ReactNode;
 }
@@ -60,8 +71,10 @@ interface ChartCardProps {
 export function ChartCard({
   title,
   info,
+  headerSlot,
   actions,
   bodyClassName,
+  height = "fixed",
   children,
 }: ChartCardProps) {
   const surface = React.useContext(ChartCardSurfaceContext);
@@ -69,7 +82,8 @@ export function ChartCard({
   return (
     <div
       className={cn(
-        "flex h-96 w-full flex-col",
+        "flex w-full flex-col",
+        height === "fixed" && "h-96",
         surface === "card" ? "bg-card rounded-sm" : "md:bg-card md:rounded-sm",
       )}
     >
@@ -92,9 +106,14 @@ export function ChartCard({
             </button>
           </Tooltip>
         )}
+        {headerSlot}
         {actions}
       </div>
-      <div className={cn("min-h-0 flex-1", bodyClassName)}>{children}</div>
+      {/* One calm fade-up on mount, shared by every chart (gated on
+          prefers-reduced-motion inside the utility). */}
+      <div className={cn("min-h-0 flex-1 animate-chart-in", bodyClassName)}>
+        {children}
+      </div>
     </div>
   );
 }

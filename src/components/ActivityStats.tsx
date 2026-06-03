@@ -100,7 +100,7 @@ export const ActivityStats = React.memo(function ActivityStats({
       ? [
           {
             icon: Gauge,
-            label: t("stats.avgLabel", { label: sportConfig.speedLabel }),
+            label: t("stats.avgLabel", { label: t(sportConfig.speedLabelKey) }),
             value: sportConfig.formatSpeed(activity.averageSpeed),
           },
         ]
@@ -141,7 +141,7 @@ export const ActivityStats = React.memo(function ActivityStats({
     ...(activity.averageSpeed > 0
       ? [
           {
-            label: t("stats.avgLabel", { label: sportConfig.speedLabel }),
+            label: t("stats.avgLabel", { label: t(sportConfig.speedLabelKey) }),
             value: sportConfig.formatSpeed(activity.averageSpeed),
           },
         ]
@@ -149,7 +149,7 @@ export const ActivityStats = React.memo(function ActivityStats({
     ...(activity.maxSpeed != null && activity.maxSpeed > 0
       ? [
           {
-            label: t("stats.maxLabel", { label: sportConfig.speedLabel }),
+            label: t("stats.maxLabel", { label: t(sportConfig.speedLabelKey) }),
             value: sportConfig.formatSpeed(activity.maxSpeed),
           },
         ]
@@ -201,6 +201,7 @@ export const ActivityStats = React.memo(function ActivityStats({
           {
             label: t("stats.normalizedPower"),
             value: `${Math.round(np)} W`,
+            tooltip: t("stats.normalizedPowerTooltip"),
           },
         ]
       : []),
@@ -319,7 +320,7 @@ export const ActivityStats = React.memo(function ActivityStats({
 
       {/* Grouped Sections */}
       <div className="flex flex-col gap-4">
-        <StatSection icon={Clock} title={t("stats.section.timeAndSpeed", { label: sportConfig.speedLabel })}>
+        <StatSection icon={Clock} title={t("stats.section.timeAndSpeed", { label: t(sportConfig.speedLabelKey) })}>
           {timeSpeedStats.map((stat) => (
             <StatCard key={stat.label} {...stat} />
           ))}

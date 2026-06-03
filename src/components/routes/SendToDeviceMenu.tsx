@@ -24,8 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { useT } from "~/i18n/useT";
-import { buildFitCourse } from "~/utils/fitCourse";
-import { downloadFitFile } from "~/utils/fitFileGenerator";
 import { buildGpx, downloadFile } from "~/utils/gpx";
 import type { LatLngTuple } from "~/utils/polyline";
 import type { RouteSport } from "~/utils/routeProfiles";
@@ -75,7 +73,14 @@ export function SendToDeviceMenu({
     downloadFile(`${filenameBase}.gpx`, xml, "application/gpx+xml");
   };
 
-  const onDownloadFit = () => {
+  // The FIT writer (@markw65/fit-file-writer, ~2.6M) is only needed when the
+  // user actually exports a .fit — load it on demand so it stays out of the
+  // route-builder's initial chunk.
+  const onDownloadFit = async () => {
+    const [{ buildFitCourse }, { downloadFitFile }] = await Promise.all([
+      import("~/utils/fitCourse"),
+      import("~/utils/fitFileGenerator"),
+    ]);
     const buffer = buildFitCourse({
       name: safe,
       sport,
@@ -114,7 +119,7 @@ export function SendToDeviceMenu({
           <FileDownIcon />
           {t("routes.send.downloadGpx")}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={onDownloadFit}>
+        <DropdownMenuItem onClick={() => void onDownloadFit()}>
           <FileDownIcon />
           {t("routes.send.downloadFit")}
         </DropdownMenuItem>

@@ -91,73 +91,69 @@ export class WebGLChartRenderer {
     const gl = this.gl;
     if (!gl) return;
 
-    // Clean up existing buffers for this panel
-    this.deletePanelBuffers(panelIndex);
+    // Reuse this panel's existing VAOs/buffers and just re-upload the vertex
+    // data, rather than deleting and recreating GL objects on every update.
+    // Allocating/freeing VAOs+buffers each frame (on every zoom/resize/theme
+    // change) causes driver churn and GC pressure; bufferData with DYNAMIC_DRAW
+    // reuses the storage.
+    const existing = this.panelBuffers.get(panelIndex);
 
-    const lineVAO = gl.createVertexArray();
-    const lineBuffer = gl.createBuffer();
-    if (!lineVAO || !lineBuffer) return;
-    const lineVertexCount = data.lineMesh.length / 2;
-    this.setupVAO(
+    const line = this.uploadBuffer(
       gl,
-      lineVAO,
-      lineBuffer,
+      existing ? { vao: existing.lineVAO, buffer: existing.lineBuffer } : null,
       data.lineMesh,
       this.solidProgram!.aPosition,
     );
+    if (!line) return;
+    const lineVertexCount = data.lineMesh.length / 2;
 
-    let areaVAO: WebGLVertexArrayObject | null = null;
-    let areaBuffer: WebGLBuffer | null = null;
+    let areaVAO = existing?.areaVAO ?? null;
+    let areaBuffer = existing?.areaBuffer ?? null;
     let areaVertexCount = 0;
     if (data.areaMesh) {
-      areaVAO = gl.createVertexArray();
-      areaBuffer = gl.createBuffer();
-      if (areaVAO && areaBuffer) {
+      const area = this.uploadBuffer(
+        gl,
+        areaVAO && areaBuffer ? { vao: areaVAO, buffer: areaBuffer } : null,
+        data.areaMesh,
+        this.gradientProgram!.aPosition,
+      );
+      if (area) {
+        areaVAO = area.vao;
+        areaBuffer = area.buffer;
         areaVertexCount = data.areaMesh.length / 2;
-        this.setupVAO(
-          gl,
-          areaVAO,
-          areaBuffer,
-          data.areaMesh,
-          this.gradientProgram!.aPosition,
-        );
       }
     }
 
-    const gridVAO = gl.createVertexArray();
-    const gridBuffer = gl.createBuffer();
-    if (!gridVAO || !gridBuffer) return;
-    this.setupVAO(
+    const grid = this.uploadBuffer(
       gl,
-      gridVAO,
-      gridBuffer,
+      existing ? { vao: existing.gridVAO, buffer: existing.gridBuffer } : null,
       data.gridMesh,
       this.solidProgram!.aPosition,
     );
+    if (!grid) return;
 
-    const separatorVAO = gl.createVertexArray();
-    const separatorBuffer = gl.createBuffer();
-    if (!separatorVAO || !separatorBuffer) return;
-    this.setupVAO(
+    const separator = this.uploadBuffer(
       gl,
-      separatorVAO,
-      separatorBuffer,
+      existing
+        ? { vao: existing.separatorVAO, buffer: existing.separatorBuffer }
+        : null,
       data.separatorMesh,
       this.solidProgram!.aPosition,
     );
+    if (!separator) return;
 
     this.panelBuffers.set(panelIndex, {
-      lineVAO,
-      lineBuffer,
+      lineVAO: line.vao,
+      lineBuffer: line.buffer,
       lineVertexCount,
       areaVAO,
       areaBuffer,
       areaVertexCount,
-      gridVAO,
-      gridBuffer,
+      gridVAO: grid.vao,
+      gridBuffer: grid.buffer,
       gridVertexCount: data.gridVertexCount,
-      separatorVAO,
-      separatorBuffer,
+      separatorVAO: separator.vao,
+      separatorBuffer: separator.buffer,
     });
   }
 
@@ -249,19 +245,32 @@ export class WebGLChartRenderer {
     this.gl = null;
   }
 
-  private setupVAO(
+  /**
+   * Create-or-update a VAO/buffer pair: reuses the existing pair when given one
+   * (re-uploading via DYNAMIC_DRAW), otherwise allocates a new pair and wires up
+   * the vertex attribute. The attribute pointer only needs to be set once at
+   * creation — re-uploading the buffer keeps the VAO's binding valid.
+   */
+  private uploadBuffer(
     gl: WebGL2RenderingContext,
-    vao: WebGLVertexArrayObject,
-    buffer: WebGLBuffer,
+    existing: { vao: WebGLVertexArrayObject; buffer: WebGLBuffer } | null,
     data: Float32Array,
     attribLocation: number,
-  ): void {
+  ): { vao: WebGLVertexArrayObject; buffer: WebGLBuffer } | null {
+    const isNew = !existing;
+    const vao = existing?.vao ?? gl.createVertexArray();
+    const buffer = existing?.buffer ?? gl.createBuffer();
+    if (!vao || !buffer) return null;
+
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(attribLocation);
-    gl.vertexAttribPointer(attribLocation, 2, gl.FLOAT, false, 0, 0);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    if (isNew) {
+      gl.enableVertexAttribArray(attribLocation);
+      gl.vertexAttribPointer(attribLocation, 2, gl.FLOAT, false, 0, 0);
+    }
     gl.bindVertexArray(null);
+    return { vao, buffer };
   }
 
   private deletePanelBuffers(index: number): void {

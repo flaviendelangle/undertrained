@@ -12,7 +12,7 @@ import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useT } from "~/i18n/useT";
 import type { SessionDataPoint } from "~/sensors/types";
-import { getPowerZoneColor } from "~/sensors/types";
+import { findPowerZone } from "~/sensors/types";
 
 import { ChartThemeProvider } from "../charts/ChartThemeProvider";
 
@@ -51,10 +51,10 @@ export function PowerHrChart(props: PowerHrChartProps) {
     () =>
       points.map((p) =>
         p.power != null && p.power > 0
-          ? getPowerZoneColor(p.power, ftp)
-          : "#808080",
+          ? tokens.zones[findPowerZone(p.power, ftp).zone.ramp]
+          : tokens.zones[0],
       ),
-    [points, ftp],
+    [points, ftp, tokens],
   );
 
   const hasTargetPower = points.some((p) => p.targetPower != null);

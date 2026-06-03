@@ -25,10 +25,18 @@ export function useActivitiesQuery(options?: UseActivitiesQueryOptions) {
     { enabled: athleteId != null, placeholderData: keepPreviousData },
   );
 
+  // Filter-dropdown options depend only on the athlete, so they're a separate
+  // query keyed on athleteId alone — fetched once and shared across every
+  // `useActivitiesQuery` caller, rather than re-scanned on each filter change.
+  const filterOptions = trpc.activities.filterOptions.useQuery(
+    { athleteId: athleteId! },
+    { enabled: athleteId != null },
+  );
+
   return {
     data: result.data?.activities,
-    allTypes: result.data?.allTypes,
-    allWorkoutTypes: result.data?.allWorkoutTypes,
+    allTypes: filterOptions.data?.allTypes,
+    allWorkoutTypes: filterOptions.data?.allWorkoutTypes,
     isLoading: result.isLoading,
     isError: result.isError,
     error: result.error,

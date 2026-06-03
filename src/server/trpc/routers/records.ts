@@ -152,17 +152,40 @@ export const recordsRouter = router({
           limit: 1,
         }).then((rows) => ({ label, stravaId: rows[0]?.activityStravaId }));
 
-      const [powerLeaders, misc, runEffortRows] = await Promise.all([
-        Promise.all(
-          CYCLING_POWER_DURATIONS.map((d) =>
-            single(
-              sql`(a.power_bests ->> ${String(d.seconds)})::int`,
-              sql`DESC`,
-              `${d.label} power`,
-              cycling,
-            ),
+      // All-time #1 holder for each headline power duration, in a single query:
+      // unnest the power_bests jsonb once and rank by watts per duration (the
+      // windowed pattern from analytics.getPowerCurve) instead of firing one
+      // LIMIT-1 query per duration (16 round-trips → 1).
+      const powerDurationList = sql.join(
+        CYCLING_POWER_DURATIONS.map((d) => sql`${d.seconds}`),
+        sql`, `,
+      );
+
+      const [powerLeaderRows, misc, runEffortRows] = await Promise.all([
+        ctx.db.execute<{ duration: string; strava_id: string }>(sql`
+          WITH unnested AS (
+            SELECT
+              a.strava_id,
+              (kv.key)::int AS duration,
+              (kv.value)::int AS watts
+            FROM activities a,
+            LATERAL jsonb_each_text(a.power_bests) AS kv(key, value)
+            WHERE a.athlete = ${input.athleteId}
+              AND a.power_bests IS NOT NULL
+              AND (kv.key)::int IN (${powerDurationList})
+              AND a.type IN (${typeList(CYCLING_TYPES)})
           ),
-        ),
+          ranked AS (
+            SELECT
+              strava_id,
+              duration,
+              ROW_NUMBER() OVER (PARTITION BY duration ORDER BY watts DESC) AS rn
+            FROM unnested
+          )
+          SELECT duration, strava_id
+          FROM ranked
+          WHERE rn = 1
+        `),
         Promise.all([
           single(sql`a.distance`, sql`DESC`, "Longest ride", cycling),
           single(sql`a.distance`, sql`DESC`, "Longest run", running),
@@ -197,7 +220,15 @@ export const recordsRouter = router({
         }
       };
 
-      for (const leader of [...powerLeaders, ...misc]) {
+      const powerLeaderByDuration = new Map(
+        powerLeaderRows.map((r) => [Number(r.duration), Number(r.strava_id)]),
+      );
+      // Preserve the original ordering: power durations (ascending) first, then
+      // the misc records, then run efforts.
+      for (const d of CYCLING_POWER_DURATIONS) {
+        add(powerLeaderByDuration.get(d.seconds), `${d.label} power`);
+      }
+      for (const leader of misc) {
         add(leader.stravaId, leader.label);
       }
       for (const row of runEffortRows) {

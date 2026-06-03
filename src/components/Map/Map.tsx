@@ -17,6 +17,7 @@ import type { ListActivity } from "@server/db/types";
 import { useExplorerTiles } from "~/hooks/useExplorerTiles";
 import { useExplorerTilesToggle } from "~/hooks/useExplorerTilesToggle";
 import { TILE_PROVIDERS, useTileStyle } from "~/hooks/useTileStyle";
+import { sportColor, useChartTokens } from "~/lib/chartTokens";
 import { decode } from "~/utils/polyline";
 
 import { ExplorerTilesLayer } from "./ExplorerTilesLayer";
@@ -79,11 +80,13 @@ export default function Map(props: MapProps) {
     interactive = true,
     onReady,
     routePositions,
+    routeActivityType,
     zoomControl = true,
   } = props;
   const { showExplorerTiles } = useExplorerTilesToggle();
   const { tileStyle } = useTileStyle();
   const tileProvider = TILE_PROVIDERS[tileStyle];
+  const tokens = useChartTokens();
 
   // The map is "ready" once the view has been fitted to the routes AND the
   // tiles for that view have finished loading. We track both signals and fire
@@ -169,9 +172,16 @@ export default function Map(props: MapProps) {
   );
   const explorerTilesData = useExplorerTiles(explorerPolylines);
 
+  // For the heatmap (many overlaid routes) render polylines to a single canvas
+  // instead of one SVG <path> per route — hundreds of SVG nodes make pan/zoom
+  // janky. Single-activity / route maps keep the SVG renderer: their node count
+  // is low and SVG paths support the hover cursor on clickable routes.
+  const preferCanvas = (decodedActivityPolylines?.length ?? 0) > 1;
+
   return (
     <div className="relative h-full w-full">
       <MapContainer
+        preferCanvas={preferCanvas}
         center={{ lat: 0, lng: 0 }}
         zoom={14}
         className="z-0 h-full w-full"
@@ -204,36 +214,58 @@ export default function Map(props: MapProps) {
             visible={showExplorerTiles}
           />
         )}
-        {polylines?.map((entry) => (
-          <Polyline
-            key={entry.id}
-            positions={entry.polyline}
-            color="red"
-            pathOptions={{
-              className: enableActivityClick ? "cursor-pointer" : undefined,
-            }}
-            eventHandlers={
-              enableActivityClick && "activity" in entry
-                ? {
-                    click: (e) => {
-                      const { clientX, clientY } = e.originalEvent;
-                      setSelectedActivity({
-                        activity: (entry as { activity: ListActivity }).activity,
-                        position: { x: clientX, y: clientY },
-                      });
-                    },
-                  }
-                : undefined
-            }
-          />
-        ))}
+        {polylines?.map((entry) => {
+          // Many overlaid routes (heatmap) read as density, so draw them all in
+          // a single low-opacity brand teal that builds up where you ride most.
+          // A single route is colored by its sport so it matches the Journal
+          // chip and the by-sport timeline (falling back to the brand accent
+          // when the sport isn't known, e.g. a raw `routePositions` route).
+          const color = preferCanvas
+            ? tokens.accent
+            : "activity" in entry
+              ? sportColor(
+                  tokens,
+                  (entry as { activity: ListActivity }).activity.type,
+                )
+              : routeActivityType
+                ? sportColor(tokens, routeActivityType)
+                : tokens.accent;
+          return (
+            <Polyline
+              key={entry.id}
+              positions={entry.polyline}
+              pathOptions={{
+                color,
+                weight: preferCanvas ? 2 : 3,
+                opacity: preferCanvas ? 0.5 : 1,
+                className: enableActivityClick ? "cursor-pointer" : undefined,
+              }}
+              eventHandlers={
+                enableActivityClick && "activity" in entry
+                  ? {
+                      click: (e) => {
+                        const { clientX, clientY } = e.originalEvent;
+                        setSelectedActivity({
+                          activity: (entry as { activity: ListActivity })
+                            .activity,
+                          position: { x: clientX, y: clientY },
+                        });
+                      },
+                    }
+                  : undefined
+              }
+            />
+          );
+        })}
         {highlightPosition && (
+          // "You are here" marker — brand teal fill with a card-colored ring,
+          // the same treatment as the WebGL charts' crosshair dot.
           <CircleMarker
             center={highlightPosition}
             radius={6}
             pathOptions={{
-              color: "white",
-              fillColor: "#3b82f6",
+              color: tokens.cardBg,
+              fillColor: tokens.accent,
               fillOpacity: 1,
               weight: 2,
             }}
@@ -283,6 +315,11 @@ interface MapProps {
   /** Called once the view is fitted and its tiles have finished loading. */
   onReady?: () => void;
   routePositions?: [number, number][] | null;
+  /**
+   * Sport/activity type for a `routePositions` route, used to color it by sport
+   * (matching the Journal chip). Falls back to the brand accent when absent.
+   */
+  routeActivityType?: string;
   /** Whether to show Leaflet's zoom +/- buttons. Defaults to `true`. */
   zoomControl?: boolean;
 }

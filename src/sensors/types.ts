@@ -145,14 +145,16 @@ export interface SensorConnection<T> {
   disconnect: () => Promise<void>;
 }
 
+// `ramp` indexes the theme-aware cool→hot zone ramp in chartTokens.ts
+// (`tokens.zones`). Resolve a color at render time — never hardcode a hex here.
 export const POWER_ZONES = [
-  { name: "Recovery", maxPct: 0.55, color: "#808080" },
-  { name: "Endurance", maxPct: 0.75, color: "#3B82F6" },
-  { name: "Tempo", maxPct: 0.9, color: "#22C55E" },
-  { name: "Threshold", maxPct: 1.05, color: "#EAB308" },
-  { name: "VO2max", maxPct: 1.2, color: "#F97316" },
-  { name: "Anaerobic", maxPct: 1.5, color: "#EF4444" },
-  { name: "Neuromuscular", maxPct: Infinity, color: "#DC2626" },
+  { name: "Recovery", maxPct: 0.55, ramp: 0 },
+  { name: "Endurance", maxPct: 0.75, ramp: 1 },
+  { name: "Tempo", maxPct: 0.9, ramp: 2 },
+  { name: "Threshold", maxPct: 1.05, ramp: 3 },
+  { name: "VO2max", maxPct: 1.2, ramp: 4 },
+  { name: "Anaerobic", maxPct: 1.5, ramp: 5 },
+  { name: "Neuromuscular", maxPct: Infinity, ramp: 6 },
 ] as const;
 
 export function findPowerZone(
@@ -169,10 +171,6 @@ export function findPowerZone(
   };
 }
 
-export function getPowerZoneColor(power: number, ftp: number): string {
-  return findPowerZone(power, ftp).zone.color;
-}
-
 export function getPowerZoneName(power: number, ftp: number): string {
   return findPowerZone(power, ftp).zone.name;
 }
@@ -183,12 +181,14 @@ export function getPowerZoneIndex(power: number, ftp: number): number {
 
 // ── Heart-rate zones (Karvonen / heart-rate reserve) ─────────────────
 
+// `ramp` indexes the shared zone ramp (chartTokens `tokens.zones`). HR has five
+// zones, so it skips ramp index 4 (orange) and tops out at 5 (red).
 export const HR_ZONES = [
-  { name: "Recovery", minPct: 0.5, maxPct: 0.6, color: "#808080" },
-  { name: "Aerobic", minPct: 0.6, maxPct: 0.7, color: "#3B82F6" },
-  { name: "Tempo", minPct: 0.7, maxPct: 0.8, color: "#22C55E" },
-  { name: "Threshold", minPct: 0.8, maxPct: 0.9, color: "#EAB308" },
-  { name: "VO2max", minPct: 0.9, maxPct: 1.0, color: "#EF4444" },
+  { name: "Recovery", minPct: 0.5, maxPct: 0.6, ramp: 0 },
+  { name: "Aerobic", minPct: 0.6, maxPct: 0.7, ramp: 1 },
+  { name: "Tempo", minPct: 0.7, maxPct: 0.8, ramp: 2 },
+  { name: "Threshold", minPct: 0.8, maxPct: 0.9, ramp: 3 },
+  { name: "VO2max", minPct: 0.9, maxPct: 1.0, ramp: 5 },
 ] as const;
 
 /**
@@ -207,14 +207,6 @@ export function findHeartRateZone(
     if (pct < HR_ZONES[i].maxPct) return { zone: HR_ZONES[i], index: i };
   }
   return { zone: HR_ZONES[HR_ZONES.length - 1], index: HR_ZONES.length - 1 };
-}
-
-export function getHeartRateZoneColor(
-  hr: number,
-  maxHr: number,
-  restingHr: number,
-): string {
-  return findHeartRateZone(hr, maxHr, restingHr).zone.color;
 }
 
 // ── Running pace zones (Jack Daniels VDOT) ───────────────────────────
@@ -273,12 +265,14 @@ export function predictRaceTime(vdot: number, distanceMeters: number): number {
   return (lo + hi) / 2;
 }
 
+// `ramp` indexes the shared zone ramp (chartTokens `tokens.zones`); like HR it
+// skips orange (4) and tops out at red (5).
 export const RUNNING_ZONES = [
-  { name: "Easy", color: "#808080" },
-  { name: "Marathon", color: "#3B82F6" },
-  { name: "Threshold", color: "#22C55E" },
-  { name: "Interval", color: "#EAB308" },
-  { name: "Repetition", color: "#EF4444" },
+  { name: "Easy", ramp: 0 },
+  { name: "Marathon", ramp: 1 },
+  { name: "Threshold", ramp: 2 },
+  { name: "Interval", ramp: 3 },
+  { name: "Repetition", ramp: 5 },
 ] as const;
 
 export interface PaceRange {

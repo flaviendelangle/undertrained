@@ -14,7 +14,7 @@ import {
   ResponsivePopoverTitle,
   ResponsivePopoverTrigger,
 } from "~/components/ui/responsive-popover";
-import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
+import { useActivitiesFilteredByType } from "~/hooks/useActivitiesFilteredByType";
 import { useGroupActivitiesByTimeSlice } from "~/hooks/useGroupActivitiesByTimeSlice";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
@@ -25,6 +25,7 @@ import {
   AXIS_SIZE,
   CHART_MARGINS,
   formatCompact,
+  sportColor,
   useChartTokens,
 } from "~/lib/chartTokens";
 import { formatSlice } from "~/utils/dateUtils";
@@ -47,7 +48,8 @@ export default function ActivitiesTimeline() {
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
   const [precision, setPrecision] = React.useState<SlicePrecision>("week");
-  const activitiesQuery = useActivitiesQuery({ activityTypes: selectedTypes });
+  const activitiesQuery = useActivitiesFilteredByType(selectedTypes);
+  const activities = activitiesQuery.activities;
   const { timeline } = useRiderSettingsTimeline();
 
   const metricContext: MetricContext = React.useMemo(
@@ -57,11 +59,11 @@ export default function ActivitiesTimeline() {
 
   const slices = useTimeSlices({
     precision,
-    activities: activitiesQuery.data,
+    activities,
   });
 
   const groupedActivities = useGroupActivitiesByTimeSlice({
-    activities: activitiesQuery.data,
+    activities,
     slices,
     precision,
   });
@@ -142,12 +144,15 @@ export default function ActivitiesTimeline() {
     }
 
     const activityTypes = new Set<string>();
-    activitiesQuery.data?.forEach((activity) => {
+    activities?.forEach((activity) => {
       activityTypes.add(activity.type);
     });
 
     return Array.from(activityTypes).map((activityType) => ({
       label: sportTypeLabel(activityType, t),
+      // Color each sport's stack by its sport-category color so cycling/running/
+      // etc. read identically here, in the Journal, and on the Map.
+      color: sportColor(tokens, activityType),
       data: groupedActivities.map((group) =>
         group.activities.reduce((acc, activity) => {
           if (activity.type === activityType) {
@@ -163,8 +168,9 @@ export default function ActivitiesTimeline() {
     groupedActivities,
     metricConfig,
     metricContext,
-    activitiesQuery.data,
+    activities,
     formatValue,
+    tokens,
     t,
   ]);
 
@@ -268,8 +274,8 @@ export default function ActivitiesTimeline() {
               },
             ]}
             series={series}
-            colors={tokens.palette}
             grid={{ horizontal: true }}
+            skipAnimation
             margin={
               isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
             }

@@ -1,12 +1,19 @@
 import * as React from "react";
 
 import { format, subDays } from "date-fns";
-import { SlidersHorizontalIcon, X } from "lucide-react";
+import {
+  BarChart3Icon,
+  LayersIcon,
+  SlidersHorizontalIcon,
+  TrendingUpIcon,
+  X,
+} from "lucide-react";
 
 import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { Button } from "~/components/ui/button";
 import { ChartCard } from "~/components/ui/chart-card";
 import { Label } from "~/components/ui/label";
+import { NumberField } from "~/components/ui/number-field";
 import {
   ResponsivePopover,
   ResponsivePopoverContent,
@@ -28,13 +35,23 @@ import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { type TFunction } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
+import { cn } from "~/lib/utils";
 import { trpc } from "~/utils/trpc";
 
+import { ChartMessage } from "../ChartMessage";
 import {
   type PowerCurveMode,
   PowerCurveWebGLChart,
 } from "./PowerCurveWebGLChart";
+import { PowerSliceDistribution } from "./PowerSliceDistribution";
+import { PowerZoneDistribution } from "./PowerZoneDistribution";
 import type { ActivityInfo, PowerCurveSeriesData } from "./types";
+import {
+  clampSliceWidth,
+  MAX_SLICE_WIDTH,
+  MIN_SLICE_WIDTH,
+  usePowerSliceWidth,
+} from "./usePowerSliceWidth";
 
 // --- Types & constants ---
 
@@ -138,6 +155,8 @@ const ACTIVITY_RANGE_ID = "activity";
 const SINGLE_ACTIVITY_TYPES = ["Ride", "VirtualRide"];
 const SINGLE_ACTIVITY_LOCKED_IDS = new Set([ACTIVITY_RANGE_ID]);
 
+type PowerTab = "curve" | "zones" | "distribution";
+
 function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
   const t = useT();
   const tokens = useChartTokens();
@@ -147,6 +166,8 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
     presetToRange("all", t),
   ]);
   const [mode, setMode] = React.useState<PowerCurveMode>("watts");
+  const [tab, setTab] = React.useState<PowerTab>("curve");
+  const [sliceWidth, setSliceWidth] = usePowerSliceWidth();
   const { resolveForDate } = useRiderSettingsTimeline();
 
   const addRange = (range: DateRange) => {
@@ -162,20 +183,48 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
 
   const { data: activity } = trpc.activities.get.useQuery({ stravaId });
 
-  // One query per non-activity range
+  // The Zones and Distribution tabs work off the raw per-second watts stream
+  // (the curve itself comes from the precomputed `powerBests`). `ActivityStreams`
+  // higher on the page is responsible for fetching streams, so we only read the
+  // cached query here.
+  const { data: streamsData } = trpc.activityStreams.getStreams.useQuery({
+    stravaId,
+  });
+
+  const watts = React.useMemo<number[]>(() => {
+    const stream = streamsData?.find((s) => s.type === "watts");
+    if (!stream) return [];
+    try {
+      const parsed: unknown = JSON.parse(stream.data);
+      return Array.isArray(parsed) ? (parsed as number[]) : [];
+    } catch {
+      return [];
+    }
+  }, [streamsData]);
+
+  const ftp = activity?.startDate ? resolveForDate(activity.startDate).ftp : 0;
+  const weightedAverageWatts = activity?.weightedAverageWatts ?? null;
+
+  // One query per non-activity range. `combine` maps the results down to their
+  // data arrays here; React Query memoizes the combined output (replaceEqualDeep),
+  // so `queryResults` keeps a stable reference until the data actually changes.
+  // The raw `useQueries` array is a fresh reference every render, which would
+  // otherwise make the chart-data memo below recompute on every render.
   const queryRanges = ranges.filter((r) => r.id !== ACTIVITY_RANGE_ID);
-  const queries = trpc.useQueries((t) =>
-    queryRanges.map((range) =>
-      t.analytics.getPowerCurve(
-        {
-          athleteId: athleteId!,
-          activityTypes: SINGLE_ACTIVITY_TYPES,
-          dateFrom: range.dateFrom,
-          dateTo: range.dateTo,
-        },
-        { enabled: athleteId != null },
+  const queryResults = trpc.useQueries(
+    (t) =>
+      queryRanges.map((range) =>
+        t.analytics.getPowerCurve(
+          {
+            athleteId: athleteId!,
+            activityTypes: SINGLE_ACTIVITY_TYPES,
+            dateFrom: range.dateFrom,
+            dateTo: range.dateTo,
+          },
+          { enabled: athleteId != null },
+        ),
       ),
-    ),
+    { combine: (results) => results.map((r) => r.data ?? []) },
   );
 
   const { xData, series, activityMetadata } = React.useMemo(() => {
@@ -188,8 +237,6 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
           }))
           .sort((a, b) => a.duration - b.duration)
       : [];
-
-    const queryResults = queries.map((q) => q.data ?? []);
 
     const durationSet = new Set<number>();
     for (const d of activityData) durationSet.add(d.duration);
@@ -272,7 +319,7 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
       series: chartSeries,
       activityMetadata: metadata,
     };
-  }, [activity, queries, ranges, tokens.palette, resolveForDate]);
+  }, [activity, queryResults, ranges, tokens.palette, resolveForDate]);
 
   const hint = (
     <FeatureHint
@@ -284,37 +331,345 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
     </FeatureHint>
   );
 
-  if (xData.length === 0) {
-    return <EmptyChart />;
+  const tabOptions: {
+    value: PowerTab;
+    label: React.ReactNode;
+    tooltip: string;
+  }[] = [
+    {
+      value: "curve",
+      tooltip: t("charts.power.tabCurve"),
+      label: (
+        <>
+          <TrendingUpIcon className="size-4" />
+          <span className="sr-only">{t("charts.power.tabCurve")}</span>
+        </>
+      ),
+    },
+    {
+      value: "zones",
+      tooltip: t("charts.power.tabZones"),
+      label: (
+        <>
+          <LayersIcon className="size-4" />
+          <span className="sr-only">{t("charts.power.tabZones")}</span>
+        </>
+      ),
+    },
+    {
+      value: "distribution",
+      tooltip: t("charts.power.tabDistribution"),
+      label: (
+        <>
+          <BarChart3Icon className="size-4" />
+          <span className="sr-only">{t("charts.power.tabDistribution")}</span>
+        </>
+      ),
+    },
+  ];
+
+  // Only the Curve and Distribution tabs expose parameters; Zones is derived
+  // entirely from the FTP-based zones.
+  const settings =
+    tab === "curve" ? (
+      <CurveSettings
+        mode={mode}
+        onModeChange={setMode}
+        ranges={ranges}
+        onAddRange={addRange}
+        onRemoveRange={removeRange}
+        athleteId={athleteId}
+      />
+    ) : tab === "distribution" ? (
+      <DistributionSettings
+        sliceWidth={sliceWidth}
+        onSliceWidthChange={setSliceWidth}
+      />
+    ) : null;
+
+  const actions = (
+    <>
+      {hint}
+      <div className="flex-1" />
+      {settings && (
+        <ResponsivePopover>
+          <ResponsivePopoverTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground size-6"
+                aria-label={t("charts.power.settings")}
+              >
+                <SlidersHorizontalIcon className="size-4" />
+              </Button>
+            }
+          />
+          <ResponsivePopoverContent
+            align="end"
+            className="flex flex-col gap-4 sm:w-72"
+          >
+            {settings}
+          </ResponsivePopoverContent>
+        </ResponsivePopover>
+      )}
+      <SegmentedToggle value={tab} onChange={setTab} options={tabOptions} />
+    </>
+  );
+
+  const cardTitle = t("charts.powerCurve.activityCardTitle");
+
+  return (
+    <ChartCard title={cardTitle} actions={actions}>
+      {tab === "curve" &&
+        (xData.length === 0 ? (
+          <ChartMessage>{t("charts.powerCurve.empty")}</ChartMessage>
+        ) : (
+          <PowerCurveWebGLChart
+            xData={xData}
+            series={series}
+            activityMetadata={activityMetadata}
+            mode={mode}
+          />
+        ))}
+
+      {tab === "zones" &&
+        (streamsData == null ? (
+          <StreamLoading />
+        ) : (
+          <PowerZoneDistribution watts={watts} ftp={ftp} />
+        ))}
+
+      {tab === "distribution" &&
+        (streamsData == null ? (
+          <StreamLoading />
+        ) : (
+          <PowerSliceDistribution
+            watts={watts}
+            ftp={ftp}
+            sliceWidth={clampSliceWidth(sliceWidth)}
+            weightedAverageWatts={weightedAverageWatts}
+          />
+        ))}
+    </ChartCard>
+  );
+}
+
+/** Loading placeholder shown while the activity's streams are still fetching. */
+function StreamLoading() {
+  const t = useT();
+  return <ChartMessage>{t("charts.power.loading")}</ChartMessage>;
+}
+
+/** Curve-tab parameters: unit (W / W·kg⁻¹) and the comparison date ranges. */
+function CurveSettings({
+  mode,
+  onModeChange,
+  ranges,
+  onAddRange,
+  onRemoveRange,
+  athleteId,
+}: {
+  mode: PowerCurveMode;
+  onModeChange: (mode: PowerCurveMode) => void;
+  ranges: DateRange[];
+  onAddRange: (range: DateRange) => void;
+  onRemoveRange: (id: string) => void;
+  athleteId: number | null | undefined;
+}) {
+  const t = useT();
+  const tokens = useChartTokens();
+  const presetOptions = React.useMemo(() => createPresetOptions(t), [t]);
+  const { data: years } = trpc.analytics.getPowerCurveYears.useQuery(
+    { athleteId: athleteId!, activityTypes: SINGLE_ACTIVITY_TYPES },
+    { enabled: athleteId != null },
+  );
+
+  // Active ranges keyed by id, remembering their position so each toggle can
+  // show the dot in its plotted series colour.
+  const activeById = React.useMemo(
+    () => new Map(ranges.map((range, i) => [range.id, i])),
+    [ranges],
+  );
+  const colorFor = (id: string) => {
+    const index = activeById.get(id);
+    return index == null ? null : tokens.palette[index % tokens.palette.length];
+  };
+
+  const togglePreset = (value: string) => {
+    const range = presetToRange(value, t);
+    if (activeById.has(range.id)) {
+      if (!SINGLE_ACTIVITY_LOCKED_IDS.has(range.id)) onRemoveRange(range.id);
+    } else {
+      onAddRange(range);
+    }
+  };
+
+  const toggleYear = (year: number) => {
+    const id = `year-${year}`;
+    if (activeById.has(id)) onRemoveRange(id);
+    else onAddRange(makeYearRange(year));
+  };
+
+  return (
+    <>
+      <ResponsivePopoverHeader>
+        <ResponsivePopoverTitle>
+          {t("charts.power.curveSettings")}
+        </ResponsivePopoverTitle>
+      </ResponsivePopoverHeader>
+      <div className="flex flex-col gap-1.5">
+        <Label>{t("charts.power.unit")}</Label>
+        <SegmentedToggle
+          size="default"
+          value={mode}
+          onChange={onModeChange}
+          options={MODE_OPTIONS}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label>{t("charts.power.compareWith")}</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {/* The activity itself is always plotted and can't be removed. */}
+          <RangeToggle
+            label={t("charts.powerCurve.thisActivity")}
+            color={colorFor(ACTIVITY_RANGE_ID)}
+            active
+            locked
+          />
+          {presetOptions.map((opt) => {
+            const id = presetToRange(opt.value, t).id;
+            return (
+              <RangeToggle
+                key={opt.value}
+                label={opt.label}
+                color={colorFor(id)}
+                active={activeById.has(id)}
+                onToggle={() => togglePreset(opt.value)}
+              />
+            );
+          })}
+        </div>
+        {years && years.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-muted-foreground text-xs">
+              {t("charts.power.years")}
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {years.map((year) => {
+                const id = `year-${year}`;
+                return (
+                  <RangeToggle
+                    key={year}
+                    label={String(year)}
+                    color={colorFor(id)}
+                    active={activeById.has(id)}
+                    onToggle={() => toggleYear(year)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * A togglable pill for a comparison date range — active pills carry a dot in
+ * their plotted series colour, inactive ones are dashed and muted. Replaces the
+ * old "add range" dropdown so every option is visible and one click away.
+ */
+function RangeToggle({
+  label,
+  color,
+  active,
+  locked = false,
+  onToggle,
+}: {
+  label: string;
+  color: string | null;
+  active: boolean;
+  locked?: boolean;
+  onToggle?: () => void;
+}) {
+  // Both states keep the same box (1px border + a dot slot) so toggling only
+  // swaps colours, never resizes the pill. Active = solid fill + the series
+  // colour dot; inactive = dashed outline + a hollow muted dot.
+  const className = cn(
+    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+    active
+      ? "border-transparent bg-muted text-foreground"
+      : "border-border text-muted-foreground hover:bg-muted border-dashed",
+  );
+  const dot = (
+    <span
+      className={cn(
+        "inline-block size-2 rounded-full",
+        !active && "border-muted-foreground/50 border",
+      )}
+      style={active && color ? { backgroundColor: color } : undefined}
+    />
+  );
+
+  // The always-on range (this activity) is shown as a static pill, not a toggle.
+  if (locked) {
+    return (
+      <span className={className}>
+        {dot}
+        {label}
+      </span>
+    );
   }
 
   return (
-    <ChartCard
-      title={t("charts.powerCurve.activityCardTitle")}
-      actions={
-        <Toolbar
-          ranges={ranges}
-          onAddPreset={addRange}
-          onAddCustom={addRange}
-          onRemove={removeRange}
-          lockedRangeIds={SINGLE_ACTIVITY_LOCKED_IDS}
-          athleteId={athleteId}
-          activityTypes={SINGLE_ACTIVITY_TYPES}
-          workoutTypes={undefined}
-          mode={mode}
-          onModeChange={setMode}
-          showCustomRange={false}
-          hint={hint}
-        />
-      }
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      className={className}
     >
-      <PowerCurveWebGLChart
-        xData={xData}
-        series={series}
-        activityMetadata={activityMetadata}
-        mode={mode}
-      />
-    </ChartCard>
+      {dot}
+      {label}
+    </button>
+  );
+}
+
+/** Distribution-tab parameters: the histogram slice width (watts). */
+function DistributionSettings({
+  sliceWidth,
+  onSliceWidthChange,
+}: {
+  sliceWidth: number;
+  onSliceWidthChange: (width: number) => void;
+}) {
+  const t = useT();
+  return (
+    <>
+      <ResponsivePopoverHeader>
+        <ResponsivePopoverTitle>
+          {t("charts.power.distributionSettings")}
+        </ResponsivePopoverTitle>
+      </ResponsivePopoverHeader>
+      <div className="flex flex-col gap-1.5">
+        <Label>{t("charts.power.sliceWidth")}</Label>
+        <NumberField
+          className="w-full"
+          value={sliceWidth}
+          onValueChange={(value) => {
+            if (value != null) onSliceWidthChange(value);
+          }}
+          min={MIN_SLICE_WIDTH}
+          max={MAX_SLICE_WIDTH}
+          step={5}
+          smallStep={1}
+        />
+        <p className="text-muted-foreground text-xs">
+          {t("charts.power.sliceWidthHint")}
+        </p>
+      </div>
+    </>
   );
 }
 
@@ -357,29 +712,33 @@ function AggregatedPowerCurve({
     setRanges((prev) => prev.filter((r) => r.id !== id));
   };
 
-  // One query per range
-  const queries = trpc.useQueries((t) =>
-    ranges.map((range) =>
-      t.analytics.getPowerCurve(
-        {
-          athleteId: athleteId!,
-          activityTypes,
-          workoutTypes,
-          dateFrom: range.dateFrom,
-          dateTo: range.dateTo,
-        },
-        { enabled: athleteId != null },
+  // One query per range. `combine` reduces the results to their data arrays and
+  // React Query memoizes that output (replaceEqualDeep), so `queryResults` stays
+  // referentially stable until the data changes — keeping the chart-data memo
+  // from recomputing on every render (the raw `useQueries` array is fresh each
+  // render).
+  const queryResults = trpc.useQueries(
+    (t) =>
+      ranges.map((range) =>
+        t.analytics.getPowerCurve(
+          {
+            athleteId: athleteId!,
+            activityTypes,
+            workoutTypes,
+            dateFrom: range.dateFrom,
+            dateTo: range.dateTo,
+          },
+          { enabled: athleteId != null },
+        ),
       ),
-    ),
+    { combine: (results) => results.map((r) => r.data ?? []) },
   );
 
   // Build multi-series chart data
   const { xData, series, activityMetadata } = React.useMemo(() => {
-    const allResults = queries.map((q) => q.data ?? []);
-
     // Union of all durations
     const durationSet = new Set<number>();
-    for (const result of allResults) {
+    for (const result of queryResults) {
       for (const d of result) {
         durationSet.add(d.duration);
       }
@@ -396,7 +755,7 @@ function AggregatedPowerCurve({
 
     const metadata: ActivityMetadataMap = {};
 
-    const chartSeries: PowerCurveSeriesData[] = allResults.map((data, i) => {
+    const chartSeries: PowerCurveSeriesData[] = queryResults.map((data, i) => {
       const seriesId = `range-${i}`;
       const byDuration = new Map(
         data.map((d) => [
@@ -423,7 +782,9 @@ function AggregatedPowerCurve({
       return {
         id: seriesId,
         yData: durations.map((d) => byDuration.get(d)?.watts ?? null),
-        label: ranges[i]?.label ?? t("charts.powerCurve.rangeFallback", { index: i + 1 }),
+        label:
+          ranges[i]?.label ??
+          t("charts.powerCurve.rangeFallback", { index: i + 1 }),
         color: tokens.palette[i % tokens.palette.length],
         weights: durations.map((d) => {
           const entry = byDuration.get(d);
@@ -438,7 +799,7 @@ function AggregatedPowerCurve({
       series: chartSeries,
       activityMetadata: metadata,
     };
-  }, [queries, ranges, tokens.palette, resolveForDate, t]);
+  }, [queryResults, ranges, tokens.palette, resolveForDate, t]);
 
   const toolbar = (
     <Toolbar
@@ -458,9 +819,7 @@ function AggregatedPowerCurve({
   if (xData.length === 0) {
     return (
       <ChartCard title={t("charts.powerCurve.cardTitle")} actions={toolbar}>
-        <div className="text-muted-foreground flex h-full items-center justify-center">
-          {t("charts.powerCurve.empty")}
-        </div>
+        <ChartMessage>{t("charts.powerCurve.empty")}</ChartMessage>
       </ChartCard>
     );
   }
@@ -741,18 +1100,5 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
         </div>
       </ResponsivePopoverContent>
     </ResponsivePopover>
-  );
-}
-
-// --- Shared empty state ---
-
-function EmptyChart() {
-  const t = useT();
-  return (
-    <ChartCard title={t("charts.powerCurve.activityCardTitle")}>
-      <div className="text-muted-foreground flex h-full items-center justify-center">
-        {t("charts.powerCurve.empty")}
-      </div>
-    </ChartCard>
   );
 }

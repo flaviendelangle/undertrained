@@ -36,6 +36,10 @@ export const trpc = createTRPCNext<AppRouter>({
         defaultOptions: {
           queries: {
             staleTime: 5 * 60 * 1000, // 5 minutes
+            // Activity/analytics data is historical, not live — refetching every
+            // time the window regains focus just triggers a storm of full-history
+            // refetches with no user benefit.
+            refetchOnWindowFocus: false,
             retry: (failureCount, error) => {
               if (isUnauthorized(error)) {
                 handleUnauthorized();

@@ -3,21 +3,22 @@ import * as React from "react";
 import { bisector } from "d3-array";
 import { scaleLinear, scaleLog } from "d3-scale";
 
-import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import {
   filterVisibleLabels,
   measureTickLabels,
 } from "~/lib/chartTicks/visibleLabels";
+import { CHART_FONT, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import {
-  WebGLChartRenderer,
   type PanelRenderData,
+  WebGLChartRenderer,
   buildLineStripMesh,
   colorToGLColor,
 } from "~/lib/webgl";
 
-import { formatDuration } from "./formatDuration";
+import { CrosshairDot, CrosshairLine } from "../shared/Crosshair";
 import { PowerCurveTooltip } from "./PowerCurveTooltip";
-import type { PowerCurveSeriesData, ActivityInfo } from "./types";
+import { formatDuration } from "./formatDuration";
+import type { ActivityInfo, PowerCurveSeriesData } from "./types";
 
 // --- Constants ---
 
@@ -38,11 +39,19 @@ const X_AXIS_LABEL_STYLE = { fontSize: 11 };
 
 /** Well-known reference durations for X-axis tick marks. */
 const X_AXIS_TICKS = [
-  1, 5, 10, 30,
-  60, 2 * 60, 5 * 60,
-  10 * 60, 20 * 60,
-  30 * 60, 60 * 60,
-  2 * 3600, 3 * 3600,
+  1,
+  5,
+  10,
+  30,
+  60,
+  2 * 60,
+  5 * 60,
+  10 * 60,
+  20 * 60,
+  30 * 60,
+  60 * 60,
+  2 * 3600,
+  3 * 3600,
   5 * 3600,
 ];
 
@@ -78,7 +87,9 @@ export function PowerCurveWebGLChart({
   const [hoverClientX, setHoverClientX] = React.useState<number | null>(null);
   const [frozen, setFrozen] = React.useState(false);
   const rafRef = React.useRef<number>(0);
-  const [renderer, setRenderer] = React.useState<WebGLChartRenderer | null>(null);
+  const [renderer, setRenderer] = React.useState<WebGLChartRenderer | null>(
+    null,
+  );
 
   // Track container size — the chart fills the available space (like the MUI
   // charts on the page) rather than using a fixed height, so the bottom margin
@@ -97,11 +108,14 @@ export function PowerCurveWebGLChart({
   }, []);
 
   // Initialize 2D grid canvas
-  const initGridCanvas = React.useCallback((canvas: HTMLCanvasElement | null) => {
-    if (!canvas) return;
-    gridCanvasRef.current = canvas;
-    gridCtxRef.current = canvas.getContext("2d", { alpha: true });
-  }, []);
+  const initGridCanvas = React.useCallback(
+    (canvas: HTMLCanvasElement | null) => {
+      if (!canvas) return;
+      gridCanvasRef.current = canvas;
+      gridCtxRef.current = canvas.getContext("2d", { alpha: true });
+    },
+    [],
+  );
 
   // Initialize WebGL renderer
   const canvasRef = React.useCallback((canvas: HTMLCanvasElement | null) => {
@@ -220,7 +234,9 @@ export function PowerCurveWebGLChart({
   }, [renderer, width, totalHeight]);
 
   // Resize 2D grid canvas (separate from WebGL to avoid clearing grid on renderer change)
-  const [gridCanvasSize, setGridCanvasSize] = React.useState<[number, number]>([0, 0]);
+  const [gridCanvasSize, setGridCanvasSize] = React.useState<[number, number]>([
+    0, 0,
+  ]);
   React.useEffect(() => {
     const canvas = gridCanvasRef.current;
     if (!canvas || width <= 0 || totalHeight <= 0) return;
@@ -272,7 +288,16 @@ export function PowerCurveWebGLChart({
     }
 
     ctx.restore();
-  }, [xScale, yScale, xTicks, yTicks, drawingWidth, drawingHeight, tokens, gridCanvasSize]);
+  }, [
+    xScale,
+    yScale,
+    xTicks,
+    yTicks,
+    drawingWidth,
+    drawingHeight,
+    tokens,
+    gridCanvasSize,
+  ]);
 
   // Rebuild WebGL geometry and render (data lines only, no grid)
   React.useEffect(() => {
@@ -420,13 +445,16 @@ export function PowerCurveWebGLChart({
 
   if (width === 0 || drawingHeight <= 0 || xData.length < 2) {
     return (
-      <div ref={containerRef} className="h-full w-full" style={{ minHeight: 200 }} />
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        style={{ minHeight: 200 }}
+      />
     );
   }
 
   // Compute crosshair x position
-  const crosshairX =
-    hoverIndex !== null ? xScale(xData[hoverIndex]) : null;
+  const crosshairX = hoverIndex !== null ? xScale(xData[hoverIndex]) : null;
 
   // Build tooltip entries
   const tooltipEntries =
@@ -470,81 +498,42 @@ export function PowerCurveWebGLChart({
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         className="relative select-none"
-        style={{ background: "transparent", cursor: frozen ? "pointer" : "crosshair" }}
+        style={{
+          background: "transparent",
+          cursor: frozen ? "pointer" : "crosshair",
+        }}
       >
-        {/* Y-axis labels */}
-        <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
-          {yTicks.map((tick) => (
-            <text
-              key={tick}
-              x={-8}
-              y={yScale(tick)}
-              textAnchor="end"
-              dominantBaseline="middle"
-              fill={tokens.axisLabel}
-              fontSize={10}
-            >
-              {mode === "watts"
-                ? `${tick} W`
-                : `${tick} W/kg`}
-            </text>
-          ))}
-        </g>
-
-        {/* X-axis */}
-        <g transform={`translate(${MARGIN.left}, ${MARGIN.top + drawingHeight})`}>
-          <line
-            x1={0}
-            y1={0}
-            x2={drawingWidth}
-            y2={0}
-            stroke={tokens.gridStrong.hex}
-            strokeWidth={1}
-          />
-          {xTickLabels.map((item) => (
-            <g key={item.value} transform={`translate(${item.position}, 0)`}>
-              <line y1={0} y2={5} stroke={tokens.gridStrong.hex} />
-              {visibleXLabels.has(item) && (
-                <text
-                  y={18}
-                  textAnchor="middle"
-                  fill={tokens.axisLabel}
-                  fontSize={11}
-                >
-                  {item.label}
-                </text>
-              )}
-            </g>
-          ))}
-        </g>
+        {/* Static axes — memoized so hover re-renders don't rebuild them. */}
+        <PowerCurveAxes
+          yTicks={yTicks}
+          yScale={yScale}
+          mode={mode}
+          drawingWidth={drawingWidth}
+          drawingHeight={drawingHeight}
+          xTickLabels={xTickLabels}
+          visibleXLabels={visibleXLabels}
+          tokens={tokens}
+        />
 
         {/* Crosshair */}
         {crosshairX !== null && hoverIndex !== null && (
           <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
-            <line
-              x1={crosshairX}
-              y1={0}
-              x2={crosshairX}
-              y2={drawingHeight}
-              stroke={tokens.crosshair}
-              strokeWidth={1}
-              strokeDasharray="3,3"
-              pointerEvents="none"
+            <CrosshairLine
+              x={crosshairX}
+              height={drawingHeight}
+              color={tokens.crosshair}
             />
             {series.map((s, sIdx) => {
               const value = seriesValues[sIdx][hoverIndex];
               if (value == null) return null;
               const cy = yScale(value);
               return (
-                <circle
+                <CrosshairDot
                   key={s.id}
                   cx={crosshairX}
                   cy={cy}
-                  r={3.5}
-                  fill={s.color}
-                  stroke={tokens.cardBg}
-                  strokeWidth={1.5}
-                  pointerEvents="none"
+                  color={s.color}
+                  ringColor={tokens.cardBg}
                 />
               );
             })}
@@ -565,3 +554,83 @@ export function PowerCurveWebGLChart({
     </div>
   );
 }
+
+// --- Static axes ---
+
+type XTickLabel = { value: number; label: string; position: number };
+
+interface PowerCurveAxesProps {
+  yTicks: number[];
+  yScale: (value: number) => number;
+  mode: PowerCurveMode;
+  drawingWidth: number;
+  drawingHeight: number;
+  xTickLabels: XTickLabel[];
+  visibleXLabels: Set<XTickLabel>;
+  tokens: ReturnType<typeof useChartTokens>;
+}
+
+/**
+ * Static axes (y-labels + x-axis ticks), split into a memoized component so a
+ * hover/mousemove — which updates `hoverIndex` on the parent every frame — does
+ * not re-create the whole axis SVG tree. None of these props depend on the
+ * hover state, so React.memo skips the re-render.
+ */
+const PowerCurveAxes = React.memo(function PowerCurveAxes({
+  yTicks,
+  yScale,
+  mode,
+  drawingWidth,
+  drawingHeight,
+  xTickLabels,
+  visibleXLabels,
+  tokens,
+}: PowerCurveAxesProps) {
+  return (
+    <>
+      {/* Y-axis labels */}
+      <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
+        {yTicks.map((tick) => (
+          <text
+            key={tick}
+            x={-8}
+            y={yScale(tick)}
+            textAnchor="end"
+            dominantBaseline="middle"
+            fill={tokens.axisLabel}
+            fontSize={CHART_FONT.tick}
+          >
+            {mode === "watts" ? `${tick} W` : `${tick} W/kg`}
+          </text>
+        ))}
+      </g>
+
+      {/* X-axis */}
+      <g transform={`translate(${MARGIN.left}, ${MARGIN.top + drawingHeight})`}>
+        <line
+          x1={0}
+          y1={0}
+          x2={drawingWidth}
+          y2={0}
+          stroke={tokens.gridStrong.hex}
+          strokeWidth={1}
+        />
+        {xTickLabels.map((item) => (
+          <g key={item.value} transform={`translate(${item.position}, 0)`}>
+            <line y1={0} y2={5} stroke={tokens.gridStrong.hex} />
+            {visibleXLabels.has(item) && (
+              <text
+                y={18}
+                textAnchor="middle"
+                fill={tokens.axisLabel}
+                fontSize={CHART_FONT.tick}
+              >
+                {item.label}
+              </text>
+            )}
+          </g>
+        ))}
+      </g>
+    </>
+  );
+});

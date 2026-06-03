@@ -61,24 +61,6 @@ export const activitiesRouter = router({
         conditions.push(lte(activities.startDate, periodDateTo + "T23:59:59Z"));
       }
 
-      // Run both queries in parallel
-      const allTypesPromise = ctx.db
-        .selectDistinct({ type: activities.type })
-        .from(activities)
-        .where(eq(activities.athlete, input.athleteId))
-        .then((rows) => rows.map((r) => r.type).sort());
-
-      const allWorkoutTypesPromise = ctx.db
-        .selectDistinct({ workoutType: activities.workoutType })
-        .from(activities)
-        .where(
-          and(
-            eq(activities.athlete, input.athleteId),
-            isNotNull(activities.workoutType),
-          ),
-        )
-        .then((rows) => rows.map((r) => r.workoutType!).sort((a, b) => a - b));
-
       // Omit the heavy jsonb columns (and mapPolyline unless requested) from the
       // list projection — none of the list consumers read them, so shipping them
       // wastes Postgres deserialization, wire, and client parsing on every load.
@@ -95,36 +77,57 @@ export const activitiesRouter = router({
       } = getTableColumns(activities);
 
       if (input.includeMap) {
-        const [filtered, allTypes, allWorkoutTypes] = await Promise.all([
-          ctx.db
-            .select({ ...leanColumns, mapPolyline: activities.mapPolyline })
-            .from(activities)
-            .where(and(...conditions))
-            .orderBy(desc(activities.startDate)),
-          allTypesPromise,
-          allWorkoutTypesPromise,
-        ]);
-        return { activities: filtered, allTypes, allWorkoutTypes };
-      }
-
-      const [filtered, allTypes, allWorkoutTypes] = await Promise.all([
-        ctx.db
-          .select(leanColumns)
+        const filtered = await ctx.db
+          .select({ ...leanColumns, mapPolyline: activities.mapPolyline })
           .from(activities)
           .where(and(...conditions))
-          .orderBy(desc(activities.startDate)),
-        allTypesPromise,
-        allWorkoutTypesPromise,
-      ]);
+          .orderBy(desc(activities.startDate));
+        return { activities: filtered };
+      }
+
+      const filtered = await ctx.db
+        .select(leanColumns)
+        .from(activities)
+        .where(and(...conditions))
+        .orderBy(desc(activities.startDate));
 
       return {
         activities: filtered.map((a) => ({
           ...a,
           mapPolyline: null as string | null,
         })),
-        allTypes,
-        allWorkoutTypes,
       };
+    }),
+
+  /**
+   * Distinct activity types and workout types for an athlete — the option lists
+   * for the filter dropdowns. These depend only on the athlete, not on the
+   * active filters, so they live in their own query keyed on `athleteId` alone:
+   * fetched once and reused across every filter change, instead of re-running
+   * two full `SELECT DISTINCT` scans on every `list` call.
+   */
+  filterOptions: protectedProcedure
+    .input(z.object({ athleteId: z.number() }))
+    .use(validateAthleteOwnership)
+    .query(async ({ ctx, input }) => {
+      const [allTypes, allWorkoutTypes] = await Promise.all([
+        ctx.db
+          .selectDistinct({ type: activities.type })
+          .from(activities)
+          .where(eq(activities.athlete, input.athleteId))
+          .then((rows) => rows.map((r) => r.type).sort()),
+        ctx.db
+          .selectDistinct({ workoutType: activities.workoutType })
+          .from(activities)
+          .where(
+            and(
+              eq(activities.athlete, input.athleteId),
+              isNotNull(activities.workoutType),
+            ),
+          )
+          .then((rows) => rows.map((r) => r.workoutType!).sort((a, b) => a - b)),
+      ]);
+      return { allTypes, allWorkoutTypes };
     }),
 
   get: protectedProcedure
