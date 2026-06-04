@@ -1,4 +1,5 @@
 import type { PlannedTraining } from "@server/db/types";
+import type { BusyEvent } from "@server/lib/icalFeed";
 
 import type { JournalActivity, JournalDay } from "./useJournalWeeks";
 
@@ -10,6 +11,13 @@ export const GUTTER_WIDTH_PX = 52;
 
 /** Pixel height of the sticky week-header row (day names + week picker). */
 export const HEADER_HEIGHT_PX = 60;
+
+/**
+ * Fixed pixel height of the all-day strip slotted below the day-header row,
+ * sized to hold a single all-day event (extra events on a day clip). Shared by
+ * the columns and the hour-axis gutter so they stay aligned.
+ */
+export const ALLDAY_ROW_HEIGHT = 24;
 
 /** Hour offsets 0..23, used by both the time-axis labels and the column gridlines. */
 export const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -49,6 +57,13 @@ export type WeekEvent =
       kind: "planned";
       id: string;
       training: PlannedTraining;
+      startMinutes: number;
+      endMinutes: number;
+    }
+  | {
+      kind: "busy";
+      id: string;
+      busy: BusyEvent;
       startMinutes: number;
       endMinutes: number;
     };
@@ -114,6 +129,32 @@ export function buildDayEvents(day: JournalDay): WeekEvent[] {
       endMinutes: Math.min(MINUTES_PER_DAY, start + training.durationSeconds / 60),
     });
   }
+  return events;
+}
+
+/**
+ * The day's *timed* external-calendar busy events, packed in their own layer
+ * behind the training blocks. All-day events are skipped here — they surface as a
+ * chip in the day header instead, since they don't occupy specific hours.
+ */
+export function buildBusyEvents(day: JournalDay): WeekEvent[] {
+  const events: WeekEvent[] = [];
+  day.busyEvents.forEach((busy, index) => {
+    if (busy.allDay) {
+      return;
+    }
+    const start = minutesFromIso(busy.startLocal);
+    const rawEnd = minutesFromIso(busy.endLocal);
+    // A feed event can cross midnight; like activities, clamp it to the day end.
+    const endMinutes = rawEnd > start ? Math.min(MINUTES_PER_DAY, rawEnd) : MINUTES_PER_DAY;
+    events.push({
+      kind: "busy",
+      id: `busy-${busy.subscriptionId}-${index}-${busy.startLocal}`,
+      busy,
+      startMinutes: start,
+      endMinutes,
+    });
+  });
   return events;
 }
 

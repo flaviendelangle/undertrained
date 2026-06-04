@@ -349,3 +349,36 @@ export const routes = pgTable(
     index("routes_athlete_created_idx").on(t.athlete, t.createdAt),
   ],
 );
+
+/**
+ * An external calendar the athlete subscribes to by its secret iCal (`.ics`)
+ * URL — Google, Notion Calendar, Apple, Outlook all expose one. Its events are
+ * fetched + parsed on demand (never stored) and overlaid on the Journal week
+ * view as muted "busy" blocks, purely to help pick free training slots. The URL
+ * is a bearer secret: never logged, validated against SSRF before each fetch.
+ *
+ * Show/hide visibility is *not* stored here — that's client view-state (a cookie),
+ * so toggling a calendar on/off is instant and never writes to the DB.
+ */
+export const calendarSubscriptions = pgTable(
+  "calendar_subscriptions",
+  {
+    id: serial("id").primaryKey(),
+    athlete: integer("athlete")
+      .notNull()
+      .references(() => athletes.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Secret subscription URL. Sensitive — never logged or echoed in errors.
+    icalUrl: text("ical_url").notNull(),
+    // Hex colour (e.g. "#64748b") tinting this calendar's busy blocks + dot.
+    color: text("color").notNull().default("#64748b"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    // Epoch ms of the last successful fetch; null until first fetch. Informational.
+    lastFetchedAt: bigint("last_fetched_at", { mode: "number" }),
+    // Sanitized message from the last failed fetch/parse (never the URL), or null.
+    lastError: text("last_error"),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => [index("calendar_subscriptions_athlete_idx").on(t.athlete)],
+);

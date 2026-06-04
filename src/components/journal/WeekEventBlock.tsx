@@ -1,12 +1,13 @@
 import * as React from "react";
 
-import { FlagIcon, MedalIcon } from "lucide-react";
+import { CalendarIcon, FlagIcon, MedalIcon } from "lucide-react";
 import Link from "next/link";
 import { useDraggable } from "@dnd-kit/react";
 
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 
 import type { PlannedTraining } from "@server/db/types";
+import type { BusyEvent } from "@server/lib/icalFeed";
 
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
@@ -101,6 +102,60 @@ export function WeekActivityBlock({
         </Link>
       }
     />
+  );
+}
+
+/**
+ * Muted, diagonally-hatched fill for an external-calendar busy block, tinted by
+ * the calendar's colour. Deliberately low-contrast and "not a training": it reads
+ * as an availability backdrop, sitting behind the solid/dashed training blocks.
+ */
+function busyBlockStyle(color: string): React.CSSProperties {
+  const hatch = `color-mix(in oklab, ${color} 22%, var(--background))`;
+  const base = `color-mix(in oklab, ${color} 8%, var(--background))`;
+  return {
+    backgroundColor: base,
+    backgroundImage: `repeating-linear-gradient(45deg, ${hatch} 0, ${hatch} 1px, transparent 1px, transparent 7px)`,
+    borderColor: `color-mix(in oklab, ${color} 30%, transparent)`,
+  };
+}
+
+/**
+ * A timed external-calendar event as a muted, hatched "busy" block — an
+ * availability hint only, never a training. Non-interactive and `pointer-events-none`
+ * so clicks (incl. double-click-to-plan) pass straight through to the day column,
+ * and rendered behind the activity / planned blocks.
+ */
+export function WeekBusyBlock({
+  busy,
+  compact,
+}: {
+  busy: BusyEvent;
+  compact?: boolean;
+}) {
+  const t = useT();
+  const title = busy.title || t("journal.calendars.busy");
+  return (
+    <div
+      aria-hidden
+      style={busyBlockStyle(busy.color)}
+      className="pointer-events-none flex h-full w-full min-w-0 flex-col gap-0.5 overflow-hidden rounded border border-dashed px-1 py-0.5 text-left leading-tight"
+    >
+      <span className="flex min-w-0 items-center gap-1">
+        <CalendarIcon
+          className="size-3 shrink-0 opacity-60"
+          style={{ color: busy.color }}
+        />
+        <span className="text-muted-foreground truncate text-xs font-medium">
+          {title}
+        </span>
+      </span>
+      {!compact && (
+        <span className="text-muted-foreground/70 truncate text-[11px] tabular-nums">
+          {busy.startLocal.slice(11, 16)}
+        </span>
+      )}
+    </div>
   );
 }
 

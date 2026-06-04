@@ -106,6 +106,33 @@ const fr: Messages = {
       generating: "Génération…",
       copyUrl: "Copier l'URL du calendrier",
     },
+    calendars: {
+      title: "Calendriers",
+      manage: "Calendriers externes",
+      disclaimer:
+        "Affichés uniquement pour repérer vos créneaux libres — ils ne font pas partie de votre entraînement.",
+      showAll: "Afficher les calendriers",
+      busy: "Occupé",
+      busyCount: { one: "{count} événement", other: "{count} événements" },
+      empty: "Aucun calendrier ajouté.",
+      add: "Ajouter un calendrier",
+      addTitle: "Ajouter un calendrier",
+      editTitle: "Modifier le calendrier",
+      name: "Nom",
+      namePlaceholder: "ex. Travail, Perso",
+      url: "URL iCal secrète",
+      urlPlaceholder: "https://…/basic.ics",
+      urlHint:
+        "Collez l'adresse iCal secrète de Google Calendar, Notion, Apple ou Outlook.",
+      color: "Couleur",
+      remove: "Supprimer",
+      invalidUrl: "Saisissez une URL iCal http(s) valide.",
+      loadError: "Ce calendrier n'a pas pu être chargé.",
+      saveError:
+        "Impossible d'enregistrer le calendrier. Vérifiez l'URL et réessayez.",
+      hide: "Masquer {name}",
+      show: "Afficher {name}",
+    },
     dialog: {
       editTitle: "Modifier la séance planifiée",
       createTitle: "Planifier une séance",

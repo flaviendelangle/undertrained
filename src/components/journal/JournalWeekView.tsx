@@ -32,6 +32,7 @@ import { buildWeekGroups } from "./journalView";
 import type { JournalWeek } from "./useJournalWeeks";
 import { useWeekHorizontalVirtualizer } from "./useWeekHorizontalVirtualizer";
 import {
+  ALLDAY_ROW_HEIGHT,
   GUTTER_WIDTH_PX,
   HEADER_HEIGHT_PX,
   HOUR_HEIGHT,
@@ -89,6 +90,7 @@ function JournalWeekViewImpl({
   week,
   weeks,
   dayLoadScale,
+  reserveAllDayRow,
   scrollNonce,
   onSelectWeek,
 }: {
@@ -97,6 +99,12 @@ function JournalWeekViewImpl({
   weeks: JournalWeek[];
   /** Reference busy day used to bucket each day into a load-intensity tier. */
   dayLoadScale: number;
+  /**
+   * Reserve the fixed-height all-day strip up-front (calendars on + present),
+   * even before — or without — any all-day events, so the grid doesn't shift
+   * down when the external feeds finish loading.
+   */
+  reserveAllDayRow: boolean;
   /** Bumped by the parent to request a (re)scroll to the anchor week. */
   scrollNonce: number;
   /** Navigate the URL to the given week's Monday (debounced via the parent). */
@@ -109,6 +117,13 @@ function JournalWeekViewImpl({
   const localeOptions = { locale: dateLocale };
 
   const renderedWeeks = React.useMemo(() => weeks.toReversed(), [weeks]);
+
+  // Reserve the fixed-height all-day strip whenever the overlay is active (not
+  // just when all-day events happen to be loaded), so it's present before the
+  // feeds resolve and the grid never shifts. One shared height keeps every
+  // week's grid — and the hour-axis gutter spacer below — aligned.
+  const allDayRowHeight = reserveAllDayRow ? ALLDAY_ROW_HEIGHT : 0;
+  const topOffset = HEADER_HEIGHT_PX + allDayRowHeight;
 
   // `pinnedIndex`: the destination of an in-flight programmatic jump. Forces
   // the target week to render even when it falls outside the virtualizer's
@@ -392,8 +407,8 @@ function JournalWeekViewImpl({
       ? earliestMinutes
       : DEFAULT_SCROLL_HOUR * 60;
     const eventTop = (startMinutes / 60) * HOUR_HEIGHT;
-    scroller.scrollTop = HEADER_HEIGHT_PX + Math.max(0, eventTop - HOUR_HEIGHT);
-  }, [earliestMinutes, weeks.length]);
+    scroller.scrollTop = topOffset + Math.max(0, eventTop - HOUR_HEIGHT);
+  }, [earliestMinutes, weeks.length, topOffset]);
 
   // ---- URL sync: only after the user stops scrolling horizontally ----
 
@@ -479,7 +494,7 @@ function JournalWeekViewImpl({
             className="flex"
             style={{
               width: GUTTER_WIDTH_PX + totalSize,
-              height: HEADER_HEIGHT_PX + TOTAL_HEIGHT,
+              height: topOffset + TOTAL_HEIGHT,
             }}
           >
             {/* Left gutter: sticky-left pins the column. Inside, the week
@@ -558,6 +573,15 @@ function JournalWeekViewImpl({
                   ))}
                 </SelectContent>
               </SelectPrimitive.Root>
+              {/* Gutter slot aligning the hour axis with the grid's all-day
+                  strip; sticky just below the week picker so it pins with it. */}
+              {allDayRowHeight > 0 && (
+                <div
+                  aria-hidden
+                  className="bg-background border-border sticky z-40 border-b"
+                  style={{ top: HEADER_HEIGHT_PX, height: allDayRowHeight }}
+                />
+              )}
               <TimeAxis />
             </div>
 
@@ -567,7 +591,7 @@ function JournalWeekViewImpl({
               style={{
                 position: "relative",
                 width: totalSize,
-                height: HEADER_HEIGHT_PX + TOTAL_HEIGHT,
+                height: topOffset + TOTAL_HEIGHT,
               }}
             >
               {virtualizer.getVirtualItems().map((item) => {
@@ -577,6 +601,7 @@ function JournalWeekViewImpl({
                     key={w.weekStart.toISOString()}
                     week={w}
                     dayLoadScale={dayLoadScale}
+                    allDayRowHeight={allDayRowHeight}
                     preview={preview}
                     dateLocale={dateLocale}
                     style={{
@@ -584,7 +609,7 @@ function JournalWeekViewImpl({
                       top: 0,
                       left: item.start,
                       width: item.size,
-                      height: HEADER_HEIGHT_PX + TOTAL_HEIGHT,
+                      height: topOffset + TOTAL_HEIGHT,
                       scrollSnapAlign: "end",
                     }}
                   />

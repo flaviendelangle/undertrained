@@ -12,6 +12,7 @@ import { cn } from "~/lib/utils";
 import { TIER_STYLE, getLoadTier } from "./JournalDayCell";
 import {
   WeekActivityBlock,
+  WeekBusyBlock,
   WeekPlannedBlock,
   WeekPlannedBlockGhost,
 } from "./WeekEventBlock";
@@ -26,6 +27,7 @@ import {
   MINUTES_PER_PIXEL,
   MIN_BLOCK_HEIGHT,
   type PositionedEvent,
+  buildBusyEvents,
   buildDayEvents,
   minutesToTimeLabel,
   packDayEvents,
@@ -71,10 +73,13 @@ function PreviewGhost({ preview }: { preview: DropPreview }) {
 function DayColumn({
   date,
   positioned,
+  busy,
   preview,
 }: {
   date: Date;
   positioned: PositionedEvent[];
+  /** Timed busy events, packed into their own behind-the-training back layer. */
+  busy: PositionedEvent[];
   /** Snapped ghost shown while a drag hovers this day (null otherwise). */
   preview: DropPreview | null;
 }) {
@@ -114,6 +119,22 @@ function DayColumn({
           style={{ top: hour * HOUR_HEIGHT }}
         />
       ))}
+      {/* Busy back layer: rendered before (and so behind) the training blocks,
+          and click-through so empty-slot double-clicks still plan over them. */}
+      {busy.map(({ event, top, height, leftPct, widthPct }) =>
+        event.kind === "busy" ? (
+          <div
+            key={event.id}
+            className="pointer-events-none absolute pr-1.5"
+            style={{ top, height, left: `${leftPct}%`, width: `${widthPct}%` }}
+          >
+            <WeekBusyBlock
+              busy={event.busy}
+              compact={height < COMPACT_BLOCK_HEIGHT}
+            />
+          </div>
+        ) : null,
+      )}
       {preview != null && <PreviewGhost preview={preview} />}
       {positioned.map(({ event, top, height, leftPct, widthPct }) => (
         <div
@@ -133,12 +154,12 @@ function DayColumn({
               activity={event.activity}
               compact={height < COMPACT_BLOCK_HEIGHT}
             />
-          ) : (
+          ) : event.kind === "planned" ? (
             <WeekPlannedBlock
               training={event.training}
               compact={height < COMPACT_BLOCK_HEIGHT}
             />
-          )}
+          ) : null}
         </div>
       ))}
     </div>
@@ -179,6 +200,59 @@ function DayHeader({
 }
 
 /**
+ * One day's cell in the all-day strip: date-only busy events as full-width muted
+ * bars (availability hints only, never training). Only the first all-day event of
+ * the day is shown for now — the strip is sized for a single bar, so stacking
+ * several would overflow it. A multi-day event repeats per day, so the dot +
+ * label show only on its first visible day — the matching fill on adjacent days
+ * then reads as one continuous bar spanning the span. The continuation check uses
+ * each day's *first* all-day event too, so a span keeps its label even when an
+ * earlier day's slot is taken by another event.
+ */
+function AllDayCell({
+  day,
+  prevDay,
+}: {
+  day: JournalDay;
+  /** The day to the left, used to detect a multi-day span's continuation. */
+  prevDay: JournalDay | undefined;
+}) {
+  const t = useT();
+  const busy = day.busyEvents.find((event) => event.allDay);
+  const prevBusy = prevDay?.busyEvents.find((event) => event.allDay);
+  const label = busy ? busy.title || t("journal.calendars.busy") : "";
+  const continues =
+    busy != null &&
+    prevBusy != null &&
+    prevBusy.subscriptionId === busy.subscriptionId &&
+    prevBusy.title === busy.title;
+  return (
+    <div className="border-border flex flex-col justify-start gap-0.5 overflow-hidden border-l px-0.5 py-1">
+      {busy != null && (
+        <span
+          title={label}
+          style={{
+            backgroundColor: `color-mix(in oklab, ${busy.color} 22%, var(--background))`,
+          }}
+          className="text-foreground/85 flex h-4 w-full items-center gap-1 overflow-hidden rounded-[3px] px-1.5 text-[11px] leading-none font-medium"
+        >
+          {!continues && (
+            <>
+              <span
+                aria-hidden
+                className="size-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: busy.color }}
+              />
+              <span className="truncate">{label}</span>
+            </>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
  * One week's content — a sticky-top day-header strip plus 7 {@link DayColumn}s.
  * Positioned absolutely by the parent (`JournalWeekView`) at a horizontal slot
  * the virtualizer assigned to its week.
@@ -186,6 +260,7 @@ function DayHeader({
 export function WeekBlock({
   week,
   dayLoadScale,
+  allDayRowHeight,
   preview,
   dateLocale,
   style,
@@ -193,6 +268,12 @@ export function WeekBlock({
   week: JournalWeek;
   /** Reference busy day used to bucket each day into a load-intensity tier. */
   dayLoadScale: number;
+  /**
+   * Height of the all-day strip below the header, or `0` when the loaded range
+   * has no all-day events (so the strip is reserved only when it's needed). Kept
+   * in lock-step with the gutter spacer in {@link JournalWeekView}.
+   */
+  allDayRowHeight: number;
   /** Drop preview from the parent; only matches a day in this week is shown. */
   preview: DropPreview | null;
   dateLocale: Locale;
@@ -203,46 +284,77 @@ export function WeekBlock({
     () => week.days.map((day) => packDayEvents(buildDayEvents(day))),
     [week],
   );
+  // Busy events pack in a separate layer so they never narrow the training
+  // blocks — they sit full-width behind them.
+  const dayBusyEvents = React.useMemo(
+    () => week.days.map((day) => packDayEvents(buildBusyEvents(day))),
+    [week],
+  );
   const t = useT();
+
+  const hasAllDayRow = allDayRowHeight > 0;
 
   return (
     <div style={style}>
-      <div
-        className="bg-accent border-border sticky top-0 z-30 grid grid-cols-7 border-b"
-        style={{ height: HEADER_HEIGHT_PX }}
-      >
-        {/* Per-day load-tier stripe spanning the top of the header, split into
-            7 segments aligned with the day columns below. Empty days render a
-            transparent slot so the grid stays continuous. */}
+      {/* Header + all-day strip pin together as one sticky block, so the all-day
+          row stays visible right under the day names while the grid scrolls. The
+          header keeps the accent background; the all-day row takes the grid's
+          background so it reads as the first row of the columns below it. */}
+      <div className="sticky top-0 z-30">
         <div
-          aria-hidden
-          className="absolute inset-x-0 top-0 z-10 grid h-1 grid-cols-7"
+          className={cn(
+            "bg-accent border-border relative grid grid-cols-7",
+            !hasAllDayRow && "border-b",
+          )}
+          style={{ height: HEADER_HEIGHT_PX }}
         >
-          {week.days.map((day) => {
-            const tier = getLoadTier(day.totalLoad, dayLoadScale);
-            return (
-              <span
-                key={day.date.toISOString()}
-                title={
-                  tier !== "none"
-                    ? t("journal.tierLoad", {
-                        tier: t(`journal.tier.${tier}`),
-                        load: Math.round(day.totalLoad),
-                      })
-                    : undefined
-                }
-                className={cn(tier !== "none" && TIER_STYLE[tier].bar)}
-              />
-            );
-          })}
+          {/* Per-day load-tier stripe spanning the top of the header, split into
+              7 segments aligned with the day columns below. Empty days render a
+              transparent slot so the grid stays continuous. */}
+          <div
+            aria-hidden
+            className="absolute inset-x-0 top-0 z-10 grid h-1 grid-cols-7"
+          >
+            {week.days.map((day) => {
+              const tier = getLoadTier(day.totalLoad, dayLoadScale);
+              return (
+                <span
+                  key={day.date.toISOString()}
+                  title={
+                    tier !== "none"
+                      ? t("journal.tierLoad", {
+                          tier: t(`journal.tier.${tier}`),
+                          load: Math.round(day.totalLoad),
+                        })
+                      : undefined
+                  }
+                  className={cn(tier !== "none" && TIER_STYLE[tier].bar)}
+                />
+              );
+            })}
+          </div>
+          {week.days.map((day) => (
+            <DayHeader
+              key={day.date.toISOString()}
+              day={day}
+              dateLocale={dateLocale}
+            />
+          ))}
         </div>
-        {week.days.map((day) => (
-          <DayHeader
-            key={day.date.toISOString()}
-            day={day}
-            dateLocale={dateLocale}
-          />
-        ))}
+        {hasAllDayRow && (
+          <div
+            className="bg-background border-border grid grid-cols-7 border-b"
+            style={{ height: allDayRowHeight }}
+          >
+            {week.days.map((day, index) => (
+              <AllDayCell
+                key={day.date.toISOString()}
+                day={day}
+                prevDay={week.days[index - 1]}
+              />
+            ))}
+          </div>
+        )}
       </div>
       <div
         className="grid grid-cols-7"
@@ -255,6 +367,7 @@ export function WeekBlock({
               key={day.date.toISOString()}
               date={day.date}
               positioned={dayEvents[index]}
+              busy={dayBusyEvents[index]}
               preview={preview?.dayKey === dayKey ? preview : null}
             />
           );

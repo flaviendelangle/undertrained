@@ -4,6 +4,7 @@ import type {
   activities,
   activityStreams,
   athletes,
+  calendarSubscriptions,
   plannedTrainings,
   riderSettings,
   routes,
@@ -33,3 +34,6 @@ export type RiderSettingsRow = InferSelectModel<typeof riderSettings>;
 export type SyncJob = InferSelectModel<typeof syncJobs>;
 export type PlannedTraining = InferSelectModel<typeof plannedTrainings>;
 export type Route = InferSelectModel<typeof routes>;
+export type CalendarSubscription = InferSelectModel<
+  typeof calendarSubscriptions
+>;

@@ -3,6 +3,7 @@ import { accountRouter } from "./routers/account";
 import { activitiesRouter } from "./routers/activities";
 import { activityStreamsRouter } from "./routers/activityStreams";
 import { analyticsRouter } from "./routers/analytics";
+import { calendarSubscriptionsRouter } from "./routers/calendarSubscriptions";
 import { plannedTrainingsRouter } from "./routers/plannedTrainings";
 import { recordsRouter } from "./routers/records";
 import { riderSettingsRouter } from "./routers/riderSettings";
@@ -16,6 +17,7 @@ export const appRouter = router({
   activities: activitiesRouter,
   activityStreams: activityStreamsRouter,
   analytics: analyticsRouter,
+  calendarSubscriptions: calendarSubscriptionsRouter,
   plannedTrainings: plannedTrainingsRouter,
   records: recordsRouter,
   riderSettings: riderSettingsRouter,

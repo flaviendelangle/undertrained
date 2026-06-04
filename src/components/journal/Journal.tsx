@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import {
   CalendarCheckIcon,
   CalendarPlusIcon,
+  CalendarRangeIcon,
   EllipsisIcon,
   PlusIcon,
 } from "lucide-react";
@@ -11,6 +12,7 @@ import { useRouter } from "next/router";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 import { PreviewCard } from "@base-ui/react/preview-card";
 
+import { CalendarOverlayDialog } from "~/components/settings/CalendarOverlayPanel";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -23,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
+import { useBusyEvents } from "~/hooks/useBusyEvents";
 import { usePersonalRecords } from "~/hooks/usePersonalRecords";
 import { usePlannedTrainings } from "~/hooks/usePlannedTrainings";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
@@ -67,6 +70,7 @@ export function Journal() {
   const t = useT();
   const { data: activities, isError } = useActivitiesQuery();
   const { data: plannedTrainings } = usePlannedTrainings();
+  const { data: busyEvents, showAllDayRow } = useBusyEvents();
   const { timeline } = useRiderSettingsTimeline();
   const records = usePersonalRecords();
 
@@ -79,6 +83,7 @@ export function Journal() {
     activities,
     loadPreferences,
     plannedTrainings,
+    busyEvents,
   );
 
   // View and current week live in the URL (`/journal/<view>?week=<yyyy-MM-dd>`)
@@ -98,6 +103,8 @@ export function Journal() {
 
   // Calendar-subscription dialog, opened from the overflow menu.
   const [subscribeOpen, setSubscribeOpen] = React.useState(false);
+  // External-calendar overlay manager, opened from the overflow menu.
+  const [calendarsOpen, setCalendarsOpen] = React.useState(false);
   // Bumped to ask the month view to (re)scroll to the anchor week — e.g. "Today".
   const [scrollNonce, setScrollNonce] = React.useState(0);
 
@@ -256,7 +263,7 @@ export function Journal() {
                   </Button>
                 }
               />
-              <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuRadioGroup
                   value={view}
                   onValueChange={(value) => setView(value as JournalView)}
@@ -287,6 +294,10 @@ export function Journal() {
                   <CalendarPlusIcon />
                   {t("journal.subscribe")}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCalendarsOpen(true)}>
+                  <CalendarRangeIcon />
+                  {t("journal.calendars.manage")}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -296,6 +307,7 @@ export function Journal() {
               week={activeWeek}
               weeks={weeks}
               dayLoadScale={dayLoadScale}
+              reserveAllDayRow={showAllDayRow}
               scrollNonce={scrollNonce}
               onSelectWeek={onSelectWeek}
             />
@@ -321,6 +333,10 @@ export function Journal() {
           <CalendarFeedDialog
             open={subscribeOpen}
             onOpenChange={setSubscribeOpen}
+          />
+          <CalendarOverlayDialog
+            open={calendarsOpen}
+            onOpenChange={setCalendarsOpen}
           />
         </div>
        </JournalViewContext.Provider>

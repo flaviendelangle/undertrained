@@ -11,8 +11,10 @@ import { useIsFetching } from "@tanstack/react-query";
  *  - `dependenciesReady` — the caller's prerequisites are in place. For a page
  *    of lazily-imported charts this is "all chart modules have loaded", which is
  *    the real long pole on SPA navigation where the data is already cached.
- *  - nothing is in flight (`useIsFetching() === 0`) — either every fetch has
- *    resolved (fresh load) or the data was served from cache (SPA navigation).
+ *  - no *foreground* fetch is in flight — either every fetch has resolved (fresh
+ *    load) or the data was served from cache (SPA navigation). Queries flagged
+ *    `meta.background` (e.g. slow external-calendar feeds) are excluded, so the
+ *    page reveals without waiting on them and their results stream in after.
  *
  * Keying off fetch *activity* alone is wrong: on a warm cache nothing fetches,
  * so a "wait for a fetch to finish" signal would only ever fire via the timeout.
@@ -29,7 +31,9 @@ export function useInitialLoadComplete(
   dependenciesReady = true,
   timeoutMs = 10000,
 ): boolean {
-  const fetching = useIsFetching();
+  const fetching = useIsFetching({
+    predicate: (query) => query.meta?.background !== true,
+  });
   const [done, setDone] = React.useState(false);
 
   React.useEffect(() => {

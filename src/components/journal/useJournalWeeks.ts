@@ -4,6 +4,7 @@ import { addDays, format, isSameMonth, isToday } from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
 
 import type { ListActivity, PlannedTraining } from "@server/db/types";
+import type { BusyEvent } from "@server/lib/icalFeed";
 
 import {
   classifyWeeklyLoad,
@@ -39,6 +40,12 @@ export interface JournalDay {
   activities: JournalActivity[];
   /** Still-planned trainings scheduled on this local day (not yet done). */
   plannedTrainings: PlannedTraining[];
+  /**
+   * External-calendar "busy" events on this local day, overlaid as availability
+   * hints only (they never count toward load and aren't training). Empty outside
+   * the fetched window or when the overlay is off.
+   */
+  busyEvents: BusyEvent[];
   /** Sum of the activities' training load, precomputed for the heatmap. */
   totalLoad: number;
 }
@@ -153,6 +160,7 @@ export function useJournalWeeks(
   activities: JournalActivity[] | undefined,
   loadPreferences: LoadAlgorithmPreferences,
   plannedTrainings?: PlannedTraining[],
+  busyEvents?: BusyEvent[],
 ): JournalWeeksResult {
   // Bucket planned trainings onto their local calendar day, same key scheme as
   // activities (the date portion of the stored floating-local datetime).
@@ -169,6 +177,24 @@ export function useJournalWeeks(
     }
     return map;
   }, [plannedTrainings]);
+
+  // Bucket busy events onto their start day. They only ever land on days that
+  // already exist in the grid — they never extend the week range (that stays
+  // governed by activities + plans), so the journal can't grow unbounded from a
+  // far-future calendar event.
+  const busyByDay = React.useMemo(() => {
+    const map = new Map<string, BusyEvent[]>();
+    for (const busy of busyEvents ?? []) {
+      const key = busy.startLocal.slice(0, 10);
+      const bucket = map.get(key);
+      if (bucket) {
+        bucket.push(busy);
+      } else {
+        map.set(key, [busy]);
+      }
+    }
+    return map;
+  }, [busyEvents]);
 
   // Resolve each activity's load exactly once; reused by the day sort, the day
   // and week totals, and the heatmap scale below.
@@ -290,6 +316,7 @@ export function useJournalWeeks(
         const dayKey = format(date, DAY_KEY);
         const dayActivities = activitiesByDay.get(dayKey) ?? [];
         const dayPlanned = plannedByDay.get(dayKey) ?? [];
+        const dayBusy = busyByDay.get(dayKey) ?? [];
         let dayLoad = 0;
         for (const activity of dayActivities) {
           const load = loadByStravaId.get(activity.stravaId) ?? 0;
@@ -317,6 +344,8 @@ export function useJournalWeeks(
           activities: dayActivities,
           // Plans don't count toward training load — they aren't done yet.
           plannedTrainings: dayPlanned,
+          // Busy events are availability hints only — never part of load.
+          busyEvents: dayBusy,
           totalLoad: dayLoad,
         });
         weekActivities.push(...dayActivities);
@@ -408,5 +437,5 @@ export function useJournalWeeks(
       dayLoadScale: percentile90(nonEmptyDayLoads),
       currentForm: fitnessByDay.last,
     };
-  }, [activitiesByDay, plannedByDay, loadByStravaId, fitnessByDay]);
+  }, [activitiesByDay, plannedByDay, busyByDay, loadByStravaId, fitnessByDay]);
 }

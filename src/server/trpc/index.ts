@@ -103,6 +103,20 @@ export const routePreviewRateLimited = t.middleware(async ({ ctx, next }) => {
   return next();
 });
 
+/**
+ * Rate limit for the external-calendar events query, which makes outbound fetches
+ * to user-supplied iCal feeds. The result is cached in-process (~15 min) and the
+ * client queries a single fixed window, so this only bites pathological refresh
+ * loops — 30/min leaves ample headroom for normal use.
+ */
+export const calendarEventsRateLimited = t.middleware(async ({ ctx, next }) => {
+  const rateLimitKey = ctx.session?.athleteId
+    ? String(ctx.session.athleteId)
+    : `ip:${ctx.ip}`;
+  rateLimit(`calendar-events:${rateLimitKey}`, 30, 60_000);
+  return next();
+});
+
 export async function resolveTimePeriod(
   db: Database,
   timePeriodId: number | undefined,

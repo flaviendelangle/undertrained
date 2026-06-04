@@ -83,6 +83,12 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(postgres@3.4.9)
+      ical-expander:
+        specifier: ^3.2.0
+        version: 3.2.0
+      ical.js:
+        specifier: ^2.2.1
+        version: 2.2.1
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
@@ -3476,6 +3482,16 @@ packages:
   human-signals@8.0.1:
     resolution: {integrity: sha512-eKCa6bwnJhvxj14kZk5NCPc6Hb6BdsU9DZcOnmQKSnO1VKrfV0zCvtttPZUsBvjmNDn8rpcJfpwSYnHBjc95MQ==}
     engines: {node: '>=18.18.0'}
+
+  ical-expander@3.2.0:
+    resolution: {integrity: sha512-QhU7l1X7rcbVVekpIHy7Vm7dvFcMl+PoNPhn13oB3RK3YjdZo3+uT/yx9OJopo0anX5cEGUyzsWRvagZk8gOSw==}
+    engines: {node: '>=4'}
+
+  ical.js@1.5.0:
+    resolution: {integrity: sha512-7ZxMkogUkkaCx810yp0ZGKvq1ZpRgJeornPttpoxe6nYZ3NLesZe1wWMXDdwTkj/b5NtXT+Y16Aakph/ao98ZQ==}
+
+  ical.js@2.2.1:
+    resolution: {integrity: sha512-yK/UlPbEs316igb/tjRgbFA8ZV75rCsBJp/hWOatpyaPNlgw0dGDmU+FoicOcwX4xXkeXOkYiOmCqNPFpNPkQg==}
 
   iconv-lite@0.7.2:
     resolution: {integrity: sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw==}
@@ -8466,6 +8482,14 @@ snapshots:
   human-signals@2.1.0: {}
 
   human-signals@8.0.1: {}
+
+  ical-expander@3.2.0:
+    dependencies:
+      ical.js: 1.5.0
+
+  ical.js@1.5.0: {}
+
+  ical.js@2.2.1: {}
 
   iconv-lite@0.7.2:
     dependencies:
