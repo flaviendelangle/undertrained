@@ -29,6 +29,7 @@ const fr: Messages = {
     map: "Carte",
     personalBests: "Records personnels",
     liveTraining: "Entraînement en direct",
+    login: "Connexion",
     logout: "Déconnexion",
     privacy: "Confidentialité",
     privacyPolicy: "Politique de confidentialité",

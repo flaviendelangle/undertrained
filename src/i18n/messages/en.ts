@@ -31,6 +31,7 @@ const en = {
     map: "Map",
     personalBests: "Personal Bests",
     liveTraining: "Live Training",
+    login: "Login",
     logout: "Log out",
     privacy: "Privacy",
     privacyPolicy: "Privacy Policy",
