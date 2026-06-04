@@ -435,6 +435,7 @@ const fr: Messages = {
     },
     power: {
       tabCurve: "Courbe de puissance",
+      tab30sPower: "Puissance 30 s",
       tabZones: "Temps par zone",
       tabDistribution: "Distribution de la puissance",
       settings: "Paramètres",

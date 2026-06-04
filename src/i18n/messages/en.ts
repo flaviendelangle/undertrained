@@ -426,6 +426,7 @@ const en = {
     },
     power: {
       tabCurve: "Power curve",
+      tab30sPower: "30-second power",
       tabZones: "Time in zones",
       tabDistribution: "Power distribution",
       settings: "Settings",

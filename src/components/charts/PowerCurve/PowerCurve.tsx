@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { format, subDays } from "date-fns";
 import {
+  ActivityIcon,
   BarChart3Icon,
   LayersIcon,
   SlidersHorizontalIcon,
@@ -43,6 +44,7 @@ import {
   type PowerCurveMode,
   PowerCurveWebGLChart,
 } from "./PowerCurveWebGLChart";
+import { PowerOverTime } from "./PowerOverTime";
 import { PowerSliceDistribution } from "./PowerSliceDistribution";
 import { PowerZoneDistribution } from "./PowerZoneDistribution";
 import type { ActivityInfo, PowerCurveSeriesData } from "./types";
@@ -155,7 +157,7 @@ const ACTIVITY_RANGE_ID = "activity";
 const SINGLE_ACTIVITY_TYPES = ["Ride", "VirtualRide"];
 const SINGLE_ACTIVITY_LOCKED_IDS = new Set([ACTIVITY_RANGE_ID]);
 
-type PowerTab = "curve" | "zones" | "distribution";
+type PowerTab = "curve" | "timeline" | "zones" | "distribution";
 
 function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
   const t = useT();
@@ -347,6 +349,16 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
       ),
     },
     {
+      value: "timeline",
+      tooltip: t("charts.power.tab30sPower"),
+      label: (
+        <>
+          <ActivityIcon className="size-4" />
+          <span className="sr-only">{t("charts.power.tab30sPower")}</span>
+        </>
+      ),
+    },
+    {
       value: "zones",
       tooltip: t("charts.power.tabZones"),
       label: (
@@ -431,6 +443,13 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
             activityMetadata={activityMetadata}
             mode={mode}
           />
+        ))}
+
+      {tab === "timeline" &&
+        (streamsData == null ? (
+          <StreamLoading />
+        ) : (
+          <PowerOverTime watts={watts} ftp={ftp} />
         ))}
 
       {tab === "zones" &&
