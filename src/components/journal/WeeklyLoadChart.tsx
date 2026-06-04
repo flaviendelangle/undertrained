@@ -8,9 +8,6 @@ import { AXIS_SIZE, useChartTokens } from "~/lib/chartTokens";
 import { ChartThemeProvider } from "../charts/ChartThemeProvider";
 import { ChartTooltip } from "../charts/ChartTooltip";
 
-/** Gradient id for the faint fill under this week's (primary) line. */
-const WEEKLY_AREA_GRADIENT = "weekly-load-area-gradient";
-
 /**
  * Running total of a 7-day load array, so the line rises across the week.
  * `null` entries (future days that haven't happened yet) stay `null`, so the
@@ -82,7 +79,6 @@ export function WeeklyLoadChart({
       data: cumulative(thisWeek),
       color: thisWeekColor,
       showMark: true,
-      area: true,
       curve: "monotoneX" as const,
       valueFormatter: (v: number | null) => (v == null ? "" : v.toFixed(0)),
     });
@@ -112,25 +108,7 @@ export function WeeklyLoadChart({
           grid={{ horizontal: true }}
           hideLegend
           slots={{ tooltip: ChartTooltip }}
-          sx={{
-            [`& .MuiAreaElement-series-this`]: {
-              fill: `url(#${WEEKLY_AREA_GRADIENT})`,
-            },
-          }}
-        >
-          <defs>
-            <linearGradient
-              id={WEEKLY_AREA_GRADIENT}
-              x1="0"
-              x2="0"
-              y1="0"
-              y2="1"
-            >
-              <stop offset="0%" stopColor={thisWeekColor} stopOpacity={0.25} />
-              <stop offset="100%" stopColor={thisWeekColor} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-        </LineChartPro>
+        />
       </div>
     </ChartThemeProvider>
   );
