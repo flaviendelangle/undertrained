@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
@@ -71,11 +70,9 @@ export function StatCard({
   if (!tooltip) return card;
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger render={card} />
-        <TooltipContent side="top">{tooltip}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger render={card} />
+      <TooltipContent side="top">{tooltip}</TooltipContent>
+    </Tooltip>
   );
 }

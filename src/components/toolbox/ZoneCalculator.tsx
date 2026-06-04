@@ -17,7 +17,6 @@ import { NumberField } from "~/components/ui/number-field";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useRiderSettings } from "~/hooks/useRiderSettings";
@@ -485,21 +484,19 @@ function ZoneCalculatorInner({
             {finalVdot != null && (
               <div className="bg-muted/50 flex items-start gap-2 rounded-lg p-3">
                 <div className="text-muted-foreground flex items-center gap-1.5 text-sm">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <span className="inline-flex cursor-help items-center gap-1 underline decoration-dotted underline-offset-4">
-                            VDOT
-                            <InfoIcon className="size-3" />
-                          </span>
-                        }
-                      />
-                      <TooltipContent side="top" className="max-w-64">
-                        {t("toolbox.zone.vdotTooltip")}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <span className="inline-flex cursor-help items-center gap-1 underline decoration-dotted underline-offset-4">
+                          VDOT
+                          <InfoIcon className="size-3" />
+                        </span>
+                      }
+                    />
+                    <TooltipContent side="top" className="max-w-64">
+                      {t("toolbox.zone.vdotTooltip")}
+                    </TooltipContent>
+                  </Tooltip>
                   :{" "}
                   <span className="text-foreground font-medium tabular-nums">
                     {finalVdot.toFixed(1)}

@@ -47,7 +47,7 @@ const App = (({
       <CookiesProvider>
         <SessionProvider session={session}>
           <PostHogProvider>
-            <TooltipProvider>
+            <TooltipProvider delay={500} closeDelay={100}>
               <ErrorBoundary>
                 {getLayout(<Component {...pageProps} />)}
               </ErrorBoundary>
