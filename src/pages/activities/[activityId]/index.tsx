@@ -15,6 +15,7 @@ import { PageTitle } from "~/components/PageTitle";
 import { ActivityLaps } from "~/components/charts/ActivityLaps";
 import { ActivityStreams } from "~/components/charts/ActivityStreams";
 import { ActivityPersonalRecords } from "~/components/charts/PersonalRecords/ActivityPersonalRecords";
+import { PaceCard } from "~/components/charts/PaceCard";
 import { PowerCurve } from "~/components/charts/PowerCurve";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
@@ -138,6 +139,12 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
     activity.powerBests != null &&
     Object.keys(activity.powerBests).length > 0 &&
     (activity.type === "Ride" || activity.type === "VirtualRide");
+  // Pace card: running activities that covered distance (so a speed stream is
+  // expected — same assumption the hidden-streams logic above makes). The card
+  // reads the stream itself and shows its own loading/empty states.
+  const hasPace =
+    getSportConfig(activity.type).category === "running" &&
+    activity.distance > 0;
 
   return (
     <>
@@ -305,6 +312,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
               laps={activity.laps}
             />
             {hasPower && <PowerCurve stravaId={activity.stravaId} />}
+            {hasPace && <PaceCard stravaId={activity.stravaId} />}
             <ActivityPersonalRecords
               stravaId={activity.stravaId}
               activityType={activity.type}

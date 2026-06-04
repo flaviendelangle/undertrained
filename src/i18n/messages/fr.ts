@@ -454,6 +454,27 @@ const fr: Messages = {
       empty: "Aucune donnée de puissance disponible",
       loading: "Chargement des données de puissance…",
     },
+    pace: {
+      activityCardTitle: "Allure",
+      hint: "Votre allure de course sur cette activité — une allure lissée sur 30 secondes dans le temps, le temps passé dans chaque zone d'allure, et la répartition de ce temps selon l'allure. Les zones d'allure proviennent de votre allure seuil en course.",
+      tab30sPace: "Allure 30 s",
+      tabZones: "Temps par zone",
+      tabDistribution: "Distribution de l'allure",
+      settings: "Paramètres",
+      distributionSettings: "Distribution de l'allure",
+      sliceWidth: "Largeur des tranches (s/km)",
+      sliceWidthHint:
+        "Regroupe l'allure par paliers de ce nombre de secondes par km.",
+      paceAxis: "Allure",
+      timeAxis: "Temps",
+      perKm: "{pace} /km",
+      avgPace: "Allure moy. {pace} /km",
+      basedOnThreshold: "Basé sur une allure seuil de {pace} /km.",
+      noThreshold:
+        "Renseignez votre allure seuil en course dans les Paramètres pour voir les zones d'allure.",
+      empty: "Aucune donnée d'allure disponible",
+      loading: "Chargement des données d'allure…",
+    },
     records: {
       sport: "Sport",
       metric: "Métrique",
