@@ -12,9 +12,9 @@ import type { SportCategory } from "~/utils/sportConfig";
 // the one whose *meaning* matches the data — don't mix them within a chart:
 //
 //   • sport colors (`tokens.sport`, via `sportColor()`) — encode "which sport".
-//     Use for any series/bar/segment/route whose identity IS a sport, so the
-//     same sport reads identically in the Journal, the Statistics timeline, and
-//     the Map. Source of truth: the `--sport-*` OKLCH in globals.css.
+//     Use for any series/bar/segment whose identity IS a sport, so the same
+//     sport reads identically in the Journal and the Statistics timeline.
+//     Source of truth: the `--sport-*` OKLCH in globals.css.
 //
 //   • zone ramp (`tokens.zones`) — a cool→hot ramp encoding ordinal intensity
 //     (power/HR/pace zones, lap bars, zone histograms). Resolve by the zone's
@@ -27,6 +27,8 @@ import type { SportCategory } from "~/utils/sportConfig";
 // `tokens.accent` (brand teal) is reserved for highlight/selection states
 // (the Eddington-number bar, the map "you are here" marker) — it is a chrome
 // accent, not a data color, so it must not clash with a series meaning.
+// `tokens.route` (red) is likewise a fixed chrome color: every activity route
+// on the Map uses it, because the per-sport hues washed out against the tiles.
 
 // ---------------------------------------------------------------------------
 // OKLCH → sRGB conversion (moved from webgl/colors.ts to centralise)
@@ -114,6 +116,8 @@ export interface ChartTokens {
   sport: Record<SportCategory, string>;
   /** Brand highlight/selection accent (primary teal), hex. */
   accent: string;
+  /** Single red for activity routes on the Map, hex. */
+  route: string;
   /** Grid line color */
   grid: { hex: string; gl: Float32Array };
   /** Separator / axis line color */
@@ -138,6 +142,8 @@ interface ThemeDefinition {
   sportOklch: Record<SportCategory, string>;
   /** Brand accent (primary teal), mirroring `--primary`. */
   accentOklch: string;
+  /** Single red for activity routes on the Map (the palette's red, hue 25). */
+  routeOklch: string;
   grid: string;
   gridStrong: string;
   axisLabel: string;
@@ -177,6 +183,7 @@ const LIGHT_THEME: ThemeDefinition = {
     other: "oklch(0.52 0.17 280)",
   },
   accentOklch: "oklch(0.45 0.15 170)",
+  routeOklch: "oklch(0.59 0.20 25.331)",
   grid: "#e2e3e8",
   gridStrong: "#c4c5ce",
   axisLabel: "#81828f",
@@ -215,6 +222,7 @@ const DARK_THEME: ThemeDefinition = {
     other: "oklch(0.68 0.18 280)",
   },
   accentOklch: "oklch(0.65 0.15 170)",
+  routeOklch: "oklch(0.73 0.22 25.331)",
   grid: "#656572",
   gridStrong: "#81828f",
   axisLabel: "#b5b6bf",
@@ -237,6 +245,7 @@ function buildTokens(theme: ThemeDefinition): ChartTokens {
       sportEntries.map(([category, c]) => [category, oklchToHex(c)]),
     ) as Record<SportCategory, string>,
     accent: oklchToHex(theme.accentOklch),
+    route: oklchToHex(theme.routeOklch),
     grid: { hex: theme.grid, gl: hexToGL(theme.grid) },
     gridStrong: { hex: theme.gridStrong, gl: hexToGL(theme.gridStrong) },
     axisLabel: theme.axisLabel,

@@ -17,7 +17,7 @@ import type { ListActivity } from "@server/db/types";
 import { useExplorerTiles } from "~/hooks/useExplorerTiles";
 import { useExplorerTilesToggle } from "~/hooks/useExplorerTilesToggle";
 import { TILE_PROVIDERS, useTileStyle } from "~/hooks/useTileStyle";
-import { sportColor, useChartTokens } from "~/lib/chartTokens";
+import { useChartTokens } from "~/lib/chartTokens";
 import { decode } from "~/utils/polyline";
 
 import { ExplorerTilesLayer } from "./ExplorerTilesLayer";
@@ -80,7 +80,6 @@ export default function Map(props: MapProps) {
     interactive = true,
     onReady,
     routePositions,
-    routeActivityType,
     zoomControl = true,
   } = props;
   const { showExplorerTiles } = useExplorerTilesToggle();
@@ -217,19 +216,10 @@ export default function Map(props: MapProps) {
         {polylines?.map((entry) => {
           // Many overlaid routes (heatmap) read as density, so draw them all in
           // a single low-opacity brand teal that builds up where you ride most.
-          // A single route is colored by its sport so it matches the Journal
-          // chip and the by-sport timeline (falling back to the brand accent
-          // when the sport isn't known, e.g. a raw `routePositions` route).
-          const color = preferCanvas
-            ? tokens.accent
-            : "activity" in entry
-              ? sportColor(
-                  tokens,
-                  (entry as { activity: ListActivity }).activity.type,
-                )
-              : routeActivityType
-                ? sportColor(tokens, routeActivityType)
-                : tokens.accent;
+          // A single route is drawn in one high-contrast red (`tokens.route`):
+          // the per-sport hues washed out against street and satellite tiles, so
+          // every route now uses the same legible red regardless of sport.
+          const color = preferCanvas ? tokens.accent : tokens.route;
           return (
             <Polyline
               key={entry.id}
@@ -315,11 +305,6 @@ interface MapProps {
   /** Called once the view is fitted and its tiles have finished loading. */
   onReady?: () => void;
   routePositions?: [number, number][] | null;
-  /**
-   * Sport/activity type for a `routePositions` route, used to color it by sport
-   * (matching the Journal chip). Falls back to the brand accent when absent.
-   */
-  routeActivityType?: string;
   /** Whether to show Leaflet's zoom +/- buttons. Defaults to `true`. */
   zoomControl?: boolean;
 }

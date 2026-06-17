@@ -18,7 +18,6 @@ export function ActivityMap(props: ActivityMapProps) {
       highlightPosition={highlightPosition}
       interactive={interactive}
       routePositions={routePositions}
-      routeActivityType={activity?.type}
     />
   );
 }
