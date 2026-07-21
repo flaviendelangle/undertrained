@@ -526,6 +526,13 @@ const en = {
       hintFallback:
         "Falls back to heart-rate zones when that metric is missing.",
     },
+    workoutStructure: {
+      title: "Workout Structure",
+      hint: "Planned interval structure detected from the activity's laps (experimental). Hidden when no clear structure is found.",
+      recovery: "recovery",
+      confidence: "Confidence: {value}%",
+      uncertain: "uncertain",
+    },
     streams: {
       title: "Time Series",
       hint: "Heart rate, power, cadence, speed, altitude, and temperature plotted over time or distance. Hover to see all metrics at a specific point. Toggle the X-axis between time and distance.",

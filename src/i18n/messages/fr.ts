@@ -540,6 +540,13 @@ const fr: Messages = {
       hintFallback:
         "Bascule sur les zones de fréquence cardiaque lorsque cette donnée est absente.",
     },
+    workoutStructure: {
+      title: "Structure de la séance",
+      hint: "Structure d'intervalles détectée à partir des tours de l'activité (expérimental). Masquée quand aucune structure nette n'est trouvée.",
+      recovery: "récupération",
+      confidence: "Confiance : {value}%",
+      uncertain: "incertain",
+    },
     streams: {
       title: "Chronologie",
       hint: "Fréquence cardiaque, puissance, cadence, vitesse, altitude et température tracées en fonction du temps ou de la distance. Survolez pour voir toutes les métriques à un point précis. Basculez l'axe X entre temps et distance.",
