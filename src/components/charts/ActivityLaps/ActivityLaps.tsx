@@ -11,6 +11,7 @@ import {
 
 import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { ChartCard } from "~/components/ui/chart-card";
+import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import {
   Table,
   TableBody,
@@ -19,7 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
@@ -31,6 +31,11 @@ import {
 } from "~/sensors/types";
 import { formatElapsed } from "~/utils/format";
 import { type SportConfig, getSportConfig } from "~/utils/sportConfig";
+import {
+  type IntervalBlock,
+  type StructureIntensity,
+  detectWorkoutStructure,
+} from "~/utils/workoutStructure";
 
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import {
@@ -45,6 +50,7 @@ interface LapDatum {
   index: number;
   name: string;
   elapsedTime: number;
+  distance: number;
   averageSpeed: number;
   averageWatts?: number | null;
   averageHeartrate?: number | null;
@@ -60,6 +66,18 @@ interface LapBar {
   formattedValue: string;
   color: string;
   zoneName: string | null;
+  /** Detected structure target for this lap ("1:00 @ 280 W"), if any. */
+  target: string | null;
+}
+
+/** A detected interval block mapped onto the chart's cumulative-time axis. */
+interface StructureAnnotation {
+  start: number;
+  end: number;
+  /** e.g. "10 × 1:00 @ 280 W" or "2 × 5 × 3:00 @ 4:30 /km". */
+  label: string;
+  /** Fallback when the bracket is too narrow, e.g. "10 × 1:00". */
+  shortLabel: string;
 }
 
 interface HoverState {
@@ -106,6 +124,65 @@ export default function ActivityLaps(props: ActivityLapsProps) {
   }, []);
   const totalDuration = laps.reduce((sum, lap) => sum + lap.elapsedTime, 0);
 
+  // Detected interval structure: annotated as brackets above the bars, as a
+  // per-lap "target" tooltip row, and as a summary in the card header.
+  const structure = detectWorkoutStructure({
+    laps,
+    activityType,
+    riderSettings: settings,
+  });
+
+  // The engine reports pace targets in sec/km; convert back to m/s so the
+  // sport's own speed formatter renders them exactly like the lap values.
+  const formatTargetIntensity = (intensity: StructureIntensity) =>
+    usePower
+      ? `${intensity.value} W`
+      : sportConfig.formatSpeed(1000 / intensity.value);
+
+  const blockLabel = (block: IntervalBlock, short: boolean) => {
+    const reps =
+      block.sets != null ? `${block.sets} × ${block.reps}` : `${block.reps}`;
+    const work = `${reps} × ${formatElapsed(block.workDuration)}`;
+    return short ? work : `${work} @ ${formatTargetIntensity(block.work)}`;
+  };
+
+  const targetByLap = new Map<number, string>();
+  for (const block of structure?.blocks ?? []) {
+    const workTarget = `${formatElapsed(block.workDuration)} @ ${formatTargetIntensity(block.work)}`;
+    for (const lapIndex of block.workLapIndices)
+      targetByLap.set(lapIndex, workTarget);
+    if (block.recoveryDuration != null && block.recovery != null) {
+      const recoveryTarget = `${formatElapsed(block.recoveryDuration)} @ ${formatTargetIntensity(block.recovery)}`;
+      for (const lapIndex of block.recoveryLapIndices)
+        targetByLap.set(lapIndex, recoveryTarget);
+    }
+  }
+
+  const positionByLap = new Map(laps.map((lap, i) => [lap.index, i]));
+  const annotations: StructureAnnotation[] = (structure?.blocks ?? []).flatMap(
+    (block) => {
+      const positions = block.lapIndices
+        .map((lapIndex) => positionByLap.get(lapIndex))
+        .filter((position): position is number => position != null);
+      if (positions.length === 0) return [];
+      const first = Math.min(...positions);
+      const last = Math.max(...positions);
+      return [
+        {
+          start: starts[first],
+          end: starts[last] + laps[last].elapsedTime,
+          label: blockLabel(block, false),
+          shortLabel: blockLabel(block, true),
+        },
+      ];
+    },
+  );
+
+  const structureSummary =
+    structure != null
+      ? structure.blocks.map((block) => blockLabel(block, false)).join(" + ")
+      : null;
+
   const bars: LapBar[] = laps.map((lap, i) => {
     // Cycling uses average power; every other sport (running included) uses the
     // lap's raw average speed, exactly as Strava reports it.
@@ -128,6 +205,7 @@ export default function ActivityLaps(props: ActivityLapsProps) {
       formattedValue: value > 0 ? formatValue(value) : "—",
       color: zone != null ? tokens.zones[zone.ramp] : tokens.palette[3],
       zoneName: zone?.name ?? null,
+      target: targetByLap.get(lap.index) ?? null,
     };
   });
 
@@ -140,28 +218,39 @@ export default function ActivityLaps(props: ActivityLapsProps) {
       <ChartCard
         title={t("charts.laps.title")}
         headerSlot={
-          <FeatureHint
-            hintId="hint-activity-laps"
-            title={t("charts.laps.title")}
-          >
-            {t("charts.laps.hintIntro", {
-              metric: usePower
-                ? t("charts.laps.power").toLowerCase()
-                : t("charts.laps.pace"),
-            })}
-            {isRunning
-              ? t("charts.laps.hintColorPace")
-              : usePower
-                ? t("charts.laps.hintColorPower")
-                : ""}
-            {". "}
-            {usePower
-              ? t("charts.laps.hintFromFtp")
-              : isRunning
-                ? t("charts.laps.hintFromThreshold")
-                : ""}{" "}
-            {t("charts.laps.hintFallback")}
-          </FeatureHint>
+          <>
+            <FeatureHint
+              hintId="hint-activity-laps"
+              title={t("charts.laps.title")}
+            >
+              {t("charts.laps.hintIntro", {
+                metric: usePower
+                  ? t("charts.laps.power").toLowerCase()
+                  : t("charts.laps.pace"),
+              })}
+              {isRunning
+                ? t("charts.laps.hintColorPace")
+                : usePower
+                  ? t("charts.laps.hintColorPower")
+                  : ""}
+              {". "}
+              {usePower
+                ? t("charts.laps.hintFromFtp")
+                : isRunning
+                  ? t("charts.laps.hintFromThreshold")
+                  : ""}{" "}
+              {t("charts.laps.hintFallback")}
+              {structure != null && ` ${t("charts.laps.hintStructure")}`}
+            </FeatureHint>
+            {structureSummary != null && (
+              <span className="text-muted-foreground hidden min-w-0 truncate text-sm md:inline">
+                {structureSummary}
+                {structure != null &&
+                  !structure.confident &&
+                  ` · ${t("charts.laps.structureUncertain")}`}
+              </span>
+            )}
+          </>
         }
         actions={
           <div className="ml-auto">
@@ -183,6 +272,8 @@ export default function ActivityLaps(props: ActivityLapsProps) {
             totalDuration={totalDuration}
             formatValue={formatValue}
             valueLabel={valueLabel}
+            annotations={annotations}
+            annotationsDashed={structure != null && !structure.confident}
           />
         ) : (
           <LapsTable
@@ -202,8 +293,17 @@ function LapsChart(props: {
   totalDuration: number;
   formatValue: (v: number) => string;
   valueLabel: string;
+  annotations: StructureAnnotation[];
+  annotationsDashed: boolean;
 }) {
-  const { bars, totalDuration, formatValue, valueLabel } = props;
+  const {
+    bars,
+    totalDuration,
+    formatValue,
+    valueLabel,
+    annotations,
+    annotationsDashed,
+  } = props;
   const t = useT();
   const isMobile = useIsMobile();
   const [hover, setHover] = React.useState<HoverState | null>(null);
@@ -212,11 +312,16 @@ function LapsChart(props: {
   // Nothing to plot when no lap carries the primary metric (e.g. powerless ride).
   if (totalDuration <= 0 || maxValue <= 0) return null;
 
+  // Extra headroom above the bars when structure brackets are drawn there.
+  const headroom = annotations.length > 0 ? 1.28 : 1.08;
+
   return (
     <div className="relative min-h-0 flex-1">
       <ChartsContainerPro
         series={[]}
-        margin={isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard}
+        margin={
+          isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
+        }
         xAxis={[
           {
             id: X_AXIS_ID,
@@ -234,16 +339,20 @@ function LapsChart(props: {
             id: Y_AXIS_ID,
             scaleType: "linear",
             min: 0,
-            max: maxValue * 1.08,
+            max: maxValue * headroom,
             valueFormatter: (v: number) => formatValue(v),
-            width: isMobile
-              ? AXIS_SIZE.mobile.width
-              : AXIS_SIZE.desktop.width,
+            width: isMobile ? AXIS_SIZE.mobile.width : AXIS_SIZE.desktop.width,
           },
         ]}
       >
         <ChartsGrid horizontal />
         <LapBars bars={bars} onHover={setHover} />
+        {annotations.length > 0 && (
+          <StructureBrackets
+            annotations={annotations}
+            dashed={annotationsDashed}
+          />
+        )}
         <ChartsXAxis
           axisId={X_AXIS_ID}
           label={isMobile ? undefined : t("charts.laps.timeAxis")}
@@ -272,7 +381,9 @@ function LapsTable(props: {
       const w = lap.averageWatts;
       return w != null && w > 0 ? `${Math.round(w)} W` : "—";
     }
-    return lap.averageSpeed > 0 ? sportConfig.formatSpeed(lap.averageSpeed) : "—";
+    return lap.averageSpeed > 0
+      ? sportConfig.formatSpeed(lap.averageSpeed)
+      : "—";
   };
 
   const formatHr = (hr: number | null | undefined) =>
@@ -355,8 +466,70 @@ function LapBars(props: {
   );
 }
 
+/**
+ * Bracket overlay for the detected interval structure: one recessive
+ * ⌐———————¬ marker per block, drawn in the headroom above the bars with its
+ * label centered on top. Labels degrade with available width (full → short →
+ * none) and the bracket goes dashed for a low-confidence detection.
+ */
+function StructureBrackets(props: {
+  annotations: StructureAnnotation[];
+  dashed: boolean;
+}) {
+  const { annotations, dashed } = props;
+  const tokens = useChartTokens();
+  const xScale = useXScale<"linear">(X_AXIS_ID);
+  const yScale = useYScale<"linear">(Y_AXIS_ID);
+
+  const plotTop = Math.min(...yScale.range());
+  const labelBaselineY = plotTop + 14;
+  const bracketY = plotTop + 20;
+  const tickHeight = 5;
+  // Rough glyph width at font-size 11 — only used to pick a label that fits.
+  const charWidth = 6.2;
+
+  return (
+    <g pointerEvents="none">
+      {annotations.map((annotation) => {
+        const x1 = xScale(annotation.start);
+        const x2 = xScale(annotation.end) - BAR_GAP_PX;
+        const width = x2 - x1;
+        if (width < 12) return null;
+        const label =
+          width >= annotation.label.length * charWidth + 8
+            ? annotation.label
+            : width >= annotation.shortLabel.length * charWidth + 8
+              ? annotation.shortLabel
+              : null;
+        return (
+          <g key={annotation.start}>
+            <path
+              d={`M ${x1} ${bracketY + tickHeight} V ${bracketY} H ${x2} V ${bracketY + tickHeight}`}
+              fill="none"
+              stroke={tokens.axisLabel}
+              strokeDasharray={dashed ? "3 3" : undefined}
+            />
+            {label != null && (
+              <text
+                x={(x1 + x2) / 2}
+                y={labelBaselineY}
+                textAnchor="middle"
+                fill={tokens.axisLabel}
+                fontSize={11}
+              >
+                {label}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 /** Fixed-position tooltip following the cursor, styled like the shared one. */
 function LapTooltip({ hover }: { hover: HoverState }) {
+  const t = useT();
   return (
     <div
       style={{ position: "fixed", left: hover.x, top: hover.y - 12 }}
@@ -371,10 +544,22 @@ function LapTooltip({ hover }: { hover: HoverState }) {
           value={hover.bar.formattedValue}
           trailing={
             hover.bar.zoneName && (
-              <span className="text-muted-foreground">{hover.bar.zoneName}</span>
+              <span className="text-muted-foreground">
+                {hover.bar.zoneName}
+              </span>
             )
           }
         />
+        {hover.bar.target != null && (
+          <ChartTooltipRow
+            label={
+              <span className="text-muted-foreground">
+                {t("charts.laps.target")}
+              </span>
+            }
+            value={hover.bar.target}
+          />
+        )}
       </ChartTooltipSurface>
     </div>
   );

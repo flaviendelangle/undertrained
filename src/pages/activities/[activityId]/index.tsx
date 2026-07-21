@@ -17,7 +17,6 @@ import { ActivityStreams } from "~/components/charts/ActivityStreams";
 import { PaceCard } from "~/components/charts/PaceCard";
 import { ActivityPersonalRecords } from "~/components/charts/PersonalRecords/ActivityPersonalRecords";
 import { PowerCurve } from "~/components/charts/PowerCurve";
-import { WorkoutStructureCard } from "~/components/charts/WorkoutStructureCard";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
 import { useTypedParams } from "~/hooks/useTypedParams";
@@ -308,11 +307,6 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
               hiddenStreams={hiddenStreams}
             />
             <ActivityLaps
-              activityType={activity.type}
-              startDate={activity.startDate}
-              laps={activity.laps}
-            />
-            <WorkoutStructureCard
               activityType={activity.type}
               startDate={activity.startDate}
               laps={activity.laps}

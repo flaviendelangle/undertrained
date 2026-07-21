@@ -525,13 +525,10 @@ const en = {
       hintFromThreshold: "From your run threshold pace.",
       hintFallback:
         "Falls back to heart-rate zones when that metric is missing.",
-    },
-    workoutStructure: {
-      title: "Workout Structure",
-      hint: "Planned interval structure detected from the activity's laps (experimental). Hidden when no clear structure is found.",
-      recovery: "recovery",
-      confidence: "Confidence: {value}%",
-      uncertain: "uncertain",
+      hintStructure:
+        "A planned interval structure was detected from the laps and is annotated above the bars — hover a lap to compare it with its target (experimental).",
+      target: "Target",
+      structureUncertain: "uncertain",
     },
     streams: {
       title: "Time Series",

@@ -3,10 +3,9 @@
  * picks power (cycling) or pace (running) from the activity type, filters out
  * unusable laps, and enforces the cycling power-availability rule.
  */
-import type { StoredLap } from "~/server/lib/stravaTypes";
 import { getSportConfig } from "~/utils/sportConfig";
 
-import type { LapPoint, StructureMetric } from "./types";
+import type { DetectableLap, LapPoint, StructureMetric } from "./types";
 
 /** Laps shorter than this are spurious lap-button presses and are dropped. */
 export const MIN_LAP_DURATION_S = 5;
@@ -32,7 +31,7 @@ export function selectMetric(activityType: string): StructureMetric | null {
  * absent or unusable) — the caller should hide the feature entirely.
  */
 export function extractLapPoints(
-  laps: StoredLap[],
+  laps: readonly DetectableLap[],
   metric: StructureMetric,
 ): LapPoint[] | null {
   const usable = laps.filter((lap) => lap.elapsedTime >= MIN_LAP_DURATION_S);

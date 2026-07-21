@@ -7,7 +7,6 @@
 import { findRunningPaceZone } from "~/components/charts/ActivityLaps/lapZones";
 import type { RiderSettings } from "~/sensors/types";
 import { findPowerZone } from "~/sensors/types";
-import type { StoredLap } from "~/server/lib/stravaTypes";
 
 import { buildRepUnits, clusterBlocks, isAcceptedBlock } from "./cluster";
 import {
@@ -21,6 +20,7 @@ import { detectSetsWithinBlock, mergeAdjacentIdenticalBlocks } from "./sets";
 import { isAutoLap, splitWorkRecovery } from "./split";
 import { median, roundToFiveSeconds } from "./stats";
 import type {
+  DetectableLap,
   IntervalBlock,
   LapPoint,
   RawBlock,
@@ -32,7 +32,7 @@ import type {
 type Thresholds = Pick<RiderSettings, "ftp" | "runThresholdPace"> | null;
 
 export interface DetectWorkoutStructureInput {
-  laps: StoredLap[];
+  laps: readonly DetectableLap[];
   /** Strava activity type string, e.g. "Ride", "VirtualRide", "Run". */
   activityType: string;
   /** Optional thresholds for the activity's date — used for zone labels only. */
@@ -114,13 +114,17 @@ function finalizeBlock(
   const recoveryDurations: number[] = [];
   const recoveryValues: number[] = [];
   const lapIndices: number[] = [];
+  const workLapIndices: number[] = [];
+  const recoveryLapIndices: number[] = [];
   members.forEach((member, i) => {
     lapIndices.push(member.unit.work.lapIndex);
+    workLapIndices.push(member.unit.work.lapIndex);
     const isLast = i === members.length - 1;
     const recovery = member.unit.recovery;
     if (isLast || recovery == null) return;
     lapIndices.push(...recovery.lapIndices);
     if (!breakPositions.has(i)) {
+      recoveryLapIndices.push(...recovery.lapIndices);
       recoveryDurations.push(recovery.duration);
       recoveryValues.push(recovery.value);
     }
@@ -140,6 +144,8 @@ function finalizeBlock(
         ? toIntensity(median(recoveryValues), metric, thresholds)
         : null,
     lapIndices,
+    workLapIndices,
+    recoveryLapIndices,
   };
 
   return {

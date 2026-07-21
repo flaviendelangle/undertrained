@@ -8,6 +8,22 @@
 export type StructureMetric = "power" | "pace";
 
 /**
+ * Minimal lap shape the engine needs — a structural subset of `StoredLap`, so
+ * UI-side lap projections can be analysed without carrying the full record.
+ */
+export interface DetectableLap {
+  /** StoredLap.index — echoed back in `IntervalBlock` lap references. */
+  index: number;
+  /** Seconds. */
+  elapsedTime: number;
+  /** Meters. */
+  distance: number;
+  /** m/s. */
+  averageSpeed: number;
+  averageWatts?: number | null;
+}
+
+/**
  * An intensity target in the workout's primary metric.
  * - metric "power": `value` is watts (integer).
  * - metric "pace":  `value` is seconds per km (integer).
@@ -35,6 +51,13 @@ export interface IntervalBlock {
   recovery: StructureIntensity | null;
   /** StoredLap.index values consumed by this block (work + recovery laps). */
   lapIndices: number[];
+  /** The work laps among `lapIndices`. */
+  workLapIndices: number[];
+  /**
+   * The within-set recovery laps among `lapIndices`. Laps in neither list are
+   * set breaks — consumed by the block but not part of the rep pattern.
+   */
+  recoveryLapIndices: number[];
 }
 
 export interface WorkoutStructure {

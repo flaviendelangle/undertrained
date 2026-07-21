@@ -57,6 +57,12 @@ describe("detectWorkoutStructure — cycling", () => {
     expect(Math.max(...block.lapIndices)).toBe(19);
   });
 
+  it("classifies the block's laps as work vs recovery", () => {
+    const block = detectRide(classic)!.blocks[0];
+    expect(block.workLapIndices).toEqual([1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
+    expect(block.recoveryLapIndices).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18]);
+  });
+
   it("leaves zone labels null without rider settings", () => {
     const block = detectRide(classic)!.blocks[0];
     expect(block.work.zoneName).toBeNull();
@@ -267,6 +273,11 @@ describe("detectWorkoutStructure — running", () => {
     expect(block.recoveryDuration).toBe(60);
     expect(block.recovery?.value).toBe(390);
     expect(block.recovery?.zoneName).toBe("Zone 1");
+    // The set-break lap (10) is consumed by the block but is neither a work
+    // nor a within-set recovery lap.
+    expect(block.lapIndices).toContain(10);
+    expect(block.workLapIndices).toEqual([1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
+    expect(block.recoveryLapIndices).toEqual([2, 4, 6, 8, 12, 14, 16, 18]);
     expect(result?.confident).toBe(true);
   });
 
