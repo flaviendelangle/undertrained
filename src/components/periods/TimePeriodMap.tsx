@@ -14,5 +14,5 @@ export function TimePeriodMap({ periodId }: TimePeriodMapProps) {
     { enabled: !!athleteId },
   );
 
-  return <Map activities={data?.activities ?? null} />;
+  return <Map activities={data?.activities ?? null} boldRoutes />;
 }

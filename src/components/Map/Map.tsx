@@ -73,6 +73,7 @@ function FitBounds(props: FitBoundsProps) {
 export default function Map(props: MapProps) {
   const {
     activities,
+    boldRoutes = false,
     dragging = true,
     enableExplorerTiles = false,
     fitMode = "all",
@@ -177,6 +178,10 @@ export default function Map(props: MapProps) {
   // is low and SVG paths support the hover cursor on clickable routes.
   const preferCanvas = (decodedActivityPolylines?.length ?? 0) > 1;
 
+  // Draw the faint, density-building heatmap style only when several routes are
+  // overlaid AND the caller hasn't opted into the bold single-route look.
+  const heatmapStyle = preferCanvas && !boldRoutes;
+
   return (
     <div className="relative h-full w-full">
       <MapContainer
@@ -216,8 +221,8 @@ export default function Map(props: MapProps) {
         {polylines?.map((entry) => {
           // Every route is drawn in one high-contrast red (`tokens.route`): the
           // per-sport hues washed out against street and satellite tiles, so all
-          // routes use the same legible red regardless of sport. A single route
-          // gets a thick, fully-opaque line so it pops; the heatmap (many
+          // routes use the same legible red regardless of sport. Bold routes get
+          // a thick, fully-opaque line so each one pops; the heatmap (many
           // overlaid routes) uses a thinner, low-opacity line that builds up into
           // a density signal where you ride most.
           const color = tokens.route;
@@ -227,8 +232,8 @@ export default function Map(props: MapProps) {
               positions={entry.polyline}
               pathOptions={{
                 color,
-                weight: preferCanvas ? 2 : 4,
-                opacity: preferCanvas ? 0.5 : 1,
+                weight: heatmapStyle ? 2 : 4,
+                opacity: heatmapStyle ? 0.5 : 1,
                 className: enableActivityClick ? "cursor-pointer" : undefined,
               }}
               eventHandlers={
@@ -288,6 +293,12 @@ export default function Map(props: MapProps) {
 
 interface MapProps {
   activities: ListActivity[] | null;
+  /**
+   * Draw every route as a thick, fully-opaque line (the single-activity look)
+   * even when several routes are overlaid, instead of the faint density
+   * heatmap. Defaults to `false`.
+   */
+  boldRoutes?: boolean;
   /** Whether the user can pan the map by dragging. Defaults to `true`. */
   dragging?: boolean;
   enableExplorerTiles?: boolean;
