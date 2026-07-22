@@ -183,7 +183,9 @@ const LIGHT_THEME: ThemeDefinition = {
     other: "oklch(0.52 0.17 280)",
   },
   accentOklch: "oklch(0.45 0.15 170)",
-  routeOklch: "oklch(0.59 0.20 25.331)",
+  // Vibrant, near-gamut-edge red so a single route stays legible against busy
+  // street/topo tiles at full opacity; the heatmap dims it via line opacity.
+  routeOklch: "oklch(0.58 0.24 27)",
   grid: "#e2e3e8",
   gridStrong: "#c4c5ce",
   axisLabel: "#81828f",
@@ -222,7 +224,7 @@ const DARK_THEME: ThemeDefinition = {
     other: "oklch(0.68 0.18 280)",
   },
   accentOklch: "oklch(0.65 0.15 170)",
-  routeOklch: "oklch(0.73 0.22 25.331)",
+  routeOklch: "oklch(0.68 0.24 27)",
   grid: "#656572",
   gridStrong: "#81828f",
   axisLabel: "#b5b6bf",

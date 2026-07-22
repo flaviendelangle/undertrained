@@ -216,9 +216,10 @@ export default function Map(props: MapProps) {
         {polylines?.map((entry) => {
           // Every route is drawn in one high-contrast red (`tokens.route`): the
           // per-sport hues washed out against street and satellite tiles, so all
-          // routes use the same legible red regardless of sport. For the heatmap
-          // (many overlaid routes) the low opacity makes the red build up into a
-          // density signal where you ride most.
+          // routes use the same legible red regardless of sport. A single route
+          // gets a thick, fully-opaque line so it pops; the heatmap (many
+          // overlaid routes) uses a thinner, low-opacity line that builds up into
+          // a density signal where you ride most.
           const color = tokens.route;
           return (
             <Polyline
@@ -226,7 +227,7 @@ export default function Map(props: MapProps) {
               positions={entry.polyline}
               pathOptions={{
                 color,
-                weight: preferCanvas ? 2 : 3,
+                weight: preferCanvas ? 2 : 4,
                 opacity: preferCanvas ? 0.5 : 1,
                 className: enableActivityClick ? "cursor-pointer" : undefined,
               }}
