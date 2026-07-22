@@ -214,12 +214,12 @@ export default function Map(props: MapProps) {
           />
         )}
         {polylines?.map((entry) => {
-          // Many overlaid routes (heatmap) read as density, so draw them all in
-          // a single low-opacity brand teal that builds up where you ride most.
-          // A single route is drawn in one high-contrast red (`tokens.route`):
-          // the per-sport hues washed out against street and satellite tiles, so
-          // every route now uses the same legible red regardless of sport.
-          const color = preferCanvas ? tokens.accent : tokens.route;
+          // Every route is drawn in one high-contrast red (`tokens.route`): the
+          // per-sport hues washed out against street and satellite tiles, so all
+          // routes use the same legible red regardless of sport. For the heatmap
+          // (many overlaid routes) the low opacity makes the red build up into a
+          // density signal where you ride most.
+          const color = tokens.route;
           return (
             <Polyline
               key={entry.id}
