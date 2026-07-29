@@ -91,7 +91,8 @@ export function WorkoutPreviewChart({
     () =>
       spans.map((span) => ({
         start: span.startSeconds,
-        end: span.endSeconds,
+        // Drawn to the last effort, labelled from the full block.
+        end: span.workEndSeconds,
         label: `${span.reps} × ${formatStepDuration(
           (span.endSeconds - span.startSeconds) / span.reps,
         )}`,

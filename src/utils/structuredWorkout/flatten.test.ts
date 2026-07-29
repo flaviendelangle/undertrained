@@ -140,6 +140,30 @@ describe("repeatSpans", () => {
     expect(outer.endSeconds).toBe(600 + 2 * (5 * 120 + 300));
   });
 
+  it("stops the drawable end at the last effort, not the trailing recovery", () => {
+    const segments = flattenWorkout(nestedWorkout());
+    const inner = repeatSpans(segments).filter(
+      (s) => s.repeatId === "inner",
+    )[0];
+
+    // The block ends with a 60 s recovery; a bracket drawn to `endSeconds`
+    // would overhang the bars it labels by exactly that.
+    expect(inner.endSeconds - inner.workEndSeconds).toBe(60);
+    // The label still comes from the full block: 5 × (60 + 60).
+    expect(inner.endSeconds - inner.startSeconds).toBe(600);
+  });
+
+  it("keeps both legs of an over-under, whose last leg is the hard one", () => {
+    const workout = makeWorkout([
+      makeRepeat("ou", 4, [
+        makeStep("under", 120, 0.95),
+        makeStep("over", 60, 1.05),
+      ]),
+    ]);
+    const spans = repeatSpans(flattenWorkout(workout));
+    expect(spans[0].workEndSeconds).toBe(spans[0].endSeconds);
+  });
+
   it("returns nothing when there are no repeats", () => {
     expect(
       repeatSpans(flattenWorkout(makeWorkout([makeStep("a", 60, 0.6)]))),

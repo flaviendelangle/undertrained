@@ -46,7 +46,14 @@ export interface RepeatSpan {
   /** Nesting depth, 0 for a top-level repeat. Brackets stack by depth. */
   depth: number;
   startSeconds: number;
+  /** True end of the block, trailing recovery included. Use it for durations. */
   endSeconds: number;
+  /**
+   * End of the last hard effort in the block. A repeat almost always finishes
+   * with a recovery, and a bracket drawn to `endSeconds` overhangs the bars it
+   * labels by that recovery's width — which reads as a mistake. Draw to this.
+   */
+  workEndSeconds: number;
 }
 
 /**
@@ -237,11 +244,27 @@ export function repeatSpans(
           depth,
           startSeconds: segment.startSeconds,
           endSeconds: segment.endSeconds,
+          workEndSeconds: segment.endSeconds,
         };
         open.set(key, span);
         spans.push(span);
       }
     }
+  }
+
+  // The hard part of each span is only known once it is closed, so trim in a
+  // second pass: walk the span's own segments and stop at the last one in its
+  // top zone. An over-under keeps both legs, because its final leg *is* the
+  // top zone; a work/recovery pair loses only the recovery.
+  for (const span of spans) {
+    const members = segments.filter(
+      (segment) =>
+        segment.startSeconds >= span.startSeconds &&
+        segment.endSeconds <= span.endSeconds,
+    );
+    const topZone = members.reduce((max, s) => Math.max(max, s.zoneIndex), 0);
+    const lastWork = members.filter((s) => s.zoneIndex === topZone).at(-1);
+    span.workEndSeconds = lastWork?.endSeconds ?? span.endSeconds;
   }
 
   return spans;
