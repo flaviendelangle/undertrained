@@ -71,7 +71,16 @@ jobs:
     env:
       NODE_ENV: test
       NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET || 'ci-test-secret-not-for-production' }}
+      NEXTAUTH_URL: http://localhost:3000
       DATABASE_URL: postgresql://undertrained:undertrained@localhost:5432/undertrained
+      # `src/server/env.ts` parses the whole environment at import time and the
+      # instrumentation hook pulls it in, so a missing key doesn't degrade a
+      # feature — the server fails to boot and every route answers 500. That is
+      # what had been failing this job. The smoke tests never talk to Strava, so
+      # placeholders are enough; they just have to be present.
+      STRAVA_CLIENT_ID: ci-not-a-real-client
+      STRAVA_CLIENT_SECRET: ci-not-a-real-secret
+      STRAVA_WEBHOOK_VERIFY_TOKEN: ci-not-a-real-token
     steps:
       - uses: actions/checkout@v7
 
