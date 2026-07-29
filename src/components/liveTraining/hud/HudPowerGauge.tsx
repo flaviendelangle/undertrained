@@ -1,3 +1,5 @@
+import { powerZoneLabel } from "~/i18n/labels";
+import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import { POWER_ZONES, getPowerZoneIndex } from "~/sensors/types";
 
@@ -5,6 +7,10 @@ interface HudPowerGaugeProps {
   power: number | null;
   ftp: number;
   weightKg?: number;
+  /** ERG / workout target, drawn as a tick and an in-target band on the arc. */
+  targetPower?: number | null;
+  /** Half-width of the in-target band, in watts. */
+  toleranceWatts?: number;
 }
 
 const SIZE = 280;
@@ -30,7 +36,14 @@ function describeArc(startAngle: number, endAngle: number): string {
   return `M ${start.x} ${start.y} A ${RADIUS} ${RADIUS} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
 }
 
-export function HudPowerGauge({ power, ftp, weightKg }: HudPowerGaugeProps) {
+export function HudPowerGauge({
+  power,
+  ftp,
+  weightKg,
+  targetPower,
+  toleranceWatts,
+}: HudPowerGaugeProps) {
+  const t = useT();
   const tokens = useChartTokens();
   const currentZoneIdx = getPowerZoneIndex(power ?? 0, ftp);
   const wattsPerKg =
@@ -65,6 +78,39 @@ export function HudPowerGauge({ power, ftp, weightKg }: HudPowerGaugeProps) {
     );
   });
 
+  // The arc spans 0 → 200 % FTP, so a target maps onto it the same way a live
+  // power reading does.
+  const angleFor = (watts: number) =>
+    START_ANGLE + Math.min(watts / (ftp * 2), 1) * TOTAL_ARC;
+
+  const targetTick =
+    targetPower != null && targetPower > 0
+      ? (() => {
+          const angle = angleFor(targetPower);
+          const rad = (angle * Math.PI) / 180;
+          const reach = STROKE_WIDTH / 2 + 4;
+          return {
+            inner: {
+              x: CENTER + (RADIUS - reach) * Math.cos(rad),
+              y: CENTER + (RADIUS - reach) * Math.sin(rad),
+            },
+            outer: {
+              x: CENTER + (RADIUS + reach) * Math.cos(rad),
+              y: CENTER + (RADIUS + reach) * Math.sin(rad),
+            },
+          };
+        })()
+      : null;
+
+  const targetBand =
+    targetPower != null && targetPower > 0 && toleranceWatts
+      ? (() => {
+          const start = angleFor(Math.max(0, targetPower - toleranceWatts));
+          const end = angleFor(targetPower + toleranceWatts);
+          return end > start ? { start, end } : null;
+        })()
+      : null;
+
   return (
     <div className="relative" style={{ width: SIZE, height: SIZE }}>
       <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
@@ -78,6 +124,28 @@ export function HudPowerGauge({ power, ftp, weightKg }: HudPowerGaugeProps) {
         />
         {/* Zone segments */}
         {zoneArcs}
+        {/* Target marker: lets the rider hold the number peripherally instead
+            of reading it, which is the whole point of a gauge. */}
+        {targetBand && (
+          <path
+            d={describeArc(targetBand.start, targetBand.end)}
+            fill="none"
+            stroke={tokens.accent}
+            strokeWidth={STROKE_WIDTH}
+            opacity={0.25}
+          />
+        )}
+        {targetTick && (
+          <line
+            x1={targetTick.inner.x}
+            y1={targetTick.inner.y}
+            x2={targetTick.outer.x}
+            y2={targetTick.outer.y}
+            stroke={tokens.accent}
+            strokeWidth={3}
+            strokeLinecap="round"
+          />
+        )}
       </svg>
 
       {/* Center content */}
@@ -90,7 +158,7 @@ export function HudPowerGauge({ power, ftp, weightKg }: HudPowerGaugeProps) {
             className="mt-1 text-lg font-semibold"
             style={{ color: tokens.zones[POWER_ZONES[currentZoneIdx].ramp] }}
           >
-            {POWER_ZONES[currentZoneIdx].name}
+            {powerZoneLabel(currentZoneIdx, t)}
           </span>
         )}
         {wattsPerKg && (

@@ -8,6 +8,7 @@ import { plannedTrainingsRouter } from "./routers/plannedTrainings";
 import { recordsRouter } from "./routers/records";
 import { riderSettingsRouter } from "./routers/riderSettings";
 import { routesRouter } from "./routers/routes";
+import { structuredWorkoutsRouter } from "./routers/structuredWorkouts";
 import { syncRouter } from "./routers/sync";
 import { timePeriodsRouter } from "./routers/timePeriods";
 import { uploadRouter } from "./routers/upload";
@@ -22,6 +23,7 @@ export const appRouter = router({
   records: recordsRouter,
   riderSettings: riderSettingsRouter,
   routes: routesRouter,
+  structuredWorkouts: structuredWorkoutsRouter,
   sync: syncRouter,
   timePeriods: timePeriodsRouter,
   upload: uploadRouter,

@@ -13,6 +13,7 @@ const ROUTE_TITLE_KEYS: Record<string, AppMessageKey> = {
   "/personal-bests": "nav.personalBests",
   "/time-periods": "nav.timePeriods",
   "/live-training": "nav.liveTraining",
+  "/workouts": "nav.workouts",
   "/settings": "nav.settings",
   "/toolbox": "nav.toolbox",
   "/login": "nav.login",

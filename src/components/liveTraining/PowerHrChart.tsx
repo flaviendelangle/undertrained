@@ -66,6 +66,9 @@ function downsample(
       heartRate: mean((p) => p.heartRate),
       cadence: mean((p) => p.cadence),
       speed: mean((p) => p.speed),
+      // Carried from the last sample, never averaged: the mean of two step
+      // indices names a third step that nobody rode.
+      segmentIndex: last.segmentIndex,
     });
   }
 

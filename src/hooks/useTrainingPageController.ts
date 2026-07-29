@@ -11,8 +11,10 @@ import { useErgMode } from "~/hooks/useErgMode";
 import { useRiderSettings } from "~/hooks/useRiderSettings";
 import { useTrainingRecorder } from "~/hooks/useTrainingRecorder";
 import { useTrainingSession } from "~/hooks/useTrainingSession";
+import { useWorkoutPlayer } from "~/hooks/useWorkoutPlayer";
 import { SpeedSimulator, msToKmh } from "~/sensors/speedFromPower";
 import type { SensorSource, SessionDataPoint } from "~/sensors/types";
+import type { StructuredWorkout } from "~/utils/structuredWorkout";
 
 /** How often a sample is recorded, in milliseconds. */
 const RECORDING_INTERVAL_MS = 1000;
@@ -31,7 +33,21 @@ const CHART_REFRESH_TICKS = 3;
  *
  * The live training page calls this hook and only handles presentation.
  */
-export function useTrainingPageController() {
+export interface TrainingPageControllerOptions {
+  /** The workout to ride, already fetched. Null for a free ride. */
+  workout?: { id: number; name: string; structure: StructuredWorkout } | null;
+  /**
+   * Suspends the 2 s power-based auto-start. Set while the workout picker is
+   * open: otherwise a rider spinning the cranks mid-choice starts a free ride
+   * out from under themselves.
+   */
+  autoStartSuspended?: boolean;
+}
+
+export function useTrainingPageController(
+  options: TrainingPageControllerOptions = {},
+) {
+  const { workout = null, autoStartSuspended = false } = options;
   const [hrSource, setHrSource] = useState<SensorSource>("ant+");
   const [trainerSource, setTrainerSource] = useState<SensorSource>("ant+");
 
@@ -74,6 +90,29 @@ export function useTrainingPageController() {
   const ergEnabledRef = useValueAsRef(ergMode.ergEnabled);
   const targetPowerRef = useValueAsRef(ergMode.targetPower);
   const sessionRef = useValueAsRef(session);
+
+  /**
+   * FTP is frozen at session start. `useRiderSettings` is a live provider, so
+   * editing FTP in another tab mid-interval would otherwise shift every target
+   * under the rider and make the recorded compliance meaningless.
+   */
+  const [ftpAtStart, setFtpAtStart] = useState(riderSettings.ftp);
+  if (session.state === "idle" && ftpAtStart !== riderSettings.ftp) {
+    // Adjusted during render rather than in an effect: React re-renders
+    // immediately with the new value, so the player never sees a frame resolved
+    // against a stale FTP.
+    setFtpAtStart(riderSettings.ftp);
+  }
+
+  const player = useWorkoutPlayer({
+    workout: workout?.structure ?? null,
+    ftp: ftpAtStart,
+    elapsedSeconds: session.elapsedSeconds,
+    sessionState: session.state,
+  });
+  const segmentIndexRef = useValueAsRef(
+    workout != null ? player.segmentIndex : null,
+  );
 
   // Speed simulator with inertia
   const speedSimRef = useRef(new SpeedSimulator());
@@ -137,6 +176,9 @@ export function useTrainingPageController() {
         speed: speedMs,
         elapsed: elapsedRef.current,
         deltaSeconds,
+        // null on a free ride, and after the workout ends — which is what keeps
+        // the cool-down out of the compliance figures and the per-step laps.
+        segmentIndex: segmentIndexRef.current,
       });
 
       // Distance updates every tick — only the chart array is throttled.
@@ -156,6 +198,7 @@ export function useTrainingPageController() {
     ergEnabledRef,
     hrDataRef,
     riderSettingsRef,
+    segmentIndexRef,
     targetPowerRef,
     trainerDataRef,
   ]);
@@ -206,7 +249,40 @@ export function useTrainingPageController() {
     }
   }, [trainer.state, trainer.supportsControl, setErgEnabled]);
 
-  // Send target power to trainer when ERG is enabled and target changes
+  /**
+   * Bumping this re-sends the current target even though nothing about it
+   * changed.
+   *
+   * Needed because a workout target is quantized to a 5 W grid, so after a
+   * reconnect, a resume, or a background-tab stint the value React holds is
+   * usually identical to the one before — and without a nonce the sync effect
+   * below would not re-run, leaving the trainer sitting at zero resistance.
+   */
+  const [ergWriteNonce, setErgWriteNonce] = useState(0);
+  const forceErgWrite = useCallback(() => setErgWriteNonce((n) => n + 1), []);
+
+  // A hidden tab is the one case with no React state to key off, so it gets the
+  // nonce. Reconnects and resumes are covered by `trainer.supportsControl` and
+  // `session.state` being dependencies of the sync effect below.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") forceErgWrite();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [forceErgWrite]);
+
+  /**
+   * Sends the target to the trainer whenever it changes — and whenever the ride
+   * re-enters a state where the last write may no longer hold: a reconnect
+   * (`supportsControl` false → true), a resume (`session.state`), or a return
+   * from a hidden tab (`ergWriteNonce`).
+   *
+   * Those transitions matter because a workout target is snapped to a 5 W grid,
+   * so the value is usually *identical* across them — without them as
+   * dependencies this effect would not re-run and the trainer would sit at zero
+   * resistance.
+   */
   useEffect(() => {
     if (!ergMode.ergEnabled || !trainer.supportsControl) return;
     ergSyncTimeout.start(200, () => {
@@ -227,6 +303,8 @@ export function useTrainingPageController() {
     ergEnabledRef,
     ergMode.ergEnabled,
     ergMode.targetPower,
+    ergWriteNonce,
+    session.state,
     trainer.supportsControl,
     setTargetPower,
   ]);
@@ -247,10 +325,72 @@ export function useTrainingPageController() {
     });
   }, [ergMode.ergEnabled, releaseControl, riderSettingsRef]);
 
+  // ── Structured workout ──────────────────────────────────────────────
+
+  const { setTargetPower: setErgTargetPower, setTargetSource } = ergMode;
+
+  // A loaded workout takes over the target; removing it hands the ± buttons
+  // back. ERG on/off stays independent — a workout is perfectly rideable on a
+  // trainer that can only be read.
+  useEffect(() => {
+    setTargetSource(workout != null ? "workout" : "manual");
+  }, [workout, setTargetSource]);
+
+  /**
+   * The player writes into the existing `ergMode.targetPower`, so the recorder,
+   * the debounced trainer sync above and the target line on the chart all keep
+   * working untouched.
+   */
+  useEffect(() => {
+    if (workout == null || player.targetWatts == null) return;
+    setErgTargetPower(player.targetWatts);
+  }, [workout, player.targetWatts, setErgTargetPower]);
+
+  // No target (paused, or the workout is over) means hand the trainer back,
+  // rather than holding the rider at 280 W while they fetch a bottle.
+  const workoutReleasedRef = useRef(false);
+  useEffect(() => {
+    if (workout == null || !ergMode.ergEnabled || !trainer.supportsControl) {
+      return;
+    }
+    if (player.targetWatts == null) {
+      if (workoutReleasedRef.current) return;
+      workoutReleasedRef.current = true;
+      releaseControl().catch((err: unknown) => {
+        console.error("[ERG] Failed to release trainer control:", err);
+      });
+    } else if (workoutReleasedRef.current) {
+      workoutReleasedRef.current = false;
+      forceErgWrite();
+    }
+  }, [
+    workout,
+    player.targetWatts,
+    ergMode.ergEnabled,
+    trainer.supportsControl,
+    releaseControl,
+    forceErgWrite,
+  ]);
+
+  // Selecting a workout on a controllable trainer turns ERG on — that is what
+  // the rider asked for — while leaving the toggle available to opt out.
+  const lastWorkoutIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    const id = workout?.id ?? null;
+    if (id === lastWorkoutIdRef.current) return;
+    lastWorkoutIdRef.current = id;
+    if (id != null && trainer.supportsControl) setErgEnabled(true);
+  }, [workout, trainer.supportsControl, setErgEnabled]);
+
   // Auto-start when power is detected while idle
   useEffect(() => {
     const power = trainer.data?.power ?? null;
-    if (session.state !== "idle" || power == null || power <= 0) {
+    if (
+      autoStartSuspended ||
+      session.state !== "idle" ||
+      power == null ||
+      power <= 0
+    ) {
       autoStartTimeout.clear();
       return;
     }
@@ -268,6 +408,7 @@ export function useTrainingPageController() {
     startSession,
     sessionRef,
     autoStartTimeout,
+    autoStartSuspended,
   ]);
 
   // Current live values
@@ -285,10 +426,15 @@ export function useTrainingPageController() {
     setChartData([...recorder.getDataPoints()]);
   }, [session, recorder, setErgEnabled]);
 
+  const { setBiasPct, restart: restartWorkout } = player;
   const handleReset = useCallback(() => {
+    // Keep the selected workout — "ride it again" is the common case — but drop
+    // the bias and any skips, which belonged to the session just ended.
+    setBiasPct(1);
+    restartWorkout();
     session.reset();
     clearRideState();
-  }, [session, clearRideState]);
+  }, [session, clearRideState, setBiasPct, restartWorkout]);
 
   return {
     // Sensor source selection
@@ -323,6 +469,14 @@ export function useTrainingPageController() {
 
     // Rider settings
     riderSettings,
+    /** FTP the workout targets were resolved against, frozen at session start. */
+    ftpAtStart,
+
+    /**
+     * Structured workout playback. Grouped rather than spread across a dozen
+     * more top-level keys, since the page passes it straight through to the HUD.
+     */
+    workout: workout == null ? null : { ...workout, player },
 
     // Actions
     startSession,

@@ -1,4 +1,8 @@
+import type { UseWorkoutPlayerResult } from "~/hooks/useWorkoutPlayer";
 import { useT } from "~/i18n/useT";
+import { formatCompactDuration } from "~/utils/format";
+
+import { HudWorkoutBar } from "./HudWorkoutBar";
 
 interface HudWaitingScreenProps {
   currentHr: number | null;
@@ -13,6 +17,10 @@ interface HudWaitingScreenProps {
   ergError: boolean;
   /** FE-C target status: the trainer can't hold the target at this speed. */
   ergTargetStatus: "OnTarget" | "LowSpeed" | "HighSpeed" | null;
+  /** The structured workout loaded for this ride, or null for a free ride. */
+  workout: { name: string; player: UseWorkoutPlayerResult } | null;
+  onPickWorkout: () => void;
+  onClearWorkout: () => void;
 }
 
 export function HudWaitingScreen({
@@ -26,8 +34,12 @@ export function HudWaitingScreen({
   supportsControl,
   ergError,
   ergTargetStatus,
+  workout,
+  onPickWorkout,
+  onClearWorkout,
 }: HudWaitingScreenProps) {
   const t = useT();
+  const player = workout?.player ?? null;
   return (
     <div className="from-background to-background absolute inset-0 z-40 flex items-center justify-center bg-linear-to-br">
       {/* Live HR badge */}
@@ -63,6 +75,61 @@ export function HudWaitingScreen({
         <p className="animate-breathe text-muted-foreground text-2xl font-light tracking-wide">
           {t("liveTraining.startPedaling")}
         </p>
+
+        {/* Workout slot. Deliberately above the ERG card and independent of it:
+            a workout can be ridden as advisory targets on a trainer that cannot
+            be controlled at all. */}
+        {workout == null ? (
+          <button
+            type="button"
+            onClick={onPickWorkout}
+            className="border-border/50 bg-card/60 text-muted-foreground hover:text-foreground rounded-2xl border px-6 py-3 text-sm backdrop-blur-md transition-colors"
+          >
+            {t("liveTraining.workout.freeRide")} ·{" "}
+            <span className="text-foreground underline">
+              {t("liveTraining.workout.choose")}
+            </span>
+          </button>
+        ) : (
+          <div className="border-border/50 bg-card/60 flex w-72 flex-col gap-2 rounded-2xl border px-4 py-3 backdrop-blur-md">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate text-sm font-medium">
+                {workout.name}
+              </span>
+              <span className="text-muted-foreground shrink-0 text-xs">
+                {formatCompactDuration(player?.totalSeconds ?? 0, {
+                  subHour: "min",
+                })}
+              </span>
+            </div>
+            {player && player.segments.length > 0 && (
+              <div className="h-10">
+                <HudWorkoutBar segments={player.segments} />
+              </div>
+            )}
+            <div className="flex justify-end gap-3 text-xs">
+              <button
+                type="button"
+                onClick={onPickWorkout}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {t("liveTraining.workout.change")}
+              </button>
+              <button
+                type="button"
+                onClick={onClearWorkout}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {t("liveTraining.workout.remove")}
+              </button>
+            </div>
+            {!supportsControl && (
+              <p className="text-muted-foreground text-xs">
+                {t("liveTraining.workout.noControl")}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* ERG mode toggle */}
         {supportsControl && (
@@ -111,54 +178,89 @@ export function HudWaitingScreen({
 
             {ergEnabled && (
               <>
-                <div className="flex items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    aria-label={t("liveTraining.targetPowerStep", {
-                      step: "-10",
-                    })}
-                    onClick={() => onTargetPowerChange(targetPower - 10)}
-                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                  >
-                    -10
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t("liveTraining.targetPowerStep", {
-                      step: "-5",
-                    })}
-                    onClick={() => onTargetPowerChange(targetPower - 5)}
-                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                  >
-                    -5
-                  </button>
-                  <span className="min-w-20 text-center font-mono text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                    {targetPower}
-                    <span className="text-muted-foreground ml-1 text-xs font-normal">
-                      W
+                {/* With a workout loaded the absolute target is derived, so the
+                    stepper scales the whole session instead. */}
+                {player != null && (
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      aria-label={t("liveTraining.workout.biasStep", {
+                        step: "-1",
+                      })}
+                      onClick={() => player.adjustBias(-0.01)}
+                      className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                    >
+                      −
+                    </button>
+                    <span className="min-w-20 text-center font-mono text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                      {Math.round(player.biasPct * 100)}
+                      <span className="text-muted-foreground ml-1 text-xs font-normal">
+                        %
+                      </span>
                     </span>
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={t("liveTraining.targetPowerStep", {
-                      step: "+5",
-                    })}
-                    onClick={() => onTargetPowerChange(targetPower + 5)}
-                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                  >
-                    +5
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t("liveTraining.targetPowerStep", {
-                      step: "+10",
-                    })}
-                    onClick={() => onTargetPowerChange(targetPower + 10)}
-                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                  >
-                    +10
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      aria-label={t("liveTraining.workout.biasStep", {
+                        step: "+1",
+                      })}
+                      onClick={() => player.adjustBias(0.01)}
+                      className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+
+                {player == null && (
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      aria-label={t("liveTraining.targetPowerStep", {
+                        step: "-10",
+                      })}
+                      onClick={() => onTargetPowerChange(targetPower - 10)}
+                      className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                    >
+                      -10
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t("liveTraining.targetPowerStep", {
+                        step: "-5",
+                      })}
+                      onClick={() => onTargetPowerChange(targetPower - 5)}
+                      className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                    >
+                      -5
+                    </button>
+                    <span className="min-w-20 text-center font-mono text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                      {targetPower}
+                      <span className="text-muted-foreground ml-1 text-xs font-normal">
+                        W
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={t("liveTraining.targetPowerStep", {
+                        step: "+5",
+                      })}
+                      onClick={() => onTargetPowerChange(targetPower + 5)}
+                      className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                    >
+                      +5
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t("liveTraining.targetPowerStep", {
+                        step: "+10",
+                      })}
+                      onClick={() => onTargetPowerChange(targetPower + 10)}
+                      className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                    >
+                      +10
+                    </button>
+                  </div>
+                )}
 
                 {ergError && (
                   <p role="alert" className="text-center text-xs text-red-400">
