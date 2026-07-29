@@ -14,6 +14,7 @@ interface HudPostTrainingProps {
   chartData: SessionDataPoint[];
   dataPoints: SessionDataPoint[];
   ftp: number;
+  maxHr: number;
   onReset: () => void;
 }
 
@@ -22,6 +23,7 @@ export function HudPostTraining({
   chartData,
   dataPoints,
   ftp,
+  maxHr,
   onReset,
 }: HudPostTrainingProps) {
   const t = useT();
@@ -47,10 +49,14 @@ export function HudPostTraining({
 
         {/* Activity name */}
         <div className="mb-6">
-          <label className="text-muted-foreground mb-2 block text-xs tracking-wider uppercase">
+          <label
+            htmlFor="live-training-activity-name"
+            className="text-muted-foreground mb-2 block text-xs tracking-wider uppercase"
+          >
             {t("liveTraining.activityName")}
           </label>
           <input
+            id="live-training-activity-name"
             className="border-border bg-card text-foreground placeholder:text-muted-foreground focus:border-primary w-full rounded-xl border px-4 py-3 text-lg focus:outline-none"
             value={activityName}
             onChange={(e) => setActivityName(e.target.value)}
@@ -115,7 +121,7 @@ export function HudPostTraining({
         {/* Chart */}
         <div className="border-border/50 bg-card/50 mb-6 rounded-xl border p-3">
           <div className="h-48">
-            <PowerHrChart dataPoints={chartData} ftp={ftp} showAll />
+            <PowerHrChart dataPoints={chartData} ftp={ftp} maxHr={maxHr} showAll />
           </div>
         </div>
 

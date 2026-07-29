@@ -1,5 +1,4 @@
-import * as React from "react";
-import { useEffect, useRef } from "react";
+import { useState } from "react";
 
 import type { GetServerSideProps } from "next";
 
@@ -25,57 +24,30 @@ export const getServerSideProps: GetServerSideProps = async () => {
 
 type Phase = "connection" | "waiting" | "main" | "paused" | "post";
 
-function getPhase(ctrl: ReturnType<typeof useTrainingPageController>): Phase {
+/**
+ * Only the trainer is required to ride: heart rate is optional everywhere
+ * downstream (the summary, the chart and the FIT record all handle a missing
+ * HR), so gating the wizard on it locked out anyone without a strap.
+ */
+function getPhase(
+  ctrl: ReturnType<typeof useTrainingPageController>,
+  hrSkipped: boolean,
+): Phase {
   if (ctrl.session.state === "stopped") return "post";
   if (ctrl.session.state === "paused") return "paused";
   if (ctrl.session.state === "running") return "main";
-  if (ctrl.hr.state === "connected" && ctrl.trainer.state === "connected")
-    return "waiting";
+  if (ctrl.trainer.state === "connected") {
+    if (hrSkipped || ctrl.hr.state === "connected") return "waiting";
+  }
   return "connection";
 }
 
-export default function Training1Page() {
+export default function LiveTrainingPage() {
   const t = useT();
   const ctrl = useTrainingPageController();
-  const phase = getPhase(ctrl);
-
-
-  // Track paused duration
-  const pauseStartRef = useRef<number | null>(null);
-  const pauseListenersRef = useRef(new Set<() => void>());
-  const pauseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (ctrl.session.state === "paused") {
-      pauseStartRef.current = Date.now();
-      pauseIntervalRef.current = setInterval(() => {
-        for (const cb of pauseListenersRef.current) cb();
-      }, 1000);
-    } else {
-      pauseStartRef.current = null;
-      if (pauseIntervalRef.current) {
-        clearInterval(pauseIntervalRef.current);
-        pauseIntervalRef.current = null;
-      }
-      // Notify subscribers so they re-read 0
-      for (const cb of pauseListenersRef.current) cb();
-    }
-    return () => {
-      if (pauseIntervalRef.current) clearInterval(pauseIntervalRef.current);
-    };
-  }, [ctrl.session.state]);
-
-  const pausedSeconds = React.useSyncExternalStore(
-    (cb) => {
-      pauseListenersRef.current.add(cb);
-      return () => pauseListenersRef.current.delete(cb);
-    },
-    () =>
-      pauseStartRef.current != null
-        ? Math.floor((Date.now() - pauseStartRef.current) / 1000)
-        : 0,
-    () => 0,
-  );
+  // Set once the rider chooses to continue without a heart rate sensor.
+  const [hrSkipped, setHrSkipped] = useState(false);
+  const phase = getPhase(ctrl, hrSkipped);
 
   return (
     <div className="relative h-full overflow-hidden">
@@ -101,6 +73,7 @@ export default function Training1Page() {
           chartData={ctrl.chartData}
           ftp={ctrl.riderSettings.ftp}
           weightKg={ctrl.riderSettings.weightKg}
+          maxHr={ctrl.riderSettings.maxHr}
           onPause={ctrl.session.pause}
           onStop={ctrl.handleStop}
         />
@@ -110,17 +83,20 @@ export default function Training1Page() {
       {phase === "connection" && (
         <HudConnectionWizard
           hrState={ctrl.hr.state}
+          hrErrorReason={ctrl.hr.errorReason}
           hrDeviceName={ctrl.hr.deviceName}
           hrSource={ctrl.hrSource}
           onHrSourceChange={ctrl.setHrSource}
           onHrConnect={ctrl.hr.connect}
           onHrDisconnect={ctrl.hr.disconnect}
           trainerState={ctrl.trainer.state}
+          trainerErrorReason={ctrl.trainer.errorReason}
           trainerDeviceName={ctrl.trainer.deviceName}
           trainerSource={ctrl.trainerSource}
           onTrainerSourceChange={ctrl.setTrainerSource}
           onTrainerConnect={ctrl.trainer.connect}
           onTrainerDisconnect={ctrl.trainer.disconnect}
+          onSkipHeartRate={() => setHrSkipped(true)}
         />
       )}
 
@@ -129,22 +105,21 @@ export default function Training1Page() {
         <HudWaitingScreen
           currentHr={ctrl.currentHr}
           hrConnected={ctrl.hr.state === "connected"}
-          onManualStart={() => {
-            ctrl.recorder.clear();
-            ctrl.session.start();
-          }}
+          onManualStart={ctrl.startSession}
           ergEnabled={ctrl.ergMode.ergEnabled}
           onErgEnabledChange={ctrl.ergMode.setErgEnabled}
           targetPower={ctrl.ergMode.targetPower}
           onTargetPowerChange={ctrl.ergMode.setTargetPower}
           supportsControl={ctrl.ergMode.supportsControl}
+          ergError={ctrl.ergError}
+          ergTargetStatus={ctrl.ergTargetStatus}
         />
       )}
 
       {/* Pause overlay */}
       {phase === "paused" && (
         <HudPauseOverlay
-          pausedSeconds={pausedSeconds}
+          pausedSeconds={ctrl.session.pausedSeconds}
           onResume={ctrl.session.resume}
           onStop={ctrl.handleStop}
         />
@@ -157,7 +132,8 @@ export default function Training1Page() {
           chartData={ctrl.chartData}
           dataPoints={ctrl.recorder.getDataPoints()}
           ftp={ctrl.riderSettings.ftp}
-          onReset={ctrl.session.reset}
+          maxHr={ctrl.riderSettings.maxHr}
+          onReset={ctrl.handleReset}
         />
       )}
     </div>

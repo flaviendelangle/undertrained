@@ -22,6 +22,31 @@ export type ConnectionState =
 
 export type SensorSource = "ble" | "ant+";
 
+/** Why a sensor connection failed, for a useful message on the device card. */
+export type SensorErrorReason = "unsupported-device" | "failed";
+
+/** Options accepted by every sensor hook's `connect`. */
+export interface SensorConnectOptions {
+  /**
+   * List every nearby Bluetooth device instead of filtering on the service.
+   * Ignored by ANT+, which has no chooser.
+   */
+  acceptAllDevices?: boolean;
+}
+
+/**
+ * Highest ERG target the app will ask for, in watts.
+ *
+ * Not a protocol limit — FE-C carries target power as 16 bits of quarter-watts
+ * (up to ~16 kW) and FTMS as a SINT16 of watts. It is a `ant-plus-next` bug:
+ * its `setTargetPower` does `Math.min(4000, Math.round(4 * watts))`, applying
+ * the intended 4000 W cap to the *scaled* value, so anything above 1000 W is
+ * silently truncated. (Compare `openant`, which rejects >4000 W and only then
+ * multiplies by 4.) Capping the UI here keeps BLE and ANT+ honest about the
+ * same number; raise it once the upstream clamp is fixed.
+ */
+export const MAX_TARGET_POWER_WATTS = 1000;
+
 export interface RiderSettings {
   weightKg: number;
   ftp: number;

@@ -1,5 +1,7 @@
 import * as React from "react";
 
+import { MAX_TARGET_POWER_WATTS } from "~/sensors/types";
+
 interface ErgModeContextValue {
   ergEnabled: boolean;
   setErgEnabled: React.Dispatch<React.SetStateAction<boolean>>;
@@ -27,7 +29,9 @@ export function ErgModeProvider({ children }: { children: React.ReactNode }) {
   const [supportsControl, setSupportsControl] = React.useState(false);
 
   const setTargetPower = React.useCallback((watts: number) => {
-    setTargetPowerState(Math.max(0, Math.min(2000, Math.round(watts))));
+    setTargetPowerState(
+      Math.max(0, Math.min(MAX_TARGET_POWER_WATTS, Math.round(watts))),
+    );
   }, []);
 
   const value = React.useMemo(

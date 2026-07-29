@@ -1,23 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AntTrainerConnection } from "~/sensors/ant/connection";
-import type { ConnectionState, TrainerData } from "~/sensors/types";
+import type { FecTargetStatus } from "~/sensors/ant/connection";
+import type {
+  ConnectionState,
+  SensorErrorReason,
+  TrainerData,
+} from "~/sensors/types";
 
 export function useAntTrainer() {
   const [state, setState] = useState<ConnectionState>("disconnected");
   const [data, setData] = useState<TrainerData | null>(null);
   const [supportsControl, setSupportsControl] = useState(false);
+  const [targetStatus, setTargetStatus] = useState<FecTargetStatus>(null);
   const connectionRef = useRef(new AntTrainerConnection());
 
   const connect = useCallback(async () => {
     setState("connecting");
+    // Control starts out unavailable and is unlocked by the connection once
+    // FE-C data actually arrives — reading the capability the moment connect()
+    // resolves would report every device, power meters included, as ERG-capable.
+    setSupportsControl(false);
     try {
       await connectionRef.current.connect({
         onData: (trainerData) => setData(trainerData),
-        onDisconnect: () => setState("disconnected"),
+        onDisconnect: () => {
+          setState("disconnected");
+          setSupportsControl(false);
+        },
+        onControlAvailabilityChange: setSupportsControl,
+        onTargetStatusChange: setTargetStatus,
       });
       setState("connected");
-      setSupportsControl(connectionRef.current.supportsControl);
     } catch (err) {
       console.error("[ANT+ Trainer] Connection failed:", err);
       setState("error");
@@ -28,11 +42,21 @@ export function useAntTrainer() {
     await connectionRef.current.disconnect();
     setState("disconnected");
     setSupportsControl(false);
+    setTargetStatus(null);
     setData(null);
   }, []);
 
   const setTargetPower = useCallback(async (watts: number) => {
     await connectionRef.current.setTargetPower(watts);
+  }, []);
+
+  /** FE-C has no persistent control grant to hand back — see useBleTrainer. */
+  const releaseControl = useCallback(async () => {
+    // Dropping the target to 0 W is the closest FE-C equivalent of an FTMS
+    // Reset: it stops the trainer holding the rider at the last ERG target.
+    if (connectionRef.current.supportsControl) {
+      await connectionRef.current.setTargetPower(0);
+    }
   }, []);
 
   useEffect(() => {
@@ -44,12 +68,16 @@ export function useAntTrainer() {
 
   return {
     state,
+    // ANT+ has no device chooser, so there is no "wrong device picked" case.
+    errorReason: (state === "error" ? "failed" : null) as SensorErrorReason | null,
     data,
     deviceName: null as string | null,
     protocol: "ant+" as const,
     connect,
     disconnect,
     supportsControl: state === "connected" && supportsControl,
+    targetStatus,
     setTargetPower,
+    releaseControl,
   };
 }

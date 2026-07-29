@@ -1,20 +1,27 @@
 import { Button } from "~/components/ui/button";
 import { useT } from "~/i18n/useT";
-import type { ConnectionState, SensorSource } from "~/sensors/types";
+import type {
+  ConnectionState,
+  SensorConnectOptions,
+  SensorErrorReason,
+  SensorSource,
+} from "~/sensors/types";
 
 interface HudDeviceCardProps {
   type: "heartRate" | "trainer";
   state: ConnectionState;
+  errorReason: SensorErrorReason | null;
   deviceName: string | null;
   source: SensorSource;
   onSourceChange: (s: SensorSource) => void;
-  onConnect: () => void;
+  onConnect: (options?: SensorConnectOptions) => void;
   onDisconnect: () => void;
 }
 
 function HudDeviceCard({
   type,
   state,
+  errorReason,
   deviceName,
   source,
   onSourceChange,
@@ -24,6 +31,9 @@ function HudDeviceCard({
   const t = useT();
   const isConnected = state === "connected";
   const isConnecting = state === "connecting";
+  // The unfiltered chooser only makes sense for Bluetooth; ANT+ scans by
+  // profile and never shows a picker.
+  const canBrowseAllDevices = source === "ble" && !isConnected && !isConnecting;
   const label =
     type === "heartRate"
       ? t("liveTraining.heartRate")
@@ -47,6 +57,7 @@ function HudDeviceCard({
           >
             {type === "heartRate" ? (
               <svg
+                aria-hidden="true"
                 className={`h-6 w-6 transition-colors duration-500 sm:h-10 sm:w-10 ${isConnected ? "text-green-400" : "text-red-400"}`}
                 viewBox="0 0 24 24"
                 fill="currentColor"
@@ -55,6 +66,7 @@ function HudDeviceCard({
               </svg>
             ) : (
               <svg
+                aria-hidden="true"
                 className={`h-6 w-6 transition-colors duration-500 sm:h-10 sm:w-10 ${isConnected ? "text-green-400" : "text-teal-400"}`}
                 viewBox="0 0 24 24"
                 fill="currentColor"
@@ -79,6 +91,7 @@ function HudDeviceCard({
           {isConnected && (
             <div className="absolute -right-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full bg-green-500 text-green-50 shadow-lg shadow-green-500/30">
               <svg
+                aria-hidden="true"
                 className="h-4 w-4"
                 viewBox="0 0 24 24"
                 fill="none"
@@ -101,11 +114,24 @@ function HudDeviceCard({
                 ? t("liveTraining.searching")
                 : t("liveTraining.notConnected")}
           </p>
+          {state === "error" && (
+            <p role="alert" className="mt-1 text-xs text-red-400">
+              {errorReason === "unsupported-device"
+                ? t("liveTraining.wrongDevice")
+                : t("liveTraining.connectFailed")}
+            </p>
+          )}
         </div>
 
         {/* BLE/ANT+ toggle */}
-        <div className="bg-background/70 flex gap-1 rounded-lg p-1">
+        <div
+          className="bg-background/70 flex gap-1 rounded-lg p-1"
+          role="group"
+          aria-label={`${label} — ${t("liveTraining.protocol")}`}
+        >
           <button
+            type="button"
+            aria-pressed={source === "ble"}
             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               source === "ble"
                 ? "bg-primary text-primary-foreground"
@@ -117,6 +143,8 @@ function HudDeviceCard({
             BLE
           </button>
           <button
+            type="button"
+            aria-pressed={source === "ant+"}
             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
               source === "ant+"
                 ? "bg-primary text-primary-foreground"
@@ -131,7 +159,7 @@ function HudDeviceCard({
 
         {/* Connect button */}
         <Button
-          onClick={isConnected ? onDisconnect : onConnect}
+          onClick={isConnected ? onDisconnect : () => onConnect()}
           disabled={isConnecting}
           className={`w-full ${
             isConnected
@@ -145,6 +173,18 @@ function HudDeviceCard({
               ? t("liveTraining.searching")
               : t("liveTraining.connect")}
         </Button>
+
+        {/* Some trainers implement the service but never advertise its UUID,
+            so the filtered chooser lists nothing. This re-prompts unfiltered. */}
+        {canBrowseAllDevices && (
+          <button
+            type="button"
+            onClick={() => onConnect({ acceptAllDevices: true })}
+            className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2 transition-colors"
+          >
+            {t("liveTraining.deviceNotListed")}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -152,21 +192,27 @@ function HudDeviceCard({
 
 interface HudConnectionWizardProps {
   hrState: ConnectionState;
+  hrErrorReason: SensorErrorReason | null;
   hrDeviceName: string | null;
   hrSource: SensorSource;
   onHrSourceChange: (s: SensorSource) => void;
-  onHrConnect: () => void;
+  onHrConnect: (options?: SensorConnectOptions) => void;
   onHrDisconnect: () => void;
   trainerState: ConnectionState;
+  trainerErrorReason: SensorErrorReason | null;
   trainerDeviceName: string | null;
   trainerSource: SensorSource;
   onTrainerSourceChange: (s: SensorSource) => void;
-  onTrainerConnect: () => void;
+  onTrainerConnect: (options?: SensorConnectOptions) => void;
   onTrainerDisconnect: () => void;
+  /** Continue with the trainer alone — heart rate is optional. */
+  onSkipHeartRate: () => void;
 }
 
 export function HudConnectionWizard(props: HudConnectionWizardProps) {
   const t = useT();
+  const trainerConnected = props.trainerState === "connected";
+  const hrConnected = props.hrState === "connected";
   return (
     <div className="bg-background/95 absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm p-4">
       <div className="flex flex-col items-center gap-4 sm:gap-8">
@@ -180,6 +226,7 @@ export function HudConnectionWizard(props: HudConnectionWizardProps) {
           <HudDeviceCard
             type="heartRate"
             state={props.hrState}
+            errorReason={props.hrErrorReason}
             deviceName={props.hrDeviceName}
             source={props.hrSource}
             onSourceChange={props.onHrSourceChange}
@@ -189,6 +236,7 @@ export function HudConnectionWizard(props: HudConnectionWizardProps) {
           <HudDeviceCard
             type="trainer"
             state={props.trainerState}
+            errorReason={props.trainerErrorReason}
             deviceName={props.trainerDeviceName}
             source={props.trainerSource}
             onSourceChange={props.onTrainerSourceChange}
@@ -196,6 +244,18 @@ export function HudConnectionWizard(props: HudConnectionWizardProps) {
             onDisconnect={props.onTrainerDisconnect}
           />
         </div>
+
+        {/* Riding without a strap is a normal setup, so offer a way past the
+            heart rate card once the trainer is up. */}
+        {trainerConnected && !hrConnected && (
+          <Button
+            variant="outline"
+            onClick={props.onSkipHeartRate}
+            className="rounded-full px-6"
+          >
+            {t("liveTraining.continueWithoutHr")}
+          </Button>
+        )}
       </div>
     </div>
   );

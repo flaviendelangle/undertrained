@@ -1,53 +1,6 @@
 const GRAVITY = 9.80665;
 const DEFAULT_AIR_DENSITY = 1.225; // kg/m³ at sea level 15°C
 
-interface SpeedFromPowerParams {
-  power: number;
-  riderMassKg: number;
-  cdA?: number;
-  crr?: number;
-  airDensity?: number;
-}
-
-/**
- * Computes realistic cycling speed from power output.
- *
- * For indoor training (slope = 0), the power equation is:
- *   P = 0.5 * rho * CdA * v³ + Crr * m * g * v
- *
- * We solve this cubic equation using Newton-Raphson iteration.
- * Returns speed in m/s.
- */
-export function speedFromPower(params: SpeedFromPowerParams): number {
-  const {
-    power,
-    riderMassKg,
-    cdA = 0.35,
-    crr = 0.004,
-    airDensity = DEFAULT_AIR_DENSITY,
-  } = params;
-
-  if (power <= 0) return 0;
-
-  const A = 0.5 * airDensity * cdA;
-  const B = crr * (riderMassKg + BIKE_MASS_KG) * GRAVITY;
-
-  // f(v)  = A*v³ + B*v - P
-  // f'(v) = 3*A*v² + B
-  // Initial guess: approximate by ignoring rolling resistance
-  let v = Math.cbrt(power / A);
-
-  for (let i = 0; i < 10; i++) {
-    const fv = A * v * v * v + B * v - power;
-    const fpv = 3 * A * v * v + B;
-    const delta = fv / fpv;
-    v -= delta;
-    if (Math.abs(delta) < 1e-6) break;
-  }
-
-  return Math.max(0, v);
-}
-
 // Drivetrain efficiency (well-maintained chain)
 const DRIVETRAIN_ETA = 0.97;
 
@@ -60,15 +13,12 @@ const V_MIN = 1.0; // m/s
 // ~500 N corresponds to a strong pedal effort through a typical gear ratio.
 const F_DRIVE_MAX = 500;
 
-// Bike mass (kg) — used for total system mass
-const BIKE_MASS_KG = 8;
-
 // Wheel rotational inertia: two 700c wheels ≈ 0.12 kg·m² each, r ≈ 0.34 m
 // m_eff = m_total + 2·I/r² ≈ m_total + 2.1 kg
 const WHEEL_INERTIA_EQUIV_KG = 2.1;
 
-// Number of sub-steps per update call for numerical stability
-const SUB_STEPS = 10;
+// Sub-steps per second of simulated time, for numerical stability
+const SUB_STEPS_PER_SECOND = 10;
 
 /**
  * Physics-based cycling speed simulator.
@@ -80,7 +30,11 @@ const SUB_STEPS = 10;
  *   F_drive = min(P · η / max(v, V_MIN), F_MAX)
  *   F_aero  = ½ · ρ · CdA · v²
  *   F_roll  = Crr · m · g
- *   m_eff   = m_rider + m_bike + wheel inertia equivalent
+ *   m_eff   = m_total + wheel inertia equivalent
+ *
+ * `m_total` is supplied whole by the caller as `totalMassKg` — rider, bike and
+ * anything else on board. The simulator adds no mass of its own beyond the
+ * wheel inertia equivalent.
  *
  * Integration uses semi-implicit Euler with sub-stepping for stability.
  */
@@ -95,24 +49,29 @@ export class SpeedSimulator {
     power: number,
     dt: number,
     params: {
-      riderMassKg: number;
+      /** Rider + bike + kit, in kilograms. */
+      totalMassKg: number;
       cdA?: number;
       crr?: number;
       airDensity?: number;
     },
   ): number {
     const {
-      riderMassKg,
+      totalMassKg,
       cdA = 0.35,
       crr = 0.004,
       airDensity = DEFAULT_AIR_DENSITY,
     } = params;
 
-    const mTotal = riderMassKg + BIKE_MASS_KG;
-    const mEff = mTotal + WHEEL_INERTIA_EQUIV_KG;
-    const subDt = dt / SUB_STEPS;
+    if (dt <= 0) return this.speed;
 
-    for (let i = 0; i < SUB_STEPS; i++) {
+    const mEff = totalMassKg + WHEEL_INERTIA_EQUIV_KG;
+    // Keep the sub-step size independent of `dt` so a long tick (a throttled
+    // background tab) integrates as accurately as a 1 s one.
+    const subSteps = Math.max(1, Math.ceil(dt * SUB_STEPS_PER_SECOND));
+    const subDt = dt / subSteps;
+
+    for (let i = 0; i < subSteps; i++) {
       const v = this.speed;
 
       // Driving force: F = P·η / v, clamped at low speed and capped
@@ -126,7 +85,7 @@ export class SpeedSimulator {
       const dragForce = 0.5 * airDensity * cdA * v * v;
 
       // Rolling resistance: F = Crr·m·g
-      const rollForce = crr * mTotal * GRAVITY;
+      const rollForce = crr * totalMassKg * GRAVITY;
 
       const netForce = driveForce - dragForce - rollForce;
       this.speed = Math.max(0, v + (netForce / mEff) * subDt);
