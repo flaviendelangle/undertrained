@@ -79,12 +79,36 @@ describe("describeWorkoutShort", () => {
     expect(describeWorkoutShort(workout)).toBe("3 × 12:00 @ 90%");
   });
 
-  it("describes the dominant step when there are no repeats", () => {
+  it("keeps both legs of an over-under, which its peak alone would lose", () => {
+    const workout = makeWorkout([
+      makeStep("warm", 600, { kind: "ramp", from: 0.45, to: 0.7 }),
+      makeRepeat("sets", 3, [
+        makeRepeat("reps", 4, [
+          makeStep("under", 120, 0.95),
+          makeStep("over", 60, 1.05),
+        ]),
+        makeStep("rest", 360, 0.5),
+      ]),
+      makeStep("cool", 480, 0.5),
+    ]);
+    expect(describeWorkoutShort(workout)).toBe(
+      "12 × (2:00 @ 95% + 1:00 @ 105%)",
+    );
+  });
+
+  it("slides the threshold down so an endurance ride keeps its Z2", () => {
     const workout = makeWorkout([
       makeStep("warm", 600, { kind: "ramp", from: 0.45, to: 0.65 }),
       makeStep("ride", 4200, 0.68),
     ]);
-    expect(describeWorkoutShort(workout)).toBe("1:10:00 @ 68%");
+    expect(describeWorkoutShort(workout)).toBe(
+      "10:00 @ 45–65% + 1:10:00 @ 68%",
+    );
+  });
+
+  it("keeps Z1 when the whole ride is recovery, rather than saying nothing", () => {
+    const workout = makeWorkout([makeStep("easy", 2400, 0.45)]);
+    expect(describeWorkoutShort(workout)).toBe("40:00 @ 45%");
   });
 
   it("joins two blocks and trails off past that", () => {

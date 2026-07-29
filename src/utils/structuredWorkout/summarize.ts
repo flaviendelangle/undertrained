@@ -1,3 +1,5 @@
+import { getPowerZoneIndex } from "~/sensors/types";
+
 import type {
   PowerTarget,
   StructuredWorkout,
@@ -60,76 +62,103 @@ export function describeWorkout(
   return workout.nodes.map(describeNode).join(" + ");
 }
 
-/**
- * The hardest step under `nodes`, and how many times it is actually ridden —
- * the product of every repeat above it, so a step inside `2 × (5 × …)` reports
- * 10 rather than 2.
- *
- * Ties on intensity go to the longer step, which is the one that defines the
- * session.
- */
-function hardestStep(
+/** A step with the number of times it is actually ridden, and its zone. */
+interface FlatStep {
+  step: WorkoutStep;
+  /** Product of every repeat above it: a step in `2 × (5 × …)` reports 10. */
+  reps: number;
+  /** Index into POWER_ZONES; 0 for a step with no target. */
+  zone: number;
+}
+
+/** Flattens a subtree to its steps, carrying the rep multiplier down. */
+function flattenSteps(
   nodes: readonly WorkoutNode[],
-): { step: WorkoutStep; reps: number } | null {
-  let best: { step: WorkoutStep; reps: number } | null = null;
-
-  const walk = (list: readonly WorkoutNode[], reps: number) => {
-    for (const node of list) {
-      if (isRepeat(node)) {
-        walk(node.children, reps * node.reps);
-        continue;
-      }
-      const pct = targetMidPct(node.power) ?? 0;
-      const bestPct = best ? (targetMidPct(best.step.power) ?? 0) : -1;
-      if (
-        pct > bestPct ||
-        (pct === bestPct &&
-          best != null &&
-          node.durationSeconds > best.step.durationSeconds)
-      ) {
-        best = { step: node, reps };
-      }
+  reps = 1,
+  out: FlatStep[] = [],
+): FlatStep[] {
+  for (const node of nodes) {
+    if (isRepeat(node)) {
+      flattenSteps(node.children, reps * node.reps, out);
+      continue;
     }
-  };
-
-  walk(nodes, 1);
-  return best;
+    const pct = targetMidPct(node.power);
+    out.push({
+      step: node,
+      reps,
+      // Zone lookup is scale-free, so asking in %FTP against an FTP of 1 is the
+      // same question as asking in watts against the real FTP.
+      zone: pct == null ? 0 : getPowerZoneIndex(pct, 1),
+    });
+  }
+  return out;
 }
 
 /** At most this many blocks before the summary trails off. */
 const SHORT_SUMMARY_BLOCKS = 2;
+/** And at most this many steps described within one block. */
+const SHORT_SUMMARY_STEPS = 3;
+/** Steps below this zone are filler — unless the whole workout is filler. */
+const WORK_ZONE = 2;
 
 /**
- * A card-sized description: `"10 × 4:00 @ 106%"`.
+ * A card-sized description: `"10 × 4:00 @ 106%"`, or
+ * `"12 × (2:00 @ 95% + 1:00 @ 105%)"` for an over-under.
  *
- * Keeps only what identifies the session — the repeat blocks, each collapsed to
- * its hardest step and its true rep count. Warm-up, cool-down and the
- * recoveries between efforts are dropped: they are nearly the same in every
- * workout, and spelling them out is what made the full description overflow
- * every card it was put on.
+ * Keeps the steps at Z3 and above and drops the rest, which is what makes it
+ * fit: warm-ups, cool-downs and recoveries are near-identical across workouts
+ * and were most of the length. The threshold slides down for easier sessions —
+ * an endurance ride keeps its Z2, a recovery ride keeps its Z1 — so the summary
+ * is never empty.
+ *
+ * Every surviving step is described, not just the hardest one. Over-unders are
+ * defined by the pair, and collapsing them to their peak loses the workout.
  */
 export function describeWorkoutShort(
   workout: StructuredWorkout | null | undefined,
 ): string {
   if (!workout || workout.nodes.length === 0) return "";
 
-  const repeats = workout.nodes.filter(isRepeat);
-  // With no repeats there is no "structure" to summarise, so the dominant step
-  // stands for the session — a steady endurance ride reads "1:10:00 @ 68%".
-  const blocks =
-    repeats.length > 0
-      ? repeats.map((repeat) => hardestStep([repeat]))
-      : [hardestStep(workout.nodes)];
+  const everything = flattenSteps(workout.nodes);
+  if (everything.length === 0) return "";
+  const hardestZone = everything.reduce((max, e) => Math.max(max, e.zone), 0);
+  const keepFrom = Math.min(hardestZone, WORK_ZONE);
 
-  const parts = blocks
-    .filter(
-      (block): block is { step: WorkoutStep; reps: number } => block != null,
-    )
-    .map(({ step, reps }) => {
-      const target = describePowerTarget(step.power);
-      const body = `${formatStepDuration(step.durationSeconds)} @ ${target}`;
-      return reps > 1 ? `${reps} × ${body}` : body;
-    });
+  // Grouped per top-level node, so two blocks that happen to share a rep count
+  // don't merge into one, and then per rep count, so a set break sitting at a
+  // different multiplier starts its own group.
+  interface Block {
+    reps: number;
+    steps: WorkoutStep[];
+  }
+  const blocks: Block[] = [];
+  for (const node of workout.nodes) {
+    let current: Block | null = null;
+    for (const entry of flattenSteps([node])) {
+      if (entry.zone < keepFrom) continue;
+      if (current !== null && current.reps === entry.reps) {
+        current.steps.push(entry.step);
+        continue;
+      }
+      current = { reps: entry.reps, steps: [entry.step] };
+      blocks.push(current);
+    }
+  }
+
+  const parts = blocks.map(({ reps, steps }) => {
+    const shown = steps
+      .slice(0, SHORT_SUMMARY_STEPS)
+      .map(
+        (step) =>
+          `${formatStepDuration(step.durationSeconds)} @ ${describePowerTarget(step.power)}`,
+      );
+    if (steps.length > SHORT_SUMMARY_STEPS) shown.push("…");
+    const body =
+      shown.length > 1 && reps > 1
+        ? `(${shown.join(" + ")})`
+        : shown.join(" + ");
+    return reps > 1 ? `${reps} × ${body}` : body;
+  });
 
   if (parts.length === 0) return "";
   const shown = parts.slice(0, SHORT_SUMMARY_BLOCKS).join(" + ");
