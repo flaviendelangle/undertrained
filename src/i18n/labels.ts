@@ -42,7 +42,10 @@ const SPORT_CATEGORY_LABEL_KEY: Record<SportCategory, AppMessageKey> = {
   other: "sport.other.label",
 };
 
-export function sportCategoryLabel(category: SportCategory, t: TFunction): string {
+export function sportCategoryLabel(
+  category: SportCategory,
+  t: TFunction,
+): string {
   return t(SPORT_CATEGORY_LABEL_KEY[category]);
 }
 

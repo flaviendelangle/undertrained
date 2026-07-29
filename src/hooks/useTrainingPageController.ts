@@ -1,6 +1,7 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+
 import { useTimeout } from "@base-ui/utils/useTimeout";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
-import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAntHeartRate } from "~/hooks/useAntHeartRate";
 import { useAntTrainer } from "~/hooks/useAntTrainer";

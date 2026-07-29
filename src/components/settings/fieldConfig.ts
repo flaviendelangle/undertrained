@@ -116,10 +116,7 @@ export function paceToSpeed(
 /**
  * Format speed (m/s) as a pace string like "5:00 /km" or "1:15 /100m".
  */
-export function formatPace(
-  speed: number,
-  paceUnit: "/km" | "/100m",
-): string {
+export function formatPace(speed: number, paceUnit: "/km" | "/100m"): string {
   const { minutes, seconds } = speedToPace(speed, paceUnit);
   return `${minutes}:${String(seconds).padStart(2, "0")} ${paceUnit}`;
 }

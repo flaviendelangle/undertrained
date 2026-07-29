@@ -8,7 +8,8 @@ const logError = (...args: unknown[]) => console.error("[ANT+]", ...args);
 // A new instance must be created after close() since the AbortController is single-use.
 let sharedStick: import("ant-plus-next").WebUsbStick | null = null;
 let stickReady = false;
-let stickOpenPromise: Promise<import("ant-plus-next").WebUsbStick> | null = null;
+let stickOpenPromise: Promise<import("ant-plus-next").WebUsbStick> | null =
+  null;
 let stickRefCount = 0;
 /**
  * Connections that have acquired the stick but have not finished attaching
@@ -418,13 +419,11 @@ export class AntTrainerConnection {
     this.fallbackTimeout = setTimeout(() => {
       this.fallbackTimeout = null;
       if (feReceivedData || this.disposed) return;
-      void this.fallBackToPowerSensor(
-        BicyclePowerSensor,
-        stick,
-        params,
-      ).catch((err: unknown) => {
-        logError("Trainer: BicyclePowerSensor fallback failed:", err);
-      });
+      void this.fallBackToPowerSensor(BicyclePowerSensor, stick, params).catch(
+        (err: unknown) => {
+          logError("Trainer: BicyclePowerSensor fallback failed:", err);
+        },
+      );
     }, 5_000);
   }
 

@@ -85,7 +85,10 @@ export function TimePeriodStats(props: TimePeriodStatsProps) {
               label={t("periods.stats.avgDistance")}
               value={`${avgDistance} km`}
             />
-            <StatCard label={t("periods.stats.avgDuration")} value={avgDuration} />
+            <StatCard
+              label={t("periods.stats.avgDuration")}
+              value={avgDuration}
+            />
             <StatCard
               label={t("periods.stats.avgElevation")}
               value={`${activityCount > 0 ? Math.round(totalElevation / activityCount) : 0} m`}

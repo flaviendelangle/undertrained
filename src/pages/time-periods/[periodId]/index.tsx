@@ -212,9 +212,7 @@ function DeletePeriodButton({
 
   return (
     <div className="border-border mt-4 flex items-center justify-between border-t pt-4">
-      <p className="text-muted-foreground text-sm">
-        {t("periods.deleteHint")}
-      </p>
+      <p className="text-muted-foreground text-sm">{t("periods.deleteHint")}</p>
       <ResponsiveDialog>
         <ResponsiveDialogTrigger
           render={<Button variant="destructive" size="sm" />}

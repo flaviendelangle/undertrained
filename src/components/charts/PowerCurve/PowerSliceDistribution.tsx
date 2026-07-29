@@ -79,7 +79,11 @@ export function PowerSliceDistribution({
   // Fold the totals into the same memo so they aren't recomputed on every
   // hover-driven re-render (only when the underlying data/width/ftp change).
   const { slices, total, maxWatts, maxSeconds } = React.useMemo(() => {
-    const buckets = computePowerSliceDistribution(watts, deferredSliceWidth, ftp);
+    const buckets = computePowerSliceDistribution(
+      watts,
+      deferredSliceWidth,
+      ftp,
+    );
     let total = 0;
     let maxSeconds = 0;
     for (const s of buckets) {

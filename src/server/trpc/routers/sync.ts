@@ -69,9 +69,8 @@ export const syncRouter = router({
           if (latestActivity) {
             // Subtract 60s for safety margin (avoid missing activities at the boundary)
             afterEpoch =
-              Math.floor(
-                new Date(latestActivity.startDate).getTime() / 1000,
-              ) - 60;
+              Math.floor(new Date(latestActivity.startDate).getTime() / 1000) -
+              60;
           }
         }
 

@@ -311,12 +311,8 @@
           "name": "activities_athlete_athletes_id_fk",
           "tableFrom": "activities",
           "tableTo": "athletes",
-          "columnsFrom": [
-            "athlete"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["athlete"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -423,12 +419,8 @@
           "name": "activity_streams_activity_id_activities_id_fk",
           "tableFrom": "activity_streams",
           "tableTo": "activities",
-          "columnsFrom": [
-            "activity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["activity_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -490,12 +482,8 @@
           "name": "athlete_stats_athlete_athletes_id_fk",
           "tableFrom": "athlete_stats",
           "tableTo": "athletes",
-          "columnsFrom": [
-            "athlete"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["athlete"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -675,12 +663,8 @@
           "name": "best_efforts_activity_id_activities_id_fk",
           "tableFrom": "best_efforts",
           "tableTo": "activities",
-          "columnsFrom": [
-            "activity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["activity_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -781,12 +765,8 @@
           "name": "rider_settings_athlete_athletes_id_fk",
           "tableFrom": "rider_settings",
           "tableTo": "athletes",
-          "columnsFrom": [
-            "athlete"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["athlete"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -890,12 +870,8 @@
           "name": "sync_jobs_athlete_athletes_id_fk",
           "tableFrom": "sync_jobs",
           "tableTo": "athletes",
-          "columnsFrom": [
-            "athlete"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["athlete"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -969,12 +945,8 @@
           "name": "time_periods_athlete_athletes_id_fk",
           "tableFrom": "time_periods",
           "tableTo": "athletes",
-          "columnsFrom": [
-            "athlete"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["athlete"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -990,12 +962,7 @@
     "public.sync_job_mode": {
       "name": "sync_job_mode",
       "schema": "public",
-      "values": [
-        "load_new",
-        "load_missing",
-        "reload_all",
-        "recompute_scores"
-      ]
+      "values": ["load_new", "load_missing", "reload_all", "recompute_scores"]
     },
     "public.sync_job_status": {
       "name": "sync_job_status",

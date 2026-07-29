@@ -247,7 +247,9 @@ export function PaceCalculator() {
         <ToolboxTable containerClassName="max-h-[600px]">
           <ToolboxTableHeader>
             <ToolboxTableHeaderRow>
-              <ToolboxTableHead first>{t("toolbox.pace.paceKm")}</ToolboxTableHead>
+              <ToolboxTableHead first>
+                {t("toolbox.pace.paceKm")}
+              </ToolboxTableHead>
               {distances.map((d) => (
                 <ToolboxTableHead key={d.id}>{d.label}</ToolboxTableHead>
               ))}

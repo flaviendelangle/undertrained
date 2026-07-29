@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { computeFitnessSeries, type FitnessPoint } from "~/lib/fitness";
+import { type FitnessPoint, computeFitnessSeries } from "~/lib/fitness";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
 import { useActivitiesQuery } from "./useActivitiesQuery";

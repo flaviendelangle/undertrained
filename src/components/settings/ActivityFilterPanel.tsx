@@ -26,10 +26,18 @@ const WORKOUT_TYPE_GROUPS: {
   labelKey: AppMessageKey;
   types: number[];
 }[] = [
-  { id: "default", labelKey: "settings.filter.workout.default", types: [0, 10] },
+  {
+    id: "default",
+    labelKey: "settings.filter.workout.default",
+    types: [0, 10],
+  },
   { id: "race", labelKey: "settings.filter.workout.race", types: [1, 11] },
   { id: "longRun", labelKey: "settings.filter.workout.longRun", types: [2] },
-  { id: "workout", labelKey: "settings.filter.workout.workout", types: [3, 12] },
+  {
+    id: "workout",
+    labelKey: "settings.filter.workout.workout",
+    types: [3, 12],
+  },
   {
     id: "weightTraining",
     labelKey: "settings.filter.workout.weightTraining",
@@ -46,7 +54,8 @@ export function ActivityFilterPanel({
   onSearchChange?: (value: string) => void;
 } = {}) {
   const t = useT();
-  const { allTypes: activityTypes, allWorkoutTypes: workoutTypes } = useActivitiesQuery();
+  const { allTypes: activityTypes, allWorkoutTypes: workoutTypes } =
+    useActivitiesQuery();
   const filter = useActivityFilter();
   const athleteId = useAthleteId();
   const { data: periods } = trpc.timePeriods.list.useQuery(
@@ -90,7 +99,9 @@ export function ActivityFilterPanel({
             {t("settings.filter.timePeriod")}
           </div>
           <Select
-            value={filter.timePeriodId ? String(filter.timePeriodId) : NONE_VALUE}
+            value={
+              filter.timePeriodId ? String(filter.timePeriodId) : NONE_VALUE
+            }
             onValueChange={(val) => {
               filter.setTimePeriodId(
                 val === NONE_VALUE ? undefined : Number(val),
@@ -100,8 +111,8 @@ export function ActivityFilterPanel({
             <SelectTrigger size="sm" className="w-full">
               <SelectValue>
                 {filter.timePeriodId
-                  ? periods.find((p) => p.id === filter.timePeriodId)?.name ??
-                    t("settings.filter.allTime")
+                  ? (periods.find((p) => p.id === filter.timePeriodId)?.name ??
+                    t("settings.filter.allTime"))
                   : t("settings.filter.allTime")}
               </SelectValue>
             </SelectTrigger>
@@ -176,16 +187,27 @@ export function ActivityFilterPanel({
           </div>
           <div className="grid grid-cols-2 gap-1.5">
             {WORKOUT_TYPE_GROUPS.map((group) => {
-              const presentTypes = group.types.filter((t) => workoutTypes.includes(t));
+              const presentTypes = group.types.filter((t) =>
+                workoutTypes.includes(t),
+              );
               if (presentTypes.length === 0) return null;
-              const active = presentTypes.every((t) => filter.workoutTypes.includes(t));
+              const active = presentTypes.every((t) =>
+                filter.workoutTypes.includes(t),
+              );
               return (
                 <button
                   key={group.id}
                   onClick={() => {
                     const next = active
-                      ? filter.workoutTypes.filter((t) => !presentTypes.includes(t))
-                      : [...filter.workoutTypes.filter((t) => !presentTypes.includes(t)), ...presentTypes];
+                      ? filter.workoutTypes.filter(
+                          (t) => !presentTypes.includes(t),
+                        )
+                      : [
+                          ...filter.workoutTypes.filter(
+                            (t) => !presentTypes.includes(t),
+                          ),
+                          ...presentTypes,
+                        ];
                     filter.setWorkoutTypes(next);
                   }}
                   className={cn(

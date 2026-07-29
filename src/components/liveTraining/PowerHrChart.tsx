@@ -8,9 +8,9 @@ import {
   LinePlot,
 } from "@mui/x-charts-pro";
 
-import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useT } from "~/i18n/useT";
+import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import type { SessionDataPoint } from "~/sensors/types";
 import { findPowerZone } from "~/sensors/types";
 
@@ -232,7 +232,11 @@ export function PowerHrChart(props: PowerHrChartProps) {
         ]}
         height={200}
         skipAnimation
-        margin={isMobile ? { left: 24, right: 24, top: 8, bottom: 20 } : CHART_MARGINS.dualAxis}
+        margin={
+          isMobile
+            ? { left: 24, right: 24, top: 8, bottom: 20 }
+            : CHART_MARGINS.dualAxis
+        }
       >
         <BarPlot />
         <LinePlot />

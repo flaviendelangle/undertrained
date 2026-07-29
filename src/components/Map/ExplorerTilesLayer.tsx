@@ -191,7 +191,12 @@ class ExplorerTilesCanvas extends L.Layer {
     this._draw(map, ctx, min, bSize);
   }
 
-  private _draw(map: L.Map, ctx: CanvasRenderingContext2D, min: L.Point, size: L.Point) {
+  private _draw(
+    map: L.Map,
+    ctx: CanvasRenderingContext2D,
+    min: L.Point,
+    size: L.Point,
+  ) {
     ctx.clearRect(min.x, min.y, size.x, size.y);
 
     const index = this._index;

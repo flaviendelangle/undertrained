@@ -116,7 +116,13 @@ export function RiderSettingsProvider({
   const hasSettings = stored != null;
 
   const value = React.useMemo(
-    () => ({ timeline, setTimeline, resolveForDate, currentSettings, hasSettings }),
+    () => ({
+      timeline,
+      setTimeline,
+      resolveForDate,
+      currentSettings,
+      hasSettings,
+    }),
     [timeline, setTimeline, resolveForDate, currentSettings, hasSettings],
   );
 

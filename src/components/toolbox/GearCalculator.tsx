@@ -331,7 +331,9 @@ export function GearCalculator() {
           <ToolboxTable>
             <ToolboxTableHeader>
               <ToolboxTableHeaderRow>
-                <ToolboxTableHead first>{t("toolbox.gear.cog")}</ToolboxTableHead>
+                <ToolboxTableHead first>
+                  {t("toolbox.gear.cog")}
+                </ToolboxTableHead>
                 {rings.map((ring) => (
                   <ToolboxTableHead key={ring} className="text-center">
                     {ring}T

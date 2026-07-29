@@ -126,7 +126,10 @@ export function buildDayEvents(day: JournalDay): WeekEvent[] {
       id: `planned-${training.id}`,
       training,
       startMinutes: start,
-      endMinutes: Math.min(MINUTES_PER_DAY, start + training.durationSeconds / 60),
+      endMinutes: Math.min(
+        MINUTES_PER_DAY,
+        start + training.durationSeconds / 60,
+      ),
     });
   }
   return events;
@@ -146,7 +149,8 @@ export function buildBusyEvents(day: JournalDay): WeekEvent[] {
     const start = minutesFromIso(busy.startLocal);
     const rawEnd = minutesFromIso(busy.endLocal);
     // A feed event can cross midnight; like activities, clamp it to the day end.
-    const endMinutes = rawEnd > start ? Math.min(MINUTES_PER_DAY, rawEnd) : MINUTES_PER_DAY;
+    const endMinutes =
+      rawEnd > start ? Math.min(MINUTES_PER_DAY, rawEnd) : MINUTES_PER_DAY;
     events.push({
       kind: "busy",
       id: `busy-${busy.subscriptionId}-${index}-${busy.startLocal}`,

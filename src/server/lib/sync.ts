@@ -2,6 +2,7 @@ import { and, asc, count, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 import strava from "strava-v3";
 import type { DetailedActivity } from "strava-v3";
 
+import { CYCLING_SPEED_DISTANCE_METERS } from "../../utils/cyclingRecordDistances";
 import {
   getActivityTypesByCategory,
   getSportConfig,
@@ -10,13 +11,12 @@ import type { Database } from "../db";
 import {
   activities,
   activityStreams,
-  athletes,
   athleteStats,
+  athletes,
   bestEfforts,
   riderSettings,
   syncJobs,
 } from "../db/schema";
-import { CYCLING_SPEED_DISTANCE_METERS } from "../../utils/cyclingRecordDistances";
 import {
   calculateHRSS,
   calculateRunningTSS,
@@ -125,7 +125,11 @@ async function callStrava<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export type SyncMode = "load_new" | "load_missing" | "reload_all" | "recompute_scores";
+export type SyncMode =
+  | "load_new"
+  | "load_missing"
+  | "reload_all"
+  | "recompute_scores";
 
 /**
  * Fire-and-forget sync orchestration.
@@ -499,7 +503,10 @@ async function computeScoresPhase(
               eq(activities.athlete, athleteId),
               or(
                 gt(activities.startDate, cursorDate),
-                and(eq(activities.startDate, cursorDate), gt(activities.id, cursorId!)),
+                and(
+                  eq(activities.startDate, cursorDate),
+                  gt(activities.id, cursorId!),
+                ),
               ),
             )
           : eq(activities.athlete, athleteId),
@@ -728,10 +735,7 @@ export async function computeActivityScoresInternal(
   preloadedStreams?: StreamDoc[],
 ) {
   const settings = settingsDoc
-    ? resolveRiderSettings(
-        settingsDoc,
-        activity.startDateLocal.slice(0, 10),
-      )
+    ? resolveRiderSettings(settingsDoc, activity.startDateLocal.slice(0, 10))
     : null;
 
   const patch: {
@@ -745,11 +749,7 @@ export async function computeActivityScoresInternal(
 
   const sc = getSportConfig(activity.type);
 
-  if (
-    settings &&
-    activity.weightedAverageWatts != null &&
-    sc.hasPowerMetrics
-  ) {
+  if (settings && activity.weightedAverageWatts != null && sc.hasPowerMetrics) {
     patch.tss = Math.round(
       calculateTSS(
         activity.weightedAverageWatts,
@@ -803,11 +803,23 @@ export async function computeActivityScoresInternal(
       patch.heartrateBests = null;
     }
 
-    if (settings && sc.category === "running" && settings.runThresholdPace > 0) {
-      const velocityData = streamData(streamDocs, "velocity_smooth", activity.id);
+    if (
+      settings &&
+      sc.category === "running" &&
+      settings.runThresholdPace > 0
+    ) {
+      const velocityData = streamData(
+        streamDocs,
+        "velocity_smooth",
+        activity.id,
+      );
       if (velocityData && timeData) {
         patch.tss = Math.round(
-          calculateRunningTSS(velocityData, timeData, settings.runThresholdPace),
+          calculateRunningTSS(
+            velocityData,
+            timeData,
+            settings.runThresholdPace,
+          ),
         );
       }
     }
@@ -877,7 +889,10 @@ export async function recomputeAllScores(db: Database, athleteId: number) {
               eq(activities.athlete, athleteId),
               or(
                 gt(activities.startDate, cursorDate),
-                and(eq(activities.startDate, cursorDate), gt(activities.id, cursorId!)),
+                and(
+                  eq(activities.startDate, cursorDate),
+                  gt(activities.id, cursorId!),
+                ),
               ),
             )
           : eq(activities.athlete, athleteId),

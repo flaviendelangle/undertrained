@@ -980,8 +980,7 @@ const fr: Messages = {
     continueWithoutHr: "Continuer sans capteur cardiaque",
     pause: "Pause",
     deviceNotListed: "Vous ne voyez pas votre appareil ?",
-    wrongDevice:
-      "Cet appareil ne fournit ni puissance ni fréquence cardiaque.",
+    wrongDevice: "Cet appareil ne fournit ni puissance ni fréquence cardiaque.",
     connectFailed: "Échec de la connexion. Réessayez.",
     startManually: "Démarrer manuellement",
   },

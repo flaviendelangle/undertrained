@@ -11,7 +11,7 @@ interface Props {
 function DefaultErrorFallback() {
   const t = useT();
   return (
-    <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+    <div className="text-muted-foreground flex items-center justify-center p-8 text-sm">
       {t("errors.somethingWentWrong")}
     </div>
   );

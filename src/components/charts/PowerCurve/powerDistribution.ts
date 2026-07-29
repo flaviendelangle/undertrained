@@ -114,9 +114,7 @@ export function computePowerSliceDistribution(
       upperWatts,
       seconds: secondsByBucket.get(bucket) ?? 0,
       ramp:
-        ftp > 0
-          ? findPowerZone(midpoint, ftp).zone.ramp
-          : POWER_ZONES[0].ramp,
+        ftp > 0 ? findPowerZone(midpoint, ftp).zone.ramp : POWER_ZONES[0].ramp,
     });
   }
 

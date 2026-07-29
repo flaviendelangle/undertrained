@@ -9,7 +9,8 @@ const PADDING_TOP = 4;
 const LABEL_MARGIN = 40;
 
 const d3BisectorObj = bisector<number, number>((d: number) => d);
-const d3Bisector = (arr: ArrayLike<number>, x: number) => d3BisectorObj.left(arr, x);
+const d3Bisector = (arr: ArrayLike<number>, x: number) =>
+  d3BisectorObj.left(arr, x);
 
 interface ElevationProfileProps {
   altitudeData: number[];
@@ -44,8 +45,8 @@ export function ElevationProfile({
   const drawHeight = CHART_HEIGHT - PADDING_TOP;
 
   const n = altitudeData.length;
-  const xMin = distanceData ? distanceData[0] ?? 0 : 0;
-  const xMax = distanceData ? distanceData[n - 1] ?? n - 1 : n - 1;
+  const xMin = distanceData ? (distanceData[0] ?? 0) : 0;
+  const xMax = distanceData ? (distanceData[n - 1] ?? n - 1) : n - 1;
   const xRange = xMax - xMin || 1;
 
   const pxToIndex = React.useCallback(
@@ -159,8 +160,24 @@ export function ElevationProfile({
       };
     }
 
-    return { paths: { linePath, areaPath }, yLabels: yLbls, xLabels: xLbls, hoverPoint: hp };
-  }, [altitudeData, distanceData, chartWidth, width, n, xMin, xMax, xRange, drawHeight, hoverIndex]);
+    return {
+      paths: { linePath, areaPath },
+      yLabels: yLbls,
+      xLabels: xLbls,
+      hoverPoint: hp,
+    };
+  }, [
+    altitudeData,
+    distanceData,
+    chartWidth,
+    width,
+    n,
+    xMin,
+    xMax,
+    xRange,
+    drawHeight,
+    hoverIndex,
+  ]);
 
   return (
     <div
@@ -179,11 +196,7 @@ export function ElevationProfile({
           <defs>
             <linearGradient id="elev-gradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="currentColor" stopOpacity={0.3} />
-              <stop
-                offset="100%"
-                stopColor="currentColor"
-                stopOpacity={0.05}
-              />
+              <stop offset="100%" stopColor="currentColor" stopOpacity={0.05} />
             </linearGradient>
           </defs>
           <path

@@ -9,11 +9,6 @@ import {
   measureTickLabels,
 } from "~/lib/chartTicks/visibleLabels";
 import { CHART_FONT, useChartTokens } from "~/lib/chartTokens";
-import { formatElapsed } from "~/utils/format";
-import type { SportConfig } from "~/utils/sportConfig";
-
-import { CrosshairDot, CrosshairLine } from "../shared/Crosshair";
-import type { MultiPanelChartProps, PanelLayout } from "./types";
 import { colorToGLColor } from "~/lib/webgl/colors";
 import {
   buildAreaMesh,
@@ -21,6 +16,11 @@ import {
   buildLineStripMesh,
 } from "~/lib/webgl/geometry";
 import { type PanelRenderData, WebGLChartRenderer } from "~/lib/webgl/renderer";
+import { formatElapsed } from "~/utils/format";
+import type { SportConfig } from "~/utils/sportConfig";
+
+import { CrosshairDot, CrosshairLine } from "../shared/Crosshair";
+import type { MultiPanelChartProps, PanelLayout } from "./types";
 
 const PANEL_HEIGHT = 100;
 const ALTITUDE_PANEL_HEIGHT = 70;
@@ -62,7 +62,8 @@ function formatStreamValue(
 }
 
 const d3BisectorObj = bisector<number, number>((d: number) => d);
-const d3Bisector = (arr: ArrayLike<number>, x: number) => d3BisectorObj.left(arr, x);
+const d3Bisector = (arr: ArrayLike<number>, x: number) =>
+  d3BisectorObj.left(arr, x);
 
 // ~2 drawn points per horizontal pixel — anything denser is sub-pixel and
 // invisible.
@@ -130,8 +131,14 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   // Reset the zoom when the x-axis unit changes (time↔distance) or a different
   // activity's streams load, so a stale domain is never applied. Done during
   // render (rather than in an effect) so the reset domain is used immediately.
-  const [zoomResetKey, setZoomResetKey] = React.useState({ xAxisMode, streams });
-  if (zoomResetKey.xAxisMode !== xAxisMode || zoomResetKey.streams !== streams) {
+  const [zoomResetKey, setZoomResetKey] = React.useState({
+    xAxisMode,
+    streams,
+  });
+  if (
+    zoomResetKey.xAxisMode !== xAxisMode ||
+    zoomResetKey.streams !== streams
+  ) {
     setZoomResetKey({ xAxisMode, streams });
     setZoomDomain(null);
   }
@@ -671,7 +678,10 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
               fontWeight={600}
               stroke={tokens.cardBg}
               strokeWidth={3}
-              style={{ paintOrder: "stroke", fontVariantNumeric: "tabular-nums" }}
+              style={{
+                paintOrder: "stroke",
+                fontVariantNumeric: "tabular-nums",
+              }}
               pointerEvents="none"
             >
               {formatX(activeXData[hoverIndex] ?? hoverIndex)}

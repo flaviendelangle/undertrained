@@ -40,7 +40,12 @@ const App = (({
     Component.getLayout ?? ((page) => <LoggedInLayout>{page}</LoggedInLayout>);
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem nonce={nonce}>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      nonce={nonce}
+    >
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </Head>

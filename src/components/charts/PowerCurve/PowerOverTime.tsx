@@ -14,11 +14,7 @@ import {
 
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useT } from "~/i18n/useT";
-import {
-  AXIS_SIZE,
-  CHART_MARGINS,
-  useChartTokens,
-} from "~/lib/chartTokens";
+import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { findPowerZone } from "~/sensors/types";
 import { formatElapsed } from "~/utils/format";
 

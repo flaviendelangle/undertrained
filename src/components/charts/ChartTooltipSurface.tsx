@@ -72,7 +72,9 @@ export function ChartTooltipRow({
         style={color ? { backgroundColor: color } : undefined}
       />
       {label != null && <span>{label}</span>}
-      {value != null && <span className="font-medium tabular-nums">{value}</span>}
+      {value != null && (
+        <span className="font-medium tabular-nums">{value}</span>
+      )}
       {trailing}
     </div>
   );

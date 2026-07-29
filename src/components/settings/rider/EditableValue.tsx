@@ -68,7 +68,7 @@ export function EditableValue({
         type="button"
         onClick={startEditing}
         className={cn(
-          "rounded px-1 text-left hover:bg-muted/60 focus-visible:ring-ring/50 focus-visible:ring-2 focus-visible:outline-none",
+          "hover:bg-muted/60 focus-visible:ring-ring/50 rounded px-1 text-left focus-visible:ring-2 focus-visible:outline-none",
           isEmpty && "text-muted-foreground",
           displayClassName,
         )}

@@ -111,7 +111,7 @@ export function ChartCard({
       </div>
       {/* One calm fade-up on mount, shared by every chart (gated on
           prefers-reduced-motion inside the utility). */}
-      <div className={cn("min-h-0 flex-1 animate-chart-in", bodyClassName)}>
+      <div className={cn("animate-chart-in min-h-0 flex-1", bodyClassName)}>
         {children}
       </div>
     </div>

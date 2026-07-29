@@ -21,7 +21,7 @@ export function PeriodStatsTable() {
 
   if (!stats || stats.length === 0) {
     return (
-      <div className="border-border bg-card rounded-sm border max-sm:border-0 p-8 text-center">
+      <div className="border-border bg-card rounded-sm border p-8 text-center max-sm:border-0">
         <p className="text-muted-foreground text-sm">
           No time periods defined.{" "}
           <Link href="/settings/periods" className="text-primary underline">
@@ -59,9 +59,7 @@ export function PeriodStatsTable() {
                   ? row.period.sportTypes.map(formatActivityType).join(", ")
                   : "All"}
               </TableCell>
-              <TableCell className="text-right">
-                {row.activityCount}
-              </TableCell>
+              <TableCell className="text-right">{row.activityCount}</TableCell>
               <TableCell className="text-right">
                 {formatHumanDuration(row.totalMovingTime)}
               </TableCell>

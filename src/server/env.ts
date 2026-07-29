@@ -24,17 +24,14 @@ const envSchema = z.object({
   // which treats floating times as UTC) show them at the intended local time.
   CALENDAR_TIMEZONE: z
     .string()
-    .refine(
-      (tz) => {
-        try {
-          new Intl.DateTimeFormat("en-US", { timeZone: tz });
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      "CALENDAR_TIMEZONE must be a valid IANA timezone (e.g. Europe/Paris)",
-    )
+    .refine((tz) => {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    }, "CALENDAR_TIMEZONE must be a valid IANA timezone (e.g. Europe/Paris)")
     .default("Europe/Paris"),
 });
 

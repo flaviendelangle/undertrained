@@ -61,7 +61,9 @@ export const ActivityStats = React.memo(function ActivityStats({
   const tssTooltipLines = sportConfig.getTssTooltipLines(riderSettings, np);
   const tssTooltip = (
     <div className="flex flex-col gap-0.5">
-      <div className="font-medium">{t("stats.settingsForDate", { date: activityDate })}</div>
+      <div className="font-medium">
+        {t("stats.settingsForDate", { date: activityDate })}
+      </div>
       {tssTooltipLines.map((line) => (
         <div key={line.label}>
           {line.label}: {line.value}
@@ -72,9 +74,15 @@ export const ActivityStats = React.memo(function ActivityStats({
 
   const hrSettingsTooltip = (
     <div className="flex flex-col gap-0.5">
-      <div className="font-medium">{t("stats.settingsForDate", { date: activityDate })}</div>
-      <div>{t("stats.restingHr")}: {riderSettings.restingHr} bpm</div>
-      <div>{t("stats.maxHr")}: {riderSettings.maxHr} bpm</div>
+      <div className="font-medium">
+        {t("stats.settingsForDate", { date: activityDate })}
+      </div>
+      <div>
+        {t("stats.restingHr")}: {riderSettings.restingHr} bpm
+      </div>
+      <div>
+        {t("stats.maxHr")}: {riderSettings.maxHr} bpm
+      </div>
       <div>LTHR: {riderSettings.lthr} bpm</div>
     </div>
   );
@@ -211,7 +219,12 @@ export const ActivityStats = React.memo(function ActivityStats({
 
   const energyCadenceStats: Stat[] = [
     ...(activity.kilojoules != null
-      ? [{ label: t("stats.energy"), value: `${Math.round(activity.kilojoules)} kJ` }]
+      ? [
+          {
+            label: t("stats.energy"),
+            value: `${Math.round(activity.kilojoules)} kJ`,
+          },
+        ]
       : []),
     ...(activity.calories != null
       ? [
@@ -298,7 +311,9 @@ export const ActivityStats = React.memo(function ActivityStats({
 
   return (
     <div className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
-      <CardTitle className="mb-4">{t("stats.section.activityDetails")}</CardTitle>
+      <CardTitle className="mb-4">
+        {t("stats.section.activityDetails")}
+      </CardTitle>
 
       {/* Hero Row */}
       <div
@@ -320,7 +335,12 @@ export const ActivityStats = React.memo(function ActivityStats({
 
       {/* Grouped Sections */}
       <div className="flex flex-col gap-4">
-        <StatSection icon={Clock} title={t("stats.section.timeAndSpeed", { label: t(sportConfig.speedLabelKey) })}>
+        <StatSection
+          icon={Clock}
+          title={t("stats.section.timeAndSpeed", {
+            label: t(sportConfig.speedLabelKey),
+          })}
+        >
           {timeSpeedStats.map((stat) => (
             <StatCard key={stat.label} {...stat} />
           ))}
@@ -351,7 +371,10 @@ export const ActivityStats = React.memo(function ActivityStats({
         )}
 
         {activity.perceivedExertion != null && (
-          <StatSection icon={ActivityIcon} title={t("stats.section.perceivedExertion")}>
+          <StatSection
+            icon={ActivityIcon}
+            title={t("stats.section.perceivedExertion")}
+          >
             <StatCard
               label="RPE"
               value={`${activity.perceivedExertion} / 10`}
@@ -360,7 +383,10 @@ export const ActivityStats = React.memo(function ActivityStats({
         )}
 
         {trainingLoadStats.length > 0 && (
-          <StatSection icon={TrendingUp} title={t("stats.section.trainingLoadDetails")}>
+          <StatSection
+            icon={TrendingUp}
+            title={t("stats.section.trainingLoadDetails")}
+          >
             {!hasSettings && (
               <SettingsCallout
                 hintId="callout-activity-load"

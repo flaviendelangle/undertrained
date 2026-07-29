@@ -114,7 +114,9 @@ export function HudWaitingScreen({
                 <div className="flex items-center justify-center gap-3">
                   <button
                     type="button"
-                    aria-label={t("liveTraining.targetPowerStep", { step: "-10" })}
+                    aria-label={t("liveTraining.targetPowerStep", {
+                      step: "-10",
+                    })}
                     onClick={() => onTargetPowerChange(targetPower - 10)}
                     className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
                   >
@@ -122,7 +124,9 @@ export function HudWaitingScreen({
                   </button>
                   <button
                     type="button"
-                    aria-label={t("liveTraining.targetPowerStep", { step: "-5" })}
+                    aria-label={t("liveTraining.targetPowerStep", {
+                      step: "-5",
+                    })}
                     onClick={() => onTargetPowerChange(targetPower - 5)}
                     className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
                   >
@@ -136,7 +140,9 @@ export function HudWaitingScreen({
                   </span>
                   <button
                     type="button"
-                    aria-label={t("liveTraining.targetPowerStep", { step: "+5" })}
+                    aria-label={t("liveTraining.targetPowerStep", {
+                      step: "+5",
+                    })}
                     onClick={() => onTargetPowerChange(targetPower + 5)}
                     className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
                   >
@@ -144,7 +150,9 @@ export function HudWaitingScreen({
                   </button>
                   <button
                     type="button"
-                    aria-label={t("liveTraining.targetPowerStep", { step: "+10" })}
+                    aria-label={t("liveTraining.targetPowerStep", {
+                      step: "+10",
+                    })}
                     onClick={() => onTargetPowerChange(targetPower + 10)}
                     className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
                   >

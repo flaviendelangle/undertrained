@@ -131,7 +131,9 @@ async function createSubscription(): Promise<void> {
     if (res.ok) {
       const data = await res.json();
       activeSubscriptionId = data.id;
-      console.log(`[webhook] Subscription created (id=${activeSubscriptionId})`);
+      console.log(
+        `[webhook] Subscription created (id=${activeSubscriptionId})`,
+      );
       return;
     }
 

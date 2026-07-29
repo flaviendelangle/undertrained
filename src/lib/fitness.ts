@@ -1,6 +1,9 @@
 import { addDays, differenceInCalendarDays, isValid } from "date-fns";
 
-import { getActivityLoad, type LoadAlgorithmPreferences } from "~/utils/getActivityLoad";
+import {
+  type LoadAlgorithmPreferences,
+  getActivityLoad,
+} from "~/utils/getActivityLoad";
 
 /**
  * Minimal activity shape needed to build the fitness curve. Kept decoupled from
@@ -43,7 +46,12 @@ export interface FitnessSeriesOptions {
 }
 
 /** Stable identifier for a form (TSB) band; drives its translated label. */
-export type FormZoneKey = "highRisk" | "optimal" | "grey" | "fresh" | "transition";
+export type FormZoneKey =
+  | "highRisk"
+  | "optimal"
+  | "grey"
+  | "fresh"
+  | "transition";
 
 /** A Training Stress Balance band, used for background shading and the readout. */
 export interface FormZone {
@@ -62,11 +70,35 @@ export interface FormZone {
  * follow the intervals.icu / Joe Friel TSB model.
  */
 export const FORM_ZONES: FormZone[] = [
-  { key: "highRisk", label: "High risk", color: "#ef4444", min: -Infinity, max: -30 },
-  { key: "optimal", label: "Optimal training", color: "#22c55e", min: -30, max: -10 },
+  {
+    key: "highRisk",
+    label: "High risk",
+    color: "#ef4444",
+    min: -Infinity,
+    max: -30,
+  },
+  {
+    key: "optimal",
+    label: "Optimal training",
+    color: "#22c55e",
+    min: -30,
+    max: -10,
+  },
   { key: "grey", label: "Grey zone", color: "#9ca3af", min: -10, max: 5 },
-  { key: "fresh", label: "Fresh — race ready", color: "#3b82f6", min: 5, max: 25 },
-  { key: "transition", label: "Transition", color: "#14b8a6", min: 25, max: Infinity },
+  {
+    key: "fresh",
+    label: "Fresh — race ready",
+    color: "#3b82f6",
+    min: 5,
+    max: 25,
+  },
+  {
+    key: "transition",
+    label: "Transition",
+    color: "#14b8a6",
+    min: 25,
+    max: Infinity,
+  },
 ];
 
 /** Classify a Form (TSB) value into its zone. */
@@ -108,7 +140,11 @@ const WEEKLY_VERDICTS: Record<WeeklyVerdict["key"], WeeklyVerdict> = {
   detraining: { key: "detraining", label: "Undertrained", color: "#f59e0b" },
   maintaining: { key: "maintaining", label: "Maintaining", color: "#9ca3af" },
   productive: { key: "productive", label: "Productive", color: "#22c55e" },
-  overreaching: { key: "overreaching", label: "Overreaching", color: "#ef4444" },
+  overreaching: {
+    key: "overreaching",
+    label: "Overreaching",
+    color: "#ef4444",
+  },
 };
 
 /**
@@ -153,7 +189,12 @@ export function computeFitnessSeries(
   preferences: LoadAlgorithmPreferences,
   options: FitnessSeriesOptions = {},
 ): FitnessPoint[] {
-  const { ctlDays = 42, atlDays = 7, rampDays = 7, endDate = new Date() } = options;
+  const {
+    ctlDays = 42,
+    atlDays = 7,
+    rampDays = 7,
+    endDate = new Date(),
+  } = options;
 
   if (activities.length === 0) {
     return [];
@@ -177,14 +218,19 @@ export function computeFitnessSeries(
   // Anchor the curve at the oldest day that actually carries load. Leading
   // activities with no load (missing HR/power data, etc.) shouldn't stretch the
   // chart back to a flat, zero-fitness lead-in.
-  const firstLoadedDayKey = dayKeys.find((key) => (loadByDay.get(key) ?? 0) > 0);
+  const firstLoadedDayKey = dayKeys.find(
+    (key) => (loadByDay.get(key) ?? 0) > 0,
+  );
   if (firstLoadedDayKey === undefined) {
     return [];
   }
   const firstDay = parseDayKey(firstLoadedDayKey);
   const lastActivityDay = parseDayKey(dayKeys[dayKeys.length - 1]);
   const endDay = stripTime(endDate);
-  const lastDay = differenceInCalendarDays(endDay, lastActivityDay) > 0 ? endDay : lastActivityDay;
+  const lastDay =
+    differenceInCalendarDays(endDay, lastActivityDay) > 0
+      ? endDay
+      : lastActivityDay;
 
   const totalDays = differenceInCalendarDays(lastDay, firstDay) + 1;
   const ctlAlpha = 1 / ctlDays;

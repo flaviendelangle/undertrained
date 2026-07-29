@@ -25,7 +25,9 @@ const ROUTE_TITLE_KEYS: Record<string, AppMessageKey> = {
  * Detail pages fall back to their section label until they override the title
  * with their own data. Returns `undefined` for unmapped routes.
  */
-export function resolveRouteTitleKey(pathname: string): AppMessageKey | undefined {
+export function resolveRouteTitleKey(
+  pathname: string,
+): AppMessageKey | undefined {
   if (ROUTE_TITLE_KEYS[pathname]) {
     return ROUTE_TITLE_KEYS[pathname];
   }

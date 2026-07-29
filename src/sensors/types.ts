@@ -132,8 +132,10 @@ export const DEFAULT_RIDER_SETTINGS: RiderSettings = {
   restingHr: DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.restingHr!,
   maxHr: DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.maxHr!,
   lthr: DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.lthr!,
-  runThresholdPace: DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.runThresholdPace!,
-  swimThresholdPace: DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.swimThresholdPace!,
+  runThresholdPace:
+    DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.runThresholdPace!,
+  swimThresholdPace:
+    DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.swimThresholdPace!,
 };
 
 export interface SessionDataPoint {
@@ -251,7 +253,10 @@ export function pctVO2max(t: number): number {
 }
 
 /** Compute VDOT from a race distance (meters) and time (minutes). */
-export function computeVdot(distanceMeters: number, timeMinutes: number): number {
+export function computeVdot(
+  distanceMeters: number,
+  timeMinutes: number,
+): number {
   const v = distanceMeters / timeMinutes;
   return oxygenCost(v) / pctVO2max(timeMinutes);
 }

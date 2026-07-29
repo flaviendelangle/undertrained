@@ -272,9 +272,7 @@ export function PeriodsEmptyState() {
           <CalendarPlusIcon className="size-6" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">
-            {t("periods.emptyTitle")}
-          </h3>
+          <h3 className="text-lg font-semibold">{t("periods.emptyTitle")}</h3>
           <p className="text-muted-foreground mt-1 text-sm">
             {t("periods.emptyDescription")}
           </p>

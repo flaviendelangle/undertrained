@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { computeNormalizedPower, computeSessionSummary } from "./sessionSummary";
+import {
+  computeNormalizedPower,
+  computeSessionSummary,
+} from "./sessionSummary";
 import type { SessionDataPoint } from "./types";
 
 function point(
@@ -22,15 +25,21 @@ function point(
 
 describe("computeNormalizedPower", () => {
   it("is undefined below a full 30 s window", () => {
-    expect(computeNormalizedPower(Array.from({ length: 29 }, () => 200))).toBeNull();
+    expect(
+      computeNormalizedPower(Array.from({ length: 29 }, () => 200)),
+    ).toBeNull();
   });
 
   it("equals the constant for a steady effort", () => {
-    expect(computeNormalizedPower(Array.from({ length: 600 }, () => 200))).toBe(200);
+    expect(computeNormalizedPower(Array.from({ length: 600 }, () => 200))).toBe(
+      200,
+    );
   });
 
   it("is defined at exactly one full window", () => {
-    expect(computeNormalizedPower(Array.from({ length: 30 }, () => 150))).toBe(150);
+    expect(computeNormalizedPower(Array.from({ length: 30 }, () => 150))).toBe(
+      150,
+    );
   });
 
   it("exceeds average power for a variable effort", () => {

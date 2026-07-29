@@ -1,6 +1,5 @@
-import type { Instrumentation } from "next";
-
 import { eq, inArray } from "drizzle-orm";
+import type { Instrumentation } from "next";
 
 import { db } from "./server/db";
 import { syncJobs } from "./server/db/schema";

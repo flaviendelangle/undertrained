@@ -41,7 +41,7 @@ function HudDeviceCard({
 
   return (
     <div
-      className={`relative w-full max-w-80 overflow-hidden rounded-2xl border backdrop-blur-md transition-all duration-700 sm:min-w-80 sm:max-w-none ${
+      className={`relative w-full max-w-80 overflow-hidden rounded-2xl border backdrop-blur-md transition-all duration-700 sm:max-w-none sm:min-w-80 ${
         isConnected
           ? "border-green-400/50 bg-green-50 dark:border-green-500/40 dark:bg-green-950/30"
           : "border-border/50 bg-card/60"
@@ -106,7 +106,9 @@ function HudDeviceCard({
 
         {/* Label + status */}
         <div className="text-center">
-          <h3 className="text-foreground text-base font-semibold sm:text-lg">{label}</h3>
+          <h3 className="text-foreground text-base font-semibold sm:text-lg">
+            {label}
+          </h3>
           <p className="text-muted-foreground mt-0.5 text-xs sm:mt-1 sm:text-sm">
             {isConnected
               ? (deviceName ?? t("liveTraining.connected"))
@@ -214,7 +216,7 @@ export function HudConnectionWizard(props: HudConnectionWizardProps) {
   const trainerConnected = props.trainerState === "connected";
   const hrConnected = props.hrState === "connected";
   return (
-    <div className="bg-background/95 absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+    <div className="bg-background/95 absolute inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="flex flex-col items-center gap-4 sm:gap-8">
         <h1 className="text-foreground text-xl font-bold sm:text-3xl">
           {t("liveTraining.connectDevices")}

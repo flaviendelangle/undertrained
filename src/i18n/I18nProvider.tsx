@@ -25,7 +25,11 @@ const CATALOGS: Record<Locale, Messages> = {
 
 const LOCALE_COOKIE = "locale";
 // Persist the cookie for a year and across the whole app.
-const COOKIE_OPTIONS = { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" as const };
+const COOKIE_OPTIONS = {
+  path: "/",
+  maxAge: 60 * 60 * 24 * 365,
+  sameSite: "lax" as const,
+};
 
 /** Dot-path key into the message catalog, e.g. "journal.dialog.title". */
 export type AppMessageKey = MessageKey<Messages>;
@@ -93,8 +97,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   );
 
   const t = React.useCallback<TFunction>(
-    (key, params) =>
-      translate(CATALOGS[locale], en, locale, key, params),
+    (key, params) => translate(CATALOGS[locale], en, locale, key, params),
     [locale],
   );
 

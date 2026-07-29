@@ -1,6 +1,5 @@
-import { randomBytes } from "node:crypto";
-
 import { and, asc, eq, gte, isNotNull, lte } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
@@ -18,7 +17,11 @@ import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 const trainingFields = {
   title: z.string().trim().min(1).max(200),
   plannedDate: z.string().min(1), // floating local ISO datetime
-  durationSeconds: z.number().int().positive().max(24 * 3600),
+  durationSeconds: z
+    .number()
+    .int()
+    .positive()
+    .max(24 * 3600),
   sportType: z.string().min(1),
 };
 
@@ -74,9 +77,7 @@ export const plannedTrainingsRouter = router({
             isNotNull(plannedTrainings.linkedActivityId),
           ),
         );
-      return rows
-        .map((r) => r.id)
-        .filter((id): id is number => id != null);
+      return rows.map((r) => r.id).filter((id): id is number => id != null);
     }),
 
   create: protectedProcedure

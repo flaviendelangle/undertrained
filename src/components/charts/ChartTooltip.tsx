@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import type { ReactNode, RefObject } from "react";
+
 import { createPortal } from "react-dom";
 
 import {
@@ -197,7 +198,9 @@ export function ChartTooltip() {
                       className="border-border mt-1 border-t pt-1"
                       label={t("charts.tooltip.total")}
                       value={
-                        formatTotal ? formatTotal(total) : total.toLocaleString()
+                        formatTotal
+                          ? formatTotal(total)
+                          : total.toLocaleString()
                       }
                     />
                   )}

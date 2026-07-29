@@ -21,8 +21,7 @@ export function tzOffsetMs(utcMs: number, timeZone: string): number {
     minute: "2-digit",
     second: "2-digit",
   }).formatToParts(new Date(utcMs));
-  const f = (type: string) =>
-    Number(parts.find((p) => p.type === type)?.value);
+  const f = (type: string) => Number(parts.find((p) => p.type === type)?.value);
   const asUtc = Date.UTC(
     f("year"),
     f("month") - 1,
@@ -59,6 +58,8 @@ export function zonedWallClockToUtc(floating: string, timeZone: string): Date {
  * so every incoming event is funnelled through this.
  */
 export function utcToZonedWallClock(instant: Date, timeZone: string): string {
-  const local = new Date(instant.getTime() + tzOffsetMs(instant.getTime(), timeZone));
+  const local = new Date(
+    instant.getTime() + tzOffsetMs(instant.getTime(), timeZone),
+  );
   return local.toISOString().slice(0, 19);
 }

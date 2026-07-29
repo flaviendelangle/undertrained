@@ -10,9 +10,7 @@ export function Tooltip(props: TooltipProps) {
   const { children, label, side = "right" } = props;
   return (
     <ShadTooltip>
-      <TooltipTrigger render={<span />}>
-        {children}
-      </TooltipTrigger>
+      <TooltipTrigger render={<span />}>{children}</TooltipTrigger>
       <TooltipContent side={side}>{label}</TooltipContent>
     </ShadTooltip>
   );

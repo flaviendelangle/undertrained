@@ -21,8 +21,8 @@ import type { JournalDay, JournalWeek } from "./useJournalWeeks";
 import {
   COMPACT_BLOCK_HEIGHT,
   HEADER_HEIGHT_PX,
-  HOUR_HEIGHT,
   HOURS,
+  HOUR_HEIGHT,
   MINUTES_PER_DAY,
   MINUTES_PER_PIXEL,
   MIN_BLOCK_HEIGHT,
@@ -356,10 +356,7 @@ export function WeekBlock({
           </div>
         )}
       </div>
-      <div
-        className="grid grid-cols-7"
-        style={{ height: TOTAL_HEIGHT }}
-      >
+      <div className="grid grid-cols-7" style={{ height: TOTAL_HEIGHT }}>
         {week.days.map((day, index) => {
           const dayKey = format(day.date, "yyyy-MM-dd");
           return (

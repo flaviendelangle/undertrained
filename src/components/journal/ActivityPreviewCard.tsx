@@ -6,13 +6,13 @@ import { MedalIcon } from "lucide-react";
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 
 import { PreviewCardContent } from "~/components/ui/preview-card";
-import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { type TFunction } from "~/i18n/I18nProvider";
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import { trpc } from "~/utils/trpc";
 import { formatHumanDuration } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
+import { trpc } from "~/utils/trpc";
 
 import { ActivityPreviewMap } from "./ActivityPreviewMap";
 import type { ActivityPreviewPayload } from "./journalPreview";
@@ -115,7 +115,10 @@ function ActivityPreviewCardBody({
       <div className="flex flex-col gap-2 p-3">
         <div className="flex flex-col gap-0.5">
           <span className="flex min-w-0 items-center gap-1.5">
-            <Icon className="size-3.5 shrink-0" style={{ color: config.color }} />
+            <Icon
+              className="size-3.5 shrink-0"
+              style={{ color: config.color }}
+            />
             <span className="text-foreground truncate font-medium">
               {activity.name || sportTypeLabel(activity.type, t)}
             </span>
@@ -201,7 +204,10 @@ function buildStats(
 
   const watts = activity.weightedAverageWatts ?? activity.averageWatts;
   if (config.hasPowerMetrics && watts != null) {
-    stats.push({ label: t("journal.stat.power"), value: `${Math.round(watts)} W` });
+    stats.push({
+      label: t("journal.stat.power"),
+      value: `${Math.round(watts)} W`,
+    });
   } else if (activity.averageSpeed > 0) {
     stats.push({
       label: t(config.speedLabelKey),
@@ -217,7 +223,10 @@ function buildStats(
   }
 
   if ((config.hasPowerMetrics || config.hasPaceTSS) && activity.tss != null) {
-    stats.push({ label: config.tssLabel, value: String(Math.round(activity.tss)) });
+    stats.push({
+      label: config.tssLabel,
+      value: String(Math.round(activity.tss)),
+    });
   } else if (activity.hrss != null) {
     stats.push({ label: "HRSS", value: String(Math.round(activity.hrss)) });
   }

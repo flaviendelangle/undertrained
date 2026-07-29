@@ -72,7 +72,9 @@ export function useAntTrainer() {
   return {
     state,
     // ANT+ has no device chooser, so there is no "wrong device picked" case.
-    errorReason: (state === "error" ? "failed" : null) as SensorErrorReason | null,
+    errorReason: (state === "error"
+      ? "failed"
+      : null) as SensorErrorReason | null,
     data,
     deviceName: null as string | null,
     protocol: "ant+" as const,

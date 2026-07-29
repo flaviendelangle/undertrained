@@ -13,7 +13,9 @@ export const uploadRouter = router({
     .input(
       z.object({
         athleteId: z.number(),
-        fitFileBase64: z.string().max(10 * 1024 * 1024, "File too large (max 10 MB)"),
+        fitFileBase64: z
+          .string()
+          .max(10 * 1024 * 1024, "File too large (max 10 MB)"),
         name: z.string(),
         description: z.string().optional(),
       }),
@@ -26,7 +28,10 @@ export const uploadRouter = router({
       const fitBuffer = Buffer.from(input.fitFileBase64, "base64");
 
       // Validate FIT file header: byte 8-11 must be ".FIT"
-      if (fitBuffer.length < 12 || fitBuffer.toString("ascii", 8, 12) !== ".FIT") {
+      if (
+        fitBuffer.length < 12 ||
+        fitBuffer.toString("ascii", 8, 12) !== ".FIT"
+      ) {
         throw new Error("Invalid FIT file format");
       }
 

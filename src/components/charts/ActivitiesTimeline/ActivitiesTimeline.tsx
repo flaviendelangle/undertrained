@@ -2,8 +2,8 @@ import * as React from "react";
 
 import { SlidersHorizontalIcon } from "lucide-react";
 
-import { type ZoomData } from "@mui/x-charts-pro";
 import { BarChartPremium } from "@mui/x-charts-premium";
+import { type ZoomData } from "@mui/x-charts-pro";
 
 import { Button } from "~/components/ui/button";
 import { ChartCard } from "~/components/ui/chart-card";

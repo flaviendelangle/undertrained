@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
-import { encode, type LatLngTuple } from "../../utils/polyline";
+import { type LatLngTuple, encode } from "../../utils/polyline";
 import { env } from "../env";
 
 const ORS_BASE = "https://api.openrouteservice.org/v2/directions";

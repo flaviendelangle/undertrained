@@ -1,9 +1,9 @@
+import { and, eq } from "drizzle-orm";
 import type { NextApiRequest, NextApiResponse } from "next";
 import type { Session } from "next-auth";
 import { getServerSession } from "next-auth";
 import superjson from "superjson";
 
-import { and, eq } from "drizzle-orm";
 import { TRPCError, initTRPC } from "@trpc/server";
 
 import { authOptions } from "../../pages/api/auth/[...nextauth]";

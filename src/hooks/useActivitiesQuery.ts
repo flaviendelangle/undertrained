@@ -15,13 +15,23 @@ export function useActivitiesQuery(options?: UseActivitiesQueryOptions) {
   const athleteId = useAthleteId();
 
   const hasLocalOverride = options !== undefined;
-  const activityTypes = hasLocalOverride ? (options.activityTypes ?? []) : globalFilter.activityTypes;
+  const activityTypes = hasLocalOverride
+    ? (options.activityTypes ?? [])
+    : globalFilter.activityTypes;
   const workoutTypes = hasLocalOverride ? [] : globalFilter.workoutTypes;
-  const timePeriodId = hasLocalOverride ? (options.timePeriodId ?? undefined) : globalFilter.timePeriodId;
+  const timePeriodId = hasLocalOverride
+    ? (options.timePeriodId ?? undefined)
+    : globalFilter.timePeriodId;
   const hideCommutes = hasLocalOverride ? false : globalFilter.hideCommutes;
 
   const result = trpc.activities.list.useQuery(
-    { athleteId: athleteId!, activityTypes, workoutTypes, timePeriodId, hideCommutes },
+    {
+      athleteId: athleteId!,
+      activityTypes,
+      workoutTypes,
+      timePeriodId,
+      hideCommutes,
+    },
     { enabled: athleteId != null, placeholderData: keepPreviousData },
   );
 

@@ -60,9 +60,7 @@ export function useBusyEvents() {
     if (!masterEnabled || !result.data) {
       return EMPTY;
     }
-    const hidden = new Set(
-      hiddenKey ? hiddenKey.split(",").map(Number) : [],
-    );
+    const hidden = new Set(hiddenKey ? hiddenKey.split(",").map(Number) : []);
     return result.data.filter((event) => !hidden.has(event.subscriptionId));
   }, [result.data, masterEnabled, hiddenKey]);
 

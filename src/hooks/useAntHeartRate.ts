@@ -42,7 +42,9 @@ export function useAntHeartRate() {
   return {
     state,
     // ANT+ has no device chooser, so there is no "wrong device picked" case.
-    errorReason: (state === "error" ? "failed" : null) as SensorErrorReason | null,
+    errorReason: (state === "error"
+      ? "failed"
+      : null) as SensorErrorReason | null,
     data,
     deviceName: null as string | null,
     connect,

@@ -2,13 +2,13 @@ import { useState } from "react";
 
 import type { GetServerSideProps } from "next";
 
-import { SettingsCallout } from "~/components/primitives/SettingsCallout";
 import { BrowserCompatibilityBanner } from "~/components/liveTraining/BrowserCompatibilityBanner";
 import { HudConnectionWizard } from "~/components/liveTraining/hud/HudConnectionWizard";
 import { HudMainView } from "~/components/liveTraining/hud/HudMainView";
 import { HudPauseOverlay } from "~/components/liveTraining/hud/HudPauseOverlay";
 import { HudPostTraining } from "~/components/liveTraining/hud/HudPostTraining";
 import { HudWaitingScreen } from "~/components/liveTraining/hud/HudWaitingScreen";
+import { SettingsCallout } from "~/components/primitives/SettingsCallout";
 import { useTrainingPageController } from "~/hooks/useTrainingPageController";
 import { useT } from "~/i18n/useT";
 import { isLiveTrainingEnabled } from "~/lib/features";

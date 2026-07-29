@@ -107,7 +107,7 @@ function renderLabel(
 ): (value: string | null) => string {
   return (value) => {
     const option = options.find((o) => o.value === value);
-    return option ? t(option.labelKey) : value ?? "";
+    return option ? t(option.labelKey) : (value ?? "");
   };
 }
 

@@ -1,5 +1,6 @@
-import { useTimeout } from "@base-ui/utils/useTimeout";
 import { useState } from "react";
+
+import { useTimeout } from "@base-ui/utils/useTimeout";
 
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
@@ -95,7 +96,9 @@ export function ExportPanel(props: ExportPanelProps) {
       setErrorMsg(t("liveTraining.uploadTimeout"));
       setUploadState("error");
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : t("liveTraining.uploadFailed"));
+      setErrorMsg(
+        e instanceof Error ? e.message : t("liveTraining.uploadFailed"),
+      );
       setUploadState("error");
     }
   };

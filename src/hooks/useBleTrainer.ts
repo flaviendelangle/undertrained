@@ -180,7 +180,9 @@ export function useBleTrainer() {
       }
       console.error("[BLE Trainer] Connection failed:", e);
       setErrorReason(
-        e instanceof UnsupportedBleDeviceError ? "unsupported-device" : "failed",
+        e instanceof UnsupportedBleDeviceError
+          ? "unsupported-device"
+          : "failed",
       );
       setState("error");
     }

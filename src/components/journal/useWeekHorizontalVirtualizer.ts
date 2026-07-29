@@ -50,7 +50,12 @@ export function useWeekHorizontalVirtualizer({
   const weekWidth = Math.max(1, containerWidth - GUTTER_WIDTH_PX);
 
   const rangeExtractor = React.useCallback(
-    (range: { startIndex: number; endIndex: number; overscan: number; count: number }) => {
+    (range: {
+      startIndex: number;
+      endIndex: number;
+      overscan: number;
+      count: number;
+    }) => {
       const indices = defaultRangeExtractor(range);
       if (
         pinnedIndex != null &&
@@ -90,10 +95,7 @@ export function useWeekHorizontalVirtualizer({
       ? 0
       : Math.min(
           count - 1,
-          Math.max(
-            0,
-            Math.round((virtualizer.scrollOffset ?? 0) / weekWidth),
-          ),
+          Math.max(0, Math.round((virtualizer.scrollOffset ?? 0) / weekWidth)),
         );
 
   return { virtualizer, weekWidth, containerWidth, activeIndex };

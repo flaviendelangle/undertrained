@@ -34,7 +34,8 @@ export function resolveRiderSettings(
     maxHr: resolved.maxHr ?? defaults.maxHr!,
     lthr: resolved.lthr ?? defaults.lthr!,
     runThresholdPace: resolved.runThresholdPace ?? defaults.runThresholdPace!,
-    swimThresholdPace: resolved.swimThresholdPace ?? defaults.swimThresholdPace!,
+    swimThresholdPace:
+      resolved.swimThresholdPace ?? defaults.swimThresholdPace!,
   };
 }
 

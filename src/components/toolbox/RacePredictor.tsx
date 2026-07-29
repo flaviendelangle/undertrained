@@ -23,7 +23,11 @@ const DISTANCES = [
   { id: "1mile", labelKey: "toolbox.distance.1mile", km: 1.60934 },
   { id: "5k", labelKey: "toolbox.distance.5k", km: 5 },
   { id: "10k", labelKey: "toolbox.distance.10k", km: 10 },
-  { id: "half-marathon", labelKey: "toolbox.distance.halfMarathon", km: 21.0975 },
+  {
+    id: "half-marathon",
+    labelKey: "toolbox.distance.halfMarathon",
+    km: 21.0975,
+  },
   { id: "marathon", labelKey: "toolbox.distance.marathon", km: 42.195 },
   { id: "50km", labelKey: "toolbox.distance.50km", km: 50 },
   { id: "100km", labelKey: "toolbox.distance.100km", km: 100 },

@@ -2,9 +2,8 @@ import * as React from "react";
 
 import { Pencil } from "lucide-react";
 
-import type { Activity } from "@server/db/types";
-
 import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
+import type { Activity } from "@server/db/types";
 
 import { SportPicker } from "~/components/SportPicker";
 import { Button } from "~/components/ui/button";

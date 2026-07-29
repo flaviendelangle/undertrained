@@ -71,8 +71,7 @@ export function getActivityLoad(
   }
 
   // Resolve preferred value
-  const preferredValue =
-    preferred === "hrss" ? activity.hrss : activity.tss;
+  const preferredValue = preferred === "hrss" ? activity.hrss : activity.tss;
 
   if (preferredValue != null) {
     const info = ALGORITHM_INFO[preferred];
@@ -85,8 +84,7 @@ export function getActivityLoad(
 
   // Fallback: try the other value source
   const fallbackAlgorithm = preferred === "hrss" ? sportSpecific : "hrss";
-  const fallbackValue =
-    preferred === "hrss" ? activity.tss : activity.hrss;
+  const fallbackValue = preferred === "hrss" ? activity.tss : activity.hrss;
 
   if (fallbackValue != null) {
     const info = ALGORITHM_INFO[fallbackAlgorithm];

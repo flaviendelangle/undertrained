@@ -215,10 +215,7 @@ function RaceRefInputFields({
   allowVma: boolean;
   onRemove?: () => void;
 }) {
-  const referenceOptions = React.useMemo(
-    () => createReferenceOptions(t),
-    [t],
-  );
+  const referenceOptions = React.useMemo(() => createReferenceOptions(t), [t]);
   const options = allowVma
     ? referenceOptions
     : referenceOptions.filter((o) => o.id !== "vma");
@@ -630,7 +627,9 @@ function HrZonesTable({
         </h2>
         <p className="text-muted-foreground text-sm">
           {t("toolbox.zone.basedOnMaxHr", { maxHr })}
-          {restingHr > 0 && <> {t("toolbox.zone.andRestingHr", { restingHr })}</>}
+          {restingHr > 0 && (
+            <> {t("toolbox.zone.andRestingHr", { restingHr })}</>
+          )}
           {" — "}
           {t("toolbox.zone.hrReserve", { hrReserve })}
         </p>

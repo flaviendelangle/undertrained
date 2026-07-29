@@ -117,7 +117,9 @@ export const activities = pgTable(
     // fields stored — laps, description, RPE, private note for every activity,
     // plus best efforts for runs. (Legacy column name predates the generalization
     // from runs-only best efforts to all-activity detail fetching.)
-    areDetailsLoaded: boolean("are_best_efforts_loaded").notNull().default(false),
+    areDetailsLoaded: boolean("are_best_efforts_loaded")
+      .notNull()
+      .default(false),
     detailFetchAttempts: integer("best_effort_fetch_attempts")
       .notNull()
       .default(0),
@@ -215,9 +217,15 @@ export const riderSettings = pgTable(
     cdA: real("cd_a").notNull(),
     crr: real("crr").notNull(),
     bikeWeightKg: real("bike_weight_kg"),
-    cyclingLoadAlgorithm: text("cycling_load_algorithm").notNull().default("tss"),
-    runningLoadAlgorithm: text("running_load_algorithm").notNull().default("rtss"),
-    swimmingLoadAlgorithm: text("swimming_load_algorithm").notNull().default("stss"),
+    cyclingLoadAlgorithm: text("cycling_load_algorithm")
+      .notNull()
+      .default("tss"),
+    runningLoadAlgorithm: text("running_load_algorithm")
+      .notNull()
+      .default("rtss"),
+    swimmingLoadAlgorithm: text("swimming_load_algorithm")
+      .notNull()
+      .default("stss"),
     initialValues: jsonb("initial_values").notNull().$type<{
       ftp?: number | null;
       weightKg?: number | null;
