@@ -1017,6 +1017,7 @@ const en = {
     noMatch: "No workout matches this search.",
     createFirst: "Create your first workout",
     notFound: "Workout not found.",
+    unsavedChanges: "This workout has unsaved changes. Leave without saving?",
     searchPlaceholder: "Search workouts",
     clearSearch: "Clear search",
     name: "Name",

@@ -155,6 +155,32 @@ describe("overallCompliance", () => {
     expect(overallCompliance([])).toBeNull();
   });
 
+  it("scores a ramp by its midpoint, not by where it starts", () => {
+    // A ramp test: starts well below the work threshold and finishes far above
+    // it. Judged by `startPct` this whole ride is filler and scores nothing.
+    const rampTest = flattenWorkout(
+      makeWorkout([makeStep("ramp", 600, { kind: "ramp", from: 0.25, to: 1.5 })]),
+    );
+    const stats = computeSegmentStats(
+      points([{ segmentIndex: 0, power: 200, target: 200, count: 600 }]),
+      rampTest,
+    );
+
+    expect(overallCompliance(stats)).toBe(1);
+  });
+
+  it("still discards a ramp whose midpoint is below the work threshold", () => {
+    const easyRamp = flattenWorkout(
+      makeWorkout([makeStep("ramp", 600, { kind: "ramp", from: 0.2, to: 0.6 })]),
+    );
+    const stats = computeSegmentStats(
+      points([{ segmentIndex: 0, power: 100, target: 100, count: 600 }]),
+      easyRamp,
+    );
+
+    expect(overallCompliance(stats)).toBeNull();
+  });
+
   it("averages work segments by their duration", () => {
     const long = flattenWorkout(
       makeWorkout([makeStep("a", 100, 1.0), makeStep("b", 300, 1.0)]),

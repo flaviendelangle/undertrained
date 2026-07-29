@@ -27,8 +27,13 @@ describe("parseDuration", () => {
     expect(parseDuration("1h05m")).toBe(3900);
   });
 
-  it("reads a trailing bare number after an hour as minutes", () => {
+  it("reads a trailing bare number as the next unit down", () => {
     expect(parseDuration("1h30")).toBe(5400);
+    // Minutes need the same treatment as hours: `1m30` is at least as natural
+    // to type as `1m30s`, and returning null here silently discards the edit.
+    expect(parseDuration("1m30")).toBe(90);
+    expect(parseDuration("5m30")).toBe(330);
+    expect(parseDuration("1h30m45")).toBe(5445);
   });
 
   it("tolerates whitespace and case", () => {

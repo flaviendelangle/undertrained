@@ -91,7 +91,12 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
   );
 
   const utils = trpc.useUtils();
+  // Set the instant a save succeeds, so the guard below doesn't prompt on the
+  // very navigation the save asked for. A ref, not state: `router.push` runs in
+  // the same tick and would not see a re-render.
+  const savedRef = React.useRef(false);
   const onSaved = () => {
+    savedRef.current = true;
     void utils.structuredWorkouts.list.invalidate();
     void router.push("/workouts");
   };
@@ -103,7 +108,14 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
   });
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  const validation = structuredWorkoutSchema.safeParse(editor.workout);
+  // Memoized on the tree like `segments`/`spans`/`metrics` above: a full parse
+  // deep-copies the tree and its `superRefine` walks it four more times, and
+  // this would otherwise run on every keystroke in the name and description
+  // fields, which cannot change the tree at all.
+  const validation = React.useMemo(
+    () => structuredWorkoutSchema.safeParse(editor.workout),
+    [editor.workout],
+  );
   const canSave =
     !!athleteId && name.trim() !== "" && validation.success && !isSaving;
 
@@ -123,6 +135,7 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
   };
 
   useEditorShortcuts(editor);
+  useUnsavedChangesGuard(editor.isDirty, savedRef);
 
   /**
    * Description + derived numbers. One block, rendered in the sidebar on
@@ -267,6 +280,50 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
       )}
     </div>
   );
+}
+
+/**
+ * Confirms before an edited-but-unsaved workout is abandoned.
+ *
+ * Two separate mechanisms, because the Pages Router owns in-app navigation and
+ * the browser owns the rest: `routeChangeStart` covers a nav link or the back
+ * button, `beforeunload` covers a reload or a closed tab. The router event has
+ * no cancel API, so aborting it means throwing — Next treats the throw as
+ * "navigation cancelled", and the string is matched by its own internal
+ * handler rather than surfacing as an error.
+ */
+function useUnsavedChangesGuard(
+  isDirty: boolean,
+  savedRef: React.RefObject<boolean>,
+) {
+  const t = useT();
+  const router = useRouter();
+  const dirtyRef = useValueAsRef(isDirty);
+  const messageRef = useValueAsRef(t("workouts.unsavedChanges"));
+
+  React.useEffect(() => {
+    const shouldGuard = () => dirtyRef.current && !savedRef.current;
+
+    const onRouteChangeStart = () => {
+      if (!shouldGuard()) return;
+      if (window.confirm(messageRef.current)) return;
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw "routeChange aborted by the workout builder's unsaved-changes guard";
+    };
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!shouldGuard()) return;
+      // The message is browser-chrome now; only preventDefault still matters.
+      event.preventDefault();
+    };
+
+    router.events.on("routeChangeStart", onRouteChangeStart);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      router.events.off("routeChangeStart", onRouteChangeStart);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [router.events, dirtyRef, messageRef, savedRef]);
 }
 
 /**

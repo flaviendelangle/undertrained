@@ -108,6 +108,30 @@ describe("buildLaps", () => {
     expect(laps[1].avgPower).toBe(50);
   });
 
+  it("laps the warm-up and cool-down either side of the workout", () => {
+    // The shape `useTrainingPageController` actually records: `segmentIndex` is
+    // null before the workout starts and again once it ends, so a rider who
+    // spins down afterwards must get their own trailing lap rather than having
+    // it merged into the last interval.
+    const points = [
+      point(0, { segmentIndex: null }),
+      point(1, { segmentIndex: null }),
+      point(2, { segmentIndex: 0 }),
+      point(3, { segmentIndex: 0 }),
+      point(4, { segmentIndex: 1 }),
+      point(5, { segmentIndex: null }),
+      point(6, { segmentIndex: null }),
+    ];
+
+    const laps = buildLaps(points, summary);
+    expect(laps).toHaveLength(4);
+    // Contiguous: each lap picks up where the previous one ended.
+    for (let i = 1; i < laps.length; i++) {
+      expect(laps[i].startTimestamp).toBe(laps[i - 1].endTimestamp);
+    }
+    expect(laps[laps.length - 1].endTimestamp).toBe(points[6].timestamp);
+  });
+
   it("tolerates a lap with no power at all", () => {
     const points = [
       point(0, { segmentIndex: 0, power: null, cadence: null }),

@@ -151,8 +151,14 @@ export function overallCompliance(
   let seconds = 0;
   for (const stat of stats) {
     if (stat.compliance == null) continue;
-    const pct = stat.segment.startPct;
-    if (pct == null || pct < COMPLIANCE_MIN_PCT) continue;
+    // Judged by the midpoint, not the start: a ramp's `startPct` is where it
+    // begins, not what it asks for, so a 25 % → 150 % ramp test would be
+    // discarded here as filler and leave the whole ride unscored. This is the
+    // same representative-intensity rule `flatten` uses for `zoneIndex` and
+    // `targetMidPct` uses for the summaries.
+    const { startPct, endPct } = stat.segment;
+    if (startPct == null || endPct == null) continue;
+    if ((startPct + endPct) / 2 < COMPLIANCE_MIN_PCT) continue;
     weighted += stat.compliance * stat.seconds;
     seconds += stat.seconds;
   }

@@ -3,7 +3,7 @@
  *
  * A bare number means *minutes*, because that is how workouts are spoken
  * ("twenty at sweet spot", "five by three"). Everything else is explicit:
- * `1:30` / `90s` / `1m30` / `1h05`.
+ * `1:30` / `90s` / `5m` / `1m30` / `1h05` / `1h30m45`.
  *
  * Returns null for anything unparseable, which the field renders as "leave the
  * previous value alone" rather than silently snapping to zero.
@@ -21,7 +21,7 @@ export function parseDuration(input: string): number | null {
       : Number(first) * 3600 + Number(second) * 60 + Number(third);
   }
 
-  // 1h, 1h30, 5m, 5m30, 90s, and combinations thereof
+  // 1h, 5m, 90s, 1h05m, 1m30s — every part carrying its own unit.
   const unitMatch = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/.exec(text);
   if (unitMatch?.slice(1).some((part) => part != null)) {
     const [, hours, minutes, seconds] = unitMatch;
@@ -32,10 +32,20 @@ export function parseDuration(input: string): number | null {
     );
   }
 
-  // `1h30` — a trailing bare number after a unit reads as the next unit down.
-  const trailingMatch = /^(\d+)h(\d{1,2})$/.exec(text);
-  if (trailingMatch) {
-    return Number(trailingMatch[1]) * 3600 + Number(trailingMatch[2]) * 60;
+  // `1h30`, `5m30`, `1h30m45` — a trailing bare number after a unit reads as
+  // the next unit down, which is how these are spoken. Handled separately from
+  // the pattern above, whose parts must each carry a unit: `1m30` leaves a bare
+  // `30` there and would otherwise fall through to null, silently discarding a
+  // duration the rider had every reason to expect to work.
+  const trailingMatch = /^(?:(\d+)h)?(?:(\d+)m)?(\d{1,2})$/.exec(text);
+  if (trailingMatch && (trailingMatch[1] != null || trailingMatch[2] != null)) {
+    const [, hours, minutes, trailing] = trailingMatch;
+    // The bare tail is minutes after an hour, seconds after a minute.
+    return minutes != null
+      ? Number(hours ?? 0) * 3600 +
+          Number(minutes) * 60 +
+          Number(trailing)
+      : Number(hours) * 3600 + Number(trailing) * 60;
   }
 
   const bare = /^(\d+(?:\.\d+)?)$/.exec(text);

@@ -56,7 +56,14 @@ export interface UseWorkoutPlayerResult extends PlayerSnapshot {
   extendSegment: (deltaSeconds: number) => void;
   /** Ends the workout but keeps the ride going. */
   endWorkout: () => void;
+  /** Rebases the workout to start *now*, mid-ride. */
   restart: () => void;
+  /**
+   * Rewinds to the top for a session that is itself being reset. Distinct from
+   * {@link restart}, which rebases against a clock that keeps running — see the
+   * note on the implementation.
+   */
+  reset: () => void;
 }
 
 export function useWorkoutPlayer({
@@ -154,9 +161,13 @@ export function useWorkoutPlayer({
       const current = snapshotRef.current;
       if (current.currentSegment == null) return;
 
+      // Segment boundaries are fixed in workout-time, so the only way to give
+      // the rider more or less time in the current step is to move the clock
+      // the *opposite* way: `workoutSeconds = elapsed - adjustSeconds`, so
+      // raising `adjustSeconds` slows the workout down and lengthens the step.
       if (deltaSeconds < 0) {
-        // Never trim past the start of the current step — a held button would
-        // otherwise walk backwards through the whole workout.
+        // Shortening. Never cut past the end of the current step — a held
+        // button would otherwise run through the whole workout.
         const trim = Math.min(
           -deltaSeconds,
           Math.max(
@@ -164,15 +175,19 @@ export function useWorkoutPlayer({
             current.secondsRemainingInSegment - MIN_REMAINING_AFTER_TRIM_S,
           ),
         );
-        setAdjustSeconds((prev) => prev + trim);
+        setAdjustSeconds((prev) => prev - trim);
         return;
       }
 
-      // Cap the total extension so a stuck button can't create an endless
-      // workout.
-      setAdjustSeconds((prev) =>
-        Math.max(prev - deltaSeconds, -current.totalSeconds),
-      );
+      // Lengthening, and the mirror image of the guard above: rewinding the
+      // clock past the start of the current step would drop the rider into the
+      // *previous* one, swapping the target out mid-interval. So a step can
+      // only be stretched by as much time as has already been spent in it —
+      // which also caps a stuck button, since each press leaves the playhead at
+      // the step start with nothing further to give back.
+      const grow = Math.min(deltaSeconds, current.secondsIntoSegment);
+      if (grow <= 0) return;
+      setAdjustSeconds((prev) => prev + grow);
     },
     [snapshotRef],
   );
@@ -183,6 +198,21 @@ export function useWorkoutPlayer({
     setEnded(false);
     setAdjustSeconds(elapsedSeconds);
   }, [elapsedSeconds]);
+
+  /**
+   * The counterpart of `restart` for a session reset, and NOT the same thing.
+   *
+   * `restart` rebases against a clock that keeps running, so it has to cancel
+   * the elapsed time so far (`adjustSeconds := elapsedSeconds`). A session
+   * reset zeroes `elapsedSeconds` itself, so cancelling it a second time would
+   * leave `workoutSeconds = elapsed - adjustSeconds` negative for as long as
+   * the previous ride lasted — clamped to 0 by `resolveSnapshot`, which parks
+   * the player on step 1 instead of crashing. Zero is the whole fix.
+   */
+  const reset = React.useCallback(() => {
+    setEnded(false);
+    setAdjustSeconds(0);
+  }, []);
 
   return {
     ...snapshot,
@@ -199,6 +229,7 @@ export function useWorkoutPlayer({
     extendSegment,
     endWorkout,
     restart,
+    reset,
   };
 }
 

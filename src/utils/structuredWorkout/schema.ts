@@ -22,10 +22,7 @@ const pctSchema = z.number().min(0).max(MAX_FTP_PCT);
 const powerTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("pct"), pct: pctSchema }),
   z.object({ kind: z.literal("ramp"), from: pctSchema, to: pctSchema }),
-  z.object({
-    kind: z.literal("free"),
-    guide: z.object({ low: pctSchema, high: pctSchema }).optional(),
-  }),
+  z.object({ kind: z.literal("free") }),
 ]);
 
 const cadenceTargetSchema = z.number().int().min(30).max(200);

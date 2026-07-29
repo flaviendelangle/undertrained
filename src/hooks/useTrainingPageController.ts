@@ -426,15 +426,18 @@ export function useTrainingPageController(
     setChartData([...recorder.getDataPoints()]);
   }, [session, recorder, setErgEnabled]);
 
-  const { setBiasPct, restart: restartWorkout } = player;
+  const { setBiasPct, reset: resetWorkout } = player;
   const handleReset = useCallback(() => {
     // Keep the selected workout — "ride it again" is the common case — but drop
     // the bias and any skips, which belonged to the session just ended.
+    // `reset`, not `restart`: `session.reset()` below zeroes the clock the
+    // player derives from, and `restart` would cancel that elapsed time a
+    // second time.
     setBiasPct(1);
-    restartWorkout();
+    resetWorkout();
     session.reset();
     clearRideState();
-  }, [session, clearRideState, setBiasPct, restartWorkout]);
+  }, [session, clearRideState, setBiasPct, resetWorkout]);
 
   return {
     // Sensor source selection

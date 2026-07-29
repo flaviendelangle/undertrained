@@ -1040,6 +1040,8 @@ const fr: Messages = {
     noMatch: "Aucune séance ne correspond à cette recherche.",
     createFirst: "Créer votre première séance",
     notFound: "Séance introuvable.",
+    unsavedChanges:
+      "Cette séance contient des modifications non enregistrées. Quitter sans enregistrer ?",
     searchPlaceholder: "Rechercher une séance",
     clearSearch: "Effacer la recherche",
     name: "Nom",
