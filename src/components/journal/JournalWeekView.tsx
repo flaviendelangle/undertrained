@@ -265,6 +265,11 @@ function JournalWeekViewImpl({
       align: "end",
       behavior: "instant",
     });
+    // Intentional: clearing the pin is the second half of the two-phase scroll
+    // described above. It has to happen here, after `scrollToIndex`, and
+    // `pendingScrollTarget` has to be state (not a ref) because phase 2 relies
+    // on the re-render that mounts the target in the virtualizer's range.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPendingScrollTarget(null);
     const scroller = scrollRef.current;
     if (!scroller) {
@@ -299,6 +304,11 @@ function JournalWeekViewImpl({
       (w) => w.weekStart.getTime() === anchorWeekTime,
     );
     if (index >= 0) {
+      // Intentional: the mount anchor can only be resolved once `renderedWeeks`
+      // and the container measurement have landed, so phase 1 of the scroll is
+      // necessarily kicked off from an effect. Guarded by the ref above so it
+      // runs exactly once.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       jumpToWeek(index);
     }
     const raf = requestAnimationFrame(() =>
@@ -385,6 +395,10 @@ function JournalWeekViewImpl({
       (w) => w.weekStart.getTime() === anchorWeekTime,
     );
     if (index >= 0) {
+      // Intentional: the nonce bump *is* the "scroll now" request, so reacting
+      // to it from an effect is the point. The guard above skips the initial
+      // nonce, so this never double-fires with the mount scroll.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       jumpToWeek(index);
     }
   }, [scrollNonce, renderedWeeks, anchorWeekTime, jumpToWeek]);

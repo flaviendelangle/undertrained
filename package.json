@@ -14,6 +14,7 @@
     "lint": "eslint --cache src",
     "lint-fix": "pnpm lint --fix",
     "prettier": "prettier --write .",
+    "prettier-check": "prettier --check .",
     "test-unit": "vitest",
     "test-e2e": "playwright test",
     "test-start": "run-s test-unit test-e2e",

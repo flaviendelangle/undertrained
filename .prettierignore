@@ -1,0 +1,10 @@
+# Generated / vendored — not ours to format
+pnpm-lock.yaml
+.next/
+src/server/db/migrations/
+
+# Build & tooling artefacts
+coverage/
+playwright/test-results/
+tsconfig.tsbuildinfo
+.eslintcache
