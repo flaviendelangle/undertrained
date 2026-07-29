@@ -5,10 +5,17 @@ import type { NextApiRequest } from "next";
  * routes. Tracks request timestamps per key within a sliding window and
  * periodically prunes stale entries to prevent unbounded memory growth.
  *
+ * Each bucket remembers the window it was recorded under, because callers do not
+ * all use the same one. Pruning against the *calling* site's `windowMs` would let
+ * a one-minute limiter evict an hour-long bucket, silently handing back a budget
+ * that had already been spent.
+ *
  * Single-instance VPS, so a plain Map is enough; a horizontally scaled
  * deployment would need a shared store.
  */
-const rateLimitStore = new Map<string, number[]>();
+type Bucket = { windowMs: number; hits: number[] };
+
+const rateLimitStore = new Map<string, Bucket>();
 let lastPruneTime = 0;
 const PRUNE_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
@@ -24,25 +31,31 @@ export function consumeRateLimit(
 ): boolean {
   const now = Date.now();
 
-  // Periodically prune stale entries
+  // Periodically prune stale entries, each against its own window
   if (now - lastPruneTime > PRUNE_INTERVAL_MS) {
     lastPruneTime = now;
-    for (const [k, timestamps] of rateLimitStore) {
-      const active = timestamps.filter((ts) => now - ts < windowMs);
+    for (const [k, bucket] of rateLimitStore) {
+      const active = liveHits(bucket, now);
       if (active.length === 0) rateLimitStore.delete(k);
-      else rateLimitStore.set(k, active);
+      else rateLimitStore.set(k, { windowMs: bucket.windowMs, hits: active });
     }
   }
 
-  const timestamps = (rateLimitStore.get(key) ?? []).filter(
-    (ts) => now - ts < windowMs,
-  );
-  if (timestamps.length >= maxRequests) {
+  const existing = rateLimitStore.get(key);
+  // A key whose window changed (config edit, hot reload) starts a fresh bucket
+  // rather than reusing hits measured against the old one.
+  const hits = existing?.windowMs === windowMs ? liveHits(existing, now) : [];
+  if (hits.length >= maxRequests) {
     return false;
   }
-  timestamps.push(now);
-  rateLimitStore.set(key, timestamps);
+  hits.push(now);
+  rateLimitStore.set(key, { windowMs, hits });
   return true;
+}
+
+/** Hits still inside the bucket's own window. */
+function liveHits(bucket: Bucket, now: number): number[] {
+  return bucket.hits.filter((ts) => now - ts < bucket.windowMs);
 }
 
 /** Test-only: drops all recorded hits so cases don't leak into each other. */

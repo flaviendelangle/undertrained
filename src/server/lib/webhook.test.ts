@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
 
 import { activities, athletes } from "../db/schema";
-import { resetRateLimits } from "./rateLimit";
 
 // `webhook.ts` reaches for the singleton db and a pile of sync helpers at import
 // time; stub them so these cases exercise the dispatcher alone, with no database
@@ -74,7 +73,8 @@ const dbMock = {
   }),
 };
 
-const { processWebhookEvent } = await import("./webhook");
+const { processWebhookEvent, resetDeauthCheckThrottle } =
+  await import("./webhook");
 
 function deauthEvent() {
   return {
@@ -98,7 +98,7 @@ beforeEach(() => {
   activityRow = undefined;
   activityLookup = undefined;
   vi.unstubAllGlobals();
-  resetRateLimits();
+  resetDeauthCheckThrottle();
   getAccessToken.mockReset().mockResolvedValue("live-token");
   athleteRow = {
     id: ATHLETE_ID,
@@ -181,8 +181,30 @@ describe("deauthorization events", () => {
     for (let i = 0; i < 9; i += 1) {
       await processWebhookEvent(deauthEvent());
     }
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(wiped()).toBe(false);
+  });
+
+  it("still checks — and acts — once the throttle window has passed", async () => {
+    // The throttle must not be exhaustible: a flood of forged events cannot be
+    // allowed to make the app ignore the athlete's genuine deauthorization.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    try {
+      const stillAuthorized = stravaReplies(200);
+      for (let i = 0; i < 50; i += 1) {
+        await processWebhookEvent(deauthEvent());
+      }
+      expect(stillAuthorized).toHaveBeenCalledTimes(1);
+      expect(wiped()).toBe(false);
+
+      vi.advanceTimersByTime(11 * 60_000);
+      stravaReplies(401);
+      await processWebhookEvent(deauthEvent());
+      expect(wiped()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("leaves other athlete updates alone", async () => {

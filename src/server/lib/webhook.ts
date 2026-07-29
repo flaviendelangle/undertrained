@@ -13,7 +13,6 @@ import {
   syncJobs,
   timePeriods,
 } from "../db/schema";
-import { consumeRateLimit } from "./rateLimit";
 import {
   fetchStreamsFromStrava,
   getAccessToken,
@@ -348,9 +347,12 @@ async function handleActivityDelete(
   athleteId: number,
   stravaActivityId: number,
 ): Promise<void> {
-  // Scoped to the event's athlete: `stravaId` alone is not ours to trust, since
-  // the payload carrying it is unauthenticated (see the deauthorization note
-  // below) and two athletes can hold rows for the same activity id.
+  // Scoped to the event's athlete: the payload carrying `stravaId` is
+  // unauthenticated (see the deauthorization note below), so a delete must be
+  // constrained to the athlete the event claims to speak for — otherwise any
+  // known activity id can be removed from whoever happens to hold it. The unique
+  // index on `activities.stravaId` makes a collision unrepresentable today; the
+  // scoping is about who is allowed to ask, not about disambiguating rows.
   const result = await db
     .delete(activities)
     .where(
@@ -374,12 +376,25 @@ async function handleActivityDelete(
 const DEAUTH_CHECK_TIMEOUT_MS = 15_000;
 
 /**
- * How many deauthorization checks one athlete may trigger per hour. Each check
- * spends a Strava API call, so without a cap a flood of forged events would burn
- * the app's quota (and take real syncing down with it). Genuine deauthorization
- * happens once, with at most a retry or two behind it.
+ * Minimum spacing between two Strava confirmation calls for the same athlete.
+ * Each call spends the app's API quota, so without a throttle a flood of forged
+ * events would burn it (and take real syncing down with it).
+ *
+ * Deliberately a throttle and not a per-hour ceiling: a ceiling is exhaustible,
+ * and an attacker who exhausts it makes the app *ignore* the athlete's genuine
+ * deauthorization — the one outcome we owe Strava. Spacing bounds the quota just
+ * as well while leaving every event past the window a real check, so a
+ * revocation is picked up on the next delivery or retry instead of dropped.
  */
-const MAX_DEAUTH_CHECKS_PER_HOUR = 5;
+const DEAUTH_CHECK_INTERVAL_MS = 10 * 60_000;
+
+/** When we last spent a Strava call confirming an athlete's authorization. */
+const lastDeauthCheckAt = new Map<number, number>();
+
+/** Test-only: forgets the throttle so cases don't leak into each other. */
+export function resetDeauthCheckThrottle(): void {
+  lastDeauthCheckAt.clear();
+}
 
 /**
  * Asks Strava whether our authorization for this athlete is genuinely gone.
@@ -393,7 +408,7 @@ const MAX_DEAUTH_CHECKS_PER_HOUR = 5;
  * the data untouched; a real deauthorization that lands here is recoverable via
  * "delete all data" in account settings, whereas a wrongful wipe is not.
  */
-export async function isDeauthorizationConfirmed(
+async function isDeauthorizationConfirmed(
   db: Database,
   athleteId: number,
 ): Promise<boolean> {
@@ -408,13 +423,29 @@ export async function isDeauthorizationConfirmed(
     return true;
   }
 
+  // Everything past here can spend a Strava API call, so the throttle sits at
+  // this boundary rather than at the top: the two answers above are free.
+  const now = Date.now();
+  const lastCheck = lastDeauthCheckAt.get(athleteId);
+  if (lastCheck !== undefined && now - lastCheck < DEAUTH_CHECK_INTERVAL_MS) {
+    console.warn(
+      `[webhook] Deauthorization for athlete ${athleteId} already checked with Strava recently, not re-checking yet`,
+    );
+    return false;
+  }
+  pruneDeauthCheckThrottle(now);
+  lastDeauthCheckAt.set(athleteId, now);
+
   let accessToken: string;
   try {
     accessToken = await getAccessToken(db, athleteId);
   } catch (err) {
-    // getAccessToken raises UNAUTHORIZED only when Strava rejected the refresh
-    // token itself, which is exactly what revoking access does. Transient
-    // failures surface as other errors and stay inconclusive.
+    // UNAUTHORIZED means we hold no usable grant: either Strava rejected the
+    // refresh token (which is what revoking access does — `refreshToken` in
+    // `strava.ts` only maps a rejection to this code once the body names the
+    // token, never for an app-credential failure), or there is no refresh token
+    // left to try. Transient failures surface as other codes and stay
+    // inconclusive.
     return err instanceof TRPCError && err.code === "UNAUTHORIZED";
   }
 
@@ -441,23 +472,17 @@ export async function isDeauthorizationConfirmed(
   }
 }
 
+/** Drops throttle entries that no longer hold anything back. */
+function pruneDeauthCheckThrottle(now: number): void {
+  for (const [id, at] of lastDeauthCheckAt) {
+    if (now - at >= DEAUTH_CHECK_INTERVAL_MS) lastDeauthCheckAt.delete(id);
+  }
+}
+
 async function handleAthleteDeauthorization(
   db: Database,
   athleteId: number,
 ): Promise<void> {
-  if (
-    !consumeRateLimit(
-      `deauth-check:${athleteId}`,
-      MAX_DEAUTH_CHECKS_PER_HOUR,
-      60 * 60_000,
-    )
-  ) {
-    console.warn(
-      `[webhook] Too many deauthorization events for athlete ${athleteId}, not re-checking with Strava`,
-    );
-    return;
-  }
-
   if (!(await isDeauthorizationConfirmed(db, athleteId))) {
     console.warn(
       `[webhook] Ignoring unverified deauthorization for athlete ${athleteId} — Strava still accepts our token`,

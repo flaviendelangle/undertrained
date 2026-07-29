@@ -1,10 +1,21 @@
 import type { NextApiRequest } from "next";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clientIp, consumeRateLimit, resetRateLimits } from "./rateLimit";
 
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+
 beforeEach(() => {
+  // Fake timers throughout: window expiry is the thing under test, and sleeping
+  // on real ones makes the outcome a race with whatever else the box is doing.
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
   resetRateLimits();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 /** Minimal request stub — only the bits `clientIp` reads. */
@@ -32,11 +43,38 @@ describe("consumeRateLimit", () => {
     expect(consumeRateLimit("b", 1, 60_000)).toBe(true);
   });
 
-  it("forgets hits that fall out of the window", async () => {
-    expect(consumeRateLimit("k", 1, 5)).toBe(true);
-    expect(consumeRateLimit("k", 1, 5)).toBe(false);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(consumeRateLimit("k", 1, 5)).toBe(true);
+  it("forgets hits that fall out of the window", () => {
+    expect(consumeRateLimit("k", 1, MINUTE)).toBe(true);
+    expect(consumeRateLimit("k", 1, MINUTE)).toBe(false);
+    vi.advanceTimersByTime(MINUTE);
+    expect(consumeRateLimit("k", 1, MINUTE)).toBe(true);
+  });
+
+  it("does not let a short-window caller hand back a long-window budget", () => {
+    // The webhook's per-athlete deauthorization throttle used to share this
+    // store with the one-minute tRPC limits. Pruning every bucket against the
+    // *calling* site's window reset the long one every few minutes.
+    for (let i = 0; i < 5; i += 1) {
+      expect(consumeRateLimit("hourly:7", 5, HOUR)).toBe(true);
+    }
+    expect(consumeRateLimit("hourly:7", 5, HOUR)).toBe(false);
+
+    // Six minutes on, past PRUNE_INTERVAL_MS: any one-minute caller triggers the
+    // periodic prune.
+    vi.advanceTimersByTime(6 * MINUTE);
+    expect(consumeRateLimit("ip:1.2.3.4", 30, MINUTE)).toBe(true);
+
+    expect(consumeRateLimit("hourly:7", 5, HOUR)).toBe(false);
+    // …and it does come back once its own window has actually passed.
+    vi.advanceTimersByTime(HOUR);
+    expect(consumeRateLimit("hourly:7", 5, HOUR)).toBe(true);
+  });
+
+  it("starts a fresh bucket when a key's window changes", () => {
+    expect(consumeRateLimit("k", 1, HOUR)).toBe(true);
+    expect(consumeRateLimit("k", 1, HOUR)).toBe(false);
+    // Hits measured against an hour say nothing about a one-minute allowance.
+    expect(consumeRateLimit("k", 1, MINUTE)).toBe(true);
   });
 });
 

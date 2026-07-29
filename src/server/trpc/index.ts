@@ -49,14 +49,21 @@ function rateLimit(key: string, maxRequests: number, windowMs: number) {
 }
 
 /**
+ * Who a limit is charged to: the signed-in athlete, or their IP while anonymous.
+ * The `ip:` prefix keeps the two namespaces from colliding on a numeric address.
+ */
+function callerKey(ctx: Context): string {
+  return ctx.session?.athleteId
+    ? String(ctx.session.athleteId)
+    : `ip:${ctx.ip}`;
+}
+
+/**
  * Rate-limiting middleware for expensive mutations.
  * Limits to 5 requests per minute per user.
  */
 export const rateLimited = t.middleware(async ({ ctx, next }) => {
-  const rateLimitKey = ctx.session?.athleteId
-    ? String(ctx.session.athleteId)
-    : `ip:${ctx.ip}`;
-  rateLimit(rateLimitKey, 5, 60_000);
+  rateLimit(callerKey(ctx), 5, 60_000);
   return next();
 });
 
@@ -66,10 +73,7 @@ export const rateLimited = t.middleware(async ({ ctx, next }) => {
  * (~40 req/min) while still feeling responsive while drawing.
  */
 export const routePreviewRateLimited = t.middleware(async ({ ctx, next }) => {
-  const rateLimitKey = ctx.session?.athleteId
-    ? String(ctx.session.athleteId)
-    : `ip:${ctx.ip}`;
-  rateLimit(`route-preview:${rateLimitKey}`, 40, 60_000);
+  rateLimit(`route-preview:${callerKey(ctx)}`, 40, 60_000);
   return next();
 });
 
@@ -80,10 +84,7 @@ export const routePreviewRateLimited = t.middleware(async ({ ctx, next }) => {
  * loops — 30/min leaves ample headroom for normal use.
  */
 export const calendarEventsRateLimited = t.middleware(async ({ ctx, next }) => {
-  const rateLimitKey = ctx.session?.athleteId
-    ? String(ctx.session.athleteId)
-    : `ip:${ctx.ip}`;
-  rateLimit(`calendar-events:${rateLimitKey}`, 30, 60_000);
+  rateLimit(`calendar-events:${callerKey(ctx)}`, 30, 60_000);
   return next();
 });
 
