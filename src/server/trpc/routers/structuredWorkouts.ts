@@ -4,7 +4,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import {
-  describeWorkout,
+  describeWorkoutShort,
   flattenWorkout,
   migrateStructuredWorkout,
   structuredWorkoutSchema,
@@ -53,7 +53,7 @@ export const structuredWorkoutsRouter = router({
         try {
           const workout = migrateStructuredWorkout(structure);
           profile = workoutProfile(flattenWorkout(workout));
-          summary = describeWorkout(workout);
+          summary = describeWorkoutShort(workout);
         } catch (error) {
           console.error(
             `[structuredWorkouts] Skipping unreadable structure for workout ${rest.id}:`,

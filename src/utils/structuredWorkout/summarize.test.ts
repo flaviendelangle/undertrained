@@ -5,7 +5,7 @@ import {
   describeNode,
   describePowerTarget,
   describeWorkout,
-  describeWorkoutBlocks,
+  describeWorkoutShort,
   formatStepDuration,
   peakPct,
 } from "./summarize";
@@ -63,16 +63,43 @@ describe("describeNode / describeWorkout", () => {
   });
 });
 
-describe("describeWorkoutBlocks", () => {
-  it("keeps only the repeat blocks when there are any", () => {
-    expect(describeWorkoutBlocks(nestedWorkout())).toBe(
-      "2 × (5 × (1:00 @ 105% + 1:00 @ 50%) + 5:00 @ 50%)",
-    );
+describe("describeWorkoutShort", () => {
+  it("collapses a block to its hardest step and its true rep count", () => {
+    // 2 × (5 × (1:00 @ 105% + 1:00 @ 50%) + 5:00 @ 50%) — the hard minute is
+    // ridden ten times, not twice.
+    expect(describeWorkoutShort(nestedWorkout())).toBe("10 × 1:00 @ 105%");
   });
 
-  it("falls back to the full description without repeats", () => {
-    const workout = makeWorkout([makeStep("a", 600, 0.5)]);
-    expect(describeWorkoutBlocks(workout)).toBe(describeWorkout(workout));
+  it("drops warm-up and cool-down", () => {
+    const workout = makeWorkout([
+      makeStep("warm", 600, { kind: "ramp", from: 0.45, to: 0.7 }),
+      makeRepeat("r", 3, [makeStep("on", 720, 0.9), makeStep("off", 300, 0.5)]),
+      makeStep("cool", 480, 0.5),
+    ]);
+    expect(describeWorkoutShort(workout)).toBe("3 × 12:00 @ 90%");
+  });
+
+  it("describes the dominant step when there are no repeats", () => {
+    const workout = makeWorkout([
+      makeStep("warm", 600, { kind: "ramp", from: 0.45, to: 0.65 }),
+      makeStep("ride", 4200, 0.68),
+    ]);
+    expect(describeWorkoutShort(workout)).toBe("1:10:00 @ 68%");
+  });
+
+  it("joins two blocks and trails off past that", () => {
+    const block = (id: string, pct: number) =>
+      makeRepeat(id, 2, [makeStep(`${id}s`, 300, pct)]);
+    expect(
+      describeWorkoutShort(
+        makeWorkout([block("a", 0.9), block("b", 1.05), block("c", 1.2)]),
+      ),
+    ).toBe("2 × 5:00 @ 90% + 2 × 5:00 @ 105% + …");
+  });
+
+  it("is empty for an empty workout", () => {
+    expect(describeWorkoutShort(null)).toBe("");
+    expect(describeWorkoutShort(makeWorkout([]))).toBe("");
   });
 });
 

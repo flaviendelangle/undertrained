@@ -1,4 +1,9 @@
-import type { PowerTarget, StructuredWorkout, WorkoutNode } from "./types";
+import type {
+  PowerTarget,
+  StructuredWorkout,
+  WorkoutNode,
+  WorkoutStep,
+} from "./types";
 import { isRepeat, targetMidPct } from "./types";
 
 /**
@@ -56,17 +61,79 @@ export function describeWorkout(
 }
 
 /**
- * A shorter form for card subtitles: only the repeat blocks, so a long
- * warm-up/cool-down does not push the interesting part out of view.
- * Falls back to the full description when the workout has no repeats.
+ * The hardest step under `nodes`, and how many times it is actually ridden —
+ * the product of every repeat above it, so a step inside `2 × (5 × …)` reports
+ * 10 rather than 2.
+ *
+ * Ties on intensity go to the longer step, which is the one that defines the
+ * session.
  */
-export function describeWorkoutBlocks(
+function hardestStep(
+  nodes: readonly WorkoutNode[],
+): { step: WorkoutStep; reps: number } | null {
+  let best: { step: WorkoutStep; reps: number } | null = null;
+
+  const walk = (list: readonly WorkoutNode[], reps: number) => {
+    for (const node of list) {
+      if (isRepeat(node)) {
+        walk(node.children, reps * node.reps);
+        continue;
+      }
+      const pct = targetMidPct(node.power) ?? 0;
+      const bestPct = best ? (targetMidPct(best.step.power) ?? 0) : -1;
+      if (
+        pct > bestPct ||
+        (pct === bestPct &&
+          best != null &&
+          node.durationSeconds > best.step.durationSeconds)
+      ) {
+        best = { step: node, reps };
+      }
+    }
+  };
+
+  walk(nodes, 1);
+  return best;
+}
+
+/** At most this many blocks before the summary trails off. */
+const SHORT_SUMMARY_BLOCKS = 2;
+
+/**
+ * A card-sized description: `"10 × 4:00 @ 106%"`.
+ *
+ * Keeps only what identifies the session — the repeat blocks, each collapsed to
+ * its hardest step and its true rep count. Warm-up, cool-down and the
+ * recoveries between efforts are dropped: they are nearly the same in every
+ * workout, and spelling them out is what made the full description overflow
+ * every card it was put on.
+ */
+export function describeWorkoutShort(
   workout: StructuredWorkout | null | undefined,
 ): string {
   if (!workout || workout.nodes.length === 0) return "";
+
   const repeats = workout.nodes.filter(isRepeat);
-  if (repeats.length === 0) return describeWorkout(workout);
-  return repeats.map(describeNode).join(" + ");
+  // With no repeats there is no "structure" to summarise, so the dominant step
+  // stands for the session — a steady endurance ride reads "1:10:00 @ 68%".
+  const blocks =
+    repeats.length > 0
+      ? repeats.map((repeat) => hardestStep([repeat]))
+      : [hardestStep(workout.nodes)];
+
+  const parts = blocks
+    .filter(
+      (block): block is { step: WorkoutStep; reps: number } => block != null,
+    )
+    .map(({ step, reps }) => {
+      const target = describePowerTarget(step.power);
+      const body = `${formatStepDuration(step.durationSeconds)} @ ${target}`;
+      return reps > 1 ? `${reps} × ${body}` : body;
+    });
+
+  if (parts.length === 0) return "";
+  const shown = parts.slice(0, SHORT_SUMMARY_BLOCKS).join(" + ");
+  return parts.length > SHORT_SUMMARY_BLOCKS ? `${shown} + …` : shown;
 }
 
 /** Highest %FTP the workout asks for — used to scale the mini preview. */

@@ -74,7 +74,7 @@ export {
   describeNode,
   describePowerTarget,
   describeWorkout,
-  describeWorkoutBlocks,
+  describeWorkoutShort,
   formatStepDuration,
   peakPct,
 } from "./summarize";
