@@ -51,8 +51,8 @@ export type ListStructuredWorkout = Omit<
   StructuredWorkoutRow,
   "structure" | "description"
 > & {
-  /** Evenly spaced %FTP samples for the card sparkline; null where free-riding. */
-  profile: (number | null)[];
+  /** One `[durationSeconds, %FTP]` bar per step; null %FTP where free-riding. */
+  profile: [number, number | null][];
   /** One-line "10:00 @ 65% + 2 × (…)" summary, precomputed server-side. */
   summary: string;
 };

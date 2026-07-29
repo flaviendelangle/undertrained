@@ -109,33 +109,49 @@ export function zoneDistribution(
 }
 
 /**
- * A fixed-size %FTP profile for the card thumbnails: `count` evenly spaced
- * samples across the whole workout, null where the workout is free-riding.
+ * One bar per segment for the card thumbnails: `[durationSeconds, %FTP]`, with
+ * a null intensity where the workout is free-riding.
  *
- * Fixed-size rather than one entry per segment, because the list page would
- * otherwise ship a 2000-element array per card for a big interval session — and
- * an 80 px-wide sparkline cannot draw more than about this many bars anyway.
+ * Exact rather than sampled on a fixed grid. Evenly spaced samples alias badly
+ * at thumbnail sizes — a 1-minute recovery inside a 2-hour session falls
+ * between two samples and vanishes, so a set of five intervals renders as one
+ * solid block. Segment counts are small in practice (tens), and the cap below
+ * bounds the pathological case.
  */
-export function profileSamples(
+export function workoutProfile(
   segments: readonly ResolvedSegment[],
-  count = 80,
-): (number | null)[] {
-  const total =
-    segments.length === 0 ? 0 : segments[segments.length - 1].endSeconds;
-  if (total <= 0) return [];
+  maxBars = 400,
+): [number, number | null][] {
+  let bars: [number, number | null][] = segments.map((segment) => [
+    segment.durationSeconds,
+    segment.startPct == null || segment.endPct == null
+      ? null
+      : (segment.startPct + segment.endPct) / 2,
+  ]);
 
-  const samples: (number | null)[] = new Array<number | null>(count).fill(null);
-  let cursor = 0;
-  for (let i = 0; i < count; i++) {
-    const at = ((i + 0.5) / count) * total;
-    // Segments and samples both advance monotonically, so one shared cursor
-    // walks the list once instead of re-searching per sample.
-    while (cursor < segments.length - 1 && at >= segments[cursor].endSeconds) {
-      cursor++;
+  // Halve repeatedly rather than resample: merging neighbours keeps every bar's
+  // width proportional to real time, so the shape degrades evenly instead of
+  // dropping whichever segments happen to miss a sample.
+  while (bars.length > maxBars) {
+    const merged: [number, number | null][] = [];
+    for (let i = 0; i < bars.length; i += 2) {
+      const a = bars[i];
+      const b = bars[i + 1];
+      if (!b) {
+        merged.push(a);
+        break;
+      }
+      const duration = a[0] + b[0];
+      const pct =
+        a[1] == null && b[1] == null
+          ? null
+          : ((a[1] ?? 0) * a[0] + (b[1] ?? 0) * b[0]) / duration;
+      merged.push([duration, pct]);
     }
-    samples[i] = segmentPctAt(segments[cursor], at);
+    bars = merged;
   }
-  return samples;
+
+  return bars;
 }
 
 export function computeWorkoutMetrics(

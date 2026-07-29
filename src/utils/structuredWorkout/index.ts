@@ -45,8 +45,8 @@ export {
   estimateIntensityFactor,
   estimateNormalizedPower,
   estimateTss,
-  profileSamples,
   sampleTargetWatts,
+  workoutProfile,
   zoneDistribution,
 } from "./metrics";
 

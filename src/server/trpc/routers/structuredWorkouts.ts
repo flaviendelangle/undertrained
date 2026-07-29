@@ -7,9 +7,9 @@ import {
   describeWorkout,
   flattenWorkout,
   migrateStructuredWorkout,
-  profileSamples,
   structuredWorkoutSchema,
   totalDuration,
+  workoutProfile,
 } from "../../../utils/structuredWorkout";
 import { structuredWorkouts } from "../../db/schema";
 import type { ListStructuredWorkout } from "../../db/types";
@@ -48,11 +48,11 @@ export const structuredWorkoutsRouter = router({
 
       return rows.map(({ structure, description: _description, ...rest }) => {
         // A single corrupted row must not take the whole library down with it.
-        let profile: (number | null)[] = [];
+        let profile: [number, number | null][] = [];
         let summary = "";
         try {
           const workout = migrateStructuredWorkout(structure);
-          profile = profileSamples(flattenWorkout(workout));
+          profile = workoutProfile(flattenWorkout(workout));
           summary = describeWorkout(workout);
         } catch (error) {
           console.error(
