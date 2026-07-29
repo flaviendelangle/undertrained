@@ -20,3 +20,11 @@ export const isLiveTrainingEnabled =
  */
 export const isRoutesEnabled =
   process.env.NEXT_PUBLIC_ROUTES_ENABLED === "true";
+
+/**
+ * Structured workouts (the interval builder at /workouts, and riding one in ERG
+ * mode from Live Training) are opt-in. Hidden unless
+ * STRUCTURED_WORKOUTS_ENABLED=true was set when the app was built.
+ */
+export const isStructuredWorkoutsEnabled =
+  process.env.NEXT_PUBLIC_STRUCTURED_WORKOUTS_ENABLED === "true";

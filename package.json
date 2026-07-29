@@ -22,6 +22,7 @@
     "webhook:delete": "tsx scripts/manage-webhook.ts delete"
   },
   "dependencies": {
+    "@base-ui/plus": "https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@c8addde",
     "@base-ui/react": "^1.5.0",
     "@base-ui/utils": "^0.2.9",
     "@dnd-kit/dom": "^0.4.0",
@@ -67,9 +68,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@date-fns/tz": "^1.5.0",
     "@playwright/test": "^1.60.0",
     "@posthog/nextjs-config": "^1.9.44",
     "@tailwindcss/postcss": "^4.3.0",
+    "@testing-library/react": "^16.3.2",
     "@trivago/prettier-plugin-sort-imports": "6.0.2",
     "@types/d3-array": "^3.2.2",
     "@types/d3-scale": "^4.0.9",
@@ -84,6 +87,7 @@
     "eslint-config-next": "^16.2.6",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "happy-dom": "^20.11.1",
     "npm-run-all": "^4.1.5",
     "postcss": "^8.5.15",
     "prettier": "^3.8.3",

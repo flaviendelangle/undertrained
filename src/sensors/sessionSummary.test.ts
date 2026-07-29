@@ -19,6 +19,7 @@ function point(
     cadence: null,
     speed: null,
     distance: 0,
+    segmentIndex: null,
     ...overrides,
   };
 }
