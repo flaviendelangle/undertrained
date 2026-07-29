@@ -141,6 +141,13 @@
       "when": 1785321412206,
       "tag": "0019_classy_khan",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785338793355,
+      "tag": "0020_bizarre_shard",
+      "breakpoints": true
     }
   ]
 }

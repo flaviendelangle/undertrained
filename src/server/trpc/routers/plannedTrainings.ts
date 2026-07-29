@@ -1,9 +1,21 @@
-import { and, asc, eq, gte, isNotNull, lte } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  gte,
+  isNotNull,
+  lte,
+  max,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
+import type { Database } from "../../db";
 import { activities, athletes, plannedTrainings } from "../../db/schema";
 import { env } from "../../env";
 import {
@@ -28,6 +40,26 @@ const trainingFields = {
 /** Build the absolute iCal feed URL when the public origin is configured. */
 function buildFeedUrl(token: string): string | null {
   return env.APP_URL ? `${env.APP_URL}/api/calendar/${token}.ics` : null;
+}
+
+/**
+ * Internal `activities.id`s already reconciled with a plan, so an activity is
+ * never offered — nor auto-suggested — for a second one.
+ */
+async function getLinkedActivityIds(
+  db: Database,
+  athleteId: number,
+): Promise<number[]> {
+  const rows = await db
+    .select({ id: plannedTrainings.linkedActivityId })
+    .from(plannedTrainings)
+    .where(
+      and(
+        eq(plannedTrainings.athlete, athleteId),
+        isNotNull(plannedTrainings.linkedActivityId),
+      ),
+    );
+  return rows.map((r) => r.id).filter((id): id is number => id != null);
 }
 
 export const plannedTrainingsRouter = router({
@@ -67,17 +99,89 @@ export const plannedTrainingsRouter = router({
   linkedActivityIds: protectedProcedure
     .input(z.object({ athleteId: z.number() }))
     .use(validateAthleteOwnership)
+    .query(({ ctx, input }) => getLinkedActivityIds(ctx.db, input.athleteId)),
+
+  /**
+   * Activities imported since the athlete last had the link prompt shown to
+   * them, as the raw candidate set for that prompt — the day/sport matching runs
+   * on the client, because `~/utils/sportConfig` pulls in `lucide-react` icons
+   * and has no business in the server bundle.
+   *
+   * `activities.id` is a serial and both the backfill sync and the webhook
+   * upsert on `strava_id`, so a re-sync never mints new ids: `id > watermark` is
+   * an exact "imported since the last visit" test.
+   *
+   * The first ever call has no watermark to compare against, so it silently
+   * adopts the current maximum and reports nothing new — otherwise every athlete
+   * would be greeted with their entire history the first time they load the app
+   * after this ships. Writing from a query mirrors the lazy `calendarToken`
+   * creation in `getCalendarToken` below.
+   */
+  newActivities: protectedProcedure
+    .input(z.object({ athleteId: z.number() }))
+    .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
+      const athlete = await ctx.db.query.athletes.findFirst({
+        where: eq(athletes.id, input.athleteId),
+      });
+      if (!athlete) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const [maxRow] = await ctx.db
+        .select({ maxId: max(activities.id) })
+        .from(activities)
+        .where(eq(activities.athlete, input.athleteId));
+      const watermark = maxRow?.maxId ?? 0;
+
+      if (athlete.lastSeenActivityId == null) {
+        await ctx.db
+          .update(athletes)
+          .set({ lastSeenActivityId: watermark })
+          .where(eq(athletes.id, input.athleteId));
+        return { watermark, activities: [] };
+      }
+
+      const linked = await getLinkedActivityIds(ctx.db, input.athleteId);
+      const conditions = [
+        eq(activities.athlete, input.athleteId),
+        gt(activities.id, athlete.lastSeenActivityId),
+      ];
+      if (linked.length > 0) {
+        conditions.push(notInArray(activities.id, linked));
+      }
+
       const rows = await ctx.db
-        .select({ id: plannedTrainings.linkedActivityId })
-        .from(plannedTrainings)
-        .where(
-          and(
-            eq(plannedTrainings.athlete, input.athleteId),
-            isNotNull(plannedTrainings.linkedActivityId),
-          ),
-        );
-      return rows.map((r) => r.id).filter((id): id is number => id != null);
+        .select({
+          id: activities.id,
+          stravaId: activities.stravaId,
+          type: activities.type,
+          name: activities.name,
+          startDateLocal: activities.startDateLocal,
+        })
+        .from(activities)
+        .where(and(...conditions))
+        .orderBy(asc(activities.startDateLocal));
+
+      return { watermark, activities: rows };
+    }),
+
+  /**
+   * Records that the athlete has been shown the link prompt for everything up to
+   * `watermark`, so it doesn't come back on the next load. `greatest` keeps a
+   * stale in-flight acknowledgement from rewinding a watermark a later one moved
+   * forward.
+   */
+  acknowledgeNewActivities: protectedProcedure
+    .input(z.object({ athleteId: z.number(), watermark: z.number().int() }))
+    .use(validateAthleteOwnership)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(athletes)
+        .set({
+          lastSeenActivityId: sql`greatest(coalesce(${athletes.lastSeenActivityId}, 0), ${input.watermark})`,
+        })
+        .where(eq(athletes.id, input.athleteId));
     }),
 
   create: protectedProcedure

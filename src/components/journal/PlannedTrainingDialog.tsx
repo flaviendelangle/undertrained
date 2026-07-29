@@ -36,6 +36,10 @@ import { useT } from "~/i18n/useT";
 import { PLANNABLE_SPORT_TYPES, getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
+import type { ActivityOptionData } from "./ActivityOption";
+import { ActivityOption } from "./ActivityOption";
+import { dayKey, isPerfectMatch } from "./perfectMatch";
+
 const NATIVE_INPUT_CLASS =
   "border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none";
 
@@ -44,11 +48,6 @@ export type PlannerDialogState =
   | { mode: "create"; date: Date }
   | { mode: "edit"; training: PlannedTraining }
   | null;
-
-/** Local day key (yyyy-MM-dd) of a floating-local ISO datetime string. */
-function dayKey(isoLocal: string): string {
-  return isoLocal.slice(0, 10);
-}
 
 interface FormProps {
   athleteId: number;
@@ -227,31 +226,6 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
   );
 }
 
-/** Minimal activity shape the mark-done picker needs to label an option. */
-interface MarkDoneActivity {
-  type: string;
-  name: string;
-  startDateLocal: string;
-}
-
-/** Coloured sport icon + date · name for a mark-done option / value. */
-function ActivityOption({ activity }: { activity: MarkDoneActivity }) {
-  const t = useT();
-  const config = getSportConfig(activity.type);
-  const Icon = config.icon;
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <Icon className="size-4 shrink-0" style={{ color: config.color }} />
-      <span className="truncate">
-        {format(new Date(activity.startDateLocal), "EEE d MMM", {
-          locale: getActiveDateLocale(),
-        })}{" "}
-        · {activity.name || sportTypeLabel(activity.type, t)}
-      </span>
-    </span>
-  );
-}
-
 /** Group shape consumed by the mark-done Combobox (items are stravaId strings). */
 interface ActivityGroup {
   value: string;
@@ -281,13 +255,16 @@ function MarkDoneSection({
   // day). Anything outside those criteria, or already linked, is dropped.
   const { groups, byStravaId } = React.useMemo(() => {
     const linked = new Set(linkedActivityIds ?? []);
-    const plannedCategory = getSportConfig(training.sportType).category;
-    const plannedDay = dayKey(training.plannedDate);
-    const plannedDate = new Date(`${plannedDay}T00:00:00`);
+    const plan = {
+      plannedDate: training.plannedDate,
+      sportType: training.sportType,
+    };
+    const plannedCategory = getSportConfig(plan.sportType).category;
+    const plannedDate = new Date(`${dayKey(plan.plannedDate)}T00:00:00`);
 
     const perfect: string[] = [];
     const other: string[] = [];
-    const map = new Map<string, MarkDoneActivity>();
+    const map = new Map<string, ActivityOptionData>();
 
     for (const a of activities ?? []) {
       if (linked.has(a.id)) {
@@ -296,9 +273,9 @@ function MarkDoneSection({
       if (getSportConfig(a.type).category !== plannedCategory) {
         continue;
       }
-      const activityDay = a.startDateLocal.slice(0, 10);
+      const activityDay = dayKey(a.startDateLocal);
       const stravaId = String(a.stravaId);
-      if (activityDay === plannedDay) {
+      if (isPerfectMatch(plan, a)) {
         perfect.push(stravaId);
         map.set(stravaId, a);
       } else if (

@@ -1,0 +1,1 @@
+ALTER TABLE "athletes" ADD COLUMN "last_seen_activity_id" integer;

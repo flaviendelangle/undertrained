@@ -165,6 +165,18 @@ const fr: Messages = {
       markDoneError:
         "Impossible de mettre à jour l'activité sur Strava. Veuillez réessayer.",
     },
+    linkPrompt: {
+      title: "Avez-vous fait cette séance ?",
+      description: {
+        one: "Une nouvelle activité correspond à une de vos séances planifiées.",
+        other:
+          "De nouvelles activités correspondent à {count} de vos séances planifiées.",
+      },
+      plannedFor: "Prévue le {date} · {duration}",
+      link: "Lier",
+      linked: "Liée",
+      notNow: "Plus tard",
+    },
   },
   stats: {
     movingTime: "Temps actif",

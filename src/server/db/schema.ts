@@ -56,6 +56,13 @@ export const athletes = pgTable(
     // Secret, unguessable token authenticating the athlete's iCal subscription
     // feed (`/api/calendar/{token}.ics`). Generated lazily, revocable.
     calendarToken: text("calendar_token"),
+    // Highest `activities.id` the athlete has already been offered a plan-link
+    // prompt for. Serial ids are monotonic per insert and sync/webhook upsert on
+    // `strava_id` (so a re-sync never mints new ones), which makes
+    // `id > lastSeenActivityId` an exact "imported since the last visit" test
+    // without a timestamp column on the huge `activities` table. Null = never
+    // computed; initialised lazily and silently on the first check.
+    lastSeenActivityId: integer("last_seen_activity_id"),
   },
   (t) => [
     uniqueIndex("athletes_strava_id_idx").on(t.stravaAthleteId),

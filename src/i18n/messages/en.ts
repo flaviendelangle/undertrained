@@ -164,6 +164,17 @@ const en = {
       markDoneError:
         "Couldn't update the activity on Strava. Please try again.",
     },
+    linkPrompt: {
+      title: "Did you complete this training?",
+      description: {
+        one: "A new activity matches one of your planned trainings.",
+        other: "New activities match {count} of your planned trainings.",
+      },
+      plannedFor: "Planned for {date} · {duration}",
+      link: "Link",
+      linked: "Linked",
+      notNow: "Not now",
+    },
   },
   stats: {
     movingTime: "Moving Time",
