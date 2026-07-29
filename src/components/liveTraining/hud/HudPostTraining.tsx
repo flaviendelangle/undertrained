@@ -7,8 +7,8 @@ import { Button } from "~/components/ui/button";
 import { useT } from "~/i18n/useT";
 import { msToKmh } from "~/sensors/speedFromPower";
 import type { SessionDataPoint, SessionSummary } from "~/sensors/types";
-import type { ResolvedSegment } from "~/utils/structuredWorkout";
 import { formatHumanDuration } from "~/utils/format";
+import type { ResolvedSegment } from "~/utils/structuredWorkout";
 
 import { HudWorkoutCompliance } from "./HudWorkoutCompliance";
 
@@ -136,10 +136,7 @@ export function HudPostTraining({
         {/* Compliance — only when the ride followed a workout. */}
         {segments != null && segments.length > 0 && (
           <div className="border-border/50 bg-card/50 mb-6 rounded-xl border p-4">
-            <HudWorkoutCompliance
-              dataPoints={dataPoints}
-              segments={segments}
-            />
+            <HudWorkoutCompliance dataPoints={dataPoints} segments={segments} />
           </div>
         )}
 

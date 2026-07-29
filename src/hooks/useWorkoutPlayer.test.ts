@@ -3,8 +3,9 @@
 // Scoped to this file rather than set globally in vitest.config.ts: the other
 // 30 suites are pure functions that run faster in the default node environment
 // and have no reason to pay for a DOM.
-import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
+import { act, renderHook } from "@testing-library/react";
 
 import type { SessionState } from "~/hooks/useTrainingSession";
 import { useWorkoutPlayer } from "~/hooks/useWorkoutPlayer";
