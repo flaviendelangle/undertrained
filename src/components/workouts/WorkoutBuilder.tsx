@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { KeyboardIcon, Redo2Icon, Undo2Icon } from "lucide-react";
+import { Redo2Icon, Undo2Icon } from "lucide-react";
 import { useRouter } from "next/router";
 
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
@@ -18,13 +18,13 @@ import { useAthleteId } from "~/hooks/useAthleteId";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
+import { formatCompactDuration } from "~/utils/format";
 import type { StructuredWorkout } from "~/utils/structuredWorkout";
 import {
   STRUCTURED_WORKOUT_SCHEMA_VERSION,
   computeWorkoutMetrics,
   emptyWorkoutNodes,
   flattenWorkout,
-  formatStepDuration,
   repeatSpans,
   structuredWorkoutSchema,
 } from "~/utils/structuredWorkout";
@@ -124,16 +124,37 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
 
   useEditorShortcuts(editor);
 
-  const summary = (
-    <WorkoutSummaryPanel
-      metrics={metrics}
-      segmentCount={segments.length}
-      ftp={ftp}
-    />
+  /**
+   * Description + derived numbers. One block, rendered in the sidebar on
+   * desktop and in a drawer on mobile — where there is no sidebar, and the
+   * description would otherwise be unreachable entirely.
+   */
+  const details = (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="workout-description">{t("workouts.description")}</Label>
+        <textarea
+          id="workout-description"
+          rows={3}
+          placeholder={t("workouts.descriptionPlaceholder")}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          className="border-input bg-background focus-visible:ring-ring resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-1"
+        />
+      </div>
+      <WorkoutSummaryPanel
+        metrics={metrics}
+        segmentCount={segments.length}
+        ftp={ftp}
+      />
+    </div>
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col md:flex-row">
+    // Capped and centered to match Statistics and the workouts list. Step rows
+    // are one line of small fields; stretched across an ultrawide monitor the
+    // duration and the watts end up a foot apart.
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col md:flex-row">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Header */}
         <div className="border-border bg-background sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b p-2">
@@ -167,18 +188,21 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
           >
             <Redo2Icon />
           </Button>
-          <KeyboardShortcutsButton />
 
-          {/* On a phone the summary lives in a drawer behind this chip, so the
+          <span className="min-w-0 flex-1" />
+
+          {/* On a phone the details live in a drawer behind this chip, so the
               step list keeps the whole viewport. */}
           {isMobile && (
             <ResponsiveDialog>
               <ResponsiveDialogTrigger
                 render={
                   <Button variant="outline" size="sm">
-                    {formatStepDuration(metrics.totalSeconds)}
+                    {formatCompactDuration(metrics.totalSeconds, {
+                      subHour: "min",
+                    })}
                     {metrics.tss != null && ftp != null
-                      ? ` · ${metrics.tss} TSS`
+                      ? ` · ${metrics.tss}`
                       : ""}
                   </Button>
                 }
@@ -189,7 +213,7 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
                     {t("workouts.summary.title")}
                   </ResponsiveDialogTitle>
                 </ResponsiveDialogHeader>
-                <div className="p-4">{summary}</div>
+                <div className="p-4">{details}</div>
               </ResponsiveDialogContent>
             </ResponsiveDialog>
           )}
@@ -207,7 +231,7 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
           segments={segments}
           spans={spans}
           ftp={ftp}
-          selectedStepId={editor.selectedIds.at(-1) ?? null}
+          selectedStepId={editor.selectedId}
           onSelectStep={(stepId) => editor.select(stepId)}
           className="h-32 shrink-0 md:h-48"
         />
@@ -215,7 +239,6 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
         <div
           role="listbox"
           aria-label={t("workouts.myWorkouts")}
-          aria-multiselectable
           className="min-h-0 flex-1 overflow-y-auto p-2"
         >
           {editor.nodes.length === 0 ? (
@@ -225,90 +248,27 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
           ) : (
             <StepList nodes={editor.nodes} editor={editor} ftp={ftp} />
           )}
-
-          {editor.groupError && (
-            <p role="alert" className="text-destructive p-2 text-xs">
-              {editor.groupError === "too-deep"
-                ? t("workouts.repeat.maxDepth", { depth: 3 })
-                : t("workouts.repeat.notContiguous")}
-            </p>
-          )}
         </div>
 
         <QuickAddBar editor={editor} />
       </div>
 
-      <aside className="border-border hidden shrink-0 overflow-y-auto border-l p-4 md:block md:w-80">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="workout-description">
-              {t("workouts.description")}
-            </Label>
-            <textarea
-              id="workout-description"
-              rows={3}
-              placeholder={t("workouts.descriptionPlaceholder")}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              className="border-input bg-background focus-visible:ring-ring resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-1"
-            />
-          </div>
-          {summary}
-        </div>
-      </aside>
+      {/* Rendered, not CSS-hidden: `details` owns a labelled `id`, and keeping
+          a hidden copy mounted alongside the drawer's would put that id in the
+          document twice and break the label association in both. */}
+      {!isMobile && (
+        <aside className="border-border shrink-0 overflow-y-auto border-l p-4 md:w-72 lg:w-80">
+          {details}
+        </aside>
+      )}
     </div>
   );
 }
 
-function KeyboardShortcutsButton() {
-  const t = useT();
-  const rows: [string, string][] = [
-    ["↑ / ↓", t("workouts.keyboard.move")],
-    ["Alt + ↑ / ↓", t("workouts.keyboard.reorder")],
-    ["Enter", t("workouts.keyboard.duplicate")],
-    ["Delete", t("workouts.keyboard.remove")],
-    ["Ctrl/⌘ + G", t("workouts.keyboard.group")],
-    ["Ctrl/⌘ + ⇧ + G", t("workouts.keyboard.ungroup")],
-    ["Ctrl/⌘ + Z", t("workouts.keyboard.undo")],
-    ["⇧ + click", t("workouts.keyboard.multiSelect")],
-  ];
-
-  return (
-    <ResponsiveDialog>
-      <ResponsiveDialogTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("workouts.keyboard.title")}
-          >
-            <KeyboardIcon />
-          </Button>
-        }
-      />
-      <ResponsiveDialogContent>
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>
-            {t("workouts.keyboard.title")}
-          </ResponsiveDialogTitle>
-        </ResponsiveDialogHeader>
-        <dl className="flex flex-col gap-2 p-4 text-sm">
-          {rows.map(([keys, description]) => (
-            <div key={keys} className="flex items-center justify-between gap-4">
-              <dt className="text-muted-foreground font-mono text-xs">
-                {keys}
-              </dt>
-              <dd className="text-right">{description}</dd>
-            </div>
-          ))}
-        </dl>
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
-  );
-}
-
 /**
- * Document-level shortcuts for the step list.
+ * The few shortcuts worth having without a cheatsheet: undo/redo, arrow-key
+ * selection, and delete. Everything else — grouping, duplicating, reordering —
+ * is reachable from the row menu or by dragging, which is discoverable.
  *
  * Bound on the document rather than a focused container because the fields
  * inside a row take focus as soon as anything is edited; the guard below is what
@@ -326,7 +286,7 @@ function useEditorShortcuts(editor: ReturnType<typeof useWorkoutEditor>) {
         target?.isContentEditable === true;
 
       const current = editorRef.current;
-      const selected = current.selectedIds.at(-1) ?? null;
+      const selected = current.selectedId;
       const mod = event.metaKey || event.ctrlKey;
 
       if (mod && event.key.toLowerCase() === "z") {
@@ -340,34 +300,9 @@ function useEditorShortcuts(editor: ReturnType<typeof useWorkoutEditor>) {
       // while someone is typing a duration or a percentage.
       if (isTextEntry) return;
 
-      if (mod && event.key.toLowerCase() === "g") {
-        event.preventDefault();
-        if (event.shiftKey && selected) current.ungroup(selected);
-        else current.group();
-        return;
-      }
-
-      if (mod && event.key.toLowerCase() === "d") {
-        if (!selected) return;
-        event.preventDefault();
-        current.duplicate(selected);
-        return;
-      }
-
       if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-        const delta = event.key === "ArrowUp" ? -1 : 1;
         event.preventDefault();
-        if (event.altKey) {
-          if (selected) current.move(selected, delta);
-        } else {
-          current.selectRelative(delta);
-        }
-        return;
-      }
-
-      if (event.key === "Enter" && selected) {
-        event.preventDefault();
-        current.duplicate(selected);
+        current.selectRelative(event.key === "ArrowUp" ? -1 : 1);
         return;
       }
 

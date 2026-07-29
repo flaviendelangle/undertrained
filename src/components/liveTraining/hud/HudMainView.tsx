@@ -2,10 +2,11 @@ import { PowerHrChart } from "~/components/liveTraining/PowerHrChart";
 import type { UseWorkoutPlayerResult } from "~/hooks/useWorkoutPlayer";
 import { useT } from "~/i18n/useT";
 import type { SessionDataPoint } from "~/sensors/types";
+import { complianceTolerance } from "~/utils/structuredWorkout";
 
 import { HudMetricTile } from "./HudMetricTile";
-import { HudNextSegmentChip, HudSegmentPanel } from "./HudSegmentPanel";
 import { HudPowerGauge } from "./HudPowerGauge";
+import { HudNextSegmentChip, HudSegmentPanel } from "./HudSegmentPanel";
 import { HudTopBar } from "./HudTopBar";
 import { HudWorkoutBar } from "./HudWorkoutBar";
 import { HudWorkoutControls } from "./HudWorkoutControls";
@@ -49,7 +50,8 @@ export function HudMainView({
   const t = useT();
   const player = workout?.player ?? null;
   const targetPower = player?.targetWatts ?? null;
-  const tolerance = targetPower == null ? undefined : Math.max(10, targetPower * 0.05);
+  const tolerance =
+    targetPower == null ? undefined : complianceTolerance(targetPower);
   return (
     <div className="from-background to-background absolute inset-0 flex flex-col bg-linear-to-br">
       {/* Top bar */}

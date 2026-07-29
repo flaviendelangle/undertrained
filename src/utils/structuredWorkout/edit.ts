@@ -260,85 +260,70 @@ export function moveNode(
   });
 }
 
-export type GroupFailure = "not-contiguous" | "too-deep" | "empty";
+/** Where a dragged node lands relative to the node it was dropped on. */
+export type DropPosition = "before" | "after" | "inside";
 
-export interface GroupResult {
-  nodes: WorkoutNode[];
-  repeatId: string | null;
-  error: GroupFailure | null;
+/** True when `ancestorId` contains `nodeId` at any depth (or is it). */
+export function containsNode(
+  nodes: readonly WorkoutNode[],
+  ancestorId: string,
+  nodeId: string,
+): boolean {
+  if (ancestorId === nodeId) return true;
+  const ancestor = findNode(nodes, ancestorId);
+  if (!ancestor || !isRepeat(ancestor)) return false;
+  return findNode(ancestor.children, nodeId) != null;
 }
 
 /**
- * Wraps a contiguous run of siblings in a new repeat.
+ * Moves a node next to — or into — another node. The drag-and-drop counterpart
+ * of {@link moveNode}, which only nudges within one sibling list.
  *
- * Requires the ids to be siblings and adjacent, because anything else has no
- * single obvious meaning — grouping nodes from two different lists would have to
- * silently move one of them.
+ * Refuses the two moves that cannot mean anything: dropping a repeat into its
+ * own subtree (which would detach that subtree from the tree entirely), and any
+ * drop that would nest deeper than {@link MAX_REPEAT_DEPTH}.
  */
-export function groupIntoRepeat(
+export function moveNodeTo(
   nodes: readonly WorkoutNode[],
-  ids: readonly string[],
-  reps: number,
-  makeId: IdFactory = createId,
-): GroupResult {
+  dragId: string,
+  targetId: string,
+  position: DropPosition,
+): WorkoutNode[] {
   const unchanged = nodes as WorkoutNode[];
-  if (ids.length === 0) {
-    return { nodes: unchanged, repeatId: null, error: "empty" };
-  }
+  if (dragId === targetId) return unchanged;
 
-  const locations = ids.map((id) => findLocation(nodes, id));
-  const first = locations[0];
-  if (!first || locations.some((location) => location == null)) {
-    return { nodes: unchanged, repeatId: null, error: "empty" };
-  }
+  const dragged = findNode(nodes, dragId);
+  const target = findNode(nodes, targetId);
+  if (!dragged || !target) return unchanged;
+  if (containsNode(nodes, dragId, targetId)) return unchanged;
+  if (position === "inside" && !isRepeat(target)) return unchanged;
 
-  const parentId = first.parent?.id ?? null;
-  const indices = locations
-    .map((location) => location!.index)
-    .sort((a, b) => a - b);
+  // Depth of the list the node is landing in, plus whatever it brings with it.
+  const targetLocation = findLocation(nodes, targetId);
+  if (!targetLocation) return unchanged;
+  const landingDepth =
+    position === "inside" ? targetLocation.depth + 1 : targetLocation.depth;
+  if (landingDepth + maxDepth([dragged]) > MAX_REPEAT_DEPTH) return unchanged;
 
-  const sameList = locations.every(
-    (location) => (location!.parent?.id ?? null) === parentId,
-  );
-  const contiguous = indices.every(
-    (value, offset) => value === indices[0] + offset,
-  );
-  if (!sameList || !contiguous) {
-    return { nodes: unchanged, repeatId: null, error: "not-contiguous" };
-  }
+  // Detach first so the insertion indices below are computed against the tree
+  // the node is actually landing in. `removeNode` prunes a repeat left empty,
+  // which can also remove the target — hence the re-check.
+  const without = removeNode(nodes, dragId);
+  if (!findNode(without, targetId)) return unchanged;
 
-  // The new repeat adds a level above the selection, so the deepest nesting
-  // *inside* it must leave room for it.
-  const selected = indices.map((index) => first.siblings[index]);
-  if (first.depth + 1 + maxDepth(selected) > MAX_REPEAT_DEPTH) {
-    return { nodes: unchanged, repeatId: null, error: "too-deep" };
-  }
-
-  const repeat: WorkoutRepeat = {
-    type: "repeat",
-    id: makeId(),
-    reps: Math.max(2, Math.round(reps)),
-    children: selected,
-  };
-
-  const rebuild = (siblings: readonly WorkoutNode[]): WorkoutNode[] => {
-    const next: WorkoutNode[] = [];
-    siblings.forEach((node, index) => {
-      if (index === indices[0]) next.push(repeat);
-      if (!indices.includes(index)) next.push(node);
+  if (position === "inside") {
+    const repeat = findNode(without, targetId);
+    if (!repeat || !isRepeat(repeat)) return unchanged;
+    return replaceNode(without, targetId, {
+      ...repeat,
+      children: [...repeat.children, dragged],
     });
-    return next;
-  };
+  }
 
-  const nextNodes =
-    parentId == null
-      ? rebuild(nodes)
-      : replaceNode(nodes, parentId, {
-          ...first.parent!,
-          children: rebuild(first.parent!.children),
-        });
-
-  return { nodes: nextNodes, repeatId: repeat.id, error: null };
+  return mapSiblings(without, targetId, (siblings, index) => {
+    siblings.splice(position === "before" ? index : index + 1, 0, dragged);
+    return siblings;
+  });
 }
 
 /** Replaces a repeat with its children, in place. The reps are simply lost. */

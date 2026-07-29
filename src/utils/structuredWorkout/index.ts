@@ -64,6 +64,7 @@ export {
 export type { CompliancePoint, SegmentStat } from "./compliance";
 export {
   COMPLIANCE_MIN_PCT,
+  cadenceTolerance,
   complianceTolerance,
   computeSegmentStats,
   overallCompliance,

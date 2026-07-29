@@ -20,8 +20,10 @@ export function WorkoutSportToggle({
 }: WorkoutSportToggleProps) {
   const t = useT();
 
+  // Icon-only below `sm`: the label is the first thing worth trading away when
+  // the builder header is competing for room at 390 px.
   const base =
-    "flex h-8 items-center gap-1.5 rounded px-3 text-sm transition-colors";
+    "flex h-8 items-center gap-1.5 rounded px-2.5 text-sm transition-colors sm:px-3";
 
   return (
     <div
@@ -31,6 +33,7 @@ export function WorkoutSportToggle({
     >
       <button
         type="button"
+        aria-label={t("workouts.sport.bike")}
         aria-pressed={value === "bike"}
         onClick={() => onChange("bike")}
         className={cn(
@@ -41,7 +44,7 @@ export function WorkoutSportToggle({
         )}
       >
         <BikeIcon className="size-4" />
-        {t("workouts.sport.bike")}
+        <span className="hidden sm:inline">{t("workouts.sport.bike")}</span>
       </button>
 
       {/* `aria-disabled` rather than `disabled`: a disabled button swallows
@@ -49,12 +52,13 @@ export function WorkoutSportToggle({
       <Tooltip label={t("workouts.sport.runUnavailable")} side="bottom">
         <button
           type="button"
+          aria-label={t("workouts.sport.run")}
           aria-disabled
           onClick={(event) => event.preventDefault()}
           className={cn(base, "text-muted-foreground/50 cursor-not-allowed")}
         >
           <FootprintsIcon className="size-4" />
-          {t("workouts.sport.run")}
+          <span className="hidden sm:inline">{t("workouts.sport.run")}</span>
         </button>
       </Tooltip>
     </div>

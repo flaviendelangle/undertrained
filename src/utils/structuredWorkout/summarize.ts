@@ -31,10 +31,11 @@ export function describePowerTarget(target: PowerTarget): string {
   switch (target.kind) {
     case "pct":
       return formatPct(target.pct);
-    case "pctRange":
-      return `${formatPct(target.low)}–${formatPct(target.high)}`;
     case "ramp":
-      return `${formatPct(target.from)}→${formatPct(target.to)}`;
+      // "45–70%" rather than an arrow: ranges no longer exist as a target kind,
+      // so two numbers can only mean a sweep, and the dash reads far better at
+      // 12 px than any arrow glyph.
+      return `${Math.round(target.from * 100)}–${formatPct(target.to)}`;
     case "free":
       return "free";
   }
@@ -82,9 +83,7 @@ export function peakPct(workout: StructuredWorkout | null | undefined): number {
       const candidates =
         power.kind === "ramp"
           ? [power.from, power.to]
-          : power.kind === "pctRange"
-            ? [power.high]
-            : [targetMidPct(power) ?? 0];
+          : [targetMidPct(power) ?? 0];
       for (const value of candidates) peak = Math.max(peak, value);
     }
   };

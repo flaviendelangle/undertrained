@@ -37,12 +37,25 @@ export interface SegmentStat {
 }
 
 /**
- * How far from target still counts as on target. The 10 W floor keeps recovery
- * steps from being judged by a band only a few watts wide, which no trainer
- * holds and no rider could ride.
+ * How far from target still counts as on target, in watts either side.
+ *
+ * The single definition of "on target" in the app: the live HUD's delta
+ * colouring, the gauge's in-target band and the post-ride score all read it, so
+ * a rider cannot be shown green mid-interval and marked as missed afterwards.
+ * The 10 W floor keeps easy steps from being judged by a band a few watts wide,
+ * which no trainer holds and no rider could ride.
  */
 export function complianceTolerance(targetWatts: number): number {
   return Math.max(10, targetWatts * 0.05);
+}
+
+/**
+ * How far from the cadence target still counts as on target, in rpm either
+ * side. Wider in relative terms than the power band: cadence drifts with
+ * terrain and gearing, and a rider chasing an exact rpm is not training.
+ */
+export function cadenceTolerance(): number {
+  return 5;
 }
 
 /**

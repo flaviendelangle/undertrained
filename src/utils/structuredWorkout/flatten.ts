@@ -73,11 +73,6 @@ function segmentFromStep(
       startPct = power.pct;
       endPct = power.pct;
       break;
-    case "pctRange":
-      // A band is ridden as its midpoint; the chart draws the spread on top.
-      startPct = (power.low + power.high) / 2;
-      endPct = startPct;
-      break;
     case "ramp":
       startPct = power.from;
       endPct = power.to;

@@ -11,19 +11,18 @@ import { MIN_STEP_SECONDS, isRepeat, isStep } from "~/utils/structuredWorkout";
 import {
   createId,
   duplicateNode,
-  findLocation,
   findNode,
   flattenNodeIds,
-  groupIntoRepeat,
   insertAfter,
   moveNode,
+  moveNodeTo,
   removeNode,
   ungroupRepeat,
   unrollRepeat,
   updateRepeat as updateRepeatNodes,
   updateStep as updateStepNodes,
 } from "~/utils/structuredWorkout/edit";
-import type { GroupFailure } from "~/utils/structuredWorkout/edit";
+import type { DropPosition } from "~/utils/structuredWorkout/edit";
 
 /**
  * Editing state for the workout builder: the tree, the selection, and undo/redo.
@@ -43,12 +42,10 @@ export interface WorkoutEditor {
   sport: WorkoutSport;
   setSport: (sport: WorkoutSport) => void;
 
-  selectedIds: string[];
+  /** The row whose fields are expanded, or null. */
+  selectedId: string | null;
   isSelected: (id: string) => boolean;
-  select: (
-    id: string,
-    options?: { additive?: boolean; range?: boolean },
-  ) => void;
+  select: (id: string | null) => void;
   clearSelection: () => void;
   /** Moves the selection through the tree in visual order. */
   selectRelative: (delta: -1 | 1) => void;
@@ -73,11 +70,10 @@ export interface WorkoutEditor {
   remove: (id: string) => void;
   duplicate: (id: string) => void;
   move: (id: string, direction: -1 | 1) => void;
-  group: (reps?: number) => void;
+  /** Drag-and-drop reorder: place `dragId` before/after/inside `targetId`. */
+  moveTo: (dragId: string, targetId: string, position: DropPosition) => void;
   ungroup: (id: string) => void;
   unroll: (id: string) => void;
-  /** Why the last `group()` refused, cleared on the next successful edit. */
-  groupError: GroupFailure | null;
 }
 
 /** The step a fresh "+ Step" starts from, seeded from its predecessor. */
@@ -115,15 +111,11 @@ export function useWorkoutEditor(
     history: StructuredWorkout[];
     cursor: number;
   }>({ history: [initial], cursor: 0 });
-  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
-  const [groupError, setGroupError] = React.useState<GroupFailure | null>(null);
-  /** The row a shift-click extends from. */
-  const anchorRef = React.useRef<string | null>(null);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   const workout = history[cursor];
 
   const commit = React.useCallback((next: StructuredWorkout) => {
-    setGroupError(null);
     setHistory((prev) => {
       // Editing after an undo discards the redo branch, as everywhere else.
       const trimmed = [...prev.history.slice(0, prev.cursor + 1), next];
@@ -139,57 +131,14 @@ export function useWorkoutEditor(
   );
 
   const selectOnly = React.useCallback((id: string | null) => {
-    anchorRef.current = id;
-    setSelectedIds(id == null ? [] : [id]);
+    setSelectedId(id);
   }, []);
-
-  const select = React.useCallback<WorkoutEditor["select"]>(
-    (id, options) => {
-      if (options?.additive) {
-        setSelectedIds((prev) =>
-          prev.includes(id)
-            ? prev.filter((value) => value !== id)
-            : [...prev, id],
-        );
-        anchorRef.current = id;
-        return;
-      }
-
-      const anchor = anchorRef.current;
-      if (!options?.range || anchor == null || anchor === id) {
-        selectOnly(id);
-        return;
-      }
-
-      // A range only means something within one sibling list — that is also
-      // exactly the shape `groupIntoRepeat` accepts, so extending across a
-      // repeat boundary would produce a selection that can never be grouped.
-      const from = findLocation(workout.nodes, anchor);
-      const to = findLocation(workout.nodes, id);
-      if (
-        !from ||
-        !to ||
-        (from.parent?.id ?? null) !== (to.parent?.id ?? null)
-      ) {
-        selectOnly(id);
-        return;
-      }
-
-      const [low, high] =
-        from.index <= to.index
-          ? [from.index, to.index]
-          : [to.index, from.index];
-      setSelectedIds(from.siblings.slice(low, high + 1).map((node) => node.id));
-    },
-    [selectOnly, workout.nodes],
-  );
 
   const selectRelative = React.useCallback(
     (delta: -1 | 1) => {
       const order = flattenNodeIds(workout.nodes);
       if (order.length === 0) return;
-      const current = selectedIds.at(-1);
-      const index = current == null ? -1 : order.indexOf(current);
+      const index = selectedId == null ? -1 : order.indexOf(selectedId);
       const nextIndex =
         index === -1
           ? delta === 1
@@ -198,23 +147,23 @@ export function useWorkoutEditor(
           : Math.min(Math.max(index + delta, 0), order.length - 1);
       selectOnly(order[nextIndex]);
     },
-    [selectOnly, selectedIds, workout.nodes],
+    [selectOnly, selectedId, workout.nodes],
   );
 
   const addStep = React.useCallback<WorkoutEditor["addStep"]>(
     (preset) => {
-      const anchor = selectedIds.at(-1) ?? null;
+      const anchor = selectedId;
       const previous = anchor ? findNode(workout.nodes, anchor) : null;
       const base = nextStepFrom(previous && isStep(previous) ? previous : null);
       const step: WorkoutStep = { ...base, ...preset, id: createId() };
       commitNodes(insertAfter(workout.nodes, anchor, step));
       selectOnly(step.id);
     },
-    [commitNodes, selectOnly, selectedIds, workout.nodes],
+    [commitNodes, selectOnly, selectedId, workout.nodes],
   );
 
   const addRepeat = React.useCallback(() => {
-    const anchor = selectedIds.at(-1) ?? null;
+    const anchor = selectedId;
     const repeat: WorkoutRepeat = {
       type: "repeat",
       id: createId(),
@@ -238,7 +187,7 @@ export function useWorkoutEditor(
     };
     commitNodes(insertAfter(workout.nodes, anchor, repeat));
     selectOnly(repeat.id);
-  }, [commitNodes, selectOnly, selectedIds, workout.nodes]);
+  }, [commitNodes, selectOnly, selectedId, workout.nodes]);
 
   const remove = React.useCallback(
     (id: string) => {
@@ -264,27 +213,11 @@ export function useWorkoutEditor(
     [commitNodes, selectOnly, workout.nodes],
   );
 
-  const group = React.useCallback(
-    (reps = 4) => {
-      const ids = selectedIds.length > 0 ? selectedIds : [];
-      const result = groupIntoRepeat(workout.nodes, ids, reps);
-      if (result.error) {
-        setGroupError(result.error);
-        return;
-      }
-      commitNodes(result.nodes);
-      selectOnly(result.repeatId);
-    },
-    [commitNodes, selectOnly, selectedIds, workout.nodes],
-  );
-
   const undo = React.useCallback(() => {
-    setGroupError(null);
     setHistory((prev) => ({ ...prev, cursor: Math.max(0, prev.cursor - 1) }));
   }, []);
 
   const redo = React.useCallback(() => {
-    setGroupError(null);
     setHistory((prev) => ({
       ...prev,
       cursor: Math.min(prev.history.length - 1, prev.cursor + 1),
@@ -297,9 +230,9 @@ export function useWorkoutEditor(
     sport: workout.sport,
     setSport: (sport) => commit({ ...workout, sport }),
 
-    selectedIds,
-    isSelected: (id) => selectedIds.includes(id),
-    select,
+    selectedId,
+    isSelected: (id) => selectedId === id,
+    select: selectOnly,
     clearSelection: () => selectOnly(null),
     selectRelative,
 
@@ -338,7 +271,14 @@ export function useWorkoutEditor(
     duplicate,
     move: (id, direction) =>
       commitNodes(moveNode(workout.nodes, id, direction)),
-    group,
+    moveTo: (dragId, targetId, position) => {
+      const next = moveNodeTo(workout.nodes, dragId, targetId, position);
+      // An illegal drop returns the same array; committing it would push a
+      // no-op onto the undo stack.
+      if (next === workout.nodes) return;
+      commitNodes(next);
+      selectOnly(dragId);
+    },
     ungroup: (id) => {
       commitNodes(ungroupRepeat(workout.nodes, id));
       selectOnly(null);
@@ -347,17 +287,9 @@ export function useWorkoutEditor(
       commitNodes(unrollRepeat(workout.nodes, id));
       selectOnly(null);
     },
-    groupError,
-
     // history[0] is always the workout as loaded, so anything past it is unsaved.
     isDirty: cursor > 0,
   };
-}
-
-/** Whether a node can be grouped in one gesture — used to disable the action. */
-export function isGroupable(nodes: readonly WorkoutNode[], ids: string[]) {
-  if (ids.length === 0) return false;
-  return groupIntoRepeat(nodes, ids, 2).error === null;
 }
 
 export { isRepeat, isStep };

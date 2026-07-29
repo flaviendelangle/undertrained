@@ -5,49 +5,11 @@ import { XIcon } from "lucide-react";
 import { useT } from "~/i18n/useT";
 import type { CadenceTarget } from "~/utils/structuredWorkout";
 
-/** Default band offered when cadence is first added — a normal seated range. */
-const DEFAULT_CADENCE: CadenceTarget = { low: 85, high: 95 };
+/** Offered when cadence is first added — a normal seated cadence. */
+const DEFAULT_CADENCE = 90;
 
 const MIN_RPM = 30;
 const MAX_RPM = 200;
-
-function RpmInput({
-  value,
-  onChange,
-  label,
-}: {
-  value: number;
-  onChange: (rpm: number) => void;
-  label: string;
-}) {
-  const [draft, setDraft] = React.useState<string | null>(null);
-
-  const commit = (text: string) => {
-    setDraft(null);
-    const parsed = Number(text);
-    if (!Number.isFinite(parsed)) return;
-    onChange(Math.min(MAX_RPM, Math.max(MIN_RPM, Math.round(parsed))));
-  };
-
-  return (
-    <input
-      type="text"
-      inputMode="numeric"
-      aria-label={label}
-      value={draft ?? String(value)}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={(event) => commit(event.target.value)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          commit(event.currentTarget.value);
-        }
-        if (event.key === "Escape") setDraft(null);
-      }}
-      className="border-input bg-background focus-visible:ring-ring h-7 w-11 rounded-md border px-1 text-center font-mono text-sm tabular-nums outline-none focus-visible:ring-1"
-    />
-  );
-}
 
 interface CadenceFieldProps {
   value: CadenceTarget | undefined;
@@ -57,11 +19,15 @@ interface CadenceFieldProps {
 /**
  * Cadence is optional and usually absent, so it stays collapsed behind a chip
  * until asked for rather than taking a slot on every row.
+ *
+ * A single number, like power: the band outside which the rider is warned is a
+ * property of riding the step, not of the plan (see `cadenceTolerance`).
  */
 export function CadenceField({ value, onChange }: CadenceFieldProps) {
   const t = useT();
+  const [draft, setDraft] = React.useState<string | null>(null);
 
-  if (!value) {
+  if (value == null) {
     return (
       <button
         type="button"
@@ -73,23 +39,30 @@ export function CadenceField({ value, onChange }: CadenceFieldProps) {
     );
   }
 
+  const commit = (text: string) => {
+    setDraft(null);
+    const parsed = Number(text);
+    if (!Number.isFinite(parsed)) return;
+    onChange(Math.min(MAX_RPM, Math.max(MIN_RPM, Math.round(parsed))));
+  };
+
   return (
     <span className="inline-flex items-center gap-1">
-      <RpmInput
-        value={value.low}
-        label={t("workouts.step.cadenceLow")}
-        onChange={(low) =>
-          onChange({
-            low,
-            high: value.high == null ? undefined : Math.max(low, value.high),
-          })
-        }
-      />
-      <span className="text-muted-foreground text-xs">–</span>
-      <RpmInput
-        value={value.high ?? value.low}
-        label={t("workouts.step.cadenceHigh")}
-        onChange={(high) => onChange({ low: Math.min(value.low, high), high })}
+      <input
+        type="text"
+        inputMode="numeric"
+        aria-label={t("workouts.step.cadence")}
+        value={draft ?? String(value)}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={(event) => commit(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commit(event.currentTarget.value);
+          }
+          if (event.key === "Escape") setDraft(null);
+        }}
+        className="border-input bg-background focus-visible:ring-ring h-7 w-12 rounded-md border px-1 text-center font-mono text-sm tabular-nums outline-none focus-visible:ring-1"
       />
       <span className="text-muted-foreground text-xs">rpm</span>
       <button

@@ -3,7 +3,6 @@ import * as React from "react";
 import {
   ChartsContainerPro,
   ChartsGrid,
-  ChartsReferenceLine,
   ChartsXAxis,
   ChartsYAxis,
   useXScale,
@@ -21,12 +20,7 @@ import { StructureBrackets } from "~/components/charts/shared/StructureBrackets"
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import {
-  AXIS_SIZE,
-  CHART_MARGINS,
-  REFERENCE_LINE,
-  useChartTokens,
-} from "~/lib/chartTokens";
+import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { formatElapsed } from "~/utils/format";
 import type { RepeatSpan, ResolvedSegment } from "~/utils/structuredWorkout";
 import { formatStepDuration } from "~/utils/structuredWorkout";
@@ -154,17 +148,6 @@ export function WorkoutPreviewChart({
               selectedStepId={selectedStepId ?? null}
               onSelectStep={onSelectStep}
               onHover={setHover}
-            />
-            {/* FTP is the single most useful gridline on this chart. */}
-            <ChartsReferenceLine
-              y={1}
-              axisId={Y_AXIS_ID}
-              lineStyle={{
-                strokeDasharray: REFERENCE_LINE.dash,
-                opacity: REFERENCE_LINE.opacity,
-              }}
-              labelAlign="start"
-              label={t("workouts.chart.ftpLine")}
             />
             {annotations.length > 0 && (
               <StructureBrackets
@@ -317,14 +300,14 @@ function SegmentTooltip({
     segment.startPct == null
       ? t("workouts.chart.freeRide")
       : segment.isRamp
-        ? `${Math.round(segment.startPct * 100)}% → ${Math.round((segment.endPct ?? 0) * 100)}%`
+        ? `${Math.round(segment.startPct * 100)}–${Math.round((segment.endPct ?? 0) * 100)}%`
         : `${Math.round(segment.startPct * 100)}%`;
 
   const wattsLabel =
     ftp == null || segment.startPct == null
       ? null
       : segment.isRamp
-        ? `${Math.round(segment.startPct * ftp)} → ${Math.round((segment.endPct ?? 0) * ftp)} W`
+        ? `${Math.round(segment.startPct * ftp)}–${Math.round((segment.endPct ?? 0) * ftp)} W`
         : `${Math.round(segment.startPct * ftp)} W`;
 
   const innermost = segment.repeatPath.at(-1);
@@ -350,14 +333,10 @@ function SegmentTooltip({
             value={powerZoneLabel(segment.zoneIndex, t)}
           />
         )}
-        {segment.cadence && (
+        {segment.cadence != null && (
           <ChartTooltipRow
             label={t("workouts.step.cadence")}
-            value={
-              segment.cadence.high == null
-                ? `${segment.cadence.low} rpm`
-                : `${segment.cadence.low}–${segment.cadence.high} rpm`
-            }
+            value={`${segment.cadence} rpm`}
           />
         )}
         {innermost && (

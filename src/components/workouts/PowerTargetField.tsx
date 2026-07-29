@@ -136,7 +136,6 @@ export function PowerTargetField({
 
   const KIND_LABEL: Record<PowerTarget["kind"], string> = {
     pct: t("workouts.step.kind.pct"),
-    pctRange: t("workouts.step.kind.pctRange"),
     ramp: t("workouts.step.kind.ramp"),
     free: t("workouts.step.kind.free"),
   };
@@ -147,24 +146,11 @@ export function PowerTargetField({
    */
   const switchKind = (kind: PowerTarget["kind"]) => {
     const current =
-      value.kind === "pct"
-        ? value.pct
-        : value.kind === "pctRange"
-          ? (value.low + value.high) / 2
-          : value.kind === "ramp"
-            ? value.to
-            : 0.6;
+      value.kind === "pct" ? value.pct : value.kind === "ramp" ? value.to : 0.6;
 
     switch (kind) {
       case "pct":
         onChange({ kind: "pct", pct: roundPct(current) });
-        break;
-      case "pctRange":
-        onChange({
-          kind: "pctRange",
-          low: roundPct(Math.max(0, current - 0.05)),
-          high: roundPct(Math.min(max, current + 0.05)),
-        });
         break;
       case "ramp":
         onChange({
@@ -212,38 +198,6 @@ export function PowerTargetField({
           />
         )}
 
-        {value.kind === "pctRange" && (
-          <>
-            <PctInput
-              value={value.low}
-              max={max}
-              ftp={ftp}
-              label={t("workouts.step.powerLow")}
-              onChange={(low) =>
-                onChange({
-                  kind: "pctRange",
-                  low,
-                  high: Math.max(low, value.high),
-                })
-              }
-            />
-            <span className="text-muted-foreground text-xs">–</span>
-            <PctInput
-              value={value.high}
-              max={max}
-              ftp={ftp}
-              label={t("workouts.step.powerHigh")}
-              onChange={(high) =>
-                onChange({
-                  kind: "pctRange",
-                  low: Math.min(value.low, high),
-                  high,
-                })
-              }
-            />
-          </>
-        )}
-
         {value.kind === "ramp" && (
           <>
             <PctInput
@@ -255,7 +209,7 @@ export function PowerTargetField({
                 onChange({ kind: "ramp", from, to: value.to })
               }
             />
-            <span className="text-muted-foreground text-xs">→</span>
+            <span className="text-muted-foreground text-xs">–</span>
             <PctInput
               value={value.to}
               max={max}

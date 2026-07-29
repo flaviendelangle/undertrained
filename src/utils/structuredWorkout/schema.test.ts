@@ -47,12 +47,10 @@ describe("structuredWorkoutSchema", () => {
     ).toBe(false);
   });
 
-  it("rejects an inverted range", () => {
+  it("rejects a target above the cap", () => {
     expect(
       structuredWorkoutSchema.safeParse(
-        makeWorkout([
-          makeStep("a", 60, { kind: "pctRange", low: 0.9, high: 0.5 }),
-        ]),
+        makeWorkout([makeStep("a", 60, { kind: "pct", pct: 9 })]),
       ).success,
     ).toBe(false);
   });

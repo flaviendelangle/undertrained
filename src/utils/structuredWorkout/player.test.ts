@@ -15,7 +15,7 @@ const FTP = 200;
 const segments = flattenWorkout(
   makeWorkout([
     makeStep("a", 60, 0.5),
-    makeStep("b", 120, 1.0, { cadence: { low: 90, high: 100 } }),
+    makeStep("b", 120, 1.0, { cadence: 95 }),
     makeStep("c", 60, 0.5),
   ]),
 );
@@ -102,7 +102,7 @@ describe("resolveSnapshot", () => {
     expect(snapshot.secondsIntoSegment).toBe(30);
     expect(snapshot.secondsRemainingInSegment).toBe(90);
     expect(snapshot.targetWatts).toBe(200);
-    expect(snapshot.cadenceTarget).toEqual({ low: 90, high: 100 });
+    expect(snapshot.cadenceTarget).toBe(95);
   });
 
   it("has no next segment on the last one", () => {

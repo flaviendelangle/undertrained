@@ -22,6 +22,7 @@
     "webhook:delete": "tsx scripts/manage-webhook.ts delete"
   },
   "dependencies": {
+    "@base-ui/plus": "https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@c8addde",
     "@base-ui/react": "^1.5.0",
     "@base-ui/utils": "^0.2.9",
     "@dnd-kit/dom": "^0.4.0",
@@ -67,6 +68,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@date-fns/tz": "^1.5.0",
     "@playwright/test": "^1.60.0",
     "@posthog/nextjs-config": "^1.9.44",
     "@tailwindcss/postcss": "^4.3.0",

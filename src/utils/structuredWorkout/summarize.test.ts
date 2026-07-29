@@ -24,11 +24,8 @@ describe("formatStepDuration", () => {
 describe("describePowerTarget", () => {
   it("renders each target kind", () => {
     expect(describePowerTarget({ kind: "pct", pct: 0.88 })).toBe("88%");
-    expect(describePowerTarget({ kind: "pctRange", low: 0.6, high: 0.8 })).toBe(
-      "60%–80%",
-    );
     expect(describePowerTarget({ kind: "ramp", from: 0.4, to: 0.7 })).toBe(
-      "40%→70%",
+      "40–70%",
     );
     expect(describePowerTarget({ kind: "free" })).toBe("free");
   });
@@ -86,7 +83,6 @@ describe("peakPct", () => {
         makeWorkout([
           makeStep("a", 60, 0.8),
           makeStep("r", 60, { kind: "ramp", from: 0.5, to: 1.4 }),
-          makeStep("b", 60, { kind: "pctRange", low: 0.9, high: 1.1 }),
         ]),
       ),
     ).toBeCloseTo(1.4);

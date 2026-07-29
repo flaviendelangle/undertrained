@@ -3,7 +3,11 @@ import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import { cn } from "~/lib/utils";
 import { formatElapsed } from "~/utils/format";
-import { formatStepDuration } from "~/utils/structuredWorkout";
+import {
+  cadenceTolerance,
+  complianceTolerance,
+  formatStepDuration,
+} from "~/utils/structuredWorkout";
 
 /**
  * "What am I doing right now": the target, how far off it you are, how long is
@@ -35,16 +39,14 @@ export function HudSegmentPanel({
   const target = player.targetWatts;
   const delta =
     target != null && currentPower != null ? currentPower - target : null;
-  // A wide band, because chasing a 3 W error is not a thing anyone should do.
-  const tolerance = target == null ? 0 : Math.max(10, target * 0.05);
+  const tolerance = target == null ? 0 : complianceTolerance(target);
 
   const cadence = player.cadenceTarget;
   const cadenceOff =
     cadence != null &&
     currentCadence != null &&
     currentCadence > 0 &&
-    (currentCadence < cadence.low ||
-      (cadence.high != null && currentCadence > cadence.high));
+    Math.abs(currentCadence - cadence) > cadenceTolerance();
 
   const rep = segment.repeatPath.at(-1);
   const stepProgress =
@@ -129,11 +131,7 @@ export function HudSegmentPanel({
             cadenceOff ? "text-amber-500" : "text-muted-foreground",
           )}
         >
-          {t("liveTraining.cadence")}{" "}
-          {cadence.high == null
-            ? `${cadence.low}`
-            : `${cadence.low}–${cadence.high}`}{" "}
-          rpm
+          {t("liveTraining.cadence")} {cadence} rpm
         </div>
       )}
     </div>

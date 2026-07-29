@@ -93,7 +93,7 @@ export const WORKOUT_PRESETS: WorkoutPreset[] = [
             {
               minutes: 3,
               pct: 1.15,
-              cadence: { low: 95, high: 105 },
+              cadence: 100,
               intensity: "work",
             },
             makeId,

@@ -144,6 +144,7 @@ const WorkoutsPage: NextPageWithLayout = () => {
     <>
       <Toolbar
         label={t("workouts.myWorkouts")}
+        contentClassName="mx-auto max-w-5xl"
         actions={
           <>
             <div className="border-border focus-within:ring-ring relative flex w-36 items-center rounded-md border focus-within:ring-1 sm:w-56">
@@ -182,35 +183,39 @@ const WorkoutsPage: NextPageWithLayout = () => {
         <h1 className="text-base font-semibold">{t("workouts.myWorkouts")}</h1>
       </Toolbar>
 
-      <div className="relative flex-1 overflow-y-auto p-3 sm:p-4">
-        {workouts?.length === 0 ? (
-          <div className="text-muted-foreground flex flex-col items-center gap-3 py-16 text-center text-sm">
-            <RepeatIcon className="size-8 opacity-50" />
-            <p>{t("workouts.empty")}</p>
-            <Button
-              size="sm"
-              nativeButton={false}
-              render={<Link href="/workouts/new" />}
-            >
-              <PlusIcon /> {t("workouts.createFirst")}
-            </Button>
-          </div>
-        ) : filtered?.length === 0 ? (
-          <p className="text-muted-foreground py-16 text-center text-sm">
-            {t("workouts.noMatch")}
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered?.map((workout) => (
-              <WorkoutCard
-                key={workout.id}
-                workout={workout}
-                onDuplicate={onDuplicate}
-                onDelete={onDelete}
-              />
-            ))}
-          </div>
-        )}
+      {/* Capped and centered like Statistics: a three-column grid stretched
+          across an ultrawide monitor turns the cards into letterboxes. */}
+      <div className="relative flex flex-1 flex-col items-center overflow-y-auto p-3 sm:p-4">
+        <div className="w-full max-w-5xl">
+          {workouts?.length === 0 ? (
+            <div className="text-muted-foreground flex flex-col items-center gap-3 py-16 text-center text-sm">
+              <RepeatIcon className="size-8 opacity-50" />
+              <p>{t("workouts.empty")}</p>
+              <Button
+                size="sm"
+                nativeButton={false}
+                render={<Link href="/workouts/new" />}
+              >
+                <PlusIcon /> {t("workouts.createFirst")}
+              </Button>
+            </div>
+          ) : filtered?.length === 0 ? (
+            <p className="text-muted-foreground py-16 text-center text-sm">
+              {t("workouts.noMatch")}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered?.map((workout) => (
+                <WorkoutCard
+                  key={workout.id}
+                  workout={workout}
+                  onDuplicate={onDuplicate}
+                  onDelete={onDelete}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </>
   );

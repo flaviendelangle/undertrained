@@ -1,9 +1,6 @@
 import {
-  ChevronDownIcon,
-  ChevronUpIcon,
   CopyIcon,
   EllipsisVerticalIcon,
-  GroupIcon,
   Trash2Icon,
   UngroupIcon,
 } from "lucide-react";
@@ -19,28 +16,22 @@ import { useT } from "~/i18n/useT";
 
 interface StepActionsMenuProps {
   isRepeat: boolean;
-  canGroup: boolean;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
   onDuplicate: () => void;
-  onGroup: () => void;
   onUngroup: () => void;
   onUnroll: () => void;
   onDelete: () => void;
 }
 
 /**
- * Per-row actions. Everything here also has a keyboard shortcut; the menu is
- * what makes those actions reachable on touch, where there is no keyboard and
- * no room for seven buttons.
+ * Per-row actions.
+ *
+ * Deliberately short: reordering is dragging, and nesting is "+ Repeat" plus a
+ * drag into the group. Menu entries duplicating a direct manipulation only make
+ * the list of real actions harder to find.
  */
 export function StepActionsMenu({
   isRepeat,
-  canGroup,
-  onMoveUp,
-  onMoveDown,
   onDuplicate,
-  onGroup,
   onUngroup,
   onUnroll,
   onDelete,
@@ -50,23 +41,16 @@ export function StepActionsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label={t("workouts.step.select")}
+        aria-label={t("workouts.step.actions")}
         className="text-muted-foreground hover:text-foreground flex size-7 shrink-0 items-center justify-center rounded-md"
       >
         <EllipsisVerticalIcon className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={onMoveUp}>
-          <ChevronUpIcon /> {t("workouts.step.moveUp")}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onMoveDown}>
-          <ChevronDownIcon /> {t("workouts.step.moveDown")}
-        </DropdownMenuItem>
         <DropdownMenuItem onClick={onDuplicate}>
           <CopyIcon /> {t("workouts.step.duplicate")}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {isRepeat ? (
+        {isRepeat && (
           <>
             <DropdownMenuItem onClick={onUngroup}>
               <UngroupIcon /> {t("workouts.step.ungroup")}
@@ -75,10 +59,6 @@ export function StepActionsMenu({
               <UngroupIcon /> {t("workouts.step.unroll")}
             </DropdownMenuItem>
           </>
-        ) : (
-          <DropdownMenuItem onClick={onGroup} disabled={!canGroup}>
-            <GroupIcon /> {t("workouts.step.group")}
-          </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={onDelete}>

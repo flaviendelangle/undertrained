@@ -33,6 +33,11 @@ export type StepIntensity =
 
 /**
  * A power target, always expressed as a **fraction of FTP** (0.88 = 88 %).
+ *
+ * Authored as a single number, never a band: a target the rider is asked to hit
+ * is one number, and the tolerance around it is a property of *riding* it, not
+ * of the plan. `complianceTolerance` owns that band, so the HUD and the
+ * post-ride score can never disagree about what counts as on target.
  * Watts are derived at render time from the athlete's FTP-of-the-day and never
  * stored, so a saved workout rescales itself when FTP moves.
  *
@@ -45,27 +50,20 @@ export type StepIntensity =
 export type PowerTarget =
   /** Single target. ERG holds this number. → `.zwo` `<SteadyState Power>`. */
   | { kind: "pct"; pct: number }
-  /** Acceptable band. → FIT custom_target_power_low/high; `.zwo` emits the midpoint. */
-  | { kind: "pctRange"; low: number; high: number }
   /** Linear sweep across the step. → `.zwo` `<Warmup>`/`<Cooldown>`/`<Ramp>`. */
   | { kind: "ramp"; from: number; to: number }
   /** No target at all. → `.zwo` `<FreeRide>`; FIT `target_type: "open"`. */
-  | { kind: "free"; guide?: { low: number; high: number } };
+  | { kind: "free" };
 
 /**
- * Optional cadence target, in rpm. A range rather than a scalar because both
- * export formats are natively ranges (`.zwo` Cadence/CadenceLow/CadenceHigh,
- * FIT secondary_custom_target_value_low/high). Omitting `high` means "hold this
- * exact cadence".
+ * Optional cadence target, in rpm.
  *
- * Deliberately a plain object rather than a union like {@link PowerTarget}:
- * cadence has no ramp or free variant, so a union would be machinery for
- * nothing.
+ * A single number for the same reason power is: what the rider is asked to hold
+ * is one value, and how far off it still counts as on target belongs to riding
+ * it — `cadenceTolerance` owns that band. Both export formats want a range, so
+ * an exporter widens this by the same tolerance on the way out.
  */
-export interface CadenceTarget {
-  low: number;
-  high?: number;
-}
+export type CadenceTarget = number;
 
 export interface WorkoutStep {
   type: "step";
@@ -135,8 +133,6 @@ export function targetMidPct(target: PowerTarget): number | null {
   switch (target.kind) {
     case "pct":
       return target.pct;
-    case "pctRange":
-      return (target.low + target.high) / 2;
     case "ramp":
       return (target.from + target.to) / 2;
     case "free":

@@ -5,12 +5,12 @@ import {
   findLocation,
   findNode,
   flattenNodeIds,
-  groupIntoRepeat,
   insertAfter,
   insertInto,
   lastStep,
   maxDepth,
   moveNode,
+  moveNodeTo,
   removeNode,
   ungroupRepeat,
   unrollRepeat,
@@ -174,83 +174,13 @@ describe("moveNode", () => {
   });
 });
 
-describe("groupIntoRepeat", () => {
-  it("wraps a contiguous run of siblings", () => {
-    const result = groupIntoRepeat(flat(), ["a", "b"], 5, sequentialIds("r"));
-    expect(result.error).toBeNull();
-    expect(result.nodes.map((n) => n.id)).toEqual(["r1", "c"]);
-    const repeat = result.nodes[0];
-    expect(isRepeat(repeat) && repeat.reps).toBe(5);
-    expect(isRepeat(repeat) && repeat.children.map((c) => c.id)).toEqual([
-      "a",
-      "b",
-    ]);
-  });
-
-  it("accepts ids given out of order", () => {
-    const result = groupIntoRepeat(flat(), ["b", "a"], 2, sequentialIds("r"));
-    expect(result.error).toBeNull();
-    const repeat = result.nodes[0];
-    expect(isRepeat(repeat) && repeat.children.map((c) => c.id)).toEqual([
-      "a",
-      "b",
-    ]);
-  });
-
-  it("rejects a non-contiguous selection", () => {
-    const nodes = flat();
-    const result = groupIntoRepeat(nodes, ["a", "c"], 2, sequentialIds("r"));
-    expect(result.error).toBe("not-contiguous");
-    expect(result.nodes).toBe(nodes);
-  });
-
-  it("rejects a selection spanning two different lists", () => {
-    const nodes = nested();
-    const result = groupIntoRepeat(
-      nodes,
-      ["warm", "on"],
-      2,
-      sequentialIds("r"),
-    );
-    expect(result.error).toBe("not-contiguous");
-  });
-
-  it("groups inside a repeat", () => {
-    const result = groupIntoRepeat(
-      nested(),
-      ["on", "off"],
-      3,
-      sequentialIds("r"),
-    );
-    expect(result.error).toBeNull();
-    const inner = findNode(result.nodes, "inner")!;
-    expect(isRepeat(inner) && inner.children.map((c) => c.id)).toEqual(["r1"]);
-  });
-
-  it("refuses to exceed the depth cap", () => {
-    // `on` already sits two repeats deep; wrapping it would make three levels
-    // above it, one past MAX_REPEAT_DEPTH.
-    const nodes = [
-      makeRepeat("l1", 2, [
-        makeRepeat("l2", 2, [makeRepeat("l3", 2, [makeStep("s", 60, 0.6)])]),
-      ]),
-    ];
-    const result = groupIntoRepeat(nodes, ["s"], 2, sequentialIds("r"));
-    expect(result.error).toBe("too-deep");
-    expect(result.nodes).toBe(nodes);
-  });
-
-  it("forces at least two reps", () => {
-    const result = groupIntoRepeat(flat(), ["a"], 1, sequentialIds("r"));
-    const repeat = result.nodes[0];
-    expect(isRepeat(repeat) && repeat.reps).toBe(2);
-  });
-});
-
 describe("ungroupRepeat", () => {
   it("splices the children in place", () => {
-    const grouped = groupIntoRepeat(flat(), ["a", "b"], 3, sequentialIds("r"));
-    expect(ungroupRepeat(grouped.nodes, "r1").map((n) => n.id)).toEqual([
+    const nodes = [
+      makeRepeat("r1", 3, [makeStep("a", 60, 0.5), makeStep("b", 60, 0.9)]),
+      makeStep("c", 60, 0.5),
+    ];
+    expect(ungroupRepeat(nodes, "r1").map((n) => n.id)).toEqual([
       "a",
       "b",
       "c",
@@ -280,5 +210,80 @@ describe("lastStep", () => {
     expect(lastStep(nested())?.id).toBe("off");
     expect(lastStep(flat())?.id).toBe("c");
     expect(lastStep([])).toBeNull();
+  });
+});
+
+describe("moveNodeTo", () => {
+  it("inserts before a sibling", () => {
+    expect(moveNodeTo(flat(), "c", "a", "before").map((n) => n.id)).toEqual([
+      "c",
+      "a",
+      "b",
+    ]);
+  });
+
+  it("inserts after a sibling", () => {
+    expect(moveNodeTo(flat(), "a", "c", "after").map((n) => n.id)).toEqual([
+      "b",
+      "c",
+      "a",
+    ]);
+  });
+
+  it("moves a node into a repeat", () => {
+    const next = moveNodeTo(nested(), "warm", "inner", "inside");
+    const inner = findNode(next, "inner")!;
+    expect(isRepeat(inner) && inner.children.map((c) => c.id)).toEqual([
+      "on",
+      "off",
+      "warm",
+    ]);
+    expect(next.map((n) => n.id)).toEqual(["outer"]);
+  });
+
+  it("moves a node out of a repeat", () => {
+    const next = moveNodeTo(nested(), "on", "warm", "before");
+    expect(next.map((n) => n.id)).toEqual(["on", "warm", "outer"]);
+  });
+
+  it("refuses to drop a repeat inside itself", () => {
+    const nodes = nested();
+    expect(moveNodeTo(nodes, "outer", "on", "before")).toBe(nodes);
+    expect(moveNodeTo(nodes, "outer", "inner", "inside")).toBe(nodes);
+  });
+
+  it("allows a drop that lands exactly at the depth cap", () => {
+    const nodes = [
+      makeRepeat("l1", 2, [makeRepeat("l2", 2, [makeStep("deep", 60, 0.6)])]),
+      makeRepeat("other", 2, [makeStep("s", 60, 0.6)]),
+    ];
+    // l1 › l2 › other is three levels of repeat — exactly MAX_REPEAT_DEPTH.
+    expect(moveNodeTo(nodes, "other", "l2", "inside")).not.toBe(nodes);
+  });
+
+  it("refuses a drop that would nest past the cap", () => {
+    const nodes = [
+      makeRepeat("l1", 2, [
+        makeRepeat("l2", 2, [makeRepeat("l3", 2, [makeStep("deep", 60, 0.6)])]),
+      ]),
+      makeRepeat("other", 2, [makeStep("s", 60, 0.6)]),
+    ];
+    // Landing `other` inside `l3` would make four levels.
+    expect(moveNodeTo(nodes, "other", "l3", "inside")).toBe(nodes);
+  });
+
+  it("is a no-op when either node is unknown or they are the same", () => {
+    const nodes = flat();
+    expect(moveNodeTo(nodes, "a", "a", "before")).toBe(nodes);
+    expect(moveNodeTo(nodes, "a", "nope", "before")).toBe(nodes);
+  });
+
+  it("prunes a repeat the move emptied", () => {
+    const nodes = [
+      makeRepeat("solo", 2, [makeStep("only", 60, 0.6)]),
+      makeStep("tail", 60, 0.6),
+    ];
+    const next = moveNodeTo(nodes, "only", "tail", "after");
+    expect(next.map((n) => n.id)).toEqual(["tail", "only"]);
   });
 });

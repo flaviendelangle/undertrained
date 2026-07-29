@@ -86,16 +86,6 @@ describe("flattenWorkout", () => {
     expect(segment.isRamp).toBe(false);
   });
 
-  it("rides a range at its midpoint", () => {
-    const [segment] = flattenWorkout(
-      makeWorkout([
-        makeStep("band", 60, { kind: "pctRange", low: 0.6, high: 0.8 }),
-      ]),
-    );
-    expect(segment.startPct).toBeCloseTo(0.7);
-    expect(segment.endPct).toBeCloseTo(0.7);
-  });
-
   it("gives free steps no target", () => {
     const [segment] = flattenWorkout(
       makeWorkout([makeStep("free", 60, { kind: "free" })]),
