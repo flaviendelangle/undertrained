@@ -32,16 +32,14 @@ import { MAX_FTP_PCT, roundPct } from "~/utils/structuredWorkout";
 const PCT_STEP = 0.01;
 
 /**
- * The %FTP a zone chip writes: the middle of the zone's band. The open-topped
- * top zone has no midpoint, so it uses a value that is unambiguously in it
- * without being an unrideable sprint target.
+ * The %FTP each zone chip writes, in POWER_ZONES order.
+ *
+ * Round numbers a rider would actually pick, not the arithmetic middle of each
+ * band — Z4 is FTP itself rather than 97.5 %. Each value still falls inside its
+ * own zone under `findPowerZone`, so the chip that wrote a target is the one
+ * that stays highlighted.
  */
-export function zoneMidPct(index: number): number {
-  const zone = POWER_ZONES[index];
-  const lower = index === 0 ? 0 : POWER_ZONES[index - 1].maxPct;
-  if (!Number.isFinite(zone.maxPct)) return roundPct(lower + 0.2);
-  return roundPct((lower + zone.maxPct) / 2);
-}
+export const ZONE_PRESET_PCT = [0.5, 0.65, 0.85, 1.0, 1.15, 1.4, 1.8];
 
 /** Watts for a %FTP, or null when the athlete has no FTP configured. */
 function wattsFor(pct: number, ftp: number | null): number | null {
@@ -235,7 +233,12 @@ export function PowerTargetField({
                 type="button"
                 title={powerZoneLabel(index, t)}
                 onClick={() =>
-                  onChange({ kind: "pct", pct: zoneMidPct(index) })
+                  // Clamped like the numeric input: a high-FTP rider hits the
+                  // trainer's watt ceiling before Z7's 180 %.
+                  onChange({
+                    kind: "pct",
+                    pct: roundPct(Math.min(max, ZONE_PRESET_PCT[index])),
+                  })
                 }
                 style={{
                   borderColor: tokens.zones[zone.ramp],
