@@ -339,6 +339,44 @@ export function ungroupRepeat(
   });
 }
 
+/**
+ * Whether {@link wrapInRepeat} would succeed — the node exists and wrapping it
+ * leaves the tree within {@link MAX_REPEAT_DEPTH}.
+ */
+export function canWrapInRepeat(
+  nodes: readonly WorkoutNode[],
+  id: string,
+): boolean {
+  const node = findNode(nodes, id);
+  if (!node) return false;
+  // The new repeat adds a level above the node, so what it already carries has
+  // to fit underneath it.
+  return nodeDepth(nodes, id) + 1 + maxDepth([node]) <= MAX_REPEAT_DEPTH;
+}
+
+/**
+ * Wraps a single node in a new repeat, in place — the direct way to turn a step
+ * you have already written into a set of them, and to nest an existing group
+ * inside another.
+ */
+export function wrapInRepeat(
+  nodes: readonly WorkoutNode[],
+  id: string,
+  reps = 2,
+  makeId: IdFactory = createId,
+): WorkoutNode[] {
+  const node = findNode(nodes, id);
+  if (!node || !canWrapInRepeat(nodes, id)) return nodes as WorkoutNode[];
+
+  const repeat: WorkoutRepeat = {
+    type: "repeat",
+    id: makeId(),
+    reps: Math.max(2, Math.round(reps)),
+    children: [node],
+  };
+  return replaceNode(nodes, id, repeat);
+}
+
 /** Every node id in tree order — the traversal the list view and keyboard share. */
 export function flattenNodeIds(nodes: readonly WorkoutNode[]): string[] {
   const ids: string[] = [];

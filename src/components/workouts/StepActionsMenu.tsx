@@ -1,6 +1,7 @@
 import {
   CopyIcon,
   EllipsisVerticalIcon,
+  RepeatIcon,
   Trash2Icon,
   UngroupIcon,
 } from "lucide-react";
@@ -17,6 +18,8 @@ import { useT } from "~/i18n/useT";
 interface StepActionsMenuProps {
   isRepeat: boolean;
   onDuplicate: () => void;
+  onWrap: () => void;
+  canWrap: boolean;
   onUngroup: () => void;
   onDelete: () => void;
 }
@@ -31,6 +34,8 @@ interface StepActionsMenuProps {
 export function StepActionsMenu({
   isRepeat,
   onDuplicate,
+  onWrap,
+  canWrap,
   onUngroup,
   onDelete,
 }: StepActionsMenuProps) {
@@ -47,6 +52,11 @@ export function StepActionsMenu({
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={onDuplicate}>
           <CopyIcon /> {t("workouts.step.duplicate")}
+        </DropdownMenuItem>
+        {/* Wraps this row in a new group — the only way to turn something
+            already written into a set without dragging it. */}
+        <DropdownMenuItem onClick={onWrap} disabled={!canWrap}>
+          <RepeatIcon /> {t("workouts.step.wrapInRepeat")}
         </DropdownMenuItem>
         {isRepeat && (
           <DropdownMenuItem onClick={onUngroup}>

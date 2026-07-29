@@ -14,6 +14,7 @@ import {
   isStep,
 } from "~/utils/structuredWorkout";
 import {
+  canWrapInRepeat,
   createId,
   duplicateNode,
   findNode,
@@ -28,6 +29,7 @@ import {
   ungroupRepeat,
   updateRepeat as updateRepeatNodes,
   updateStep as updateStepNodes,
+  wrapInRepeat,
 } from "~/utils/structuredWorkout/edit";
 import type { DropPosition } from "~/utils/structuredWorkout/edit";
 
@@ -78,6 +80,10 @@ export interface WorkoutEditor {
   move: (id: string, direction: -1 | 1) => void;
   /** Drag-and-drop reorder: place `dragId` before/after/inside `targetId`. */
   moveTo: (dragId: string, targetId: string, position: DropPosition) => void;
+  /** Wraps one node in a new repeat, in place. */
+  wrap: (id: string) => void;
+  /** False when wrapping would nest past MAX_REPEAT_DEPTH. */
+  canWrap: (id: string) => boolean;
   ungroup: (id: string) => void;
 }
 
@@ -311,6 +317,17 @@ export function useWorkoutEditor(
       commitNodes(next);
       selectOnly(dragId);
     },
+    wrap: (id) => {
+      const next = wrapInRepeat(workout.nodes, id);
+      if (next === workout.nodes) return;
+      commitNodes(next);
+      // Select the new group so its rep count is the next thing to hand.
+      const created = flattenNodeIds(next).find(
+        (value) => !flattenNodeIds(workout.nodes).includes(value),
+      );
+      selectOnly(created ?? id);
+    },
+    canWrap: (id) => canWrapInRepeat(workout.nodes, id),
     ungroup: (id) => {
       commitNodes(ungroupRepeat(workout.nodes, id));
       selectOnly(null);

@@ -76,6 +76,8 @@ function useRowActions(editor: WorkoutEditor, id: string) {
     onMoveUp: () => editor.move(id, -1),
     onMoveDown: () => editor.move(id, 1),
     onDuplicate: () => editor.duplicate(id),
+    onWrap: () => editor.wrap(id),
+    canWrap: editor.canWrap(id),
     onUngroup: () => editor.ungroup(id),
     onDelete: () => editor.remove(id),
   };

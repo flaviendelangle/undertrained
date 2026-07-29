@@ -994,8 +994,7 @@ const fr: Messages = {
       empty: "Aucune séance pour le moment.",
       noControl:
         "Votre home-trainer n'est pas pilotable — les cibles seront affichées, pas imposées.",
-      disconnected:
-        "Home-trainer déconnecté — les cibles sont indicatives.",
+      disconnected: "Home-trainer déconnecté — les cibles sont indicatives.",
       next: "Ensuite",
       inTime: "dans {time}",
       rep: "rép. {rep}/{reps}",
@@ -1062,7 +1061,8 @@ const fr: Messages = {
       add: "Ajouter une étape",
       addWarmup: "Échauffement",
       addCooldown: "Retour au calme",
-      addRepeat: "Répétition",
+      addRepeat: "Ajouter un groupe",
+      wrapInRepeat: "Répéter",
       duration: "Durée",
       durationHint: "5, 90s ou 1:30",
       durationStep: "Modifier la durée de {step} secondes",
@@ -1112,7 +1112,8 @@ const fr: Messages = {
       averagePower: "Puissance moy.",
       zoneDistribution: "Temps par zone",
       atFtp: "pour une FTP de {ftp} W",
-      noFtp: "Renseignez votre FTP dans les réglages pour voir les watts et le TSS.",
+      noFtp:
+        "Renseignez votre FTP dans les réglages pour voir les watts et le TSS.",
       freeRideExcluded: "Hors {duration} de sortie libre",
       manyStepsWarning:
         "{count} étapes — certains compteurs limitent les séances à environ 50 étapes.",

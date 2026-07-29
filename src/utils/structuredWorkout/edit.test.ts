@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canWrapInRepeat,
   duplicateNode,
   findLocation,
   findNode,
@@ -15,6 +16,7 @@ import {
   ungroupRepeat,
   updateRepeat,
   updateStep,
+  wrapInRepeat,
 } from "./edit";
 import { makeRepeat, makeStep, sequentialIds } from "./fixtures";
 import { isRepeat } from "./types";
@@ -272,5 +274,59 @@ describe("moveNodeTo", () => {
     ];
     const next = moveNodeTo(nodes, "only", "tail", "after");
     expect(next.map((n) => n.id)).toEqual(["tail", "only"]);
+  });
+});
+
+describe("wrapInRepeat", () => {
+  it("wraps a step in place", () => {
+    const next = wrapInRepeat(flat(), "b", 2, sequentialIds("r"));
+    expect(next.map((n) => n.id)).toEqual(["a", "r1", "c"]);
+    const repeat = findNode(next, "r1")!;
+    expect(isRepeat(repeat) && repeat.reps).toBe(2);
+    expect(isRepeat(repeat) && repeat.children.map((c) => c.id)).toEqual(["b"]);
+  });
+
+  it("wraps a nested step without leaving its group", () => {
+    const next = wrapInRepeat(nested(), "on", 2, sequentialIds("r"));
+    const inner = findNode(next, "inner")!;
+    expect(isRepeat(inner) && inner.children.map((c) => c.id)).toEqual([
+      "r1",
+      "off",
+    ]);
+  });
+
+  it("nests an existing group, which is how 2 × (5 × …) is built", () => {
+    const nodes = [makeRepeat("five", 5, [makeStep("on", 60, 1.05)])];
+    const next = wrapInRepeat(nodes, "five", 2, sequentialIds("r"));
+    const outer = findNode(next, "r1")!;
+    expect(isRepeat(outer) && outer.reps).toBe(2);
+    expect(isRepeat(outer) && outer.children.map((c) => c.id)).toEqual([
+      "five",
+    ]);
+  });
+
+  it("forces at least two reps", () => {
+    const next = wrapInRepeat(flat(), "a", 1, sequentialIds("r"));
+    const repeat = findNode(next, "r1")!;
+    expect(isRepeat(repeat) && repeat.reps).toBe(2);
+  });
+
+  it("refuses when it would nest past the cap", () => {
+    // `on` already sits two repeats deep; a third above it is the limit, so
+    // wrapping the depth-2 step is allowed but wrapping `inner` again is not.
+    expect(canWrapInRepeat(nested(), "on")).toBe(true);
+    const deep = [
+      makeRepeat("l1", 2, [
+        makeRepeat("l2", 2, [makeRepeat("l3", 2, [makeStep("s", 60, 0.6)])]),
+      ]),
+    ];
+    expect(canWrapInRepeat(deep, "s")).toBe(false);
+    expect(wrapInRepeat(deep, "s")).toBe(deep);
+  });
+
+  it("is a no-op for an unknown id", () => {
+    const nodes = flat();
+    expect(wrapInRepeat(nodes, "nope")).toBe(nodes);
+    expect(canWrapInRepeat(nodes, "nope")).toBe(false);
   });
 });
