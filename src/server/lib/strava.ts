@@ -20,6 +20,23 @@ const stravaTokenResponseSchema = z.object({
   expires_at: z.number().int(),
 });
 
+/**
+ * Shape of a Strava OAuth error body:
+ * `{"message":"Bad Request","errors":[{"resource":"RefreshToken","field":"refresh_token","code":"invalid"}]}`.
+ * Everything is optional because we only ever read it as a hint.
+ */
+const stravaOAuthErrorSchema = z.object({
+  errors: z
+    .array(
+      z.object({
+        resource: z.string().optional(),
+        field: z.string().optional(),
+        code: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
 const STREAM_KEYS = [
   "time",
   "distance",
@@ -99,9 +116,26 @@ async function refreshToken(
   });
 
   if (!response.ok) {
+    // The status alone does not say *what* Strava rejected: a revoked refresh
+    // token and a wrong client id/secret both come back 400/401. Only the body
+    // distinguishes them, and the distinction matters beyond the error message —
+    // the webhook's deauthorization check treats UNAUTHORIZED as proof that
+    // access is gone and deletes the athlete's data on it. Reading a
+    // misconfigured app's rejection as "every athlete revoked us" would re-arm
+    // exactly the mass-delete that check exists to prevent, so anything we can't
+    // positively attribute to the grant stays inconclusive.
+    if (
+      (response.status === 400 || response.status === 401) &&
+      (await isRefreshTokenRejection(response))
+    ) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Strava session expired. Please sign in again.",
+      });
+    }
     throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Strava token refresh failed. Please sign in again.",
+      code: "BAD_GATEWAY",
+      message: `Strava token refresh failed (${response.status} ${response.statusText}).`,
     });
   }
 
@@ -118,6 +152,37 @@ async function refreshToken(
     .where(eq(athletes.id, athleteId));
 
   return data.access_token;
+}
+
+/**
+ * True only when Strava's rejection names the refresh token / grant — i.e. the
+ * athlete really did revoke us, or the token was already rotated away.
+ *
+ * A rejection blaming the *application* (`resource: "Application"`, a
+ * `client_id`/`client_secret` field) means our own credentials are wrong, which
+ * says nothing about the athlete's authorization. An unreadable or unfamiliar
+ * body is treated the same way: inconclusive, so callers keep the data.
+ */
+async function isRefreshTokenRejection(response: Response): Promise<boolean> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return false;
+  }
+
+  const parsed = stravaOAuthErrorSchema.safeParse(body);
+  if (!parsed.success || !parsed.data.errors?.length) {
+    return false;
+  }
+
+  return parsed.data.errors.some((error) => {
+    const subject =
+      `${error.resource ?? ""} ${error.field ?? ""}`.toLowerCase();
+    return (
+      subject.includes("refreshtoken") || subject.includes("refresh_token")
+    );
+  });
 }
 
 /**
