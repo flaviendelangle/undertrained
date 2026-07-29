@@ -8,3 +8,8 @@ coverage/
 playwright/test-results/
 tsconfig.tsbuildinfo
 .eslintcache
+
+# Agent scratch space. Ignored globally rather than by this repo, so CI never
+# sees it — but a git worktree under here is a whole second copy of the tree,
+# and `prettier --check .` would happily scan it.
+.claude/

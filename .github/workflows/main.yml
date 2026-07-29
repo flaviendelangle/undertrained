@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# Nothing here touches the API — checkout, install, lint, build, test. Pinning
+# the token to read means a future step (or a compromised action further down
+# the dependency chain) can't write to the repository.
+permissions:
+  contents: read
+
 # On a PR, a new push makes the in-flight run obsolete — cancel it. On main
 # every commit is a deploy candidate, so let those runs finish.
 concurrency:
@@ -31,11 +37,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # `!cancelled()` keeps the later checks running after an earlier failure,
-      # so one push reports every problem instead of only the first.
       - name: Prettier
         run: pnpm prettier-check
 
+      # From here down, `!cancelled()` keeps each check running after an earlier
+      # one failed, so a single push reports every problem instead of only the
+      # first. (Prettier above is the first check, so the guard would be a no-op
+      # there.)
       - name: ESLint
         if: ${{ !cancelled() }}
         run: pnpm lint

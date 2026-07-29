@@ -245,9 +245,9 @@ function JournalWeekViewImpl({
   //   1. `jumpToWeek(n)` records the pending target in `pendingScrollTarget`.
   //   2. React re-renders with the target included in the virtualizer's range
   //      and commits the target's `WeekBlock` to the DOM.
-  //   3. The `useLayoutEffect` below sees the new target, calls
-  //      `scrollToIndex` (now snap-safe because the target is mounted), and
-  //      registers a `scrollend` listener to drop the pin once the
+  //   3. The first `useLayoutEffect` below sees the new target and calls
+  //      `scrollToIndex` (now snap-safe because the target is mounted); the
+  //      second registers a `scrollend` listener that drops the pin once the
   //      virtualizer's natural range has caught up.
   const [pendingScrollTarget, setPendingScrollTarget] = React.useState<
     number | null
@@ -265,20 +265,29 @@ function JournalWeekViewImpl({
       align: "end",
       behavior: "instant",
     });
-    // Intentional: clearing the pin is the second half of the two-phase scroll
-    // described above. It has to happen here, after `scrollToIndex`, and
-    // `pendingScrollTarget` has to be state (not a ref) because phase 2 relies
-    // on the re-render that mounts the target in the virtualizer's range.
+    // Intentional: `pendingScrollTarget` is a one-shot request, so consuming it
+    // here is the point. It has to be state and not a ref because phase 2 above
+    // relies on the re-render it triggers to mount the target in the
+    // virtualizer's range before this effect scrolls to it.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPendingScrollTarget(null);
+  }, [pendingScrollTarget, virtualizer]);
+
+  // Phase 3, deliberately its own effect: the one above clears its own
+  // dependency, so its cleanup runs on the very next render — a `scrollend`
+  // listener registered there would be torn down before it could ever fire,
+  // leaving the target pinned (and rendered outside the virtualizer's range)
+  // for the rest of the session. Keyed on `pinnedIndex`, the listener outlives
+  // that render and survives until the scroll actually settles.
+  React.useLayoutEffect(() => {
     const scroller = scrollRef.current;
-    if (!scroller) {
+    if (pinnedIndex == null || !scroller) {
       return;
     }
     const onScrollEnd = () => setPinnedIndex(null);
     scroller.addEventListener("scrollend", onScrollEnd, { once: true });
     return () => scroller.removeEventListener("scrollend", onScrollEnd);
-  }, [pendingScrollTarget, virtualizer]);
+  }, [pinnedIndex]);
 
   // On mount, land on the anchor week. Once the scroll has settled, open URL
   // reporting so the next sync comes from a genuine user scroll.
