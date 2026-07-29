@@ -75,14 +75,12 @@ function downsample(
 interface PowerHrChartProps {
   dataPoints: SessionDataPoint[];
   ftp: number;
-  /** Rider's max heart rate, used to size the HR axis. */
-  maxHr: number;
   /** Show all data instead of a rolling window (for post-session view) */
   showAll?: boolean;
 }
 
 export function PowerHrChart(props: PowerHrChartProps) {
-  const { dataPoints, ftp, maxHr, showAll = false } = props;
+  const { dataPoints, ftp, showAll = false } = props;
   const t = useT();
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
@@ -133,16 +131,17 @@ export function PowerHrChart(props: PowerHrChartProps) {
     [points],
   );
 
-  // Bounds follow the data, with the rider's configured max as a fallback, so
-  // sprints above a hardcoded ceiling are no longer flat-topped.
+  // Bounds follow the data, so sprints above a hardcoded ceiling are no longer
+  // flat-topped. With no readings at all the line isn't drawn, so the fallback
+  // range only has to be a plausible-looking empty axis.
   const hrBounds = React.useMemo(() => {
     const observed = hrValues.filter((v): v is number => v != null);
-    if (observed.length === 0) return { min: 60, max: Math.max(maxHr, 120) };
+    if (observed.length === 0) return { min: 60, max: 200 };
     return {
       min: Math.max(0, Math.min(...observed) - HR_AXIS_PADDING),
       max: Math.max(...observed) + HR_AXIS_PADDING,
     };
-  }, [hrValues, maxHr]);
+  }, [hrValues]);
 
   const series = React.useMemo(
     () => [

@@ -73,7 +73,6 @@ export default function LiveTrainingPage() {
           chartData={ctrl.chartData}
           ftp={ctrl.riderSettings.ftp}
           weightKg={ctrl.riderSettings.weightKg}
-          maxHr={ctrl.riderSettings.maxHr}
           onPause={ctrl.session.pause}
           onStop={ctrl.handleStop}
         />
@@ -132,7 +131,6 @@ export default function LiveTrainingPage() {
           chartData={ctrl.chartData}
           dataPoints={ctrl.recorder.getDataPoints()}
           ftp={ctrl.riderSettings.ftp}
-          maxHr={ctrl.riderSettings.maxHr}
           onReset={ctrl.handleReset}
         />
       )}

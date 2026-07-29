@@ -107,3 +107,20 @@ export class SpeedSimulator {
 export function msToKmh(ms: number): number {
   return ms * 3.6;
 }
+
+/**
+ * Metres covered at `speedMs` over `deltaSeconds` of real time.
+ *
+ * The recorder must not assume one second per sample: browsers throttle timers
+ * in background tabs to roughly one tick per minute, and crediting a throttled
+ * tick with a single second of travel is what made distance collapse while the
+ * tab was hidden. A missing, non-positive or non-finite input contributes
+ * nothing rather than moving the rider backwards.
+ */
+export function distanceIncrementMeters(
+  speedMs: number | null,
+  deltaSeconds: number,
+): number {
+  if (speedMs == null || !(speedMs > 0) || !(deltaSeconds > 0)) return 0;
+  return speedMs * deltaSeconds;
+}

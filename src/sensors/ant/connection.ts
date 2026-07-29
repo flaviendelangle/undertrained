@@ -10,6 +10,14 @@ let sharedStick: import("ant-plus-next").WebUsbStick | null = null;
 let stickReady = false;
 let stickOpenPromise: Promise<import("ant-plus-next").WebUsbStick> | null = null;
 let stickRefCount = 0;
+/**
+ * Connections that have acquired the stick but have not finished attaching
+ * yet. They are not in `stickRefCount` — a reference is only taken once
+ * `attach()` has returned — so without counting them separately, one sensor's
+ * failed attach would see a refcount of 0 and close the stick out from under
+ * another sensor that is still handshaking on it.
+ */
+let stickPendingCount = 0;
 
 /** How long to wait for the stick's startup handshake. */
 const STARTUP_TIMEOUT_MS = 10_000;
@@ -111,27 +119,44 @@ function closeStick(): void {
   stickOpenPromise = null;
 }
 
-/**
- * Releases one reference to the shared stick.
- *
- * Only a connection that actually completed `attach()` holds a reference — see
- * `holdsStick` on each connection class. Counting an aborted connect, or a
- * `disconnect()` on a sensor that never connected, would either strand the
- * stick open (leaving the WebUSB device claimed until the browser restarts) or
- * close it out from under the other sensor.
- */
-function releaseStick(): void {
-  stickRefCount = Math.max(0, stickRefCount - 1);
-  if (stickRefCount === 0) {
+/** Nobody is using the stick, and nobody is in the middle of claiming it. */
+function closeStickIfIdle(): void {
+  if (stickRefCount === 0 && stickPendingCount === 0 && sharedStick) {
     closeStick();
   }
 }
 
-/** Closes the stick if the failed connect left nobody using it. */
-function closeStickIfUnused(): void {
-  if (stickRefCount === 0 && sharedStick) {
-    closeStick();
+/**
+ * Marks the start of a connect attempt, before the stick has been acquired.
+ *
+ * Must be paired with exactly one `endStickUse()` on every exit path,
+ * including the ones that throw.
+ */
+function beginStickUse(): void {
+  stickPendingCount++;
+}
+
+/**
+ * Marks the end of a connect attempt. `kept` is true only when the connection
+ * completed `attach()` and is taking a reference — see `holdsStick` on each
+ * connection class. Counting an aborted connect, or a `disconnect()` on a
+ * sensor that never connected, would either strand the stick open (leaving the
+ * WebUSB device claimed until the browser restarts) or close it out from under
+ * the other sensor.
+ */
+function endStickUse(kept: boolean): void {
+  stickPendingCount = Math.max(0, stickPendingCount - 1);
+  if (kept) {
+    stickRefCount++;
+    return;
   }
+  closeStickIfIdle();
+}
+
+/** Releases one reference to the shared stick. */
+function releaseStick(): void {
+  stickRefCount = Math.max(0, stickRefCount - 1);
+  closeStickIfIdle();
 }
 
 /** FE-C page 25 target status, or null once it stops being reported. */
@@ -153,6 +178,14 @@ function isValidFecSpeed(speed: number | undefined): speed is number {
   return speed != null && speed < FEC_IMPLAUSIBLE_SPEED_MS;
 }
 
+/**
+ * Rolling resistance used for the track-resistance page when no rider setting
+ * is supplied — the same asphalt-on-slicks figure the speed simulator
+ * defaults to. FE-C encodes it as `Crr × 2×10⁴` in a byte, so anything up to
+ * 0.0127 survives the trip.
+ */
+const DEFAULT_ROLLING_RESISTANCE = 0.004;
+
 // Fixed channel assignment: HR always uses channel 0, trainer always uses channel 1
 const HR_CHANNEL = 0;
 const TRAINER_CHANNEL = 1;
@@ -163,6 +196,7 @@ export class AntHeartRateConnection {
     | ((state: import("ant-plus-next").HeartRateSensorState) => void)
     | null = null;
   private holdsStick = false;
+  private disposed = false;
 
   async connect(params: {
     onData: (data: HeartRateData) => void;
@@ -170,7 +204,16 @@ export class AntHeartRateConnection {
   }): Promise<void> {
     const { HeartRateSensor } = await import("ant-plus-next");
 
-    const stick = await acquireStick();
+    this.disposed = false;
+    beginStickUse();
+
+    let stick: import("ant-plus-next").WebUsbStick;
+    try {
+      stick = await acquireStick();
+    } catch (err) {
+      endStickUse(false);
+      throw err;
+    }
     log("HR: Stick ready, attaching sensor on channel", HR_CHANNEL);
 
     const sensor = new HeartRateSensor(stick);
@@ -193,29 +236,48 @@ export class AntHeartRateConnection {
       await sensor.attach(HR_CHANNEL, 0);
     } catch (err) {
       this.handler = null;
-      closeStickIfUnused();
+      endStickUse(false);
       throw err;
+    }
+
+    if (this.disposed) {
+      // Raced with disconnect(). Undo the attach rather than taking a stick
+      // reference for a connection nobody holds any more — that reference
+      // would never be released, and the WebUSB device would stay claimed
+      // until the browser restarts.
+      await this.detachSensor(sensor);
+      endStickUse(false);
+      return;
     }
 
     // Only now do we own a reference to the stick.
     this.sensor = sensor;
-    stickRefCount++;
+    endStickUse(true);
     this.holdsStick = true;
     log("HR: attach() returned");
   }
 
-  async disconnect(): Promise<void> {
-    if (this.sensor) {
-      if (this.handler) {
-        this.sensor.removeListener("heartRateData", this.handler);
-      }
-      try {
-        await this.sensor.detach();
-      } catch {
-        // May already be detached
-      }
-      this.sensor = null;
+  private async detachSensor(
+    sensor: import("ant-plus-next").HeartRateSensor,
+  ): Promise<void> {
+    if (this.handler) {
+      sensor.removeListener("heartRateData", this.handler);
       this.handler = null;
+    }
+    try {
+      await sensor.detach();
+    } catch {
+      // May already be detached
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    this.disposed = true;
+
+    if (this.sensor) {
+      const sensor = this.sensor;
+      this.sensor = null;
+      await this.detachSensor(sensor);
     }
     if (this.holdsStick) {
       this.holdsStick = false;
@@ -266,7 +328,15 @@ export class AntTrainerConnection {
       await import("ant-plus-next");
 
     this.disposed = false;
-    const stick = await acquireStick();
+    beginStickUse();
+
+    let stick: import("ant-plus-next").WebUsbStick;
+    try {
+      stick = await acquireStick();
+    } catch (err) {
+      endStickUse(false);
+      throw err;
+    }
     log(
       "Trainer: Stick ready, attaching FE-C sensor on channel",
       TRAINER_CHANNEL,
@@ -319,12 +389,28 @@ export class AntTrainerConnection {
       await feSensor.attach(TRAINER_CHANNEL, 0);
     } catch (err) {
       this.feHandler = null;
-      closeStickIfUnused();
+      endStickUse(false);
       throw err;
     }
 
+    if (this.disposed) {
+      // Raced with disconnect() — undo the attach rather than taking a stick
+      // reference nobody will ever release.
+      if (this.feHandler) {
+        feSensor.removeListener("fitnessData", this.feHandler);
+        this.feHandler = null;
+      }
+      try {
+        await feSensor.detach();
+      } catch {
+        // May already be detached
+      }
+      endStickUse(false);
+      return;
+    }
+
     this.feSensor = feSensor;
-    stickRefCount++;
+    endStickUse(true);
     this.holdsStick = true;
     log("Trainer: FE-C attach() returned");
 
@@ -423,6 +509,23 @@ export class AntTrainerConnection {
     await this.feSensor.setTargetPower(
       Math.max(0, Math.min(MAX_TARGET_POWER_WATTS, Math.round(watts))),
     );
+  }
+
+  /**
+   * Leaves ERG and hands the road feel back to the trainer.
+   *
+   * FE-C target power (page 49) is sticky: the trainer stays in it until a
+   * *different* control page arrives. Writing a 0 W target would therefore not
+   * end ERG at all — it would hold the rider in ERG at zero watts, i.e. a
+   * free-spinning flywheel. Track resistance (page 51) at 0% grade is the
+   * documented way out, and leaves the flat-road feel a rider expects after
+   * switching ERG off.
+   */
+  async releaseControl(
+    rollingResistanceCoeff = DEFAULT_ROLLING_RESISTANCE,
+  ): Promise<void> {
+    if (!this.feSensor || !this.controlAvailable) return;
+    await this.feSensor.setTrackResistance(0, rollingResistanceCoeff);
   }
 
   async disconnect(): Promise<void> {

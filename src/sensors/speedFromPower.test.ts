@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { SpeedSimulator, msToKmh } from "./speedFromPower";
+import {
+  SpeedSimulator,
+  distanceIncrementMeters,
+  msToKmh,
+} from "./speedFromPower";
 
 /** Rider 75 kg + bike 8 kg, as the app's default settings resolve. */
 const TOTAL_MASS_KG = 83;
@@ -113,5 +117,34 @@ describe("SpeedSimulator", () => {
     expect(sim.getSpeed()).toBeGreaterThan(0);
     sim.reset();
     expect(sim.getSpeed()).toBe(0);
+  });
+});
+
+describe("distanceIncrementMeters", () => {
+  it("credits a sample with the ground it actually covered", () => {
+    expect(distanceIncrementMeters(10, 1)).toBe(10);
+    expect(distanceIncrementMeters(10, 0.5)).toBe(5);
+  });
+
+  it("gives a throttled 60 s tick the same distance as sixty 1 s ticks", () => {
+    // The bug this replaced credited every tick with one second regardless of
+    // how long the browser had actually let the timer sleep, so a backgrounded
+    // tab recorded 1/60th of the distance the rider covered.
+    const throttled = distanceIncrementMeters(10, 60);
+    let stepped = 0;
+    for (let i = 0; i < 60; i++) stepped += distanceIncrementMeters(10, 1);
+    expect(throttled).toBeCloseTo(stepped, 9);
+    expect(throttled).toBe(600);
+  });
+
+  it("contributes nothing when the rider is not moving", () => {
+    expect(distanceIncrementMeters(null, 1)).toBe(0);
+    expect(distanceIncrementMeters(0, 1)).toBe(0);
+  });
+
+  it("never moves the rider backwards on a bad time step", () => {
+    expect(distanceIncrementMeters(10, 0)).toBe(0);
+    expect(distanceIncrementMeters(10, -5)).toBe(0);
+    expect(distanceIncrementMeters(10, Number.NaN)).toBe(0);
   });
 });

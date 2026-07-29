@@ -17,7 +17,6 @@ interface HudMainViewProps {
   chartData: SessionDataPoint[];
   ftp: number;
   weightKg: number;
-  maxHr: number;
   // Actions
   onPause: () => void;
   onStop: () => void;
@@ -33,7 +32,6 @@ export function HudMainView({
   chartData,
   ftp,
   weightKg,
-  maxHr,
   onPause,
   onStop,
 }: HudMainViewProps) {
@@ -172,7 +170,7 @@ export function HudMainView({
       {/* Bottom chart strip */}
       {chartData.length > 0 && (
         <div className="border-border/30 bg-background/80 h-48 border-t px-1 py-1 sm:px-4 sm:py-2">
-          <PowerHrChart dataPoints={chartData} ftp={ftp} maxHr={maxHr} />
+          <PowerHrChart dataPoints={chartData} ftp={ftp} />
         </div>
       )}
     </div>

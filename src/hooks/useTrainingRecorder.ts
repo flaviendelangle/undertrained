@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { computeSessionSummary } from "~/sensors/sessionSummary";
+import { distanceIncrementMeters } from "~/sensors/speedFromPower";
 import type { SessionDataPoint, SessionSummary } from "~/sensors/types";
 
 export function useTrainingRecorder() {
@@ -16,12 +17,7 @@ export function useTrainingRecorder() {
       cadence: number | null;
       speed: number | null;
       elapsed: number;
-      /**
-       * Real seconds covered by this sample. The recorder must not assume 1 s
-       * per point: browsers throttle timers in background tabs to roughly one
-       * tick per minute, and crediting a throttled tick with a single second
-       * of travel is what made distance collapse while the tab was hidden.
-       */
+      /** Real seconds covered by this sample — see `distanceIncrementMeters`. */
       deltaSeconds: number;
     }) => {
       if (!startTimeRef.current) {
@@ -31,11 +27,10 @@ export function useTrainingRecorder() {
       const points = dataPointsRef.current;
       const prevDistance =
         points.length > 0 ? points[points.length - 1].distance : 0;
-      // speed is in m/s over `deltaSeconds` of real time
-      const distanceIncrement =
-        data.speed != null && data.speed > 0
-          ? data.speed * Math.max(0, data.deltaSeconds)
-          : 0;
+      const distanceIncrement = distanceIncrementMeters(
+        data.speed,
+        data.deltaSeconds,
+      );
 
       points.push({
         timestamp: Date.now(),

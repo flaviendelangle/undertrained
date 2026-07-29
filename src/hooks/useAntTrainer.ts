@@ -50,14 +50,17 @@ export function useAntTrainer() {
     await connectionRef.current.setTargetPower(watts);
   }, []);
 
-  /** FE-C has no persistent control grant to hand back — see useBleTrainer. */
-  const releaseControl = useCallback(async () => {
-    // Dropping the target to 0 W is the closest FE-C equivalent of an FTMS
-    // Reset: it stops the trainer holding the rider at the last ERG target.
-    if (connectionRef.current.supportsControl) {
-      await connectionRef.current.setTargetPower(0);
-    }
-  }, []);
+  /**
+   * Ends ERG. FE-C has no persistent control grant to hand back the way FTMS
+   * does — see useBleTrainer — so this switches the trainer to flat-road
+   * simulation instead. `rollingResistanceCoeff` is the rider's configured Crr.
+   */
+  const releaseControl = useCallback(
+    async (rollingResistanceCoeff?: number) => {
+      await connectionRef.current.releaseControl(rollingResistanceCoeff);
+    },
+    [],
+  );
 
   useEffect(() => {
     const connection = connectionRef.current;

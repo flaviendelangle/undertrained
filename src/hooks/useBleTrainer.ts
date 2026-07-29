@@ -212,12 +212,18 @@ export function useBleTrainer() {
    * Hands control back to the trainer, ending ERG mode. Without this a trainer
    * stays locked at the last target after ERG is switched off, because the
    * only Reset used to be the one on disconnect.
+   *
+   * The rolling resistance the ANT+ side needs has no FTMS equivalent — Reset
+   * returns the machine to whatever road feel it defaults to.
    */
-  const releaseControl = useCallback(async () => {
-    if (ftmsControlRef.current) {
-      await ftmsControlRef.current.reset();
-    }
-  }, []);
+  const releaseControl = useCallback(
+    async (_rollingResistanceCoeff?: number) => {
+      if (ftmsControlRef.current) {
+        await ftmsControlRef.current.reset();
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const connection = connectionRef.current;

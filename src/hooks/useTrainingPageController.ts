@@ -48,7 +48,9 @@ export function useTrainingPageController() {
 
   // ERG mode
   const ergMode = useErgMode();
-  const [ergError, setErgError] = useState<string | null>(null);
+  // Whether the trainer rejected or ignored the last target. The message
+  // itself only ever went to the console, so this is a flag, not a string.
+  const [ergError, setErgError] = useState(false);
 
   // Session management
   const session = useTrainingSession();
@@ -168,19 +170,24 @@ export function useTrainingPageController() {
   }, [session.state, startRecording, stopRecording]);
 
   /**
-   * Begins a session from a clean slate. Every entry point goes through this —
-   * auto-start used to reset the chart and the speed simulator while the
-   * manual button only cleared the recorder, so a manually started session
-   * inherited the previous ride's speed and chart.
+   * Clears everything derived from a recorded ride. Starting and resetting
+   * both go through this, so a field added here can't be forgotten by one of
+   * them — which is the bug that let a manually started session inherit the
+   * previous ride's speed and chart.
    */
-  const startSession = useCallback(() => {
+  const clearRideState = useCallback(() => {
     clearRecorder();
     setChartData([]);
     setDistanceMeters(0);
     speedSimRef.current.reset();
     setCurrentSpeedMs(0);
+  }, [clearRecorder]);
+
+  /** Begins a session from a clean slate. Every entry point goes through this. */
+  const startSession = useCallback(() => {
+    clearRideState();
     sessionRef.current.start();
-  }, [clearRecorder, sessionRef]);
+  }, [clearRideState, sessionRef]);
 
   // Destructure stable setters so eslint can track dependencies
   const { setSupportsControl, setErgEnabled } = ergMode;
@@ -203,16 +210,20 @@ export function useTrainingPageController() {
     if (!ergMode.ergEnabled || !trainer.supportsControl) return;
     ergSyncTimeout.start(200, () => {
       setTargetPower(ergMode.targetPower).then(
-        () => setErgError(null),
+        () => setErgError(false),
         (err: unknown) => {
           console.error("[ERG] Failed to set target power:", err);
-          setErgError(err instanceof Error ? err.message : String(err));
+          // A command superseded by the release that runs when ERG is switched
+          // off is not the trainer refusing anything — don't light up a panel
+          // the rider has just dismissed.
+          if (ergEnabledRef.current) setErgError(true);
         },
       );
     });
     return ergSyncTimeout.clear;
   }, [
     ergSyncTimeout,
+    ergEnabledRef,
     ergMode.ergEnabled,
     ergMode.targetPower,
     trainer.supportsControl,
@@ -229,11 +240,11 @@ export function useTrainingPageController() {
     }
     if (!ergWasEnabledRef.current) return;
     ergWasEnabledRef.current = false;
-    setErgError(null);
-    releaseControl().catch((err: unknown) => {
+    setErgError(false);
+    releaseControl(riderSettingsRef.current.crr).catch((err: unknown) => {
       console.error("[ERG] Failed to release trainer control:", err);
     });
-  }, [ergMode.ergEnabled, releaseControl]);
+  }, [ergMode.ergEnabled, releaseControl, riderSettingsRef]);
 
   // Auto-start when power is detected while idle
   useEffect(() => {
@@ -275,12 +286,8 @@ export function useTrainingPageController() {
 
   const handleReset = useCallback(() => {
     session.reset();
-    clearRecorder();
-    setChartData([]);
-    setDistanceMeters(0);
-    speedSimRef.current.reset();
-    setCurrentSpeedMs(0);
-  }, [session, clearRecorder]);
+    clearRideState();
+  }, [session, clearRideState]);
 
   return {
     // Sensor source selection

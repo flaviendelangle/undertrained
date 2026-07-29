@@ -9,8 +9,8 @@ interface HudWaitingScreenProps {
   targetPower: number;
   onTargetPowerChange: (watts: number) => void;
   supportsControl: boolean;
-  /** Last ERG command failure, if the trainer rejected or ignored it. */
-  ergError: string | null;
+  /** Whether the trainer rejected or ignored the last ERG command. */
+  ergError: boolean;
   /** FE-C target status: the trainer can't hold the target at this speed. */
   ergTargetStatus: "OnTarget" | "LowSpeed" | "HighSpeed" | null;
 }
@@ -110,64 +110,72 @@ export function HudWaitingScreen({
             </div>
 
             {ergEnabled && (
-              <div className="flex items-center justify-center gap-3">
-                <button
-                  type="button"
-                  aria-label={t("liveTraining.targetPowerStep", { step: "-10" })}
-                  onClick={() => onTargetPowerChange(targetPower - 10)}
-                  className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                >
-                  -10
-                </button>
-                <button
-                  type="button"
-                  aria-label={t("liveTraining.targetPowerStep", { step: "-5" })}
-                  onClick={() => onTargetPowerChange(targetPower - 5)}
-                  className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                >
-                  -5
-                </button>
-                <span className="min-w-20 text-center font-mono text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                  {targetPower}
-                  <span className="text-muted-foreground ml-1 text-xs font-normal">
-                    W
+              <>
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    aria-label={t("liveTraining.targetPowerStep", { step: "-10" })}
+                    onClick={() => onTargetPowerChange(targetPower - 10)}
+                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                  >
+                    -10
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("liveTraining.targetPowerStep", { step: "-5" })}
+                    onClick={() => onTargetPowerChange(targetPower - 5)}
+                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                  >
+                    -5
+                  </button>
+                  <span className="min-w-20 text-center font-mono text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                    {targetPower}
+                    <span className="text-muted-foreground ml-1 text-xs font-normal">
+                      W
+                    </span>
                   </span>
-                </span>
-                <button
-                  type="button"
-                  aria-label={t("liveTraining.targetPowerStep", { step: "+5" })}
-                  onClick={() => onTargetPowerChange(targetPower + 5)}
-                  className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                >
-                  +5
-                </button>
-                <button
-                  type="button"
-                  aria-label={t("liveTraining.targetPowerStep", { step: "+10" })}
-                  onClick={() => onTargetPowerChange(targetPower + 10)}
-                  className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                >
-                  +10
-                </button>
-              </div>
-            )}
+                  <button
+                    type="button"
+                    aria-label={t("liveTraining.targetPowerStep", { step: "+5" })}
+                    onClick={() => onTargetPowerChange(targetPower + 5)}
+                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                  >
+                    +5
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("liveTraining.targetPowerStep", { step: "+10" })}
+                    onClick={() => onTargetPowerChange(targetPower + 10)}
+                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                  >
+                    +10
+                  </button>
+                </div>
 
-            {ergError && (
-              <p role="alert" className="text-center text-xs text-red-400">
-                {t("liveTraining.ergFailed")}
-              </p>
-            )}
+                {ergError && (
+                  <p role="alert" className="text-center text-xs text-red-400">
+                    {t("liveTraining.ergFailed")}
+                  </p>
+                )}
 
-            {/* The trainer reports it cannot reach the target in this gear. */}
-            {!ergError && ergTargetStatus === "LowSpeed" && (
-              <p role="status" className="text-center text-xs text-yellow-500">
-                {t("liveTraining.ergShiftUp")}
-              </p>
-            )}
-            {!ergError && ergTargetStatus === "HighSpeed" && (
-              <p role="status" className="text-center text-xs text-yellow-500">
-                {t("liveTraining.ergShiftDown")}
-              </p>
+                {/* The trainer reports it cannot reach the target in this gear. */}
+                {!ergError && ergTargetStatus === "LowSpeed" && (
+                  <p
+                    role="status"
+                    className="text-center text-xs text-yellow-500"
+                  >
+                    {t("liveTraining.ergShiftUp")}
+                  </p>
+                )}
+                {!ergError && ergTargetStatus === "HighSpeed" && (
+                  <p
+                    role="status"
+                    className="text-center text-xs text-yellow-500"
+                  >
+                    {t("liveTraining.ergShiftDown")}
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}

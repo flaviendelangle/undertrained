@@ -10,12 +10,12 @@ import { MAX_TARGET_POWER_WATTS } from "../types";
  * - 0x07  Start or Resume
  *
  * Response notifications: [0x80, requestOpCode, resultCode]
- *   resultCode 0x01 = success
+ *   resultCode 0x01 = success, 0x05 = control not permitted
  *
  * Every command waits for its response notification rather than for the GATT
  * write to complete. The machine grants control asynchronously, so resolving
  * on the write would let a Set Target Power race ahead of the grant and be
- * rejected. A non-success result also drops the cached grant, because a
+ * rejected. A "control not permitted" result drops the cached grant, because a
  * machine that reclaims control (its own stop/pause, or a control-point
  * timeout) would otherwise reject every later command while this class kept
  * believing it still had control.
@@ -26,6 +26,13 @@ const OP_SET_TARGET_POWER = 0x05;
 const OP_START_OR_RESUME = 0x07;
 
 const RESULT_SUCCESS = 0x01;
+/**
+ * The one result code that says our control grant is gone: the machine has
+ * taken control back, through its own stop/pause or a control-point timeout.
+ * Every other failure (Op Code not supported, Invalid Parameter, Operation
+ * Failed) rejects that one command and says nothing about the grant.
+ */
+const RESULT_CONTROL_NOT_PERMITTED = 0x05;
 const RESPONSE_PREFIX = 0x80;
 
 /** How long to wait for the machine's response notification. */
@@ -64,8 +71,13 @@ export class FtmsControlPoint {
       const result = dv.getUint8(2);
       this.onResponse?.(opCode, result);
 
-      if (result !== RESULT_SUCCESS) {
+      if (result === RESULT_CONTROL_NOT_PERMITTED) {
         // The machine no longer honours our grant — re-request it next time.
+        // Dropping the grant on *every* failure would defeat `ensureStarted`:
+        // a machine that answers Start or Resume with "Op Code not supported"
+        // would have its grant cleared, forcing a Request Control that resets
+        // `hasStarted`, so the unsupported op code was re-sent on every single
+        // target change.
         this.hasControl = false;
         this.hasStarted = false;
       }
@@ -124,6 +136,13 @@ export class FtmsControlPoint {
     try {
       await this.characteristic.writeValueWithResponse(payload);
     } catch (error) {
+      // We are about to throw instead of returning `acknowledged`, so nobody
+      // will ever await it. Claim its rejection first, or settling below
+      // surfaces as an unhandled promise rejection — on exactly the path that
+      // runs when the trainer drops mid-ride.
+      acknowledged.catch(() => {
+        // Reported to the caller by the throw below instead.
+      });
       this.settle(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
