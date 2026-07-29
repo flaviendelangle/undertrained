@@ -142,9 +142,7 @@ describe("repeatSpans", () => {
 
   it("stops the drawable end at the last effort, not the trailing recovery", () => {
     const segments = flattenWorkout(nestedWorkout());
-    const inner = repeatSpans(segments).filter(
-      (s) => s.repeatId === "inner",
-    )[0];
+    const inner = repeatSpans(segments).find((s) => s.repeatId === "inner")!;
 
     // The block ends with a 60 s recovery; a bracket drawn to `endSeconds`
     // would overhang the bars it labels by exactly that.
