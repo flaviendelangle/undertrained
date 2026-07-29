@@ -12,6 +12,7 @@ import {
   MenuIcon,
   MoonIcon,
   PlayCircleIcon,
+  RepeatIcon,
   SettingsIcon,
   ShieldCheckIcon,
   SunIcon,
@@ -27,7 +28,10 @@ import { Tooltip, TooltipProps } from "~/components/primitives/Tooltip";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { useT } from "~/i18n/useT";
-import { isLiveTrainingEnabled } from "~/lib/features";
+import {
+  isLiveTrainingEnabled,
+  isStructuredWorkoutsEnabled,
+} from "~/lib/features";
 import { cn } from "~/lib/utils";
 
 import { NavBarContext } from "./NavBarContext";
@@ -219,6 +223,15 @@ export function NavBar() {
               />
             </TooltipIfMenuCollapsed>
           )}
+          {isStructuredWorkoutsEnabled && (
+            <TooltipIfMenuCollapsed label={t("nav.workouts")}>
+              <NavBarLink
+                icon={RepeatIcon}
+                label={t("nav.workouts")}
+                href="/workouts"
+              />
+            </TooltipIfMenuCollapsed>
+          )}
           <TooltipIfMenuCollapsed label={t("nav.toolbox")}>
             <NavBarLink
               icon={WrenchIcon}
@@ -352,6 +365,16 @@ export function MobileBottomBar() {
             >
               <PlayCircleIcon className="size-4" />
               {t("nav.liveTraining")}
+            </Link>
+          )}
+          {isStructuredWorkoutsEnabled && (
+            <Link
+              href="/workouts"
+              className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
+              onClick={() => setMoreOpen(false)}
+            >
+              <RepeatIcon className="size-4" />
+              {t("nav.workouts")}
             </Link>
           )}
           <Link

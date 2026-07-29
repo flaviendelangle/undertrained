@@ -134,6 +134,13 @@
       "when": 1780550842328,
       "tag": "0018_black_viper",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785321412206,
+      "tag": "0019_classy_khan",
+      "breakpoints": true
     }
   ]
 }

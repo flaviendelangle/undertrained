@@ -3,23 +3,50 @@ import { useState } from "react";
 import type { GetServerSideProps } from "next";
 
 import { BrowserCompatibilityBanner } from "~/components/liveTraining/BrowserCompatibilityBanner";
+import { WorkoutPickerDialog } from "~/components/liveTraining/WorkoutPickerDialog";
 import { HudConnectionWizard } from "~/components/liveTraining/hud/HudConnectionWizard";
 import { HudMainView } from "~/components/liveTraining/hud/HudMainView";
 import { HudPauseOverlay } from "~/components/liveTraining/hud/HudPauseOverlay";
 import { HudPostTraining } from "~/components/liveTraining/hud/HudPostTraining";
 import { HudWaitingScreen } from "~/components/liveTraining/hud/HudWaitingScreen";
 import { SettingsCallout } from "~/components/primitives/SettingsCallout";
+import { useAthleteId } from "~/hooks/useAthleteId";
 import { useTrainingPageController } from "~/hooks/useTrainingPageController";
 import { useT } from "~/i18n/useT";
-import { isLiveTrainingEnabled } from "~/lib/features";
+import {
+  isLiveTrainingEnabled,
+  isStructuredWorkoutsEnabled,
+} from "~/lib/features";
+import { trpc } from "~/utils/trpc";
 
 // Live Training is opt-in (see next.config.ts). When it's disabled the route
 // is hidden entirely — a direct visit gets a real 404 rather than the page.
-export const getServerSideProps: GetServerSideProps = async () => {
+interface LiveTrainingPageProps {
+  /**
+   * Deep link from the workouts library or the Journal
+   * (`/live-training?workoutId=123`). Resolved here rather than in an effect so
+   * the ride never flashes as a free ride before the workout loads. Ownership is
+   * still enforced server-side by the tRPC procedure that fetches it.
+   */
+  initialWorkoutId: number | null;
+}
+
+export const getServerSideProps: GetServerSideProps<
+  LiveTrainingPageProps
+> = async ({ query }) => {
   if (!isLiveTrainingEnabled) {
     return { notFound: true };
   }
-  return { props: {} };
+  const raw = Array.isArray(query.workoutId)
+    ? query.workoutId[0]
+    : query.workoutId;
+  const parsed = raw != null ? Number(raw) : Number.NaN;
+  return {
+    props: {
+      initialWorkoutId:
+        isStructuredWorkoutsEnabled && Number.isFinite(parsed) ? parsed : null,
+    },
+  };
 };
 
 type Phase = "connection" | "waiting" | "main" | "paused" | "post";
@@ -42,9 +69,27 @@ function getPhase(
   return "connection";
 }
 
-export default function LiveTrainingPage() {
+export default function LiveTrainingPage({
+  initialWorkoutId,
+}: LiveTrainingPageProps) {
   const t = useT();
-  const ctrl = useTrainingPageController();
+  const athleteId = useAthleteId();
+  const [workoutId, setWorkoutId] = useState<number | null>(initialWorkoutId);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const { data: workoutRow } = trpc.structuredWorkouts.get.useQuery(
+    { athleteId: athleteId!, id: workoutId! },
+    { enabled: !!athleteId && workoutId != null },
+  );
+  // Only hand the controller a workout once it has actually loaded, so a slow
+  // fetch never leaves the player pointing at a stale tree.
+  const workout =
+    workoutId != null && workoutRow?.id === workoutId ? workoutRow : null;
+
+  const ctrl = useTrainingPageController({
+    workout,
+    autoStartSuspended: pickerOpen,
+  });
   // Set once the rider chooses to continue without a heart rate sensor.
   const [hrSkipped, setHrSkipped] = useState(false);
   const phase = getPhase(ctrl, hrSkipped);
@@ -73,6 +118,7 @@ export default function LiveTrainingPage() {
           chartData={ctrl.chartData}
           ftp={ctrl.riderSettings.ftp}
           weightKg={ctrl.riderSettings.weightKg}
+          workout={ctrl.workout}
           onPause={ctrl.session.pause}
           onStop={ctrl.handleStop}
         />
@@ -112,6 +158,17 @@ export default function LiveTrainingPage() {
           supportsControl={ctrl.ergMode.supportsControl}
           ergError={ctrl.ergError}
           ergTargetStatus={ctrl.ergTargetStatus}
+          workout={ctrl.workout}
+          onPickWorkout={() => setPickerOpen(true)}
+          onClearWorkout={() => setWorkoutId(null)}
+        />
+      )}
+
+      {isStructuredWorkoutsEnabled && (
+        <WorkoutPickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          onSelect={setWorkoutId}
         />
       )}
 
@@ -119,6 +176,7 @@ export default function LiveTrainingPage() {
       {phase === "paused" && (
         <HudPauseOverlay
           pausedSeconds={ctrl.session.pausedSeconds}
+          workout={ctrl.workout}
           onResume={ctrl.session.resume}
           onStop={ctrl.handleStop}
         />
@@ -131,6 +189,8 @@ export default function LiveTrainingPage() {
           chartData={ctrl.chartData}
           dataPoints={ctrl.recorder.getDataPoints()}
           ftp={ctrl.riderSettings.ftp}
+          workoutName={ctrl.workout?.name ?? null}
+          segments={ctrl.workout?.player.segments ?? null}
           onReset={ctrl.handleReset}
         />
       )}

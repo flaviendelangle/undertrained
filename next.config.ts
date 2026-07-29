@@ -22,6 +22,15 @@ const liveTrainingEnabled = process.env.LIVE_TRAINING_ENABLED === "true";
 const routesEnabled = process.env.ROUTES_ENABLED === "true";
 
 /**
+ * Structured workouts (the interval builder at /workouts, plus riding one in ERG
+ * mode from Live Training) are opt-in as well, behind
+ * STRUCTURED_WORKOUTS_ENABLED. Exposed to the client as
+ * NEXT_PUBLIC_STRUCTURED_WORKOUTS_ENABLED below.
+ */
+const structuredWorkoutsEnabled =
+  process.env.STRUCTURED_WORKOUTS_ENABLED === "true";
+
+/**
  * @see https://nextjs.org/docs/api-reference/next.config.js/introduction
  */
 const nextConfig = {
@@ -39,6 +48,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_LIVE_TRAINING_ENABLED: String(liveTrainingEnabled),
     NEXT_PUBLIC_ROUTES_ENABLED: String(routesEnabled),
+    NEXT_PUBLIC_STRUCTURED_WORKOUTS_ENABLED: String(structuredWorkoutsEnabled),
   },
   /** We run typechecking as a separate task in CI */
   typescript: {
