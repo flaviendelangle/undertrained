@@ -3,17 +3,20 @@ import { useState } from "react";
 import type { GetServerSideProps } from "next";
 
 import { BrowserCompatibilityBanner } from "~/components/liveTraining/BrowserCompatibilityBanner";
+import { WorkoutPickerDialog } from "~/components/liveTraining/WorkoutPickerDialog";
 import { HudConnectionWizard } from "~/components/liveTraining/hud/HudConnectionWizard";
 import { HudMainView } from "~/components/liveTraining/hud/HudMainView";
 import { HudPauseOverlay } from "~/components/liveTraining/hud/HudPauseOverlay";
 import { HudPostTraining } from "~/components/liveTraining/hud/HudPostTraining";
 import { HudWaitingScreen } from "~/components/liveTraining/hud/HudWaitingScreen";
-import { WorkoutPickerDialog } from "~/components/liveTraining/WorkoutPickerDialog";
 import { SettingsCallout } from "~/components/primitives/SettingsCallout";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useTrainingPageController } from "~/hooks/useTrainingPageController";
 import { useT } from "~/i18n/useT";
-import { isLiveTrainingEnabled, isStructuredWorkoutsEnabled } from "~/lib/features";
+import {
+  isLiveTrainingEnabled,
+  isStructuredWorkoutsEnabled,
+} from "~/lib/features";
 import { trpc } from "~/utils/trpc";
 
 // Live Training is opt-in (see next.config.ts). When it's disabled the route

@@ -1,15 +1,74 @@
-name: Testing
-on: [push]
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Nothing here touches the API — checkout, install, lint, build, test. Pinning
+# the token to read means a future step (or a compromised action further down
+# the dependency chain) can't write to the repository.
+permissions:
+  contents: read
+
+# On a PR, a new push makes the in-flight run obsolete — cancel it. On main
+# every commit is a deploy candidate, so let those runs finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  static:
+    name: Lint, format, types & unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # Must come before setup-node: `cache: pnpm` needs the pnpm binary to
+      # resolve the store path.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prettier
+        run: pnpm prettier-check
+
+      # From here down, `!cancelled()` keeps each check running after an earlier
+      # one failed, so a single push reports every problem instead of only the
+      # first. (Prettier above is the first check, so the guard would be a no-op
+      # there.)
+      - name: ESLint
+        if: ${{ !cancelled() }}
+        run: pnpm lint
+
+      - name: TypeScript
+        if: ${{ !cancelled() }}
+        run: pnpm typescript
+
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        run: pnpm test-unit --run
+
   e2e:
-    name: "Build + E2E tests"
+    name: Build & E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:17-alpine
         env:
+          # Throwaway credentials for a container that only ever listens on the
+          # runner's localhost and is destroyed with the job.
           POSTGRES_DB: undertrained
           POSTGRES_USER: undertrained
-          POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD || 'undertrained' }}
+          POSTGRES_PASSWORD: undertrained
         ports:
           - 5432:5432
         options: >-
@@ -20,92 +79,71 @@ jobs:
     env:
       NODE_ENV: test
       NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET || 'ci-test-secret-not-for-production' }}
-      DATABASE_URL: postgresql://undertrained:${{ secrets.CI_DB_PASSWORD || 'undertrained' }}@localhost:5432/undertrained
-    runs-on: ubuntu-latest
+      NEXTAUTH_URL: http://localhost:3000
+      DATABASE_URL: postgresql://undertrained:undertrained@localhost:5432/undertrained
+      # `src/server/env.ts` parses the whole environment at import time and the
+      # instrumentation hook pulls it in, so a missing key doesn't degrade a
+      # feature — the server fails to boot and every route answers 500. That is
+      # what had been failing this job. The smoke tests never talk to Strava, so
+      # placeholders are enough; they just have to be present.
+      STRAVA_CLIENT_ID: ci-not-a-real-client
+      STRAVA_CLIENT_SECRET: ci-not-a-real-secret
+      STRAVA_WEBHOOK_VERIFY_TOKEN: ci-not-a-real-token
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22.x
-          cache: "pnpm"
+          cache: pnpm
 
-      - name: Install deps (with cache)
-        run: pnpm install
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: Install playwright
-        run: pnpm playwright install chromium
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
 
-      - name: Next.js cache
-        uses: actions/cache@v4
+      # The browser binary is cacheable; its system libraries are not, so they
+      # get reinstalled either way.
+      - name: Install Playwright browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      # `restore-keys` matters here: without it the key never changed between
+      # commits, so the first run's cache was kept forever and every later
+      # build started cold.
+      - name: Next.js build cache
+        uses: actions/cache@v6
         with:
           path: ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}-nextjs
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**', 'next.config.ts') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Push DB schema
         run: pnpm db:push
 
-      - run: pnpm build
-      - run: pnpm test-e2e
+      - name: Build
+        run: pnpm build
 
-      - name: Check types
-        run: pnpm tsc
+      - name: E2E tests
+        run: pnpm test-e2e
 
-      - name: Upload test results
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+      - name: Upload Playwright artefacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
         with:
-          name: test results
-          path: |
-            playwright/test-results
-
-  unit:
-    name: "Unit tests + typecheck"
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: undertrained
-          POSTGRES_USER: undertrained
-          POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD || 'undertrained' }}
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U undertrained"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      NODE_ENV: test
-      NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET || 'ci-test-secret-not-for-production' }}
-      DATABASE_URL: postgresql://undertrained:${{ secrets.CI_DB_PASSWORD || 'undertrained' }}@localhost:5432/undertrained
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-          cache: "pnpm"
-
-      - name: Install deps (with cache)
-        run: pnpm install
-
-      - name: Next.js cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}-nextjs
-
-      - run: pnpm test-unit
-      - run: pnpm tsc
+          name: playwright-results
+          path: playwright/test-results
+          retention-days: 7
+          if-no-files-found: ignore

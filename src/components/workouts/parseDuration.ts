@@ -42,9 +42,7 @@ export function parseDuration(input: string): number | null {
     const [, hours, minutes, trailing] = trailingMatch;
     // The bare tail is minutes after an hour, seconds after a minute.
     return minutes != null
-      ? Number(hours ?? 0) * 3600 +
-          Number(minutes) * 60 +
-          Number(trailing)
+      ? Number(hours ?? 0) * 3600 + Number(minutes) * 60 + Number(trailing)
       : Number(hours) * 3600 + Number(trailing) * 60;
   }
 

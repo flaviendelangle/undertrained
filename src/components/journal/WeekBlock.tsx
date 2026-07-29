@@ -223,8 +223,7 @@ function AllDayCell({
   const label = busy ? busy.title || t("journal.calendars.busy") : "";
   const continues =
     busy != null &&
-    prevBusy != null &&
-    prevBusy.subscriptionId === busy.subscriptionId &&
+    prevBusy?.subscriptionId === busy.subscriptionId &&
     prevBusy.title === busy.title;
   return (
     <div className="border-border flex flex-col justify-start gap-0.5 overflow-hidden border-l px-0.5 py-1">
