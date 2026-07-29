@@ -45,6 +45,11 @@ const Y_AXIS_ID = "workout-power";
 const BAR_GAP_PX = 1;
 /** Ceiling floor, so an easy ride isn't drawn as if it were all-out. */
 const MIN_PEAK_PCT = 1.2;
+/**
+ * Wider than the shared `AXIS_SIZE.mobile.width`: these ticks read "100%", and
+ * 32 px ellipsises that to "1...".
+ */
+const Y_AXIS_WIDTH_MOBILE = 42;
 
 interface HoverState {
   segment: ResolvedSegment;
@@ -137,7 +142,7 @@ export function WorkoutPreviewChart({
                 valueFormatter: (value: number) =>
                   `${Math.round(value * 100)}%`,
                 width: isMobile
-                  ? AXIS_SIZE.mobile.width
+                  ? Y_AXIS_WIDTH_MOBILE
                   : AXIS_SIZE.desktop.width,
               },
             ]}

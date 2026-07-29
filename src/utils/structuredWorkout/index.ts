@@ -81,5 +81,4 @@ export {
 
 export { structuredWorkoutSchema } from "./schema";
 export { migrateStructuredWorkout } from "./migrate";
-export { WORKOUT_PRESETS, emptyWorkoutNodes } from "./presets";
-export type { WorkoutPreset } from "./presets";
+export { emptyWorkoutNodes } from "./presets";

@@ -57,7 +57,6 @@ export interface WorkoutEditor {
 
   addStep: (preset?: Partial<Omit<WorkoutStep, "type" | "id">>) => void;
   addRepeat: () => void;
-  replaceNodes: (nodes: WorkoutNode[]) => void;
 
   updateStep: (
     id: string,
@@ -243,10 +242,6 @@ export function useWorkoutEditor(
 
     addStep,
     addRepeat,
-    replaceNodes: (nodes) => {
-      commitNodes(nodes);
-      selectOnly(null);
-    },
 
     updateStep: (id, patch) => {
       const normalized =

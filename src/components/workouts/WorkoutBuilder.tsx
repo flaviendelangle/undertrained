@@ -218,12 +218,16 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
             </ResponsiveDialog>
           )}
 
+          {/* Just "Save" on a phone: the full label is what pushes this row
+              over 390 px and wraps the header onto a third line. */}
           <Button size="sm" disabled={!canSave} onClick={save}>
             {isSaving
               ? t("workouts.saving")
-              : workout
-                ? t("workouts.updateWorkout")
-                : t("workouts.saveWorkout")}
+              : isMobile
+                ? t("common.save")
+                : workout
+                  ? t("workouts.updateWorkout")
+                  : t("workouts.saveWorkout")}
           </Button>
         </div>
 
