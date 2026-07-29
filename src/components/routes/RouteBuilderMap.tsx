@@ -1,11 +1,11 @@
 import * as React from "react";
 
-import "leaflet/dist/leaflet.css";
 import {
-  divIcon,
-  type LeafletMouseEvent,
   type Marker as LeafletMarker,
+  type LeafletMouseEvent,
+  divIcon,
 } from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   AttributionControl,
   CircleMarker,
@@ -434,7 +434,10 @@ export default function RouteBuilderMap({
         />
       ) : (
         <>
-          <ClickToAdd onAdd={onAddWaypoint} suppressClickRef={suppressClickRef} />
+          <ClickToAdd
+            onAdd={onAddWaypoint}
+            suppressClickRef={suppressClickRef}
+          />
           {waypoints.length > 1 && (
             <Polyline
               positions={waypoints}

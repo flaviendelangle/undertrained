@@ -36,17 +36,10 @@ const TileStyleContext = React.createContext<TileStyleContextValue>({
   setTileStyle: () => {},
 });
 
-export function TileStyleProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export function TileStyleProvider({ children }: { children: React.ReactNode }) {
   const [tileStyle, setTileStyle] = React.useState<TileStyle>("street");
 
-  const value = React.useMemo(
-    () => ({ tileStyle, setTileStyle }),
-    [tileStyle],
-  );
+  const value = React.useMemo(() => ({ tileStyle, setTileStyle }), [tileStyle]);
 
   return <TileStyleContext value={value}>{children}</TileStyleContext>;
 }

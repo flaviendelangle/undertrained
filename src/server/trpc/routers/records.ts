@@ -2,11 +2,11 @@ import type { SQL } from "drizzle-orm";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "../../db";
-import { activities, riderSettings } from "../../db/schema";
 import { CYCLING_POWER_DURATIONS } from "../../../utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCE_METERS } from "../../../utils/cyclingRecordDistances";
 import { getActivityTypesByCategory } from "../../../utils/sportConfig";
+import type { Database } from "../../db";
+import { activities, riderSettings } from "../../db/schema";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 const DEFAULT_LIMIT = 25;
@@ -137,7 +137,11 @@ async function rankJsonbBests(
           sql`, `,
         )})`
       : sql``;
-  const rows = await db.execute<{ param: string; value: string; rank: string }>(sql`
+  const rows = await db.execute<{
+    param: string;
+    value: string;
+    rank: string;
+  }>(sql`
     WITH unnested AS (
       SELECT a.strava_id, (kv.key)::int AS param, (kv.value)::int AS value
       FROM activities a,
@@ -231,12 +235,7 @@ export const recordsRouter = router({
       const nonVirtualCycling = sql`AND a.type IN (${typeList(NON_VIRTUAL_CYCLING_TYPES)})`;
 
       // Each category's all-time leader (LIMIT 1), tagged with a display label.
-      const single = (
-        valueExpr: SQL,
-        order: SQL,
-        label: string,
-        extra?: SQL,
-      ) =>
+      const single = (valueExpr: SQL, order: SQL, label: string, extra?: SQL) =>
         topActivities(ctx.db, {
           athleteId: input.athleteId,
           valueExpr,
@@ -375,8 +374,12 @@ export const recordsRouter = router({
         )
         .limit(1);
 
-      const isCycling = activity ? CYCLING_TYPES.includes(activity.type) : false;
-      const isRunning = activity ? RUNNING_TYPES.includes(activity.type) : false;
+      const isCycling = activity
+        ? CYCLING_TYPES.includes(activity.type)
+        : false;
+      const isRunning = activity
+        ? RUNNING_TYPES.includes(activity.type)
+        : false;
       // Records only exist for cycling/running; bail for anything else.
       if (!activity || (!isCycling && !isRunning)) {
         return [];
@@ -421,7 +424,8 @@ export const recordsRouter = router({
 
           const nonVirtual = typeList(NON_VIRTUAL_CYCLING_TYPES);
           const wantLoad = targetLoad != null && targetLoad > 0;
-          const wantClimb = isNonVirtualCycling && (activity.biggestClimb ?? 0) > 0;
+          const wantClimb =
+            isNonVirtualCycling && (activity.biggestClimb ?? 0) > 0;
           const wantTotalElev =
             isNonVirtualCycling && activity.totalElevationGain > 0;
 
@@ -456,7 +460,11 @@ export const recordsRouter = router({
           add("duration", row?.duration_rank, activity.movingTime);
           if (wantLoad) add("load", row?.load_rank, targetLoad);
           add("biggestClimb", row?.climb_rank, activity.biggestClimb ?? 0);
-          add("totalElevation", row?.total_elev_rank, activity.totalElevationGain);
+          add(
+            "totalElevation",
+            row?.total_elev_rank,
+            activity.totalElevationGain,
+          );
           return out;
         })(),
       );
@@ -634,7 +642,9 @@ export const recordsRouter = router({
    * first. Both exclude virtual rides.
    */
   getCyclingElevationLeaderboard: protectedProcedure
-    .input(leaderboardInput.extend({ kind: z.enum(["biggest_climb", "total"]) }))
+    .input(
+      leaderboardInput.extend({ kind: z.enum(["biggest_climb", "total"]) }),
+    )
     .use(validateAthleteOwnership)
     .query(({ ctx, input }) => {
       const valueExpr =

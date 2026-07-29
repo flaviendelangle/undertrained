@@ -34,10 +34,7 @@ describe("buildTileIndex", () => {
     expect(index.buckets.get("1,0")).toHaveLength(1);
     expect(index.buckets.get("3,2")).toHaveLength(1);
 
-    const total = [...index.buckets.values()].reduce(
-      (n, b) => n + b.length,
-      0,
-    );
+    const total = [...index.buckets.values()].reduce((n, b) => n + b.length, 0);
     expect(total).toBe(tiles.length);
   });
 });

@@ -1,3 +1,4 @@
+import { MAX_TARGET_POWER_WATTS } from "../types";
 import type { HeartRateData, TrainerData } from "../types";
 
 const log = (...args: unknown[]) => console.log("[ANT+]", ...args);
@@ -7,107 +8,184 @@ const logError = (...args: unknown[]) => console.error("[ANT+]", ...args);
 // A new instance must be created after close() since the AbortController is single-use.
 let sharedStick: import("ant-plus-next").WebUsbStick | null = null;
 let stickReady = false;
-let stickReadyPromise: Promise<boolean> | null = null;
+let stickOpenPromise: Promise<import("ant-plus-next").WebUsbStick> | null =
+  null;
 let stickRefCount = 0;
+/**
+ * Connections that have acquired the stick but have not finished attaching
+ * yet. They are not in `stickRefCount` — a reference is only taken once
+ * `attach()` has returned — so without counting them separately, one sensor's
+ * failed attach would see a refcount of 0 and close the stick out from under
+ * another sensor that is still handshaking on it.
+ */
+let stickPendingCount = 0;
 
-async function getOrCreateStick(): Promise<
-  import("ant-plus-next").WebUsbStick
-> {
-  if (sharedStick && stickReady) return sharedStick;
+/** How long to wait for the stick's startup handshake. */
+const STARTUP_TIMEOUT_MS = 10_000;
 
+/**
+ * Creates a stick and resolves once it has completed its startup handshake.
+ *
+ * The "startup" listener MUST be attached before calling open(), because
+ * open() blocks forever on success (readLoop is infinite).
+ */
+async function openStick(): Promise<import("ant-plus-next").WebUsbStick> {
   const { WebUsbStick } = await import("ant-plus-next");
-
-  // Always create a fresh instance (AbortController is single-use after close)
-  if (sharedStick) {
-    log("Previous stick instance exists but is not ready, creating fresh one");
-  }
-
   const stick = new WebUsbStick();
-  sharedStick = stick;
-  stickReady = false;
-  stickReadyPromise = null;
+
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(
+        new Error("ANT+ startup timeout after 10s — stick did not handshake"),
+      );
+    }, STARTUP_TIMEOUT_MS);
+
+    stick.on("startup", () => {
+      clearTimeout(timeout);
+      log("Startup handshake complete");
+      resolve();
+    });
+
+    stick.on("shutdown", () => {
+      log("Stick shutdown");
+      // The stick is gone; force the next acquire to build a fresh one.
+      if (sharedStick === stick) {
+        sharedStick = null;
+        stickReady = false;
+      }
+    });
+
+    log("Opening stick...");
+    // open() returns true on success but only AFTER readLoop ends (never in
+    // normal operation). open() returns false on error. We don't await it — we
+    // wait for the "startup" event instead.
+    stick.open().then(
+      (result) => {
+        if (!result) {
+          clearTimeout(timeout);
+          reject(
+            new Error(
+              "stick.open() returned false — connection failed. Check browser console for details.",
+            ),
+          );
+        }
+      },
+      (err) => {
+        clearTimeout(timeout);
+        logError("stick.open() threw:", err);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      },
+    );
+  });
 
   return stick;
 }
 
 /**
- * Opens the stick and waits for the "startup" event.
- * The "startup" listener MUST be attached before calling open(),
- * because open() blocks forever on success (readLoop is infinite).
+ * Returns the shared, opened stick.
+ *
+ * Concurrent callers share a single in-flight open. Creating a second
+ * `WebUsbStick` while the first was still handshaking used to leave the later
+ * caller attached to a stick that had never been opened, because the earlier
+ * stick's "startup" event flipped the shared ready flag.
  */
-async function ensureStickOpen(
-  stick: import("ant-plus-next").WebUsbStick,
-): Promise<void> {
-  if (stickReady) return;
+async function acquireStick(): Promise<import("ant-plus-next").WebUsbStick> {
+  if (sharedStick && stickReady) return sharedStick;
 
-  if (!stickReadyPromise) {
-    stickReadyPromise = new Promise<boolean>((resolve) => {
-      const timeout = setTimeout(() => {
-        logError(
-          "Startup timeout after 10s — stick did not complete handshake",
-        );
-        resolve(false);
-      }, 10_000);
-
-      // Listen for startup BEFORE calling open() — this is required because
-      // open() never resolves on success (readLoop runs forever)
-      stick.on("startup", () => {
-        clearTimeout(timeout);
-        log("Startup handshake complete");
+  if (!stickOpenPromise) {
+    stickOpenPromise = openStick().then(
+      (stick) => {
+        sharedStick = stick;
         stickReady = true;
-        resolve(true);
-      });
-
-      stick.on("shutdown", () => {
-        log("Stick shutdown");
+        stickOpenPromise = null;
+        return stick;
+      },
+      (err: unknown) => {
+        sharedStick = null;
         stickReady = false;
-      });
-
-      log("Opening stick...");
-      // open() returns true on success but only AFTER readLoop ends (never in normal operation).
-      // open() returns false on error. We don't await it — we wait for the "startup" event instead.
-      stick.open().then(
-        (result) => {
-          // This only runs if open() actually resolves, which means an error occurred
-          // or the read loop ended (stick disconnected).
-          if (!result) {
-            clearTimeout(timeout);
-            logError(
-              "stick.open() returned false — connection failed. Check browser console for details.",
-            );
-            resolve(false);
-          }
-        },
-        (err) => {
-          clearTimeout(timeout);
-          logError("stick.open() threw:", err);
-          resolve(false);
-        },
-      );
-    });
+        stickOpenPromise = null;
+        throw err;
+      },
+    );
   }
 
-  const success = await stickReadyPromise;
-  if (!success) {
-    // Reset state so next attempt creates a fresh stick
-    sharedStick = null;
-    stickReady = false;
-    stickReadyPromise = null;
-    throw new Error("Failed to open ANT+ USB stick");
+  return stickOpenPromise;
+}
+
+function closeStick(): void {
+  log("All sensors disconnected, closing stick");
+  void sharedStick?.close();
+  sharedStick = null;
+  stickReady = false;
+  stickOpenPromise = null;
+}
+
+/** Nobody is using the stick, and nobody is in the middle of claiming it. */
+function closeStickIfIdle(): void {
+  if (stickRefCount === 0 && stickPendingCount === 0 && sharedStick) {
+    closeStick();
   }
 }
 
+/**
+ * Marks the start of a connect attempt, before the stick has been acquired.
+ *
+ * Must be paired with exactly one `endStickUse()` on every exit path,
+ * including the ones that throw.
+ */
+function beginStickUse(): void {
+  stickPendingCount++;
+}
+
+/**
+ * Marks the end of a connect attempt. `kept` is true only when the connection
+ * completed `attach()` and is taking a reference — see `holdsStick` on each
+ * connection class. Counting an aborted connect, or a `disconnect()` on a
+ * sensor that never connected, would either strand the stick open (leaving the
+ * WebUSB device claimed until the browser restarts) or close it out from under
+ * the other sensor.
+ */
+function endStickUse(kept: boolean): void {
+  stickPendingCount = Math.max(0, stickPendingCount - 1);
+  if (kept) {
+    stickRefCount++;
+    return;
+  }
+  closeStickIfIdle();
+}
+
+/** Releases one reference to the shared stick. */
 function releaseStick(): void {
-  stickRefCount--;
-  if (stickRefCount <= 0) {
-    log("All sensors disconnected, closing stick");
-    void sharedStick?.close();
-    sharedStick = null;
-    stickReady = false;
-    stickReadyPromise = null;
-    stickRefCount = 0;
-  }
+  stickRefCount = Math.max(0, stickRefCount - 1);
+  closeStickIfIdle();
 }
+
+/** FE-C page 25 target status, or null once it stops being reported. */
+export type FecTargetStatus = "OnTarget" | "LowSpeed" | "HighSpeed" | null;
+
+/**
+ * FE-C carries speed as a 16-bit mm/s value where 0xFFFF means "invalid".
+ * `ant-plus-next` divides by 1000 without checking (unlike power and cadence,
+ * where it does strip the sentinel), so an unavailable reading arrives as
+ * 65.535 m/s.
+ *
+ * The threshold sits below that rather than testing equality: the sentinel
+ * reaches us as a float, and 235 km/h is far past anything a bike produces, so
+ * a generous cutoff costs nothing and does not depend on exact rounding.
+ */
+const FEC_IMPLAUSIBLE_SPEED_MS = 65;
+
+function isValidFecSpeed(speed: number | undefined): speed is number {
+  return speed != null && speed < FEC_IMPLAUSIBLE_SPEED_MS;
+}
+
+/**
+ * Rolling resistance used for the track-resistance page when no rider setting
+ * is supplied — the same asphalt-on-slicks figure the speed simulator
+ * defaults to. FE-C encodes it as `Crr × 2×10⁴` in a byte, so anything up to
+ * 0.0127 survives the trip.
+ */
+const DEFAULT_ROLLING_RESISTANCE = 0.004;
 
 // Fixed channel assignment: HR always uses channel 0, trainer always uses channel 1
 const HR_CHANNEL = 0;
@@ -118,6 +196,8 @@ export class AntHeartRateConnection {
   private handler:
     | ((state: import("ant-plus-next").HeartRateSensorState) => void)
     | null = null;
+  private holdsStick = false;
+  private disposed = false;
 
   async connect(params: {
     onData: (data: HeartRateData) => void;
@@ -125,17 +205,24 @@ export class AntHeartRateConnection {
   }): Promise<void> {
     const { HeartRateSensor } = await import("ant-plus-next");
 
-    const stick = await getOrCreateStick();
-    await ensureStickOpen(stick);
-    stickRefCount++;
+    this.disposed = false;
+    beginStickUse();
+
+    let stick: import("ant-plus-next").WebUsbStick;
+    try {
+      stick = await acquireStick();
+    } catch (err) {
+      endStickUse(false);
+      throw err;
+    }
     log("HR: Stick ready, attaching sensor on channel", HR_CHANNEL);
 
-    this.sensor = new HeartRateSensor(stick);
+    const sensor = new HeartRateSensor(stick);
 
-    this.sensor.on("attached", () =>
+    sensor.on("attached", () =>
       log("HR: Sensor attached, scanning for devices..."),
     );
-    this.sensor.on("detached", () => log("HR: Sensor detached"));
+    sensor.on("detached", () => log("HR: Sensor detached"));
 
     this.handler = (state: import("ant-plus-next").HeartRateSensorState) => {
       if (state.ComputedHeartRate != null) {
@@ -144,25 +231,59 @@ export class AntHeartRateConnection {
         });
       }
     };
-    this.sensor.on("heartRateData", this.handler);
+    sensor.on("heartRateData", this.handler);
 
-    await this.sensor.attach(HR_CHANNEL, 0);
+    try {
+      await sensor.attach(HR_CHANNEL, 0);
+    } catch (err) {
+      this.handler = null;
+      endStickUse(false);
+      throw err;
+    }
+
+    if (this.disposed) {
+      // Raced with disconnect(). Undo the attach rather than taking a stick
+      // reference for a connection nobody holds any more — that reference
+      // would never be released, and the WebUSB device would stay claimed
+      // until the browser restarts.
+      await this.detachSensor(sensor);
+      endStickUse(false);
+      return;
+    }
+
+    // Only now do we own a reference to the stick.
+    this.sensor = sensor;
+    endStickUse(true);
+    this.holdsStick = true;
     log("HR: attach() returned");
   }
 
-  async disconnect(): Promise<void> {
-    if (this.sensor) {
-      if (this.handler) {
-        this.sensor.removeListener("heartRateData", this.handler);
-      }
-      try {
-        await this.sensor.detach();
-      } catch {
-        // May already be detached
-      }
-      this.sensor = null;
+  private async detachSensor(
+    sensor: import("ant-plus-next").HeartRateSensor,
+  ): Promise<void> {
+    if (this.handler) {
+      sensor.removeListener("heartRateData", this.handler);
+      this.handler = null;
     }
-    releaseStick();
+    try {
+      await sensor.detach();
+    } catch {
+      // May already be detached
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    this.disposed = true;
+
+    if (this.sensor) {
+      const sensor = this.sensor;
+      this.sensor = null;
+      await this.detachSensor(sensor);
+    }
+    if (this.holdsStick) {
+      this.holdsStick = false;
+      releaseStick();
+    }
   }
 }
 
@@ -183,30 +304,54 @@ export class AntTrainerConnection {
     | ((state: import("ant-plus-next").BicyclePowerSensorState) => void)
     | null = null;
   private fallbackTimeout: ReturnType<typeof setTimeout> | null = null;
+  private holdsStick = false;
+  private disposed = false;
+  /**
+   * Whether the device has proven it speaks FE-C, which is what makes ERG
+   * control possible. Attaching an FE-C sensor proves nothing — the sensor
+   * object exists before any packet has arrived, and for a plain power meter
+   * none ever will.
+   */
+  private controlAvailable = false;
 
   async connect(params: {
     onData: (data: TrainerData) => void;
     onDisconnect: () => void;
+    /** Fires when FE-C control becomes available, and when it is ruled out. */
+    onControlAvailabilityChange?: (available: boolean) => void;
+    /**
+     * FE-C target status: the trainer telling us the rider's speed/gearing is
+     * too low or too high to hold the ERG target.
+     */
+    onTargetStatusChange?: (status: FecTargetStatus) => void;
   }): Promise<void> {
     const { FitnessEquipmentSensor, BicyclePowerSensor } =
       await import("ant-plus-next");
 
-    const stick = await getOrCreateStick();
-    await ensureStickOpen(stick);
-    stickRefCount++;
+    this.disposed = false;
+    beginStickUse();
+
+    let stick: import("ant-plus-next").WebUsbStick;
+    try {
+      stick = await acquireStick();
+    } catch (err) {
+      endStickUse(false);
+      throw err;
+    }
     log(
       "Trainer: Stick ready, attaching FE-C sensor on channel",
       TRAINER_CHANNEL,
     );
 
     // Try FE-C first
-    this.feSensor = new FitnessEquipmentSensor(stick);
+    const feSensor = new FitnessEquipmentSensor(stick);
     let feReceivedData = false;
+    let lastTargetStatus: FecTargetStatus | undefined;
 
-    this.feSensor.on("attached", () =>
+    feSensor.on("attached", () =>
       log("Trainer: FE-C sensor attached, scanning..."),
     );
-    this.feSensor.on("detached", () => log("Trainer: FE-C sensor detached"));
+    feSensor.on("detached", () => log("Trainer: FE-C sensor detached"));
 
     this.feHandler = (
       state: import("ant-plus-next").FitnessEquipmentSensorState,
@@ -214,84 +359,178 @@ export class AntTrainerConnection {
       if (!feReceivedData) {
         feReceivedData = true;
         log("Trainer: Receiving FE-C data from device", state.DeviceId);
-        // FE-C is working — cancel fallback
+        // FE-C is working — cancel fallback and unlock ERG control.
         if (this.fallbackTimeout != null) {
           clearTimeout(this.fallbackTimeout);
           this.fallbackTimeout = null;
         }
+        this.controlAvailable = true;
+        params.onControlAvailabilityChange?.(true);
+      }
+
+      if (state.TargetStatus !== lastTargetStatus) {
+        lastTargetStatus = state.TargetStatus;
+        params.onTargetStatusChange?.(state.TargetStatus ?? null);
       }
 
       params.onData({
         power: state.InstantaneousPower,
         cadence: state.Cadence,
-        speed: state.RealSpeed, // already in m/s
+        // RealSpeed is mm/s scaled to m/s by the library, which does not strip
+        // the 0xFFFF "invalid" sentinel the way it does for power and cadence —
+        // that would surface as a steady 236 km/h.
+        speed: isValidFecSpeed(state.RealSpeed) ? state.RealSpeed : undefined,
         heartRate: state.HeartRate,
         distance: state.Distance,
       });
     };
-    this.feSensor.on("fitnessData", this.feHandler);
+    feSensor.on("fitnessData", this.feHandler);
 
-    await this.feSensor.attach(TRAINER_CHANNEL, 0);
+    try {
+      await feSensor.attach(TRAINER_CHANNEL, 0);
+    } catch (err) {
+      this.feHandler = null;
+      endStickUse(false);
+      throw err;
+    }
+
+    if (this.disposed) {
+      // Raced with disconnect() — undo the attach rather than taking a stick
+      // reference nobody will ever release.
+      if (this.feHandler) {
+        feSensor.removeListener("fitnessData", this.feHandler);
+        this.feHandler = null;
+      }
+      try {
+        await feSensor.detach();
+      } catch {
+        // May already be detached
+      }
+      endStickUse(false);
+      return;
+    }
+
+    this.feSensor = feSensor;
+    endStickUse(true);
+    this.holdsStick = true;
     log("Trainer: FE-C attach() returned");
 
     // Set up fallback: if no FE-C data within 5s, switch to BicyclePowerSensor
-    this.fallbackTimeout = setTimeout(async () => {
-      if (feReceivedData) return;
-      log("Trainer: No FE-C data after 5s, falling back to BicyclePowerSensor");
-
-      // Detach FE-C sensor
-      try {
-        if (this.feSensor) {
-          if (this.feHandler) {
-            this.feSensor.removeListener("fitnessData", this.feHandler);
-          }
-          await this.feSensor.detach();
-        }
-      } catch {
-        // Ignore detach errors
-      }
-      this.feSensor = null;
-      this.feHandler = null;
-
-      // Attach BicyclePowerSensor on the same channel
-      this.powerSensor = new BicyclePowerSensor(stick);
-
-      this.powerSensor.on("attached", () =>
-        log("Trainer: Power sensor attached, scanning..."),
+    this.fallbackTimeout = setTimeout(() => {
+      this.fallbackTimeout = null;
+      if (feReceivedData || this.disposed) return;
+      void this.fallBackToPowerSensor(BicyclePowerSensor, stick, params).catch(
+        (err: unknown) => {
+          logError("Trainer: BicyclePowerSensor fallback failed:", err);
+        },
       );
-      this.powerSensor.on("detached", () =>
-        log("Trainer: Power sensor detached"),
-      );
-
-      this.powerHandler = (
-        state: import("ant-plus-next").BicyclePowerSensorState,
-      ) => {
-        params.onData({
-          power: state.Power ?? state.CalculatedPower,
-          cadence: state.Cadence ?? state.CalculatedCadence,
-        });
-      };
-      this.powerSensor.on("powerData", this.powerHandler);
-
-      await this.powerSensor.attach(TRAINER_CHANNEL, 0);
-      log("Trainer: Power sensor attach() returned");
     }, 5_000);
   }
 
+  private async fallBackToPowerSensor(
+    BicyclePowerSensor: typeof import("ant-plus-next").BicyclePowerSensor,
+    stick: import("ant-plus-next").WebUsbStick,
+    params: {
+      onData: (data: TrainerData) => void;
+      onControlAvailabilityChange?: (available: boolean) => void;
+      onTargetStatusChange?: (status: FecTargetStatus) => void;
+    },
+  ): Promise<void> {
+    log("Trainer: No FE-C data after 5s, falling back to BicyclePowerSensor");
+
+    // No FE-C packets means no ERG control, whatever the UI assumed so far.
+    this.controlAvailable = false;
+    params.onControlAvailabilityChange?.(false);
+    params.onTargetStatusChange?.(null);
+
+    // Detach FE-C sensor
+    try {
+      if (this.feSensor) {
+        if (this.feHandler) {
+          this.feSensor.removeListener("fitnessData", this.feHandler);
+        }
+        await this.feSensor.detach();
+      }
+    } catch {
+      // Ignore detach errors
+    }
+    this.feSensor = null;
+    this.feHandler = null;
+
+    // A disconnect() while we were detaching means nobody wants this channel
+    // any more — don't attach a sensor that would then be orphaned.
+    if (this.disposed) return;
+
+    // Attach BicyclePowerSensor on the same channel
+    const powerSensor = new BicyclePowerSensor(stick);
+
+    powerSensor.on("attached", () =>
+      log("Trainer: Power sensor attached, scanning..."),
+    );
+    powerSensor.on("detached", () => log("Trainer: Power sensor detached"));
+
+    this.powerHandler = (
+      state: import("ant-plus-next").BicyclePowerSensorState,
+    ) => {
+      params.onData({
+        power: state.Power ?? state.CalculatedPower,
+        cadence: state.Cadence ?? state.CalculatedCadence,
+      });
+    };
+    powerSensor.on("powerData", this.powerHandler);
+
+    await powerSensor.attach(TRAINER_CHANNEL, 0);
+
+    if (this.disposed) {
+      // Raced with disconnect() — undo the attach we just made.
+      powerSensor.removeListener("powerData", this.powerHandler);
+      this.powerHandler = null;
+      try {
+        await powerSensor.detach();
+      } catch {
+        // May already be detached
+      }
+      return;
+    }
+
+    this.powerSensor = powerSensor;
+    log("Trainer: Power sensor attach() returned");
+  }
+
   get supportsControl(): boolean {
-    return this.feSensor !== null;
+    return this.controlAvailable;
   }
 
   async setTargetPower(watts: number): Promise<void> {
-    if (!this.feSensor) {
+    if (!this.feSensor || !this.controlAvailable) {
       throw new Error("FE-C sensor not connected — cannot set target power");
     }
     await this.feSensor.setTargetPower(
-      Math.max(0, Math.min(4000, Math.round(watts))),
+      Math.max(0, Math.min(MAX_TARGET_POWER_WATTS, Math.round(watts))),
     );
   }
 
+  /**
+   * Leaves ERG and hands the road feel back to the trainer.
+   *
+   * FE-C target power (page 49) is sticky: the trainer stays in it until a
+   * *different* control page arrives. Writing a 0 W target would therefore not
+   * end ERG at all — it would hold the rider in ERG at zero watts, i.e. a
+   * free-spinning flywheel. Track resistance (page 51) at 0% grade is the
+   * documented way out, and leaves the flat-road feel a rider expects after
+   * switching ERG off.
+   */
+  async releaseControl(
+    rollingResistanceCoeff = DEFAULT_ROLLING_RESISTANCE,
+  ): Promise<void> {
+    if (!this.feSensor || !this.controlAvailable) return;
+    await this.feSensor.setTrackResistance(0, rollingResistanceCoeff);
+  }
+
   async disconnect(): Promise<void> {
+    this.disposed = true;
+    this.controlAvailable = false;
+
     if (this.fallbackTimeout != null) {
       clearTimeout(this.fallbackTimeout);
       this.fallbackTimeout = null;
@@ -307,6 +546,7 @@ export class AntTrainerConnection {
         // May already be detached
       }
       this.feSensor = null;
+      this.feHandler = null;
     }
 
     if (this.powerSensor) {
@@ -319,8 +559,12 @@ export class AntTrainerConnection {
         // May already be detached
       }
       this.powerSensor = null;
+      this.powerHandler = null;
     }
 
-    releaseStick();
+    if (this.holdsStick) {
+      this.holdsStick = false;
+      releaseStick();
+    }
   }
 }

@@ -49,9 +49,9 @@ import { PowerSliceDistribution } from "./PowerSliceDistribution";
 import { PowerZoneDistribution } from "./PowerZoneDistribution";
 import type { ActivityInfo, PowerCurveSeriesData } from "./types";
 import {
-  clampSliceWidth,
   MAX_SLICE_WIDTH,
   MIN_SLICE_WIDTH,
+  clampSliceWidth,
   usePowerSliceWidth,
 } from "./usePowerSliceWidth";
 

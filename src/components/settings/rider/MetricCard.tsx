@@ -1,7 +1,12 @@
 import { useState } from "react";
 
 import { format } from "date-fns";
-import { PlusIcon, TrendingDownIcon, TrendingUpIcon, XIcon } from "lucide-react";
+import {
+  PlusIcon,
+  TrendingDownIcon,
+  TrendingUpIcon,
+  XIcon,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 
 import { CardTitle } from "~/components/primitives/CardTitle";

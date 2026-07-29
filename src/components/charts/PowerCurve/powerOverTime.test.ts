@@ -57,7 +57,9 @@ describe("buildZoneGradientStops", () => {
     const stops = buildZoneGradientStops(ftp, 1000);
     // Z1 ends at 0.55 * FTP = 110 W → offset 0.11, shared by the Z1 end and Z2 start.
     const boundary = (0.55 * ftp) / 1000;
-    const atBoundary = stops.filter((s) => Math.abs(s.offset - boundary) < 1e-9);
+    const atBoundary = stops.filter(
+      (s) => Math.abs(s.offset - boundary) < 1e-9,
+    );
     expect(atBoundary).toHaveLength(2);
     expect(atBoundary.map((s) => s.ramp)).toEqual([
       POWER_ZONES[0].ramp,

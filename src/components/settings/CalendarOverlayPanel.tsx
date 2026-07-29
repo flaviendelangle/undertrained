@@ -117,7 +117,10 @@ function CalendarForm({
   };
 
   return (
-    <form onSubmit={submit} className="border-border flex flex-col gap-3 rounded-md border p-3">
+    <form
+      onSubmit={submit}
+      className="border-border flex flex-col gap-3 rounded-md border p-3"
+    >
       <div className="flex flex-col gap-1">
         <Label htmlFor="calendar-url" className="text-xs">
           {t("journal.calendars.url")}
@@ -164,7 +167,7 @@ function CalendarForm({
               className={cn(
                 "flex size-6 items-center justify-center rounded-full transition-transform",
                 color === swatch
-                  ? "ring-foreground/40 ring-2 ring-offset-2 ring-offset-background"
+                  ? "ring-foreground/40 ring-offset-background ring-2 ring-offset-2"
                   : "hover:scale-110",
               )}
             >
@@ -179,7 +182,13 @@ function CalendarForm({
       {error && <p className="text-destructive text-xs">{error}</p>}
 
       <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={pending}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          disabled={pending}
+        >
           {t("common.cancel")}
         </Button>
         <Button type="submit" size="sm" disabled={pending}>
@@ -259,9 +268,9 @@ export function CalendarOverlayPanel() {
   );
 
   // `null` = list view; "new" = add form; a row = edit form for that calendar.
-  const [editing, setEditing] = React.useState<CalendarSubscription | "new" | null>(
-    null,
-  );
+  const [editing, setEditing] = React.useState<
+    CalendarSubscription | "new" | null
+  >(null);
 
   const removeMut = trpc.calendarSubscriptions.remove.useMutation({
     onSuccess: () => {
@@ -291,7 +300,10 @@ export function CalendarOverlayPanel() {
             typeof editing === "object" &&
             editing?.id === calendar.id ? (
               <div key={calendar.id} className="flex flex-col gap-2">
-                <CalendarForm existing={calendar} onClose={() => setEditing(null)} />
+                <CalendarForm
+                  existing={calendar}
+                  onClose={() => setEditing(null)}
+                />
                 <Button
                   type="button"
                   variant="destructive"

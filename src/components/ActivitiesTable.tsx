@@ -26,15 +26,17 @@ import {
 } from "~/components/ui/table";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
-import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { type TFunction } from "~/i18n/I18nProvider";
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { formatActivityType, formatDuration } from "~/utils/format";
 import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
 import { getSportConfig } from "~/utils/sportConfig";
 
-type ActivityWithoutMap = Omit<ListActivity, "mapPolyline"> & { load: number | null };
+type ActivityWithoutMap = Omit<ListActivity, "mapPolyline"> & {
+  load: number | null;
+};
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -50,9 +52,10 @@ function ActivityRow(props: {
   timePeriodId?: number;
 }) {
   const { row, index, style, timePeriodId } = props;
-  const activityHref = timePeriodId != null
-    ? `/activities/${row.original.stravaId}?from=period&periodId=${timePeriodId}`
-    : `/activities/${row.original.stravaId}`;
+  const activityHref =
+    timePeriodId != null
+      ? `/activities/${row.original.stravaId}?from=period&periodId=${timePeriodId}`
+      : `/activities/${row.original.stravaId}`;
 
   return (
     <TableRow
@@ -63,22 +66,22 @@ function ActivityRow(props: {
       {row.getVisibleCells().map((cell, cellIndex) => {
         const minWidth = cell.column.columnDef.meta?.minWidth;
         return (
-        <TableCell
-          className="flex min-w-0 items-center px-3 md:px-6"
-          style={{ flex: cell.column.getSize(), minWidth }}
-          key={cell.id}
-        >
-          {cellIndex === 0 ? (
-            <Link
-              href={activityHref}
-              className="truncate after:absolute after:inset-0"
-            >
-              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-            </Link>
-          ) : (
-            flexRender(cell.column.columnDef.cell, cell.getContext())
-          )}
-        </TableCell>
+          <TableCell
+            className="flex min-w-0 items-center px-3 md:px-6"
+            style={{ flex: cell.column.getSize(), minWidth }}
+            key={cell.id}
+          >
+            {cellIndex === 0 ? (
+              <Link
+                href={activityHref}
+                className="truncate after:absolute after:inset-0"
+              >
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </Link>
+            ) : (
+              flexRender(cell.column.columnDef.cell, cell.getContext())
+            )}
+          </TableCell>
         );
       })}
     </TableRow>
@@ -114,7 +117,13 @@ const createColumns = (t: TFunction) => [
     meta: { minWidth: 140 },
   }),
   columnHelper.accessor("startDateLocal", {
-    cell: (info) => <span className="truncate">{format(new Date(info.getValue()), "P p", { locale: getActiveDateLocale() })}</span>,
+    cell: (info) => (
+      <span className="truncate">
+        {format(new Date(info.getValue()), "P p", {
+          locale: getActiveDateLocale(),
+        })}
+      </span>
+    ),
     header: () => <span>{t("activities.columns.date")}</span>,
     size: 2,
     meta: { minWidth: 140 },
@@ -182,23 +191,33 @@ const createActivitySearchFilter =
       // regardless of the active locale.
       formatActivityType(activity.type),
       sportTypeLabel(activity.type, t),
-      format(new Date(activity.startDateLocal), "P p", { locale: getActiveDateLocale() }),
+      format(new Date(activity.startDateLocal), "P p", {
+        locale: getActiveDateLocale(),
+      }),
     ]
       .join(" ")
       .toLowerCase();
     return haystack.includes(filterValue.toLowerCase());
   };
 
-export function ActivitiesTable(props: { searchFilter?: string; timePeriodId?: number }) {
+export function ActivitiesTable(props: {
+  searchFilter?: string;
+  timePeriodId?: number;
+}) {
   const t = useT();
   const activitiesQuery = useActivitiesQuery(
-    props.timePeriodId != null ? { timePeriodId: props.timePeriodId } : undefined,
+    props.timePeriodId != null
+      ? { timePeriodId: props.timePeriodId }
+      : undefined,
   );
   const { timeline } = useRiderSettingsTimeline();
   const tableContainerRef = React.useRef<HTMLDivElement>(null);
 
   const columns = React.useMemo(() => createColumns(t), [t]);
-  const globalFilterFn = React.useMemo(() => createActivitySearchFilter(t), [t]);
+  const globalFilterFn = React.useMemo(
+    () => createActivitySearchFilter(t),
+    [t],
+  );
 
   const loadPreferences = React.useMemo(
     () => getLoadPreferences(timeline),
@@ -206,10 +225,11 @@ export function ActivitiesTable(props: { searchFilter?: string; timePeriodId?: n
   );
 
   const data = React.useMemo(
-    () => (activitiesQuery.data ?? []).map((activity) => ({
-      ...activity,
-      load: getActivityLoad(activity, loadPreferences).value,
-    })),
+    () =>
+      (activitiesQuery.data ?? []).map((activity) => ({
+        ...activity,
+        load: getActivityLoad(activity, loadPreferences).value,
+      })),
     [activitiesQuery.data, loadPreferences],
   );
 
@@ -259,7 +279,10 @@ export function ActivitiesTable(props: { searchFilter?: string; timePeriodId?: n
                       : undefined
                   }
                   className="flex min-w-0 items-center px-3 py-3 md:px-6"
-                  style={{ flex: header.column.getSize(), minWidth: header.column.columnDef.meta?.minWidth }}
+                  style={{
+                    flex: header.column.getSize(),
+                    minWidth: header.column.columnDef.meta?.minWidth,
+                  }}
                 >
                   {header.isPlaceholder ? null : (
                     <div
@@ -292,7 +315,10 @@ export function ActivitiesTable(props: { searchFilter?: string; timePeriodId?: n
                     <TableCell
                       key={col.id}
                       className="flex min-w-0 items-center px-3 md:px-6"
-                      style={{ flex: col.getSize(), minWidth: col.columnDef.meta?.minWidth }}
+                      style={{
+                        flex: col.getSize(),
+                        minWidth: col.columnDef.meta?.minWidth,
+                      }}
                     >
                       <div className="bg-border h-4 w-32 animate-pulse" />
                     </TableCell>

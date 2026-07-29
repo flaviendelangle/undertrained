@@ -1,7 +1,6 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-
 import { addDays, addSeconds, format, subDays } from "date-fns";
 import { and, eq, gte, lte } from "drizzle-orm";
+import type { NextApiRequest, NextApiResponse } from "next";
 
 import { db } from "@server/db";
 import { athletes, plannedTrainings } from "@server/db/schema";
@@ -39,7 +38,10 @@ function foldLine(line: string): string {
 
 /** UTC timestamp, e.g. "20260522T123456Z". */
 function toUtcStamp(date: Date): string {
-  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  return date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
 }
 
 function formatDuration(seconds: number): string {
@@ -127,10 +129,7 @@ export default async function handler(
   ].join("\r\n");
 
   res.setHeader("Content-Type", "text/calendar; charset=utf-8");
-  res.setHeader(
-    "Content-Disposition",
-    'inline; filename="undertrained.ics"',
-  );
+  res.setHeader("Content-Disposition", 'inline; filename="undertrained.ics"');
   res.setHeader("Cache-Control", "private, max-age=300");
   return res.status(200).send(calendar);
 }

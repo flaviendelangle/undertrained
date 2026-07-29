@@ -93,7 +93,9 @@ function ResponsivePopoverTitle(props: PopoverPrimitive.Title.Props) {
   return isMobile ? <DrawerTitle {...props} /> : <PopoverTitle {...props} />;
 }
 
-function ResponsivePopoverDescription(props: PopoverPrimitive.Description.Props) {
+function ResponsivePopoverDescription(
+  props: PopoverPrimitive.Description.Props,
+) {
   const isMobile = React.useContext(ResponsivePopoverContext);
   return isMobile ? (
     <DrawerDescription {...props} />

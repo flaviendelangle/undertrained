@@ -971,6 +971,17 @@ const fr: Messages = {
     speed: "Vitesse",
     startPedaling: "Commencez à pédaler pour démarrer",
     ergMode: "Mode ERG",
+    ergFailed: "Le home-trainer n'a pas accepté la puissance cible.",
+    ergShiftUp:
+      "Passez un braquet plus dur ou pédalez plus vite pour tenir la cible.",
+    ergShiftDown: "Passez un braquet plus souple pour tenir la cible.",
+    targetPowerStep: "Modifier la puissance cible de {step} watts",
+    protocol: "Type de connexion",
+    continueWithoutHr: "Continuer sans capteur cardiaque",
+    pause: "Pause",
+    deviceNotListed: "Vous ne voyez pas votre appareil ?",
+    wrongDevice: "Cet appareil ne fournit ni puissance ni fréquence cardiaque.",
+    connectFailed: "Échec de la connexion. Réessayez.",
     startManually: "Démarrer manuellement",
   },
   errors: {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { assertSafeUrl, eventsFromIcs, IcalFeedError } from "./icalFeed";
+import { IcalFeedError, assertSafeUrl, eventsFromIcs } from "./icalFeed";
 
 const TZ = "Europe/Paris";
 const SUB = { subscriptionId: 7, color: "#64748b" };
@@ -27,7 +27,13 @@ describe("eventsFromIcs — timed events", () => {
         "SUMMARY:Dentist",
       ].join("\r\n"),
     );
-    const out = eventsFromIcs(feed, SUB, "2026-07-25T00:00:00", "2026-08-10T00:00:00", TZ);
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-07-25T00:00:00",
+      "2026-08-10T00:00:00",
+      TZ,
+    );
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({
       subscriptionId: 7,
@@ -49,7 +55,13 @@ describe("eventsFromIcs — timed events", () => {
         "SUMMARY:Standup",
       ].join("\r\n"),
     );
-    const out = eventsFromIcs(feed, SUB, "2026-01-25T00:00:00", "2026-02-10T00:00:00", TZ);
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-01-25T00:00:00",
+      "2026-02-10T00:00:00",
+      TZ,
+    );
     expect(out).toHaveLength(1);
     expect(out[0].startLocal).toBe("2026-02-01T11:00:00");
     expect(out[0].endLocal).toBe("2026-02-01T11:30:00");
@@ -64,7 +76,13 @@ describe("eventsFromIcs — timed events", () => {
         "SUMMARY:Reminder",
       ].join("\r\n"),
     );
-    const out = eventsFromIcs(feed, SUB, "2026-01-25T00:00:00", "2026-02-10T00:00:00", TZ);
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-01-25T00:00:00",
+      "2026-02-10T00:00:00",
+      TZ,
+    );
     expect(out[0].startLocal).toBe("2026-02-01T09:00:00");
     expect(out[0].endLocal).toBe("2026-02-01T09:30:00");
   });
@@ -80,7 +98,13 @@ describe("eventsFromIcs — all-day events", () => {
         "SUMMARY:Day off",
       ].join("\r\n"),
     );
-    const out = eventsFromIcs(feed, SUB, "2026-06-01T00:00:00", "2026-06-30T00:00:00", TZ);
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-06-01T00:00:00",
+      "2026-06-30T00:00:00",
+      TZ,
+    );
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({
       allDay: true,
@@ -98,7 +122,13 @@ describe("eventsFromIcs — all-day events", () => {
         "SUMMARY:Trip",
       ].join("\r\n"),
     );
-    const out = eventsFromIcs(feed, SUB, "2026-06-01T00:00:00", "2026-06-30T00:00:00", TZ);
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-06-01T00:00:00",
+      "2026-06-30T00:00:00",
+      TZ,
+    );
     expect(out.map((e) => e.startLocal.slice(0, 10))).toEqual([
       "2026-06-10",
       "2026-06-11",
@@ -121,7 +151,13 @@ describe("eventsFromIcs — recurrence", () => {
         "SUMMARY:Weekly sync",
       ].join("\r\n"),
     );
-    const out = eventsFromIcs(feed, SUB, "2026-02-01T00:00:00", "2026-03-01T00:00:00", TZ);
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-02-01T00:00:00",
+      "2026-03-01T00:00:00",
+      TZ,
+    );
     const days = out.map((e) => e.startLocal.slice(0, 10));
     expect(days).toContain("2026-02-02");
     expect(days).not.toContain("2026-02-09"); // excluded
@@ -141,7 +177,13 @@ describe("eventsFromIcs — recurrence", () => {
         "SUMMARY:Cancelled",
       ].join("\r\n"),
     );
-    const out = eventsFromIcs(feed, SUB, "2026-01-25T00:00:00", "2026-02-10T00:00:00", TZ);
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-01-25T00:00:00",
+      "2026-02-10T00:00:00",
+      TZ,
+    );
     expect(out).toHaveLength(0);
   });
 
@@ -154,16 +196,22 @@ describe("eventsFromIcs — recurrence", () => {
         "SUMMARY:Next year",
       ].join("\r\n"),
     );
-    const out = eventsFromIcs(feed, SUB, "2026-01-01T00:00:00", "2026-02-01T00:00:00", TZ);
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-01-01T00:00:00",
+      "2026-02-01T00:00:00",
+      TZ,
+    );
     expect(out).toHaveLength(0);
   });
 });
 
 describe("assertSafeUrl — SSRF guard", () => {
   it("rejects loopback, link-local metadata, and non-http protocols", async () => {
-    await expect(assertSafeUrl("http://127.0.0.1/cal.ics")).rejects.toBeInstanceOf(
-      IcalFeedError,
-    );
+    await expect(
+      assertSafeUrl("http://127.0.0.1/cal.ics"),
+    ).rejects.toBeInstanceOf(IcalFeedError);
     await expect(
       assertSafeUrl("http://169.254.169.254/latest/meta-data"),
     ).rejects.toBeInstanceOf(IcalFeedError);

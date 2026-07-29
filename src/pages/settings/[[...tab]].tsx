@@ -5,7 +5,6 @@ import { signOut } from "next-auth/react";
 
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { LanguageSelect } from "~/components/settings/LanguageSelect";
-import { RiderMetricCards } from "~/components/settings/rider/RiderMetricCards";
 import { ResetHintsButton } from "~/components/settings/ResetHintsButton";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import {
@@ -13,6 +12,7 @@ import {
   EquipmentFields,
   LoadAlgorithmFields,
 } from "~/components/settings/layouts/shared";
+import { RiderMetricCards } from "~/components/settings/rider/RiderMetricCards";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";

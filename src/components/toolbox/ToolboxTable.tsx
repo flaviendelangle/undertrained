@@ -16,9 +16,7 @@ import { cn } from "~/lib/utils";
  * - First column (head + cell): extra left padding
  */
 
-function ToolboxTable(
-  props: React.ComponentProps<typeof BaseTable>,
-) {
+function ToolboxTable(props: React.ComponentProps<typeof BaseTable>) {
   return <BaseTable {...props} />;
 }
 
@@ -46,15 +44,11 @@ function ToolboxTableHeaderRow({
   );
 }
 
-function ToolboxTableBody(
-  props: React.ComponentProps<typeof BaseTableBody>,
-) {
+function ToolboxTableBody(props: React.ComponentProps<typeof BaseTableBody>) {
   return <BaseTableBody {...props} />;
 }
 
-function ToolboxTableRow(
-  props: React.ComponentProps<typeof BaseTableRow>,
-) {
+function ToolboxTableRow(props: React.ComponentProps<typeof BaseTableRow>) {
   return <BaseTableRow {...props} />;
 }
 
@@ -64,10 +58,7 @@ function ToolboxTableHead({
   ...props
 }: React.ComponentProps<typeof BaseTableHead> & { first?: boolean }) {
   return (
-    <BaseTableHead
-      className={cn(first && "pl-4", className)}
-      {...props}
-    />
+    <BaseTableHead className={cn(first && "pl-4", className)} {...props} />
   );
 }
 

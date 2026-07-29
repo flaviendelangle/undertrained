@@ -3,7 +3,10 @@ import * as React from "react";
 import { TrophyIcon } from "lucide-react";
 import Link from "next/link";
 
-import { formatCyclingSpeed, formatPace } from "~/components/charts/Records/format";
+import {
+  formatCyclingSpeed,
+  formatPace,
+} from "~/components/charts/Records/format";
 import { getMedalClasses } from "~/components/charts/Records/shared";
 import { ChartCard } from "~/components/ui/chart-card";
 import { useAthleteId } from "~/hooks/useAthleteId";
@@ -13,7 +16,10 @@ import { cn } from "~/lib/utils";
 import { CYCLING_POWER_DURATIONS } from "~/utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCES } from "~/utils/cyclingRecordDistances";
 import { formatElapsed, formatKm, formatOrdinal } from "~/utils/format";
-import { getActivityTypesByCategory, getSportConfig } from "~/utils/sportConfig";
+import {
+  getActivityTypesByCategory,
+  getSportConfig,
+} from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 import {
@@ -60,10 +66,7 @@ export function ActivityPersonalRecords({
     { enabled: athleteId != null },
   );
 
-  const groups = React.useMemo(
-    () => groupActivityRankings(data ?? []),
-    [data],
-  );
+  const groups = React.useMemo(() => groupActivityRankings(data ?? []), [data]);
 
   const isCycling = CYCLING_TYPES.includes(activityType);
   const sport = isCycling ? "cycling" : "running";
@@ -75,7 +78,10 @@ export function ActivityPersonalRecords({
   ): { label: string; value: string; sub?: string } => {
     switch (r.category) {
       case "power":
-        return { label: durationLabel(r.paramKey as number), value: `${r.value} W` };
+        return {
+          label: durationLabel(r.paramKey as number),
+          value: `${r.value} W`,
+        };
       case "heartrate":
         return {
           label: durationLabel(r.paramKey as number),

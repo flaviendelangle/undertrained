@@ -349,12 +349,8 @@
           "name": "activity_streams_activity_id_activities_id_fk",
           "tableFrom": "activity_streams",
           "tableTo": "activities",
-          "columnsFrom": [
-            "activity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["activity_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -603,12 +599,7 @@
     "public.sync_job_mode": {
       "name": "sync_job_mode",
       "schema": "public",
-      "values": [
-        "load_new",
-        "load_missing",
-        "reload_all",
-        "recompute_scores"
-      ]
+      "values": ["load_new", "load_missing", "reload_all", "recompute_scores"]
     },
     "public.sync_job_status": {
       "name": "sync_job_status",

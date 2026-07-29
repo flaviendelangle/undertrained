@@ -14,7 +14,9 @@ import {
 } from "../index";
 
 /** Hex colour like "#64748b" — the only colour shape the UI emits. */
-const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a #rrggbb colour");
+const hexColor = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Must be a #rrggbb colour");
 
 /** A subscribable iCal URL: http(s) only, length-bounded. */
 const icalUrl = z

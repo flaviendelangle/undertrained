@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 
 import { useSession } from "next-auth/react";
 import posthog from "posthog-js";

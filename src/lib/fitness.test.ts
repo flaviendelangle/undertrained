@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { LoadAlgorithmPreferences } from "~/utils/getActivityLoad";
 
 import {
+  FORM_ZONES,
+  type FitnessActivity,
+  WEEKLY_VERDICT_THRESHOLDS,
   classifyForm,
   classifyWeeklyLoad,
   computeFitnessSeries,
-  FORM_ZONES,
-  WEEKLY_VERDICT_THRESHOLDS,
-  type FitnessActivity,
 } from "./fitness";
 
 const PREFS: LoadAlgorithmPreferences = {
@@ -35,9 +35,13 @@ describe("computeFitnessSeries", () => {
   });
 
   it("zero-fills rest days so the EWMAs decay between activities", () => {
-    const series = computeFitnessSeries([ride("2024-01-01", 100), ride("2024-01-05", 100)], PREFS, {
-      endDate: new Date(2024, 0, 5),
-    });
+    const series = computeFitnessSeries(
+      [ride("2024-01-01", 100), ride("2024-01-05", 100)],
+      PREFS,
+      {
+        endDate: new Date(2024, 0, 5),
+      },
+    );
 
     // One point per calendar day across the span, inclusive.
     expect(series).toHaveLength(5);
@@ -54,7 +58,9 @@ describe("computeFitnessSeries", () => {
       ride(localDay(new Date(2024, 0, 1 + i)), 50),
     );
 
-    const series = computeFitnessSeries(activities, PREFS, { endDate: new Date(2024, 0, 200) });
+    const series = computeFitnessSeries(activities, PREFS, {
+      endDate: new Date(2024, 0, 200),
+    });
     const last = series[series.length - 1];
 
     // After ~200 days of constant 50/day load the fast 7-day average is
@@ -82,15 +88,21 @@ describe("computeFitnessSeries", () => {
     const activities = Array.from({ length: 30 }, (_, i) =>
       ride(localDay(new Date(2024, 0, 1 + i)), 80),
     );
-    const series = computeFitnessSeries(activities, PREFS, { endDate: new Date(2024, 0, 30) });
+    const series = computeFitnessSeries(activities, PREFS, {
+      endDate: new Date(2024, 0, 30),
+    });
 
     expect(series[series.length - 1].ramp).toBeGreaterThan(0);
   });
 
   it("sums multiple activities on the same day", () => {
-    const series = computeFitnessSeries([ride("2024-01-01", 40), ride("2024-01-01", 60)], PREFS, {
-      endDate: new Date(2024, 0, 1),
-    });
+    const series = computeFitnessSeries(
+      [ride("2024-01-01", 40), ride("2024-01-01", 60)],
+      PREFS,
+      {
+        endDate: new Date(2024, 0, 1),
+      },
+    );
     expect(series[0].load).toBe(100);
   });
 
@@ -101,9 +113,13 @@ describe("computeFitnessSeries", () => {
       hrss: null,
       startDateLocal: "2024-01-01T10:00:00",
     };
-    const series = computeFitnessSeries([noLoad, ride("2024-01-04", 100)], PREFS, {
-      endDate: new Date(2024, 0, 4),
-    });
+    const series = computeFitnessSeries(
+      [noLoad, ride("2024-01-04", 100)],
+      PREFS,
+      {
+        endDate: new Date(2024, 0, 4),
+      },
+    );
 
     // The Jan-1 load-less activity is ignored; the curve begins on Jan 4.
     expect(series).toHaveLength(1);

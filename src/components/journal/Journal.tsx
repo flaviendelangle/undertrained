@@ -9,8 +9,9 @@ import {
   PlusIcon,
 } from "lucide-react";
 import { useRouter } from "next/router";
-import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
+
 import { PreviewCard } from "@base-ui/react/preview-card";
+import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 
 import { CalendarOverlayDialog } from "~/components/settings/CalendarOverlayPanel";
 import { Button } from "~/components/ui/button";
@@ -39,20 +40,20 @@ import { ActivityPreviewHost } from "./ActivityPreviewCard";
 import { CalendarFeedDialog } from "./CalendarFeedButton";
 import { JournalRecordsContext } from "./JournalDayCell";
 import { JournalMonthView } from "./JournalMonthView";
-import { JournalPlannerContext } from "./journalPlanner";
-import {
-  JournalPreviewProvider,
-  type ActivityPreviewPayload,
-  type JournalPreviewHandles,
-} from "./journalPreview";
-import { JournalViewContext, type JournalView } from "./journalView";
-import { JournalWeekView } from "./JournalWeekView";
 import { WeekSummaryPreviewHost } from "./JournalWeekRow";
+import { JournalWeekView } from "./JournalWeekView";
 import {
   PlannedTrainingDialog,
   type PlannerDialogState,
 } from "./PlannedTrainingDialog";
-import { useJournalWeeks, type JournalWeek } from "./useJournalWeeks";
+import { JournalPlannerContext } from "./journalPlanner";
+import {
+  type ActivityPreviewPayload,
+  type JournalPreviewHandles,
+  JournalPreviewProvider,
+} from "./journalPreview";
+import { type JournalView, JournalViewContext } from "./journalView";
+import { type JournalWeek, useJournalWeeks } from "./useJournalWeeks";
 
 const VIEW_OPTIONS: JournalView[] = ["month", "week"];
 
@@ -97,7 +98,8 @@ export function Journal() {
   const weekParam =
     typeof router.query.week === "string" ? router.query.week : null;
   const urlAnchor = React.useMemo(
-    () => (weekParam ? startOf(new Date(`${weekParam}T00:00:00`), "week") : null),
+    () =>
+      weekParam ? startOf(new Date(`${weekParam}T00:00:00`), "week") : null,
     [weekParam],
   );
 
@@ -156,7 +158,8 @@ export function Journal() {
     [routerRef, weekParamRef],
   );
 
-  const setView = (nextView: JournalView) => navigate(nextView, effectiveAnchor);
+  const setView = (nextView: JournalView) =>
+    navigate(nextView, effectiveAnchor);
   const onVisibleWeekChange = React.useCallback(
     (weekStart: Date) => navigate("month", weekStart),
     [navigate],
@@ -218,130 +221,135 @@ export function Journal() {
 
   return (
     <JournalPreviewProvider value={previewHandles}>
-    <JournalPlannerContext.Provider value={plannerValue}>
-      <JournalRecordsContext.Provider value={records}>
-       <JournalViewContext.Provider value={view}>
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="text-muted-foreground border-border flex items-center justify-between gap-3 border-b px-3 py-1.5 text-[11px]">
-            <div className="flex min-w-0 items-center gap-3">
-              {formZone != null && currentForm != null ? (
-                <span
-                  className="flex items-center gap-1.5 font-medium"
-                  title={t("journal.form.tooltip", {
-                    value: `${currentForm.tsb > 0 ? "+" : ""}${Math.round(currentForm.tsb)}`,
-                    zone: formZoneLabel(formZone.key, t),
-                  })}
-                >
-                  <span className="uppercase">{t("journal.form.label")}</span>
-                  <span
-                    className="inline-flex items-center gap-1 rounded px-1.5 py-px tabular-nums"
-                    style={{
-                      color: formZone.color,
-                      backgroundColor: `${formZone.color}22`,
-                    }}
-                  >
-                    {currentForm.tsb > 0 ? "+" : ""}
-                    {Math.round(currentForm.tsb)}
-                    <span className="not-italic">
-                      · {formZoneLabel(formZone.key, t)}
-                    </span>
-                  </span>
-                </span>
-              ) : null}
-
-            </div>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={t("journal.options")}
-                  >
-                    <EllipsisIcon />
-                  </Button>
-                }
-              />
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuRadioGroup
-                  value={view}
-                  onValueChange={(value) => setView(value as JournalView)}
-                >
-                  <DropdownMenuLabel>{t("journal.view.label")}</DropdownMenuLabel>
-                  {VIEW_OPTIONS.map((option) => (
-                    <DropdownMenuRadioItem
-                      key={option}
-                      value={option}
-                      closeOnClick
+      <JournalPlannerContext.Provider value={plannerValue}>
+        <JournalRecordsContext.Provider value={records}>
+          <JournalViewContext.Provider value={view}>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="text-muted-foreground border-border flex items-center justify-between gap-3 border-b px-3 py-1.5 text-[11px]">
+                <div className="flex min-w-0 items-center gap-3">
+                  {formZone != null && currentForm != null ? (
+                    <span
+                      className="flex items-center gap-1.5 font-medium"
+                      title={t("journal.form.tooltip", {
+                        value: `${currentForm.tsb > 0 ? "+" : ""}${Math.round(currentForm.tsb)}`,
+                        zone: formZoneLabel(formZone.key, t),
+                      })}
                     >
-                      {option === "week"
-                        ? t("journal.view.week")
-                        : t("journal.view.month")}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem closeOnClick onClick={goToToday}>
-                  <CalendarCheckIcon />
-                  {t("journal.navigateToToday")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onCreatePlanned(new Date())}>
-                  <PlusIcon />
-                  {t("journal.planTraining")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSubscribeOpen(true)}>
-                  <CalendarPlusIcon />
-                  {t("journal.subscribe")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCalendarsOpen(true)}>
-                  <CalendarRangeIcon />
-                  {t("journal.calendars.manage")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                      <span className="uppercase">
+                        {t("journal.form.label")}
+                      </span>
+                      <span
+                        className="inline-flex items-center gap-1 rounded px-1.5 py-px tabular-nums"
+                        style={{
+                          color: formZone.color,
+                          backgroundColor: `${formZone.color}22`,
+                        }}
+                      >
+                        {currentForm.tsb > 0 ? "+" : ""}
+                        {Math.round(currentForm.tsb)}
+                        <span className="not-italic">
+                          · {formZoneLabel(formZone.key, t)}
+                        </span>
+                      </span>
+                    </span>
+                  ) : null}
+                </div>
 
-          {view === "week" && activeWeek != null ? (
-            <JournalWeekView
-              week={activeWeek}
-              weeks={weeks}
-              dayLoadScale={dayLoadScale}
-              reserveAllDayRow={showAllDayRow}
-              scrollNonce={scrollNonce}
-              onSelectWeek={onSelectWeek}
-            />
-          ) : (
-            <JournalMonthView
-              weeks={weeks}
-              dayLoadScale={dayLoadScale}
-              isError={isError}
-              anchorWeekStart={effectiveAnchor}
-              scrollNonce={scrollNonce}
-              onVisibleWeekChange={onVisibleWeekChange}
-            />
-          )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={t("journal.options")}
+                      >
+                        <EllipsisIcon />
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuRadioGroup
+                      value={view}
+                      onValueChange={(value) => setView(value as JournalView)}
+                    >
+                      <DropdownMenuLabel>
+                        {t("journal.view.label")}
+                      </DropdownMenuLabel>
+                      {VIEW_OPTIONS.map((option) => (
+                        <DropdownMenuRadioItem
+                          key={option}
+                          value={option}
+                          closeOnClick
+                        >
+                          {option === "week"
+                            ? t("journal.view.week")
+                            : t("journal.view.month")}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem closeOnClick onClick={goToToday}>
+                      <CalendarCheckIcon />
+                      {t("journal.navigateToToday")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onCreatePlanned(new Date())}
+                    >
+                      <PlusIcon />
+                      {t("journal.planTraining")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSubscribeOpen(true)}>
+                      <CalendarPlusIcon />
+                      {t("journal.subscribe")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCalendarsOpen(true)}>
+                      <CalendarRangeIcon />
+                      {t("journal.calendars.manage")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
 
-          {/* Shared hover cards: one popup each for all chips / week summaries. */}
-          <ActivityPreviewHost handle={previewHandles.activity} />
-          <WeekSummaryPreviewHost handle={previewHandles.summary} />
+              {view === "week" && activeWeek != null ? (
+                <JournalWeekView
+                  week={activeWeek}
+                  weeks={weeks}
+                  dayLoadScale={dayLoadScale}
+                  reserveAllDayRow={showAllDayRow}
+                  scrollNonce={scrollNonce}
+                  onSelectWeek={onSelectWeek}
+                />
+              ) : (
+                <JournalMonthView
+                  weeks={weeks}
+                  dayLoadScale={dayLoadScale}
+                  isError={isError}
+                  anchorWeekStart={effectiveAnchor}
+                  scrollNonce={scrollNonce}
+                  onVisibleWeekChange={onVisibleWeekChange}
+                />
+              )}
 
-          <PlannedTrainingDialog
-            state={dialogState}
-            onClose={() => setDialogState(null)}
-          />
-          <CalendarFeedDialog
-            open={subscribeOpen}
-            onOpenChange={setSubscribeOpen}
-          />
-          <CalendarOverlayDialog
-            open={calendarsOpen}
-            onOpenChange={setCalendarsOpen}
-          />
-        </div>
-       </JournalViewContext.Provider>
-      </JournalRecordsContext.Provider>
-    </JournalPlannerContext.Provider>
+              {/* Shared hover cards: one popup each for all chips / week summaries. */}
+              <ActivityPreviewHost handle={previewHandles.activity} />
+              <WeekSummaryPreviewHost handle={previewHandles.summary} />
+
+              <PlannedTrainingDialog
+                state={dialogState}
+                onClose={() => setDialogState(null)}
+              />
+              <CalendarFeedDialog
+                open={subscribeOpen}
+                onOpenChange={setSubscribeOpen}
+              />
+              <CalendarOverlayDialog
+                open={calendarsOpen}
+                onOpenChange={setCalendarsOpen}
+              />
+            </div>
+          </JournalViewContext.Provider>
+        </JournalRecordsContext.Provider>
+      </JournalPlannerContext.Provider>
     </JournalPreviewProvider>
   );
 }

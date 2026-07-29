@@ -27,7 +27,11 @@ import { useReschedulePlannedTraining } from "~/hooks/useReschedulePlannedTraini
 import { useLocale, useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
-import { WeekBlock, type DropPreview, earliestMinutesOfWeek } from "./WeekBlock";
+import {
+  type DropPreview,
+  WeekBlock,
+  earliestMinutesOfWeek,
+} from "./WeekBlock";
 import { buildWeekGroups } from "./journalView";
 import type { JournalWeek } from "./useJournalWeeks";
 import { useWeekHorizontalVirtualizer } from "./useWeekHorizontalVirtualizer";
@@ -35,8 +39,8 @@ import {
   ALLDAY_ROW_HEIGHT,
   GUTTER_WIDTH_PX,
   HEADER_HEIGHT_PX,
-  HOUR_HEIGHT,
   HOURS,
+  HOUR_HEIGHT,
   MINUTES_PER_DAY,
   MINUTES_PER_PIXEL,
   minutesToTimeLabel,

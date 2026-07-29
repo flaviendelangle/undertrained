@@ -72,19 +72,33 @@ export function HudMainView({
         {/* Session controls */}
         <div className="flex justify-end gap-2 px-6 pb-4">
           <button
+            type="button"
             onClick={onPause}
+            aria-label={t("liveTraining.pause")}
             className="border-border/50 bg-card/70 hover:bg-accent/70 flex h-12 w-12 items-center justify-center rounded-xl border text-yellow-400 backdrop-blur-sm transition-colors"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+            <svg
+              aria-hidden="true"
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
               <rect x="6" y="4" width="4" height="16" rx="1" />
               <rect x="14" y="4" width="4" height="16" rx="1" />
             </svg>
           </button>
           <button
+            type="button"
             onClick={onStop}
+            aria-label={t("liveTraining.stop")}
             className="border-border/50 bg-card/70 hover:bg-accent/70 flex h-12 w-12 items-center justify-center rounded-xl border text-red-400 backdrop-blur-sm transition-colors"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+            <svg
+              aria-hidden="true"
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
               <rect x="6" y="6" width="12" height="12" rx="2" />
             </svg>
           </button>
@@ -120,19 +134,33 @@ export function HudMainView({
         {/* Session controls — bottom right */}
         <div className="flex justify-end gap-2 px-6 pb-4">
           <button
+            type="button"
             onClick={onPause}
+            aria-label={t("liveTraining.pause")}
             className="border-border/50 bg-card/70 hover:bg-accent/70 flex h-12 w-12 items-center justify-center rounded-xl border text-yellow-400 backdrop-blur-sm transition-colors"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+            <svg
+              aria-hidden="true"
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
               <rect x="6" y="4" width="4" height="16" rx="1" />
               <rect x="14" y="4" width="4" height="16" rx="1" />
             </svg>
           </button>
           <button
+            type="button"
             onClick={onStop}
+            aria-label={t("liveTraining.stop")}
             className="border-border/50 bg-card/70 hover:bg-accent/70 flex h-12 w-12 items-center justify-center rounded-xl border text-red-400 backdrop-blur-sm transition-colors"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+            <svg
+              aria-hidden="true"
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
               <rect x="6" y="6" width="12" height="12" rx="2" />
             </svg>
           </button>

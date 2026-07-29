@@ -1,6 +1,12 @@
 import * as React from "react";
 
-import { ActivityIcon, TimerIcon, TrendingUpIcon, GaugeIcon, CogIcon } from "lucide-react";
+import {
+  ActivityIcon,
+  CogIcon,
+  GaugeIcon,
+  TimerIcon,
+  TrendingUpIcon,
+} from "lucide-react";
 import { signIn, useSession } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
@@ -73,7 +79,10 @@ const LoginPage: NextPageWithLayout = () => {
               { icon: GaugeIcon, label: t("auth.tool.zoneCalculator") },
               { icon: CogIcon, label: t("auth.tool.gearCalculator") },
             ].map(({ icon: Icon, label }) => (
-              <div key={label} className="text-muted-foreground flex items-center gap-2 text-sm">
+              <div
+                key={label}
+                className="text-muted-foreground flex items-center gap-2 text-sm"
+              >
                 <Icon className="size-4 shrink-0" />
                 {label}
               </div>

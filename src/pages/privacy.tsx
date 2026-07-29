@@ -62,10 +62,12 @@ function PrivacyContent() {
             <p>{t("auth.privacy.thirdPartiesIntro")}</p>
             <ul className="mt-2 list-inside list-disc space-y-1">
               <li>
-                <strong>Strava API</strong> &mdash; {t("auth.privacy.thirdPartyStrava")}
+                <strong>Strava API</strong> &mdash;{" "}
+                {t("auth.privacy.thirdPartyStrava")}
               </li>
               <li>
-                <strong>OpenStreetMap</strong> &mdash; {t("auth.privacy.thirdPartyOsm")}
+                <strong>OpenStreetMap</strong> &mdash;{" "}
+                {t("auth.privacy.thirdPartyOsm")}
               </li>
             </ul>
             <p className="mt-2">{t("auth.privacy.thirdPartiesOutro")}</p>

@@ -4,7 +4,13 @@ import strava from "strava-v3";
 import { getSportConfig } from "../../utils/sportConfig";
 import { db } from "../db";
 import type { Database } from "../db";
-import { activities, athletes, riderSettings, syncJobs, timePeriods } from "../db/schema";
+import {
+  activities,
+  athletes,
+  riderSettings,
+  syncJobs,
+  timePeriods,
+} from "../db/schema";
 import {
   fetchStreamsFromStrava,
   getAccessToken,
@@ -52,11 +58,7 @@ export async function processWebhookEvent(
   if (event.object_type === "activity") {
     switch (event.aspect_type) {
       case "create":
-        return handleActivityCreate(
-          db,
-          athlete.id,
-          event.object_id,
-        );
+        return handleActivityCreate(db, athlete.id, event.object_id);
       case "update":
         return handleActivityUpdate(
           db,
@@ -147,7 +149,10 @@ async function handleActivityCreate(
   try {
     await storeActivityDetails(db, activityId, rawActivity);
   } catch (err) {
-    console.error(`[webhook] Failed to store details for ${stravaActivityId}:`, err);
+    console.error(
+      `[webhook] Failed to store details for ${stravaActivityId}:`,
+      err,
+    );
   }
 
   // Refresh the athlete's curated all-time stats (cheap, keeps Records fresh)
@@ -170,11 +175,7 @@ async function handleActivityCreate(
       where: eq(activities.id, activityId),
     });
     if (updatedActivity) {
-      await computeActivityScoresInternal(
-        db,
-        updatedActivity,
-        settingsDoc,
-      );
+      await computeActivityScoresInternal(db, updatedActivity, settingsDoc);
     }
   } catch (err) {
     console.error(
@@ -279,7 +280,10 @@ async function handleActivityUpdate(
     existing.weightedAverageWatts !== (model.weightedAverageWatts ?? null);
   if (metricsChanged) {
     try {
-      const streams = await fetchStreamsFromStrava(accessToken, stravaActivityId);
+      const streams = await fetchStreamsFromStrava(
+        accessToken,
+        stravaActivityId,
+      );
       await storeStreams(db, existing.id, streams);
     } catch (err) {
       console.error(
@@ -376,9 +380,7 @@ export async function deleteAllAthleteData(
   await db.delete(activities).where(eq(activities.athlete, athleteId));
 
   // Delete rider settings
-  await db
-    .delete(riderSettings)
-    .where(eq(riderSettings.athlete, athleteId));
+  await db.delete(riderSettings).where(eq(riderSettings.athlete, athleteId));
 
   // Delete time periods
   await db.delete(timePeriods).where(eq(timePeriods.athlete, athleteId));

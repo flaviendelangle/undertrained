@@ -2,8 +2,8 @@ import * as React from "react";
 
 import { useActivitiesWithMapQuery } from "~/hooks/useActivitiesWithMapQuery";
 
-import { LoadingOverlay } from "./primitives/LoadingOverlay";
 import { Map } from "./Map";
+import { LoadingOverlay } from "./primitives/LoadingOverlay";
 
 export function ActivitiesMap() {
   const activitiesQuery = useActivitiesWithMapQuery();

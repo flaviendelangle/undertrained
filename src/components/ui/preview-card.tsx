@@ -10,10 +10,7 @@ function PreviewCard({ ...props }: PreviewCardPrimitive.Root.Props) {
 
 function PreviewCardTrigger({ ...props }: PreviewCardPrimitive.Trigger.Props) {
   return (
-    <PreviewCardPrimitive.Trigger
-      data-slot="preview-card-trigger"
-      {...props}
-    />
+    <PreviewCardPrimitive.Trigger data-slot="preview-card-trigger" {...props} />
   );
 }
 
@@ -56,7 +53,7 @@ function PreviewCardContent({
         // repositioned to (0,0). The `hide` middleware sets this attribute when
         // the rect collapses, so hiding the positioner here keeps the card
         // from flashing into the top-left of the page.
-        className="isolate z-60 w-[var(--positioner-width,16rem)] data-anchor-hidden:invisible data-anchor-hidden:pointer-events-none"
+        className="isolate z-60 w-[var(--positioner-width,16rem)] data-anchor-hidden:pointer-events-none data-anchor-hidden:invisible"
       >
         <PreviewCardPrimitive.Popup
           data-slot="preview-card-content"

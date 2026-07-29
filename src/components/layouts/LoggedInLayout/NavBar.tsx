@@ -142,7 +142,7 @@ export function NavBar() {
     <NavBarContext value={{ isMenuExpanded }}>
       <nav
         data-expanded={isMenuExpanded}
-        className="bg-sidebar border-sidebar-border hidden h-full w-14 shrink-0 flex-col justify-between border-r py-3 md:flex data-[expanded=true]:w-52"
+        className="bg-sidebar border-sidebar-border hidden h-full w-14 shrink-0 flex-col justify-between border-r py-3 data-[expanded=true]:w-52 md:flex"
       >
         <div className="flex flex-col gap-0.5">
           <TooltipIfMenuCollapsed

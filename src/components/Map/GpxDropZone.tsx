@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
-import { parseGpx, type ParsedGpx } from "~/utils/gpx";
+import { type ParsedGpx, parseGpx } from "~/utils/gpx";
 
 interface GpxDropZoneProps {
   children: React.ReactNode;
@@ -59,7 +59,9 @@ export function GpxDropZone({ children, onDrop, className }: GpxDropZoneProps) {
     file
       .text()
       .then((text) => onDrop(parseGpx(text)))
-      .catch((err) => console.error("[GPX] Failed to parse dropped file:", err));
+      .catch((err) =>
+        console.error("[GPX] Failed to parse dropped file:", err),
+      );
   };
 
   return (

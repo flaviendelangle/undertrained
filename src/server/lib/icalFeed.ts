@@ -1,9 +1,8 @@
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
-
 import { asc, eq } from "drizzle-orm";
 import IcalExpander from "ical-expander";
 import type ICAL from "ical.js";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 
 import type { Database } from "../db";
 import { calendarSubscriptions } from "../db/schema";
@@ -55,7 +54,10 @@ export class IcalFeedError extends Error {
 /** True when an IPv4 literal falls in a private / loopback / reserved range. */
 function ipv4Blocked(ip: string): boolean {
   const o = ip.split(".").map(Number);
-  if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+  if (
+    o.length !== 4 ||
+    o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)
+  ) {
     return true;
   }
   const [a, b] = o;
@@ -115,7 +117,10 @@ export async function assertSafeUrl(rawUrl: string): Promise<URL> {
   } catch {
     throw new IcalFeedError("dns_failure");
   }
-  if (resolved.length === 0 || resolved.some((r) => addressBlocked(r.address))) {
+  if (
+    resolved.length === 0 ||
+    resolved.some((r) => addressBlocked(r.address))
+  ) {
     throw new IcalFeedError("blocked_address");
   }
   return url;
@@ -185,7 +190,10 @@ function pruneCache(now: number): void {
     const oldestFirst = [...feedCache.entries()].sort(
       (a, b) => a[1].fetchedAt - b[1].fetchedAt,
     );
-    for (const [key] of oldestFirst.slice(0, feedCache.size - MAX_CACHE_ENTRIES)) {
+    for (const [key] of oldestFirst.slice(
+      0,
+      feedCache.size - MAX_CACHE_ENTRIES,
+    )) {
       feedCache.delete(key);
     }
   }
@@ -305,11 +313,7 @@ export function eventsFromIcs(
   const { events, occurrences } = expander.between(after, before);
 
   const out: BusyEvent[] = [];
-  const add = (
-    event: ICAL.Event,
-    start: ICAL.Time,
-    end: ICAL.Time,
-  ): void => {
+  const add = (event: ICAL.Event, start: ICAL.Time, end: ICAL.Time): void => {
     if (out.length >= MAX_EVENTS_PER_FEED || isCancelled(event)) return;
     try {
       pushEvent(
@@ -406,7 +410,9 @@ export async function fetchBusyEvents(
       events.push(...result.value);
       bookkeeping.push(recordOutcome(db, sub.id, now, null));
     } else {
-      bookkeeping.push(recordOutcome(db, sub.id, now, sanitizeError(result.reason)));
+      bookkeeping.push(
+        recordOutcome(db, sub.id, now, sanitizeError(result.reason)),
+      );
     }
   });
   await Promise.allSettled(bookkeeping);

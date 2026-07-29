@@ -19,7 +19,11 @@ describe("groupActivityRankings", () => {
       r("power", 1, 1200),
       r("distance", 3),
     ]);
-    expect(groups.map((g) => g.key)).toEqual(["power", "overall", "bestEfforts"]);
+    expect(groups.map((g) => g.key)).toEqual([
+      "power",
+      "overall",
+      "bestEfforts",
+    ]);
     // Never invents an empty group.
     expect(groups.every((g) => g.rankings.length > 0)).toBe(true);
   });

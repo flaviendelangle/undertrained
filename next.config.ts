@@ -1,6 +1,7 @@
 // @ts-check
-import { withPostHogConfig } from "@posthog/nextjs-config";
 import { NextConfig } from "next";
+
+import { withPostHogConfig } from "@posthog/nextjs-config";
 
 /**
  * Feature flags.

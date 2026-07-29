@@ -31,10 +31,7 @@ const handler = createNextApiHandler({
   },
 });
 
-export default function trpcHandler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
+export default function trpcHandler(req: NextApiRequest, res: NextApiResponse) {
   // CSRF protection: require content-type header for mutation requests.
   // Browsers won't send application/json cross-origin without a preflight,
   // so this prevents simple CSRF form submissions.

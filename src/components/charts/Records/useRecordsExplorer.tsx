@@ -253,7 +253,9 @@ export function useRecordsExplorer(): RecordsExplorer {
   const elevationKind = metric === "biggest_climb" ? "biggest_climb" : "total";
   const heartrateActive = metric === "heartrate";
   const paceActive = !isCycling && metric === "pace";
-  const longestMeasure = (LONGEST_MEASURES as readonly string[]).includes(metric)
+  const longestMeasure = (LONGEST_MEASURES as readonly string[]).includes(
+    metric,
+  )
     ? (metric as LongestMeasure)
     : null;
   const longestActive = longestMeasure != null;
@@ -381,10 +383,12 @@ export function useRecordsExplorer(): RecordsExplorer {
   // metric/sport switch keeps showing them instead of flashing an empty table. Updated
   // during render via the same prev-state pattern as the options sync above; it
   // converges because once stored, `active.data === shown.data`.
-  const [shown, setShown] = React.useState<{ data: unknown; entries: Entry[] }>({
-    data: undefined,
-    entries: [],
-  });
+  const [shown, setShown] = React.useState<{ data: unknown; entries: Entry[] }>(
+    {
+      data: undefined,
+      entries: [],
+    },
+  );
   if (hasFreshData && active.data !== shown.data) {
     setShown({ data: active.data, entries: freshEntries });
   }

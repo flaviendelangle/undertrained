@@ -95,11 +95,7 @@ export default function Map(props: MapProps) {
   const tilesLoadedRef = React.useRef(false);
   const readyFiredRef = React.useRef(false);
   const fireReadyIfDone = React.useCallback(() => {
-    if (
-      fittedRef.current &&
-      tilesLoadedRef.current &&
-      !readyFiredRef.current
-    ) {
+    if (fittedRef.current && tilesLoadedRef.current && !readyFiredRef.current) {
       readyFiredRef.current = true;
       onReady?.();
     }
@@ -154,7 +150,10 @@ export default function Map(props: MapProps) {
     let latest: NonNullable<typeof decodedActivityPolylines>[number] | null =
       null;
     for (const entry of decodedActivityPolylines ?? []) {
-      if (latest == null || entry.activity.startDate > latest.activity.startDate) {
+      if (
+        latest == null ||
+        entry.activity.startDate > latest.activity.startDate
+      ) {
         latest = entry;
       }
     }
@@ -268,9 +267,7 @@ export default function Map(props: MapProps) {
           />
         )}
         {selectedActivity && (
-          <DismissOnMapMove
-            onDismiss={() => setSelectedActivity(null)}
-          />
+          <DismissOnMapMove onDismiss={() => setSelectedActivity(null)} />
         )}
         <FitBounds polylines={fitPolylines} onFitted={handleFitted} />
       </MapContainer>

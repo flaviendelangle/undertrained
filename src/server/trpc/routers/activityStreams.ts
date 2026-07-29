@@ -66,7 +66,10 @@ export const activityStreamsRouter = router({
       });
 
       if (!activity) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Activity not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Activity not found",
+        });
       }
 
       if (!activity.areStreamsLoaded) {
@@ -88,7 +91,10 @@ export const activityStreamsRouter = router({
         );
 
       // Group by type and merge chunks (sorted by chunkIndex)
-      const grouped = new Map<string, { chunkIndex: number | null; data: string }[]>();
+      const grouped = new Map<
+        string,
+        { chunkIndex: number | null; data: string }[]
+      >();
       for (const s of streams) {
         const existing = grouped.get(s.type);
         const entry = { chunkIndex: s.chunkIndex, data: s.data };
@@ -137,7 +143,10 @@ export const activityStreamsRouter = router({
       ]);
 
       if (!rawActivity) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Activity not found on Strava" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Activity not found on Strava",
+        });
       }
 
       const activity = await ctx.db.query.activities.findFirst({
@@ -148,7 +157,10 @@ export const activityStreamsRouter = router({
       });
 
       if (!activity) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Activity not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Activity not found",
+        });
       }
 
       // Update activity metadata
@@ -212,7 +224,10 @@ export const activityStreamsRouter = router({
       );
 
       if (normalized.length === 0) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Streams not found on Strava" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Streams not found on Strava",
+        });
       }
 
       const activity = await ctx.db.query.activities.findFirst({
@@ -223,7 +238,10 @@ export const activityStreamsRouter = router({
       });
 
       if (!activity) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Activity not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Activity not found",
+        });
       }
 
       await storeAndRecomputeScores(

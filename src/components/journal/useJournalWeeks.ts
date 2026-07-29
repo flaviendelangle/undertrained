@@ -7,17 +7,17 @@ import type { ListActivity, PlannedTraining } from "@server/db/types";
 import type { BusyEvent } from "@server/lib/icalFeed";
 
 import {
-  classifyWeeklyLoad,
-  computeFitnessSeries,
   type FitnessPoint,
   type WeeklyVerdict,
+  classifyWeeklyLoad,
+  computeFitnessSeries,
 } from "~/lib/fitness";
 import { addUnit, startOf } from "~/utils/dateUtils";
 import {
-  getActivityLoad,
   type LoadAlgorithmPreferences,
+  getActivityLoad,
 } from "~/utils/getActivityLoad";
-import { getSportConfig, type SportCategory } from "~/utils/sportConfig";
+import { type SportCategory, getSportConfig } from "~/utils/sportConfig";
 
 export type JournalActivity = Omit<ListActivity, "mapPolyline">;
 

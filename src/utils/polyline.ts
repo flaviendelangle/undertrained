@@ -73,10 +73,7 @@ export const decode = function (
  *
  * See {@link https://developers.google.com/maps/documentation/utilities/polylinealgorithm}
  */
-export const encode = function (
-  path: LatLngTuple[],
-  precision = 5,
-): string {
+export const encode = function (path: LatLngTuple[], precision = 5): string {
   const factor = Math.pow(10, precision);
 
   const encodeValue = (current: number, previous: number): string => {

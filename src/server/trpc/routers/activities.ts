@@ -125,7 +125,9 @@ export const activitiesRouter = router({
               isNotNull(activities.workoutType),
             ),
           )
-          .then((rows) => rows.map((r) => r.workoutType!).sort((a, b) => a - b)),
+          .then((rows) =>
+            rows.map((r) => r.workoutType!).sort((a, b) => a - b),
+          ),
       ]);
       return { allTypes, allWorkoutTypes };
     }),

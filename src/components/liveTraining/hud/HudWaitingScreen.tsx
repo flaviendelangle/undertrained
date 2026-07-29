@@ -9,6 +9,10 @@ interface HudWaitingScreenProps {
   targetPower: number;
   onTargetPowerChange: (watts: number) => void;
   supportsControl: boolean;
+  /** Whether the trainer rejected or ignored the last ERG command. */
+  ergError: boolean;
+  /** FE-C target status: the trainer can't hold the target at this speed. */
+  ergTargetStatus: "OnTarget" | "LowSpeed" | "HighSpeed" | null;
 }
 
 export function HudWaitingScreen({
@@ -20,6 +24,8 @@ export function HudWaitingScreen({
   targetPower,
   onTargetPowerChange,
   supportsControl,
+  ergError,
+  ergTargetStatus,
 }: HudWaitingScreenProps) {
   const t = useT();
   return (
@@ -28,6 +34,7 @@ export function HudWaitingScreen({
       {hrConnected && currentHr != null && (
         <div className="border-border/50 bg-card/70 absolute top-6 left-6 flex items-center gap-2 rounded-full border px-4 py-2 backdrop-blur-sm">
           <svg
+            aria-hidden="true"
             className="h-4 w-4 text-red-400"
             viewBox="0 0 24 24"
             fill="currentColor"
@@ -44,6 +51,7 @@ export function HudWaitingScreen({
         {/* Pedal icon */}
         <div className="relative">
           <svg
+            aria-hidden="true"
             className="text-muted-foreground h-20 w-20"
             viewBox="0 0 24 24"
             fill="currentColor"
@@ -68,6 +76,7 @@ export function HudWaitingScreen({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <svg
+                  aria-hidden="true"
                   className={`h-5 w-5 transition-colors duration-500 ${
                     ergEnabled
                       ? "text-yellow-600 dark:text-yellow-400"
@@ -83,6 +92,10 @@ export function HudWaitingScreen({
                 </span>
               </div>
               <button
+                type="button"
+                role="switch"
+                aria-checked={ergEnabled}
+                aria-label={t("liveTraining.ergMode")}
                 onClick={() => onErgEnabledChange(!ergEnabled)}
                 className={`relative ml-6 h-6 w-11 rounded-full transition-colors duration-300 ${
                   ergEnabled ? "bg-yellow-500" : "bg-accent"
@@ -97,43 +110,86 @@ export function HudWaitingScreen({
             </div>
 
             {ergEnabled && (
-              <div className="flex items-center justify-center gap-3">
-                <button
-                  onClick={() => onTargetPowerChange(targetPower - 10)}
-                  className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                >
-                  -10
-                </button>
-                <button
-                  onClick={() => onTargetPowerChange(targetPower - 5)}
-                  className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                >
-                  -5
-                </button>
-                <span className="min-w-20 text-center font-mono text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                  {targetPower}
-                  <span className="text-muted-foreground ml-1 text-xs font-normal">
-                    W
+              <>
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    aria-label={t("liveTraining.targetPowerStep", {
+                      step: "-10",
+                    })}
+                    onClick={() => onTargetPowerChange(targetPower - 10)}
+                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                  >
+                    -10
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("liveTraining.targetPowerStep", {
+                      step: "-5",
+                    })}
+                    onClick={() => onTargetPowerChange(targetPower - 5)}
+                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                  >
+                    -5
+                  </button>
+                  <span className="min-w-20 text-center font-mono text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                    {targetPower}
+                    <span className="text-muted-foreground ml-1 text-xs font-normal">
+                      W
+                    </span>
                   </span>
-                </span>
-                <button
-                  onClick={() => onTargetPowerChange(targetPower + 5)}
-                  className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                >
-                  +5
-                </button>
-                <button
-                  onClick={() => onTargetPowerChange(targetPower + 10)}
-                  className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
-                >
-                  +10
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    aria-label={t("liveTraining.targetPowerStep", {
+                      step: "+5",
+                    })}
+                    onClick={() => onTargetPowerChange(targetPower + 5)}
+                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                  >
+                    +5
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("liveTraining.targetPowerStep", {
+                      step: "+10",
+                    })}
+                    onClick={() => onTargetPowerChange(targetPower + 10)}
+                    className="border-border text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors hover:border-yellow-500/60"
+                  >
+                    +10
+                  </button>
+                </div>
+
+                {ergError && (
+                  <p role="alert" className="text-center text-xs text-red-400">
+                    {t("liveTraining.ergFailed")}
+                  </p>
+                )}
+
+                {/* The trainer reports it cannot reach the target in this gear. */}
+                {!ergError && ergTargetStatus === "LowSpeed" && (
+                  <p
+                    role="status"
+                    className="text-center text-xs text-yellow-500"
+                  >
+                    {t("liveTraining.ergShiftUp")}
+                  </p>
+                )}
+                {!ergError && ergTargetStatus === "HighSpeed" && (
+                  <p
+                    role="status"
+                    className="text-center text-xs text-yellow-500"
+                  >
+                    {t("liveTraining.ergShiftDown")}
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
 
         <button
+          type="button"
           onClick={onManualStart}
           className="border-border text-muted-foreground hover:border-border hover:text-foreground mt-4 rounded-full border px-6 py-2 text-sm transition-colors"
         >

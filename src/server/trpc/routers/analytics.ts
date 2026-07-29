@@ -1,7 +1,12 @@
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { protectedProcedure, resolveTimePeriod, router, validateAthleteOwnership } from "../index";
+import {
+  protectedProcedure,
+  resolveTimePeriod,
+  router,
+  validateAthleteOwnership,
+} from "../index";
 
 export const analyticsRouter = router({
   getPowerCurve: protectedProcedure
@@ -11,8 +16,14 @@ export const analyticsRouter = router({
         activityTypes: z.array(z.string().max(50)).optional(),
         workoutTypes: z.array(z.number().int()).optional(),
         timePeriodId: z.number().int().positive().optional(),
-        dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format").optional(),
-        dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format").optional(),
+        dateFrom: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format")
+          .optional(),
+        dateTo: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format")
+          .optional(),
       }),
     )
     .use(validateAthleteOwnership)
@@ -28,13 +39,12 @@ export const analyticsRouter = router({
             )})`
           : sql``;
 
-      const periodSportFilter =
-        periodSportTypes
-          ? sql`AND a.type IN (${sql.join(
-              periodSportTypes.map((t) => sql`${t}`),
-              sql`, `,
-            )})`
-          : sql``;
+      const periodSportFilter = periodSportTypes
+        ? sql`AND a.type IN (${sql.join(
+            periodSportTypes.map((t) => sql`${t}`),
+            sql`, `,
+          )})`
+        : sql``;
 
       const workoutTypeFilter =
         input.workoutTypes && input.workoutTypes.length > 0
@@ -44,19 +54,17 @@ export const analyticsRouter = router({
             )})`
           : sql``;
 
-      const dateFromFilter =
-        input.dateFrom
-          ? sql`AND a.start_date >= ${input.dateFrom}`
-          : periodDateFrom
-            ? sql`AND a.start_date >= ${periodDateFrom}`
-            : sql``;
+      const dateFromFilter = input.dateFrom
+        ? sql`AND a.start_date >= ${input.dateFrom}`
+        : periodDateFrom
+          ? sql`AND a.start_date >= ${periodDateFrom}`
+          : sql``;
 
-      const dateToFilter =
-        input.dateTo
-          ? sql`AND a.start_date <= ${input.dateTo + "T23:59:59Z"}`
-          : periodDateTo
-            ? sql`AND a.start_date <= ${periodDateTo + "T23:59:59Z"}`
-            : sql``;
+      const dateToFilter = input.dateTo
+        ? sql`AND a.start_date <= ${input.dateTo + "T23:59:59Z"}`
+        : periodDateTo
+          ? sql`AND a.start_date <= ${periodDateTo + "T23:59:59Z"}`
+          : sql``;
 
       const rows = await ctx.db.execute<{
         duration: string;

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_LOCALE } from "~/i18n/locales";
 import { setActiveDateLocale } from "~/i18n/activeDateLocale";
+import { DEFAULT_LOCALE } from "~/i18n/locales";
 
 import { formatOrdinal } from "./format";
 

@@ -87,7 +87,11 @@ export function setField(
   }
 
   if (value == null) return timeline;
-  return upsertChange(timeline, { id: crypto.randomUUID(), date, [field]: value });
+  return upsertChange(timeline, {
+    id: crypto.randomUUID(),
+    date,
+    [field]: value,
+  });
 }
 
 /** Remove a single field from the change point at `date` (reverts to inherited). */

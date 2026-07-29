@@ -202,7 +202,8 @@ export function generatePowerCurveDurations(maxDuration: number): number[] {
   for (let d = 1; d <= Math.min(30, maxDuration); d += 1) durations.add(d);
   for (let d = 35; d <= Math.min(300, maxDuration); d += 5) durations.add(d);
   for (let d = 330; d <= Math.min(1200, maxDuration); d += 30) durations.add(d);
-  for (let d = 1320; d <= Math.min(3600, maxDuration); d += 120) durations.add(d);
+  for (let d = 1320; d <= Math.min(3600, maxDuration); d += 120)
+    durations.add(d);
   for (let d = 3900; d <= maxDuration; d += 300) durations.add(d);
   for (const d of HEADLINE_POWER_DURATIONS) {
     if (d <= maxDuration) durations.add(d);
@@ -216,10 +217,7 @@ export function generatePowerCurveDurations(maxDuration: number): number[] {
  * holding each value until the next sample. Returns the input unchanged
  * if no time stream is provided.
  */
-function expandToPerSecond(
-  values: number[],
-  timeStream: number[],
-): number[] {
+function expandToPerSecond(values: number[], timeStream: number[]): number[] {
   if (values.length === 0) return [];
 
   const totalSeconds = timeStream[timeStream.length - 1] + 1;
@@ -436,7 +434,9 @@ export function resolveRiderSettings(
   targetDate: string,
 ): ResolvedSettings {
   const fullInitialValues: ResolvedSettings = { ...DEFAULT_RESOLVED_SETTINGS };
-  for (const key of Object.keys(DEFAULT_RESOLVED_SETTINGS) as (keyof ResolvedSettings)[]) {
+  for (const key of Object.keys(
+    DEFAULT_RESOLVED_SETTINGS,
+  ) as (keyof ResolvedSettings)[]) {
     const v = timeline.initialValues[key];
     if (v != null) {
       fullInitialValues[key] = v;

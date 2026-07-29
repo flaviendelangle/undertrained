@@ -1,7 +1,7 @@
 import * as React from "react";
 
-import type { GetServerSideProps } from "next";
 import { PlusIcon, RouteIcon, Trash2Icon } from "lucide-react";
+import type { GetServerSideProps } from "next";
 import Link from "next/link";
 
 import { Map } from "~/components/Map";
@@ -117,7 +117,11 @@ const RoutesPage: NextPageWithLayout = () => {
           <div className="text-muted-foreground flex flex-col items-center gap-3 py-16 text-center text-sm">
             <RouteIcon className="size-8 opacity-50" />
             <p>{t("routes.empty")}</p>
-            <Button size="sm" nativeButton={false} render={<Link href="/map/new" />}>
+            <Button
+              size="sm"
+              nativeButton={false}
+              render={<Link href="/map/new" />}
+            >
               <PlusIcon /> {t("routes.createFirst")}
             </Button>
           </div>

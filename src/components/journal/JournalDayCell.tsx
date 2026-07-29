@@ -19,10 +19,10 @@ import { cn } from "~/lib/utils";
 import { getSportConfig } from "~/utils/sportConfig";
 
 import { useMapPrefetch } from "./ActivityPreviewCard";
+import { PlannedTrainingChip } from "./PlannedTrainingChip";
 import { useJournalPlanner } from "./journalPlanner";
 import { useJournalPreviewHandles } from "./journalPreview";
 import { useJournalActivityHref } from "./journalView";
-import { PlannedTrainingChip } from "./PlannedTrainingChip";
 import type { JournalActivity, JournalDay } from "./useJournalWeeks";
 
 /** Chips (planned + activities) shown before collapsing the rest into a "+N more" badge. */
@@ -84,9 +84,13 @@ function ActivityChip({ activity }: { activity: JournalActivity }) {
   const records = React.useContext(JournalRecordsContext);
   const activityRecords = records.get(activity.stravaId);
   const isRace =
-    activity.workoutType != null && RACE_WORKOUT_TYPES.has(activity.workoutType);
+    activity.workoutType != null &&
+    RACE_WORKOUT_TYPES.has(activity.workoutType);
   const isPr = activityRecords != null && activityRecords.length > 0;
-  const href = useJournalActivityHref(activity.startDateLocal, activity.stravaId);
+  const href = useJournalActivityHref(
+    activity.startDateLocal,
+    activity.stravaId,
+  );
 
   // Open the Journal's shared preview card (one popup for all chips) with this
   // activity as the payload, and warm its route map on hover.
@@ -103,7 +107,9 @@ function ActivityChip({ activity }: { activity: JournalActivity }) {
         <Link
           href={href}
           aria-label={
-            isRace ? t("journal.activity.race", { name: activity.name }) : activity.name
+            isRace
+              ? t("journal.activity.race", { name: activity.name })
+              : activity.name
           }
           className={cn(
             "flex min-w-0 flex-col gap-0.5 rounded px-1 py-0.5 leading-tight transition-colors hover:brightness-95 dark:hover:brightness-110",
@@ -219,7 +225,9 @@ export function JournalDayCell({
           push this cell's chips out of alignment with the rest of the week. */}
       <div className="flex h-5 items-center">
         <span
-          aria-label={format(day.date, "EEEE d MMMM", { locale: getActiveDateLocale() })}
+          aria-label={format(day.date, "EEEE d MMMM", {
+            locale: getActiveDateLocale(),
+          })}
           className={cn(
             "text-muted-foreground px-1 text-[11px] leading-none font-medium",
             day.isToday &&
@@ -243,7 +251,9 @@ export function JournalDayCell({
             </PopoverTrigger>
             <PopoverContent align="start" className="w-60 gap-2 p-2">
               <div className="text-muted-foreground px-1 text-xs font-medium">
-                {format(day.date, "EEEE d MMMM", { locale: getActiveDateLocale() })}
+                {format(day.date, "EEEE d MMMM", {
+                  locale: getActiveDateLocale(),
+                })}
               </div>
               <div className="flex flex-col gap-0.5">
                 {items.map(renderDayItem)}

@@ -1,6 +1,7 @@
-import { TRPCError } from "@trpc/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
+
+import { TRPCError } from "@trpc/server";
 
 import { activities, timePeriods } from "../../db/schema";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
@@ -21,12 +22,18 @@ export const timePeriodsRouter = router({
         );
 
       if (!period) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Time period not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Time period not found",
+        });
       }
 
       const sportTypeCondition =
         period.sportTypes && period.sportTypes.length > 0
-          ? sql`AND a.type IN (${sql.join(period.sportTypes.map((t) => sql`${t}`), sql`, `)})`
+          ? sql`AND a.type IN (${sql.join(
+              period.sportTypes.map((t) => sql`${t}`),
+              sql`, `,
+            )})`
           : sql``;
 
       const [stats] = await ctx.db.execute<{
@@ -188,9 +195,7 @@ export const timePeriodsRouter = router({
         GROUP BY p.id
       `);
 
-      const statsMap = new Map(
-        rows.map((row) => [Number(row.period_id), row]),
-      );
+      const statsMap = new Map(rows.map((row) => [Number(row.period_id), row]));
 
       return periods.map((period) => {
         const row = statsMap.get(period.id);

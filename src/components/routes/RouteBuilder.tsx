@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/router";
 
+import type { Route } from "@server/db/types";
+
 import { GpxDropZone } from "~/components/Map/GpxDropZone";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
@@ -29,15 +31,10 @@ import {
 import { useAthleteId } from "~/hooks/useAthleteId";
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
-import type { Route } from "@server/db/types";
 import { formatKm } from "~/utils/format";
-import {
-  elevationAscent,
-  type ParsedGpx,
-  polylineDistance,
-} from "~/utils/gpx";
+import { type ParsedGpx, elevationAscent, polylineDistance } from "~/utils/gpx";
 import { takePendingGpx } from "~/utils/pendingGpx";
-import { decode, encode, type LatLngTuple } from "~/utils/polyline";
+import { type LatLngTuple, decode, encode } from "~/utils/polyline";
 import {
   DEFAULT_PROFILE_BY_SPORT,
   ROUTE_PROFILES,
@@ -54,10 +51,7 @@ import { SendToDeviceMenu } from "./SendToDeviceMenu";
 const GPX_WAYPOINT_COUNT = 12;
 
 /** Evenly-spaced subsample by index; returns the input as-is when shorter than `count`. */
-function sampleWaypoints(
-  points: LatLngTuple[],
-  count: number,
-): LatLngTuple[] {
+function sampleWaypoints(points: LatLngTuple[], count: number): LatLngTuple[] {
   if (points.length <= count) return points;
   const result: LatLngTuple[] = [];
   for (let i = 0; i < count; i++) {
@@ -250,8 +244,7 @@ export function RouteBuilder({ route }: { route?: Route }) {
       ? (activePreview.points[hoverIndex] ?? null)
       : null;
 
-  const canSave =
-    !!athleteId && name.trim().length > 0 && !!activePreview;
+  const canSave = !!athleteId && name.trim().length > 0 && !!activePreview;
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   const save = () => {
@@ -291,7 +284,11 @@ export function RouteBuilder({ route }: { route?: Route }) {
               commitWaypoints(waypoints.map((w, idx) => (idx === i ? p : w)))
             }
             onInsertWaypoint={(i, p) =>
-              commitWaypoints([...waypoints.slice(0, i), p, ...waypoints.slice(i)])
+              commitWaypoints([
+                ...waypoints.slice(0, i),
+                p,
+                ...waypoints.slice(i),
+              ])
             }
             onRemoveWaypoint={(i) =>
               commitWaypoints(waypoints.filter((_, idx) => idx !== i))
@@ -372,17 +369,18 @@ export function RouteBuilder({ route }: { route?: Route }) {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cycling">{t("sport.cycling.label")}</SelectItem>
-                <SelectItem value="running">{t("sport.running.label")}</SelectItem>
+                <SelectItem value="cycling">
+                  {t("sport.cycling.label")}
+                </SelectItem>
+                <SelectItem value="running">
+                  {t("sport.running.label")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex flex-col gap-2">
             <Label>{t("routes.profileLabel")}</Label>
-            <Select
-              value={profile}
-              onValueChange={(v) => v && setProfile(v)}
-            >
+            <Select value={profile} onValueChange={(v) => v && setProfile(v)}>
               <SelectTrigger size="sm" className="w-full">
                 <SelectValue>
                   {PROFILE_LABEL_KEY[profile]
@@ -406,13 +404,17 @@ export function RouteBuilder({ route }: { route?: Route }) {
         {/* Stats */}
         <div className="bg-muted/40 grid grid-cols-2 gap-2 rounded-md p-3 text-sm">
           <div>
-            <div className="text-muted-foreground text-xs">{t("routes.distance")}</div>
+            <div className="text-muted-foreground text-xs">
+              {t("routes.distance")}
+            </div>
             <div className="font-semibold">
               {activePreview ? formatKm(activePreview.distance) : "—"}
             </div>
           </div>
           <div>
-            <div className="text-muted-foreground text-xs">{t("routes.elevationGain")}</div>
+            <div className="text-muted-foreground text-xs">
+              {t("routes.elevationGain")}
+            </div>
             <div className="font-semibold">
               {activePreview ? `${Math.round(activePreview.ascent)} m` : "—"}
             </div>
@@ -460,7 +462,11 @@ export function RouteBuilder({ route }: { route?: Route }) {
           />
         </div>
 
-        <Button onClick={save} disabled={!canSave || isSaving} className="mt-auto">
+        <Button
+          onClick={save}
+          disabled={!canSave || isSaving}
+          className="mt-auto"
+        >
           <SaveIcon />
           {isSaving
             ? t("routes.saving")

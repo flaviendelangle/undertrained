@@ -21,8 +21,8 @@ import { formatCompactDuration } from "~/utils/format";
 import { SPORT_CATEGORY_META } from "~/utils/sportConfig";
 
 import { JournalDayCell } from "./JournalDayCell";
-import { useJournalPreviewHandles } from "./journalPreview";
 import { WeeklyLoadChart } from "./WeeklyLoadChart";
+import { useJournalPreviewHandles } from "./journalPreview";
 import type { JournalWeek } from "./useJournalWeeks";
 
 /** Fixed height of every week row, regardless of how many activities it holds. */

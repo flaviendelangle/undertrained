@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AntHeartRateConnection } from "~/sensors/ant/connection";
-import type { ConnectionState, HeartRateData } from "~/sensors/types";
+import type {
+  ConnectionState,
+  HeartRateData,
+  SensorErrorReason,
+} from "~/sensors/types";
 
 export function useAntHeartRate() {
   const [state, setState] = useState<ConnectionState>("disconnected");
@@ -37,6 +41,10 @@ export function useAntHeartRate() {
 
   return {
     state,
+    // ANT+ has no device chooser, so there is no "wrong device picked" case.
+    errorReason: (state === "error"
+      ? "failed"
+      : null) as SensorErrorReason | null,
     data,
     deviceName: null as string | null,
     connect,

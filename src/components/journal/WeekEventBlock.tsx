@@ -2,10 +2,9 @@ import * as React from "react";
 
 import { CalendarIcon, FlagIcon, MedalIcon } from "lucide-react";
 import Link from "next/link";
-import { useDraggable } from "@dnd-kit/react";
 
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
-
+import { useDraggable } from "@dnd-kit/react";
 import type { PlannedTraining } from "@server/db/types";
 import type { BusyEvent } from "@server/lib/icalFeed";
 
@@ -46,9 +45,13 @@ export function WeekActivityBlock({
   const records = React.useContext(JournalRecordsContext);
   const activityRecords = records.get(activity.stravaId);
   const isRace =
-    activity.workoutType != null && RACE_WORKOUT_TYPES.has(activity.workoutType);
+    activity.workoutType != null &&
+    RACE_WORKOUT_TYPES.has(activity.workoutType);
   const isPr = activityRecords != null && activityRecords.length > 0;
-  const href = useJournalActivityHref(activity.startDateLocal, activity.stravaId);
+  const href = useJournalActivityHref(
+    activity.startDateLocal,
+    activity.stravaId,
+  );
 
   // Same shared preview card as the month view's chips (see ActivityPreviewHost).
   const handles = useJournalPreviewHandles();
@@ -64,7 +67,9 @@ export function WeekActivityBlock({
         <Link
           href={href}
           aria-label={
-            isRace ? t("journal.activity.race", { name: activity.name }) : activity.name
+            isRace
+              ? t("journal.activity.race", { name: activity.name })
+              : activity.name
           }
           className={cn(
             "flex h-full w-full min-w-0 flex-col gap-0.5 overflow-hidden rounded px-1 py-0.5 leading-tight transition-[filter] hover:brightness-95 dark:hover:brightness-110",
