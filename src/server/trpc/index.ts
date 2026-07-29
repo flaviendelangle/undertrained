@@ -9,19 +9,14 @@ import { TRPCError, initTRPC } from "@trpc/server";
 import { authOptions } from "../../pages/api/auth/[...nextauth]";
 import { type Database, db } from "../db";
 import { timePeriods } from "../db/schema";
+import { clientIp, consumeRateLimit } from "../lib/rateLimit";
 
 export async function createContext(opts: {
   req: NextApiRequest;
   res: NextApiResponse;
 }) {
   const session = await getServerSession(opts.req, opts.res, authOptions);
-  const ip =
-    (Array.isArray(opts.req.headers["x-forwarded-for"])
-      ? opts.req.headers["x-forwarded-for"][0]
-      : opts.req.headers["x-forwarded-for"]?.split(",")[0]?.trim()) ??
-    opts.req.socket.remoteAddress ??
-    "unknown";
-  return { db, session, ip };
+  return { db, session, ip: clientIp(opts.req) };
 }
 
 export type Context = {
@@ -43,39 +38,14 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   return next({ ctx: { ...ctx, session: ctx.session } });
 });
 
-/**
- * Simple in-memory rate limiter.
- * Tracks requests per key within a sliding window.
- * Periodically prunes stale entries to prevent unbounded memory growth.
- */
-const rateLimitStore = new Map<string, number[]>();
-let lastPruneTime = 0;
-const PRUNE_INTERVAL_MS = 5 * 60_000; // 5 minutes
-
+/** Consumes one slot for `key`, surfacing exhaustion as a tRPC error. */
 function rateLimit(key: string, maxRequests: number, windowMs: number) {
-  const now = Date.now();
-
-  // Periodically prune stale entries
-  if (now - lastPruneTime > PRUNE_INTERVAL_MS) {
-    lastPruneTime = now;
-    for (const [k, timestamps] of rateLimitStore) {
-      const active = timestamps.filter((ts) => now - ts < windowMs);
-      if (active.length === 0) rateLimitStore.delete(k);
-      else rateLimitStore.set(k, active);
-    }
-  }
-
-  const timestamps = (rateLimitStore.get(key) ?? []).filter(
-    (ts) => now - ts < windowMs,
-  );
-  if (timestamps.length >= maxRequests) {
+  if (!consumeRateLimit(key, maxRequests, windowMs)) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",
       message: "Rate limit exceeded. Please try again later.",
     });
   }
-  timestamps.push(now);
-  rateLimitStore.set(key, timestamps);
 }
 
 /**

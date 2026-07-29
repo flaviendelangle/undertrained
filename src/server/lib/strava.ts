@@ -99,9 +99,20 @@ async function refreshToken(
   });
 
   if (!response.ok) {
+    // 400/401 mean Strava rejected the grant itself — the refresh token was
+    // revoked (the athlete deauthorized the app) or already rotated away. Every
+    // other status is Strava being unavailable, and the two must stay
+    // distinguishable: the webhook's deauthorization check treats UNAUTHORIZED
+    // as proof that access is gone and deletes the athlete's data on it.
+    if (response.status === 400 || response.status === 401) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Strava session expired. Please sign in again.",
+      });
+    }
     throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Strava token refresh failed. Please sign in again.",
+      code: "BAD_GATEWAY",
+      message: `Strava token refresh failed (${response.status} ${response.statusText}).`,
     });
   }
 
