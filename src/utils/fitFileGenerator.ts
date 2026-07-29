@@ -2,6 +2,8 @@ import { FitWriter } from "@markw65/fit-file-writer";
 
 import type { SessionDataPoint, SessionSummary } from "~/sensors/types";
 
+import { buildLaps } from "./fitLaps";
+
 export function generateFitFile(
   dataPoints: SessionDataPoint[],
   summary: SessionSummary,
@@ -51,26 +53,25 @@ export function generateFitFile(
     event_type: "stop_all",
   });
 
-  // Lap message
-  const lapRecord = {
-    timestamp: writer.time(endTime),
-    start_time: writer.time(startTime),
-    total_elapsed_time: summary.elapsedSeconds,
-    total_timer_time: summary.elapsedSeconds,
-    total_distance: summary.totalDistance,
-    message_index: { value: 0 },
-    ...(summary.avgPower != null && { avg_power: summary.avgPower }),
-    ...(summary.maxPower != null && { max_power: summary.maxPower }),
-    ...(summary.avgHeartRate != null && {
-      avg_heart_rate: summary.avgHeartRate,
-    }),
-    ...(summary.maxHeartRate != null && {
-      max_heart_rate: summary.maxHeartRate,
-    }),
-    ...(summary.avgCadence != null && { avg_cadence: summary.avgCadence }),
-    ...(summary.maxCadence != null && { max_cadence: summary.maxCadence }),
-  };
-  writer.writeMessage("lap", lapRecord);
+  // Lap messages — one per structured-workout step, or a single session-wide
+  // lap on a free ride (see `buildLaps`).
+  const laps = buildLaps(dataPoints, summary);
+  laps.forEach((lap, index) => {
+    writer.writeMessage("lap", {
+      timestamp: writer.time(new Date(lap.endTimestamp)),
+      start_time: writer.time(new Date(lap.startTimestamp)),
+      total_elapsed_time: lap.totalElapsedSeconds,
+      total_timer_time: lap.totalElapsedSeconds,
+      total_distance: lap.totalDistance,
+      message_index: { value: index },
+      ...(lap.avgPower != null && { avg_power: lap.avgPower }),
+      ...(lap.maxPower != null && { max_power: lap.maxPower }),
+      ...(lap.avgHeartRate != null && { avg_heart_rate: lap.avgHeartRate }),
+      ...(lap.maxHeartRate != null && { max_heart_rate: lap.maxHeartRate }),
+      ...(lap.avgCadence != null && { avg_cadence: lap.avgCadence }),
+      ...(lap.maxCadence != null && { max_cadence: lap.maxCadence }),
+    });
+  });
 
   // Session message
   const sessionRecord = {
@@ -83,7 +84,7 @@ export function generateFitFile(
     sub_sport: "indoor_cycling" as const,
     message_index: { value: 0 },
     first_lap_index: 0,
-    num_laps: 1,
+    num_laps: laps.length,
     ...(summary.avgPower != null && { avg_power: summary.avgPower }),
     ...(summary.maxPower != null && { max_power: summary.maxPower }),
     ...(summary.normalizedPower != null && {

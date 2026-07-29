@@ -7,13 +7,19 @@ import { Button } from "~/components/ui/button";
 import { useT } from "~/i18n/useT";
 import { msToKmh } from "~/sensors/speedFromPower";
 import type { SessionDataPoint, SessionSummary } from "~/sensors/types";
+import type { ResolvedSegment } from "~/utils/structuredWorkout";
 import { formatHumanDuration } from "~/utils/format";
+
+import { HudWorkoutCompliance } from "./HudWorkoutCompliance";
 
 interface HudPostTrainingProps {
   summary: SessionSummary;
   chartData: SessionDataPoint[];
   dataPoints: SessionDataPoint[];
   ftp: number;
+  /** Name of the structured workout ridden, if any. */
+  workoutName?: string | null;
+  segments?: readonly ResolvedSegment[] | null;
   onReset: () => void;
 }
 
@@ -22,10 +28,14 @@ export function HudPostTraining({
   chartData,
   dataPoints,
   ftp,
+  workoutName = null,
+  segments = null,
   onReset,
 }: HudPostTrainingProps) {
   const t = useT();
-  const [activityName, setActivityName] = useState("");
+  // Seeded from the workout: naming the ride after the session you just did is
+  // what everyone types anyway.
+  const [activityName, setActivityName] = useState(workoutName ?? "");
 
   return (
     <div className="animate-slide-up border-border/50 bg-background/95 absolute inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t backdrop-blur-lg">
@@ -122,6 +132,16 @@ export function HudPostTraining({
             <PowerHrChart dataPoints={chartData} ftp={ftp} showAll />
           </div>
         </div>
+
+        {/* Compliance — only when the ride followed a workout. */}
+        {segments != null && segments.length > 0 && (
+          <div className="border-border/50 bg-card/50 mb-6 rounded-xl border p-4">
+            <HudWorkoutCompliance
+              dataPoints={dataPoints}
+              segments={segments}
+            />
+          </div>
+        )}
 
         {/* Export */}
         <div className="border-border/50 bg-card/50 mb-6 rounded-xl border p-4">

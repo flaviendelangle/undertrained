@@ -17,6 +17,33 @@ export function formZoneLabel(key: FormZoneKey, t: TFunction): string {
   return t(FORM_ZONE_LABEL_KEY[key]);
 }
 
+/**
+ * Translation keys for the power zones, in POWER_ZONES order.
+ *
+ * `POWER_ZONES[].name` is hardcoded English because it doubles as a stable
+ * identifier in stored data; this maps the index a zone lookup returns onto a
+ * label a rider can read.
+ */
+const POWER_ZONE_LABEL_KEY: AppMessageKey[] = [
+  "powerZone.recovery",
+  "powerZone.endurance",
+  "powerZone.tempo",
+  "powerZone.threshold",
+  "powerZone.vo2max",
+  "powerZone.anaerobic",
+  "powerZone.neuromuscular",
+];
+
+export function powerZoneLabel(index: number, t: TFunction): string {
+  const key = POWER_ZONE_LABEL_KEY[index];
+  return key ? t(key) : "";
+}
+
+/** Short form for chips and axis labels: "Z1" … "Z7". */
+export function powerZoneShortLabel(index: number): string {
+  return `Z${index + 1}`;
+}
+
 /** Translation keys for each weekly training verdict, keyed by `WeeklyVerdict.key`. */
 const WEEKLY_VERDICT_LABEL_KEY: Record<WeeklyVerdict["key"], AppMessageKey> = {
   detraining: "fitness.verdict.detraining",

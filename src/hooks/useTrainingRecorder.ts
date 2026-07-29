@@ -19,6 +19,8 @@ export function useTrainingRecorder() {
       elapsed: number;
       /** Real seconds covered by this sample — see `distanceIncrementMeters`. */
       deltaSeconds: number;
+      /** Structured-workout step this sample belongs to; null on a free ride. */
+      segmentIndex: number | null;
     }) => {
       if (!startTimeRef.current) {
         startTimeRef.current = new Date();
@@ -41,6 +43,7 @@ export function useTrainingRecorder() {
         cadence: data.cadence,
         speed: data.speed,
         distance: prevDistance + distanceIncrement,
+        segmentIndex: data.segmentIndex,
       });
     },
     [],

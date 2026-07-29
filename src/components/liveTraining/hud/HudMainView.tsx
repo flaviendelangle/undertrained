@@ -1,10 +1,15 @@
 import { PowerHrChart } from "~/components/liveTraining/PowerHrChart";
+import type { UseWorkoutPlayerResult } from "~/hooks/useWorkoutPlayer";
 import { useT } from "~/i18n/useT";
 import type { SessionDataPoint } from "~/sensors/types";
+import { complianceTolerance } from "~/utils/structuredWorkout";
 
 import { HudMetricTile } from "./HudMetricTile";
 import { HudPowerGauge } from "./HudPowerGauge";
+import { HudNextSegmentChip, HudSegmentPanel } from "./HudSegmentPanel";
 import { HudTopBar } from "./HudTopBar";
+import { HudWorkoutBar } from "./HudWorkoutBar";
+import { HudWorkoutControls } from "./HudWorkoutControls";
 
 interface HudMainViewProps {
   // Live values
@@ -17,6 +22,12 @@ interface HudMainViewProps {
   chartData: SessionDataPoint[];
   ftp: number;
   weightKg: number;
+  /**
+   * Structured workout being ridden, or null for a free ride. One optional
+   * group rather than a dozen more flat props — and the null case renders the
+   * HUD exactly as it was before workouts existed.
+   */
+  workout?: { name: string; player: UseWorkoutPlayerResult } | null;
   // Actions
   onPause: () => void;
   onStop: () => void;
@@ -32,10 +43,15 @@ export function HudMainView({
   chartData,
   ftp,
   weightKg,
+  workout = null,
   onPause,
   onStop,
 }: HudMainViewProps) {
   const t = useT();
+  const player = workout?.player ?? null;
+  const targetPower = player?.targetWatts ?? null;
+  const tolerance =
+    targetPower == null ? undefined : complianceTolerance(targetPower);
   return (
     <div className="from-background to-background absolute inset-0 flex flex-col bg-linear-to-br">
       {/* Top bar */}
@@ -48,6 +64,16 @@ export function HudMainView({
       {/* Main area — mobile: stacked, desktop: absolute positioned */}
       {/* Mobile layout */}
       <div className="flex min-h-0 flex-1 flex-col md:hidden">
+        {player && (
+          <div className="px-4 pt-2">
+            <HudSegmentPanel
+              player={player}
+              currentPower={currentPower}
+              currentCadence={currentCadence}
+            />
+          </div>
+        )}
+
         {/* Metrics row — HR and Cadence side by side */}
         <div className="flex justify-center gap-3 px-4 pt-2">
           <HudMetricTile
@@ -65,9 +91,22 @@ export function HudMainView({
         </div>
 
         {/* Power gauge — centered below */}
-        <div className="flex min-h-0 flex-1 items-center justify-center">
-          <HudPowerGauge power={currentPower} ftp={ftp} weightKg={weightKg} />
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
+          <HudPowerGauge
+            power={currentPower}
+            ftp={ftp}
+            weightKg={weightKg}
+            targetPower={targetPower}
+            toleranceWatts={tolerance}
+          />
+          {player && <HudNextSegmentChip player={player} />}
         </div>
+
+        {player && (
+          <div className="px-4 pb-2">
+            <HudWorkoutControls player={player} onFinishRide={onStop} />
+          </div>
+        )}
 
         {/* Session controls */}
         <div className="flex justify-end gap-2 px-6 pb-4">
@@ -109,9 +148,26 @@ export function HudMainView({
       <div className="hidden min-h-0 flex-1 flex-col md:flex">
         {/* Gauge + metrics in a capped-width container */}
         <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 items-center justify-center gap-8 px-8">
+          {player && (
+            <div className="flex w-64 shrink-0 flex-col gap-2">
+              <HudSegmentPanel
+                player={player}
+                currentPower={currentPower}
+                currentCadence={currentCadence}
+              />
+              <HudNextSegmentChip player={player} />
+            </div>
+          )}
+
           {/* Power gauge */}
           <div className="shrink-0">
-            <HudPowerGauge power={currentPower} ftp={ftp} weightKg={weightKg} />
+            <HudPowerGauge
+              power={currentPower}
+              ftp={ftp}
+              weightKg={weightKg}
+              targetPower={targetPower}
+              toleranceWatts={tolerance}
+            />
           </div>
 
           {/* Right metrics stack */}
@@ -132,7 +188,14 @@ export function HudMainView({
         </div>
 
         {/* Session controls — bottom right */}
-        <div className="flex justify-end gap-2 px-6 pb-4">
+        <div className="flex items-center justify-end gap-2 px-6 pb-4">
+          {player && (
+            <HudWorkoutControls
+              player={player}
+              onFinishRide={onStop}
+              className="mr-auto"
+            />
+          )}
           <button
             type="button"
             onClick={onPause}
@@ -167,9 +230,25 @@ export function HudMainView({
         </div>
       </div>
 
+      {/* Workout profile with a playhead — a better use of the bottom strip
+          than ten minutes of history, so on a phone it replaces the chart
+          entirely rather than stacking with it. */}
+      {player && player.segments.length > 0 && (
+        <div className="border-border/30 bg-background/80 h-12 shrink-0 border-t px-1 py-1 sm:px-4">
+          <HudWorkoutBar
+            segments={player.segments}
+            progressPct={player.progressPct}
+          />
+        </div>
+      )}
+
       {/* Bottom chart strip */}
       {chartData.length > 0 && (
-        <div className="border-border/30 bg-background/80 h-48 border-t px-1 py-1 sm:px-4 sm:py-2">
+        <div
+          className={`border-border/30 bg-background/80 h-48 border-t px-1 py-1 sm:px-4 sm:py-2 ${
+            player ? "hidden md:block" : ""
+          }`}
+        >
           <PowerHrChart dataPoints={chartData} ftp={ftp} />
         </div>
       )}

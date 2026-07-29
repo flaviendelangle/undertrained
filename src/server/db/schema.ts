@@ -13,6 +13,8 @@ import {
 } from "drizzle-orm/pg-core";
 import type { ActivityStats } from "strava-v3";
 
+import type { StructuredWorkout } from "~/utils/structuredWorkout";
+
 import type { StoredLap } from "../lib/stravaTypes";
 
 // ── Enums ──────────────────────────────────────────────────────────────
@@ -309,6 +311,12 @@ export const plannedTrainings = pgTable(
     // `getSportConfig`. Plain text (no enum) to stay open for new sports.
     sportType: text("sport_type").notNull(),
     status: plannedTrainingStatusEnum("status").notNull().default("planned"),
+    // The authored interval workout this session is meant to follow, if any.
+    // Nullable because most planned sessions are just "90 min endurance".
+    structuredWorkoutId: integer("structured_workout_id").references(
+      () => structuredWorkouts.id,
+      { onDelete: "set null" },
+    ),
     // Set when marked done; the Strava activity this plan was reconciled with.
     linkedActivityId: integer("linked_activity_id").references(
       () => activities.id,
@@ -355,6 +363,45 @@ export const routes = pgTable(
   (t) => [
     index("routes_athlete_idx").on(t.athlete),
     index("routes_athlete_created_idx").on(t.athlete, t.createdAt),
+  ],
+);
+
+/**
+ * An interval workout the athlete authors in the builder, and that the live
+ * training page can ride in ERG mode.
+ *
+ * The `structure` tree is the source of truth; the scalar columns beside it are
+ * denormalised on write purely so the list and the Journal render without
+ * flattening it. Power targets inside the tree are fractions of FTP, so a saved
+ * workout rescales itself when the athlete's FTP changes — which is exactly why
+ * `estimatedTss` is a display cache rather than a fact, and why `ftpAtSave`
+ * records the FTP it was computed against.
+ */
+export const structuredWorkouts = pgTable(
+  "structured_workouts",
+  {
+    id: serial("id").primaryKey(),
+    athlete: integer("athlete")
+      .notNull()
+      .references(() => athletes.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    // "bike" | "run". Run is reserved: the builder only authors bike today.
+    sport: text("sport").notNull().default("bike"),
+    // The authored node tree — see `~/utils/structuredWorkout`. Read back
+    // through `migrateStructuredWorkout`, never trusted raw.
+    structure: jsonb("structure").$type<StructuredWorkout>().notNull(),
+    // Recomputed server-side from `structure` on every write.
+    durationSeconds: integer("duration_seconds").notNull(),
+    // TSS at `ftpAtSave`; null when the athlete had no FTP configured.
+    estimatedTss: real("estimated_tss"),
+    ftpAtSave: integer("ftp_at_save"),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    index("structured_workouts_athlete_idx").on(t.athlete),
+    index("structured_workouts_athlete_updated_idx").on(t.athlete, t.updatedAt),
   ],
 );
 

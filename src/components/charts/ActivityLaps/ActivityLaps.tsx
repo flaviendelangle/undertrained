@@ -43,6 +43,8 @@ import {
   ChartTooltipRow,
   ChartTooltipSurface,
 } from "../ChartTooltipSurface";
+import type { StructureAnnotation } from "../shared/StructureBrackets";
+import { StructureBrackets } from "../shared/StructureBrackets";
 import { findRunningPaceZone } from "./lapZones";
 
 /** Subset of the stored lap shape consumed by the chart. */
@@ -68,16 +70,6 @@ interface LapBar {
   zoneName: string | null;
   /** Detected structure target for this lap ("1:00 @ 280 W"), if any. */
   target: string | null;
-}
-
-/** A detected interval block mapped onto the chart's cumulative-time axis. */
-interface StructureAnnotation {
-  start: number;
-  end: number;
-  /** e.g. "10 × 1:00 @ 280 W" or "2 × 5 × 3:00 @ 4:30 /km". */
-  label: string;
-  /** Fallback when the bracket is too narrow, e.g. "10 × 1:00". */
-  shortLabel: string;
 }
 
 interface HoverState {
@@ -351,6 +343,9 @@ function LapsChart(props: {
           <StructureBrackets
             annotations={annotations}
             dashed={annotationsDashed}
+            xAxisId={X_AXIS_ID}
+            yAxisId={Y_AXIS_ID}
+            gapPx={BAR_GAP_PX}
           />
         )}
         <ChartsXAxis
@@ -460,67 +455,6 @@ function LapBars(props: {
             onMouseMove={(e) => onHover({ bar, x: e.clientX, y: e.clientY })}
             onMouseLeave={() => onHover(null)}
           />
-        );
-      })}
-    </g>
-  );
-}
-
-/**
- * Bracket overlay for the detected interval structure: one recessive
- * ⌐———————¬ marker per block, drawn in the headroom above the bars with its
- * label centered on top. Labels degrade with available width (full → short →
- * none) and the bracket goes dashed for a low-confidence detection.
- */
-function StructureBrackets(props: {
-  annotations: StructureAnnotation[];
-  dashed: boolean;
-}) {
-  const { annotations, dashed } = props;
-  const tokens = useChartTokens();
-  const xScale = useXScale<"linear">(X_AXIS_ID);
-  const yScale = useYScale<"linear">(Y_AXIS_ID);
-
-  const plotTop = Math.min(...yScale.range());
-  const labelBaselineY = plotTop + 14;
-  const bracketY = plotTop + 20;
-  const tickHeight = 5;
-  // Rough glyph width at font-size 11 — only used to pick a label that fits.
-  const charWidth = 6.2;
-
-  return (
-    <g pointerEvents="none">
-      {annotations.map((annotation) => {
-        const x1 = xScale(annotation.start);
-        const x2 = xScale(annotation.end) - BAR_GAP_PX;
-        const width = x2 - x1;
-        if (width < 12) return null;
-        const label =
-          width >= annotation.label.length * charWidth + 8
-            ? annotation.label
-            : width >= annotation.shortLabel.length * charWidth + 8
-              ? annotation.shortLabel
-              : null;
-        return (
-          <g key={annotation.start}>
-            <path
-              d={`M ${x1} ${bracketY + tickHeight} V ${bracketY} H ${x2} V ${bracketY + tickHeight}`}
-              fill="none"
-              stroke={tokens.axisLabel}
-              strokeDasharray={dashed ? "3 3" : undefined}
-            />
-            {label != null && (
-              <text
-                x={(x1 + x2) / 2}
-                y={labelBaselineY}
-                textAnchor="middle"
-                fill={tokens.axisLabel}
-                fontSize={11}
-              >
-                {label}
-              </text>
-            )}
-          </g>
         );
       })}
     </g>

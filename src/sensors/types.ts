@@ -147,6 +147,12 @@ export interface SessionDataPoint {
   cadence: number | null;
   speed: number | null;
   distance: number;
+  /**
+   * Index into the flattened structured workout, or null on a free ride and
+   * after the workout ends. Drives the per-step FIT laps and the post-training
+   * compliance table.
+   */
+  segmentIndex: number | null;
 }
 
 export interface SessionSummary {
