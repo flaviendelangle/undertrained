@@ -87,19 +87,26 @@ export function WorkoutPreviewChart({
     return Math.max(peak, local);
   }, 0);
 
+  /**
+   * Repeat brackets are desktop-only. On a phone the chart is 128 px tall, and
+   * two stacked rows of "5 × 5:00" eat a third of that to restate what the step
+   * list directly below already says.
+   */
   const annotations: StructureAnnotation[] = React.useMemo(
     () =>
-      spans.map((span) => ({
-        start: span.startSeconds,
-        // Drawn to the last effort, labelled from the full block.
-        end: span.workEndSeconds,
-        label: `${span.reps} × ${formatStepDuration(
-          (span.endSeconds - span.startSeconds) / span.reps,
-        )}`,
-        shortLabel: `${span.reps} ×`,
-        row: span.depth,
-      })),
-    [spans],
+      isMobile
+        ? []
+        : spans.map((span) => ({
+            start: span.startSeconds,
+            // Drawn to the last effort, labelled from the full block.
+            end: span.workEndSeconds,
+            label: `${span.reps} × ${formatStepDuration(
+              (span.endSeconds - span.startSeconds) / span.reps,
+            )}`,
+            shortLabel: `${span.reps} ×`,
+            row: span.depth,
+          })),
+    [spans, isMobile],
   );
 
   // MUI x-charts throws on an empty axis domain, and there is nothing to say
