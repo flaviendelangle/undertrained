@@ -13,7 +13,6 @@ import {
   moveNodeTo,
   removeNode,
   ungroupRepeat,
-  unrollRepeat,
   updateRepeat,
   updateStep,
 } from "./edit";
@@ -190,18 +189,6 @@ describe("ungroupRepeat", () => {
   it("ignores a step id", () => {
     const nodes = flat();
     expect(ungroupRepeat(nodes, "a")).toBe(nodes);
-  });
-});
-
-describe("unrollRepeat", () => {
-  it("expands into one copy per rep, keeping the first rep's ids", () => {
-    const next = unrollRepeat(nested(), "inner", sequentialIds("u"));
-    const outer = findNode(next, "outer")!;
-    const ids = isRepeat(outer) ? outer.children.map((c) => c.id) : [];
-
-    expect(ids).toHaveLength(10);
-    expect(ids.slice(0, 2)).toEqual(["on", "off"]);
-    expect(new Set(ids).size).toBe(10);
   });
 });
 

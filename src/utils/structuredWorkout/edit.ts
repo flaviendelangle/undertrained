@@ -339,32 +339,6 @@ export function ungroupRepeat(
   });
 }
 
-/**
- * Expands a repeat into `reps` copies of its children, with fresh ids. The way
- * to break a `5 ×` block apart when one rep needs to differ from the rest.
- */
-export function unrollRepeat(
-  nodes: readonly WorkoutNode[],
-  repeatId: string,
-  makeId: IdFactory = createId,
-): WorkoutNode[] {
-  const repeat = findNode(nodes, repeatId);
-  if (!repeat || !isRepeat(repeat)) return nodes as WorkoutNode[];
-
-  const expanded: WorkoutNode[] = [];
-  for (let rep = 0; rep < repeat.reps; rep++) {
-    for (const child of repeat.children) {
-      // The first rep keeps the original ids so the current selection survives.
-      expanded.push(rep === 0 ? child : cloneWithNewIds(child, makeId));
-    }
-  }
-
-  return mapSiblings(nodes, repeatId, (siblings, index) => {
-    siblings.splice(index, 1, ...expanded);
-    return siblings;
-  });
-}
-
 /** Every node id in tree order — the traversal the list view and keyboard share. */
 export function flattenNodeIds(nodes: readonly WorkoutNode[]): string[] {
   const ids: string[] = [];

@@ -1081,7 +1081,6 @@ const fr: Messages = {
       duplicate: "Dupliquer",
       delete: "Supprimer",
       ungroup: "Dégrouper",
-      unroll: "Déplier les répétitions",
       actions: "Actions de l'étape",
       kind: {
         label: "Type de cible",

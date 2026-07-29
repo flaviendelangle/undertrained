@@ -18,7 +18,6 @@ interface StepActionsMenuProps {
   isRepeat: boolean;
   onDuplicate: () => void;
   onUngroup: () => void;
-  onUnroll: () => void;
   onDelete: () => void;
 }
 
@@ -33,7 +32,6 @@ export function StepActionsMenu({
   isRepeat,
   onDuplicate,
   onUngroup,
-  onUnroll,
   onDelete,
 }: StepActionsMenuProps) {
   const t = useT();
@@ -51,14 +49,9 @@ export function StepActionsMenu({
           <CopyIcon /> {t("workouts.step.duplicate")}
         </DropdownMenuItem>
         {isRepeat && (
-          <>
-            <DropdownMenuItem onClick={onUngroup}>
-              <UngroupIcon /> {t("workouts.step.ungroup")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onUnroll}>
-              <UngroupIcon /> {t("workouts.step.unroll")}
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem onClick={onUngroup}>
+            <UngroupIcon /> {t("workouts.step.ungroup")}
+          </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={onDelete}>

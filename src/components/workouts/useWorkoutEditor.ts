@@ -7,18 +7,25 @@ import type {
   WorkoutSport,
   WorkoutStep,
 } from "~/utils/structuredWorkout";
-import { MIN_STEP_SECONDS, isRepeat, isStep } from "~/utils/structuredWorkout";
+import {
+  MAX_REPEAT_DEPTH,
+  MIN_STEP_SECONDS,
+  isRepeat,
+  isStep,
+} from "~/utils/structuredWorkout";
 import {
   createId,
   duplicateNode,
   findNode,
   flattenNodeIds,
   insertAfter,
+  insertInto,
+  lastStep,
   moveNode,
   moveNodeTo,
+  nodeDepth,
   removeNode,
   ungroupRepeat,
-  unrollRepeat,
   updateRepeat as updateRepeatNodes,
   updateStep as updateStepNodes,
 } from "~/utils/structuredWorkout/edit";
@@ -72,7 +79,6 @@ export interface WorkoutEditor {
   /** Drag-and-drop reorder: place `dragId` before/after/inside `targetId`. */
   moveTo: (dragId: string, targetId: string, position: DropPosition) => void;
   ungroup: (id: string) => void;
-  unroll: (id: string) => void;
 }
 
 /** The step a fresh "+ Step" starts from, seeded from its predecessor. */
@@ -152,10 +158,28 @@ export function useWorkoutEditor(
   const addStep = React.useCallback<WorkoutEditor["addStep"]>(
     (preset) => {
       const anchor = selectedId;
-      const previous = anchor ? findNode(workout.nodes, anchor) : null;
-      const base = nextStepFrom(previous && isStep(previous) ? previous : null);
-      const step: WorkoutStep = { ...base, ...preset, id: createId() };
-      commitNodes(insertAfter(workout.nodes, anchor, step));
+      const anchorNode = anchor ? findNode(workout.nodes, anchor) : null;
+
+      // Selecting a group and adding a step means "add one in here" — that is
+      // the only way to grow a group without dragging, and adding a sibling
+      // after it is never what someone who just clicked the group wanted.
+      const intoRepeat = anchorNode != null && isRepeat(anchorNode);
+      const previous = intoRepeat
+        ? lastStep(anchorNode.children)
+        : anchorNode != null && isStep(anchorNode)
+          ? anchorNode
+          : null;
+
+      const step: WorkoutStep = {
+        ...nextStepFrom(previous),
+        ...preset,
+        id: createId(),
+      };
+      commitNodes(
+        intoRepeat
+          ? insertInto(workout.nodes, anchorNode.id, step)
+          : insertAfter(workout.nodes, anchor, step),
+      );
       selectOnly(step.id);
     },
     [commitNodes, selectOnly, selectedId, workout.nodes],
@@ -184,7 +208,20 @@ export function useWorkoutEditor(
         },
       ],
     };
-    commitNodes(insertAfter(workout.nodes, anchor, repeat));
+    // Same rule as `addStep`, so "2 × (5 × …)" is reachable by selecting the
+    // outer group and adding — but only while there is depth left, otherwise
+    // the nested repeat would be rejected on save.
+    const anchorNode = anchor ? findNode(workout.nodes, anchor) : null;
+    const intoRepeat =
+      anchorNode != null &&
+      isRepeat(anchorNode) &&
+      nodeDepth(workout.nodes, anchorNode.id) + 2 <= MAX_REPEAT_DEPTH;
+
+    commitNodes(
+      intoRepeat
+        ? insertInto(workout.nodes, anchorNode.id, repeat)
+        : insertAfter(workout.nodes, anchor, repeat),
+    );
     selectOnly(repeat.id);
   }, [commitNodes, selectOnly, selectedId, workout.nodes]);
 
@@ -276,10 +313,6 @@ export function useWorkoutEditor(
     },
     ungroup: (id) => {
       commitNodes(ungroupRepeat(workout.nodes, id));
-      selectOnly(null);
-    },
-    unroll: (id) => {
-      commitNodes(unrollRepeat(workout.nodes, id));
       selectOnly(null);
     },
     // history[0] is always the workout as loaded, so anything past it is unsaved.

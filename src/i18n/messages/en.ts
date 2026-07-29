@@ -1057,7 +1057,6 @@ const en = {
       duplicate: "Duplicate",
       delete: "Delete",
       ungroup: "Ungroup",
-      unroll: "Expand reps",
       actions: "Step actions",
       kind: {
         label: "Target type",

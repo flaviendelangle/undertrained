@@ -141,9 +141,7 @@ export function WorkoutPreviewChart({
                 max: maxPct,
                 valueFormatter: (value: number) =>
                   `${Math.round(value * 100)}%`,
-                width: isMobile
-                  ? Y_AXIS_WIDTH_MOBILE
-                  : AXIS_SIZE.desktop.width,
+                width: isMobile ? Y_AXIS_WIDTH_MOBILE : AXIS_SIZE.desktop.width,
               },
             ]}
           >
