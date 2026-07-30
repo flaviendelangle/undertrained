@@ -108,6 +108,9 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
     onSuccess: () => {
       void invalidateList();
       void utils.activities.list.invalidate();
+      // The activity is now spoken for; without this the picker keeps offering it
+      // from cache for the next plan opened.
+      void utils.plannedTrainings.linkedActivityIds.invalidate();
       onClose();
     },
   });
@@ -255,12 +258,8 @@ function MarkDoneSection({
   // day). Anything outside those criteria, or already linked, is dropped.
   const { groups, byStravaId } = React.useMemo(() => {
     const linked = new Set(linkedActivityIds ?? []);
-    const plan = {
-      plannedDate: training.plannedDate,
-      sportType: training.sportType,
-    };
-    const plannedCategory = getSportConfig(plan.sportType).category;
-    const plannedDate = new Date(`${dayKey(plan.plannedDate)}T00:00:00`);
+    const plannedCategory = getSportConfig(training.sportType).category;
+    const plannedDate = new Date(`${dayKey(training.plannedDate)}T00:00:00`);
 
     const perfect: string[] = [];
     const other: string[] = [];
@@ -275,7 +274,7 @@ function MarkDoneSection({
       }
       const activityDay = dayKey(a.startDateLocal);
       const stravaId = String(a.stravaId);
-      if (isPerfectMatch(plan, a)) {
+      if (isPerfectMatch(training, a)) {
         perfect.push(stravaId);
         map.set(stravaId, a);
       } else if (
@@ -299,13 +298,7 @@ function MarkDoneSection({
       result.push({ value: t("journal.dialog.otherMatches"), items: other });
     }
     return { groups: result, byStravaId: map };
-  }, [
-    activities,
-    linkedActivityIds,
-    training.sportType,
-    training.plannedDate,
-    t,
-  ]);
+  }, [activities, linkedActivityIds, training, t]);
 
   return (
     <div className="border-border flex flex-col gap-2 border-t pt-4">
@@ -391,7 +384,11 @@ function MarkDoneSection({
       )}
       {markDoneMut.isError && (
         <p className="text-destructive text-sm">
-          {t("journal.dialog.markDoneError")}
+          {t(
+            markDoneMut.error.data?.code === "CONFLICT"
+              ? "journal.dialog.markDoneConflict"
+              : "journal.dialog.markDoneError",
+          )}
         </p>
       )}
     </div>

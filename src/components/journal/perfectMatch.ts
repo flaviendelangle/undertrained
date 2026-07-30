@@ -7,7 +7,9 @@ import { getSportConfig } from "~/utils/sportConfig";
  * and the prompt that offers to link a newly imported activity on load — hence
  * living here rather than in either consumer, so the two can never drift.
  *
- * Category, not exact type, so a `VirtualRide` fulfils a planned `Ride`.
+ * Category, not exact type, so a `VirtualRide` fulfils a planned `Ride` — except
+ * in the `other` category, which is `sportConfig`'s fallback for every type it
+ * has no entry for and so groups nothing meaningful together.
  */
 
 /** Local day key (yyyy-MM-dd) of a floating-local ISO datetime string. */
@@ -32,22 +34,37 @@ export function isPerfectMatch(
   plan: MatchablePlan,
   activity: MatchableActivity,
 ): boolean {
-  return (
-    dayKey(plan.plannedDate) === dayKey(activity.startDateLocal) &&
-    getSportConfig(plan.sportType).category ===
-      getSportConfig(activity.type).category
-  );
+  if (dayKey(plan.plannedDate) !== dayKey(activity.startDateLocal)) {
+    return false;
+  }
+  const planCategory = getSportConfig(plan.sportType).category;
+  if (planCategory !== getSportConfig(activity.type).category) {
+    return false;
+  }
+  // `other` is the bucket every type `sportConfig` has no entry for, so landing
+  // in it together means nothing — a Yoga session and a planned `AlpineSki` are
+  // both "other". Only the exact type tells them apart there.
+  if (planCategory === "other") {
+    return plan.sportType === activity.type;
+  }
+  return true;
 }
 
 /**
- * Greedy 1:1 pairing: walking both sides in chronological order, each plan takes
- * the earliest activity that perfectly matches it and isn't already spoken for.
+ * Strictly unambiguous 1:1 pairing: a plan is paired only when exactly one
+ * not-yet-claimed activity perfectly matches it.
  *
- * The 1:1 constraint matters because linking is destructive (it renames the
- * activity on Strava) and an activity must never end up claimed by two plans. On
- * an ambiguous day — two plans, two matching rides — this offers one pairing per
- * plan rather than guessing among the alternatives; anything it can't pair off
- * is left to the Journal's Mark done picker, where the athlete chooses manually.
+ * Linking is destructive (it renames the activity on Strava), so this never
+ * guesses. Neither side of a "perfect match" carries enough signal to choose
+ * between alternatives: the rule is day + sport category, which says nothing
+ * about time of day or duration — so on a day with a bike commute *and* an
+ * interval session, "the earlier one" would be exactly the wrong answer as often
+ * as the right one. Plans are walked in chronological order only to make the
+ * outcome deterministic when several compete for one activity: the earliest plan
+ * claims it, the rest are left alone.
+ *
+ * Everything it declines to pair stays reachable from the Journal's Mark done
+ * picker, which shows all the candidates and lets the athlete choose.
  */
 export function pairPerfectMatches<
   P extends MatchablePlan,
@@ -56,20 +73,18 @@ export function pairPerfectMatches<
   const sortedPlans = [...plans].sort((a, b) =>
     a.plannedDate.localeCompare(b.plannedDate),
   );
-  const sortedActivities = [...activities].sort((a, b) =>
-    a.startDateLocal.localeCompare(b.startDateLocal),
-  );
   const claimed = new Set<A>();
   const pairs: { plan: P; activity: A }[] = [];
 
   for (const plan of sortedPlans) {
-    const activity = sortedActivities.find(
+    const candidates = activities.filter(
       (candidate) => !claimed.has(candidate) && isPerfectMatch(plan, candidate),
     );
-    if (activity) {
-      claimed.add(activity);
-      pairs.push({ plan, activity });
+    if (candidates.length !== 1) {
+      continue;
     }
+    claimed.add(candidates[0]);
+    pairs.push({ plan, activity: candidates[0] });
   }
 
   return pairs;

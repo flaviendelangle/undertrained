@@ -42,6 +42,9 @@ function MatchRow({
     onSuccess: () => {
       void utils.plannedTrainings.list.invalidate();
       void utils.activities.list.invalidate();
+      // The activity is now spoken for. Without this the Journal's Mark done
+      // picker keeps offering it from cache and would link it to a second plan.
+      void utils.plannedTrainings.linkedActivityIds.invalidate();
     },
   });
 
@@ -88,10 +91,33 @@ function MatchRow({
       </div>
       {markDoneMut.isError && (
         <p className="text-destructive text-xs">
-          {t("journal.dialog.markDoneError")}
+          {t(
+            markDoneMut.error.data?.code === "CONFLICT"
+              ? "journal.dialog.markDoneConflict"
+              : "journal.dialog.markDoneError",
+          )}
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Whether grabbing the focus trap right now would interrupt something. The prompt
+ * waits on two queries, so it opens a few hundred milliseconds after the page is
+ * interactive — easily late enough to land mid-word in the Journal's title field,
+ * or on top of a dialog the athlete has already opened.
+ */
+function wouldInterrupt(): boolean {
+  if (document.querySelector('[role="dialog"]') != null) {
+    return true;
+  }
+  const active = document.activeElement;
+  return (
+    active instanceof HTMLInputElement ||
+    active instanceof HTMLTextAreaElement ||
+    active instanceof HTMLSelectElement ||
+    (active instanceof HTMLElement && active.isContentEditable)
   );
 }
 
@@ -134,9 +160,20 @@ export function LinkActivityPrompt() {
     if (shown.current || !isReady || pairs.length === 0 || watermark == null) {
       return;
     }
-    shown.current = true;
-    setBatch({ pairs, watermark });
-    setOpen(true);
+    // A frame later, so the focus check reads a settled DOM rather than the one
+    // mid-update from the render the queries settling just caused.
+    const frame = requestAnimationFrame(() => {
+      // Bailing without latching `shown`: nothing has been acknowledged, so the
+      // prompt just comes back on the next load rather than fighting for the
+      // caret now. A retry loop isn't worth it for a once-a-day prompt.
+      if (wouldInterrupt()) {
+        return;
+      }
+      shown.current = true;
+      setBatch({ pairs, watermark });
+      setOpen(true);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [isReady, pairs, watermark]);
 
   const handleOpenChange = (next: boolean) => {

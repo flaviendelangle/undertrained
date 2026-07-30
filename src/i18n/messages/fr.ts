@@ -164,6 +164,8 @@ const fr: Messages = {
       markDone: "Marquer comme faite",
       markDoneError:
         "Impossible de mettre à jour l'activité sur Strava. Veuillez réessayer.",
+      markDoneConflict:
+        "Cette activité est déjà liée à une autre séance planifiée.",
     },
     linkPrompt: {
       title: "Avez-vous fait cette séance ?",

@@ -123,6 +123,7 @@ export const plannedTrainingsRouter = router({
     .query(async ({ ctx, input }) => {
       const athlete = await ctx.db.query.athletes.findFirst({
         where: eq(athletes.id, input.athleteId),
+        columns: { lastSeenActivityId: true },
       });
       if (!athlete) {
         throw new TRPCError({ code: "NOT_FOUND" });
@@ -278,6 +279,25 @@ export const plannedTrainingsRouter = router({
       });
       if (!activity) {
         throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      // One activity fulfils at most one plan. The pickers filter on
+      // `linkedActivityIds`, but that's a cached client-side list — enforce the
+      // invariant here too, before renaming anything on Strava, or a stale cache
+      // silently overwrites the first plan's title and leaves two plans claiming
+      // the same activity.
+      const claimedBy = await ctx.db.query.plannedTrainings.findFirst({
+        where: and(
+          eq(plannedTrainings.athlete, input.athleteId),
+          eq(plannedTrainings.linkedActivityId, activity.id),
+        ),
+        columns: { id: true },
+      });
+      if (claimedBy) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This activity is already linked to a planned training.",
+        });
       }
 
       const accessToken = await getAccessToken(ctx.db, input.athleteId);

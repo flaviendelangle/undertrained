@@ -56,6 +56,29 @@ describe("isPerfectMatch", () => {
       ),
     ).toBe(false);
   });
+
+  it("requires the exact type in the catch-all 'other' category", () => {
+    // Both sides resolve to `other`: `AlpineSki` is configured that way and
+    // `Yoga` has no config at all. Equal categories must not be enough here.
+    expect(
+      isPerfectMatch(
+        plan("2026-03-04T07:00:00", "AlpineSki"),
+        activity("2026-03-04T07:00:00", "Yoga"),
+      ),
+    ).toBe(false);
+    expect(
+      isPerfectMatch(
+        plan("2026-03-04T07:00:00", "AlpineSki"),
+        activity("2026-03-04T07:00:00", "NordicSki"),
+      ),
+    ).toBe(false);
+    expect(
+      isPerfectMatch(
+        plan("2026-03-04T07:00:00", "AlpineSki"),
+        activity("2026-03-04T07:00:00", "AlpineSki"),
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("pairPerfectMatches", () => {
@@ -93,14 +116,28 @@ describe("pairPerfectMatches", () => {
     expect(pairs).toEqual([{ plan: first, activity: only }]);
   });
 
-  it("never gives one plan two activities", () => {
-    const single = plan("2026-03-04T07:00:00", "Ride");
-    const morning = activity("2026-03-04T08:00:00", "Ride");
-    const evening = activity("2026-03-04T18:00:00", "Ride");
+  it("declines to choose when a plan matches two activities", () => {
+    // The commute-plus-training-ride day. "Perfect match" knows nothing about
+    // time of day or duration, so there is no basis to prefer either ride —
+    // guessing would rename the wrong one on Strava.
+    const single = plan("2026-03-04T18:00:00", "Ride");
+    const commute = activity("2026-03-04T08:00:00", "Ride");
+    const intervals = activity("2026-03-04T18:30:00", "Ride");
 
-    const pairs = pairPerfectMatches([single], [evening, morning]);
+    expect(pairPerfectMatches([single], [intervals, commute])).toEqual([]);
+  });
 
-    expect(pairs).toEqual([{ plan: single, activity: morning }]);
+  it("leaves a two-plans-two-rides day entirely to the Journal picker", () => {
+    // Both plans match both rides, so neither pairing is forced. Pairing them off
+    // in time order looks tempting and is only ever right by luck.
+    const morningPlan = plan("2026-03-04T08:00:00", "Ride");
+    const eveningPlan = plan("2026-03-04T18:00:00", "Ride");
+    const first = activity("2026-03-04T08:10:00", "Ride");
+    const second = activity("2026-03-04T18:10:00", "Ride");
+
+    expect(
+      pairPerfectMatches([morningPlan, eveningPlan], [first, second]),
+    ).toEqual([]);
   });
 
   it("leaves unmatched plans and activities out", () => {

@@ -136,6 +136,11 @@ export const activities = pgTable(
   (t) => [
     uniqueIndex("activities_strava_id_idx").on(t.stravaId),
     index("activities_athlete_idx").on(t.athlete),
+    // Serves the `max(id) where athlete = ?` watermark probe behind the
+    // link-activity prompt, which runs on every app load. Without it that becomes
+    // an aggregate over every row the athlete owns (or a backwards walk of the
+    // primary key for any athlete whose newest rows aren't near the global max).
+    index("activities_athlete_id_idx").on(t.athlete, t.id),
     index("activities_athlete_start_date_idx").on(t.athlete, t.startDate),
     index("activities_athlete_streams_loaded_idx").on(
       t.athlete,
