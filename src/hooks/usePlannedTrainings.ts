@@ -18,5 +18,6 @@ export function usePlannedTrainings() {
     data: result.data,
     isLoading: result.isLoading,
     isError: result.isError,
+    isSuccess: result.isSuccess,
   };
 }

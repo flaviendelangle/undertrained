@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
+import { LinkActivityPrompt } from "~/components/journal/LinkActivityPrompt";
 import { DismissedHintsProvider } from "~/hooks/useDismissedHints";
 import { ErgModeProvider } from "~/hooks/useErgMode";
 import { ExplorerTilesProvider } from "~/hooks/useExplorerTilesToggle";
@@ -52,6 +53,12 @@ export const LoggedInLayout = (props: LoggedInLayoutProps) => {
                   </main>
                   <MobileBottomBar />
                 </div>
+                {/* Opens itself on load when a newly imported activity matches a
+                    planned training — the app's only self-opening dialog. Note
+                    `/toolbox` and `/privacy` nest this layout inside their own,
+                    so it remounts on the way there and back; the prompt latches
+                    outside React to stay shown-once across that. */}
+                <LinkActivityPrompt />
               </ErgModeProvider>
             </DismissedHintsProvider>
           </RiderSettingsProvider>

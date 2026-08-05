@@ -517,9 +517,17 @@ export async function deleteAllAthleteData(
   // Delete sync jobs
   await db.delete(syncJobs).where(eq(syncJobs.athlete, athleteId));
 
-  // Clear tokens but keep athlete row (NextAuth session reference)
+  // Clear tokens but keep athlete row (NextAuth session reference).
+  // `lastSeenActivityId` goes back to 0 alongside the activities it indexes: if
+  // the athlete ever reconnects, the re-import mints ids above any stale
+  // watermark and the link prompt would offer their entire history.
   await db
     .update(athletes)
-    .set({ accessToken: "", refreshToken: "", tokenExpiresAt: 0 })
+    .set({
+      accessToken: "",
+      refreshToken: "",
+      tokenExpiresAt: 0,
+      lastSeenActivityId: 0,
+    })
     .where(eq(athletes.id, athleteId));
 }

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -56,6 +57,17 @@ export const athletes = pgTable(
     // Secret, unguessable token authenticating the athlete's iCal subscription
     // feed (`/api/calendar/{token}.ics`). Generated lazily, revocable.
     calendarToken: text("calendar_token"),
+    // Highest `activities.id` the athlete has already been offered a plan-link
+    // prompt for, making `id > lastSeenActivityId` an "imported since the last
+    // visit" test without a timestamp column on the huge `activities` table.
+    // Serial ids are monotonic per insert, and the ordinary sync/webhook paths
+    // upsert on `strava_id`, so a normal re-sync preserves them. The paths that
+    // *delete* activities (the `reload_all` sync mode, deleting all athlete
+    // data) do mint fresh ids, so they re-baseline this column once the ids are
+    // final — see `resetLastSeenActivityId`. Backfilled to each athlete's
+    // `max(activities.id)` in migration 0022; 0 for a brand-new athlete, whose
+    // first prompt check then silently acknowledges the backfilled history.
+    lastSeenActivityId: integer("last_seen_activity_id").notNull().default(0),
   },
   (t) => [
     uniqueIndex("athletes_strava_id_idx").on(t.stravaAthleteId),
@@ -128,7 +140,15 @@ export const activities = pgTable(
   },
   (t) => [
     uniqueIndex("activities_strava_id_idx").on(t.stravaId),
-    index("activities_athlete_idx").on(t.athlete),
+    // Serves the `max(id) where athlete = ?` watermark probe behind the
+    // link-activity prompt, which runs on every app load. Without it that becomes
+    // an aggregate over every row the athlete owns (or a backwards walk of the
+    // primary key for any athlete whose newest rows aren't near the global max).
+    // Also replaces the old `activities_athlete_idx` on `(athlete)`: `athlete` is
+    // the leading column here and both index tuples are 16 bytes (two non-null
+    // ints, MAXALIGNed), so this serves every plain `athlete = ?` scan just as
+    // well and the single-column index was pure write amplification.
+    index("activities_athlete_id_idx").on(t.athlete, t.id),
     index("activities_athlete_start_date_idx").on(t.athlete, t.startDate),
     index("activities_athlete_streams_loaded_idx").on(
       t.athlete,
@@ -328,6 +348,14 @@ export const plannedTrainings = pgTable(
   (t) => [
     index("planned_trainings_athlete_idx").on(t.athlete),
     index("planned_trainings_athlete_date_idx").on(t.athlete, t.plannedDate),
+    // One activity fulfils at most one plan. `markDone` checks this before
+    // renaming anything on Strava, but that check and the write it guards are
+    // separated by a Strava round-trip, so two concurrent links (the load prompt
+    // in one tab, the Journal picker in another) could both pass it. This is
+    // what actually holds the invariant; the check just produces a nicer error.
+    uniqueIndex("planned_trainings_linked_activity_idx")
+      .on(t.linkedActivityId)
+      .where(sql`${t.linkedActivityId} is not null`),
   ],
 );
 
