@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { format } from "date-fns";
 
+import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 import type { PlannedTraining } from "@server/db/types";
 
 import { Button } from "~/components/ui/button";
@@ -13,6 +14,11 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "~/components/ui/responsive-dialog";
+import { useAthleteId } from "~/hooks/useAthleteId";
+import {
+  markDoneErrorKey,
+  useMarkPlannedTrainingDone,
+} from "~/hooks/useMarkPlannedTrainingDone";
 import type { NewActivity } from "~/hooks/useNewActivityMatches";
 import { useNewActivityMatches } from "~/hooks/useNewActivityMatches";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
@@ -34,19 +40,10 @@ function MatchRow({
   activity: NewActivity;
 }) {
   const t = useT();
-  const utils = trpc.useUtils();
   const config = getSportConfig(plan.sportType);
   const Icon = config.icon;
 
-  const markDoneMut = trpc.plannedTrainings.markDone.useMutation({
-    onSuccess: () => {
-      void utils.plannedTrainings.list.invalidate();
-      void utils.activities.list.invalidate();
-      // The activity is now spoken for. Without this the Journal's Mark done
-      // picker keeps offering it from cache and would link it to a second plan.
-      void utils.plannedTrainings.linkedActivityIds.invalidate();
-    },
-  });
+  const markDoneMut = useMarkPlannedTrainingDone();
 
   return (
     <div className="border-border flex flex-col gap-2 rounded-md border p-3">
@@ -91,11 +88,7 @@ function MatchRow({
       </div>
       {markDoneMut.isError && (
         <p className="text-destructive text-xs">
-          {t(
-            markDoneMut.error.data?.code === "CONFLICT"
-              ? "journal.dialog.markDoneConflict"
-              : "journal.dialog.markDoneError",
-          )}
+          {t(markDoneErrorKey(markDoneMut.error))}
         </p>
       )}
     </div>
@@ -106,10 +99,17 @@ function MatchRow({
  * Whether grabbing the focus trap right now would interrupt something. The prompt
  * waits on two queries, so it opens a few hundred milliseconds after the page is
  * interactive — easily late enough to land mid-word in the Journal's title field,
- * or on top of a dialog the athlete has already opened.
+ * or on top of something the athlete has already opened.
+ *
+ * The role list covers every base-ui overlay that owns the athlete's attention:
+ * dialogs and popovers report `dialog`, comboboxes and selects `listbox`, menus
+ * `menu`. Stealing focus from an open dropdown closes it mid-selection.
  */
+const INTERRUPTIBLE_OVERLAYS =
+  '[role="dialog"],[role="listbox"],[role="menu"],[role="alertdialog"]';
+
 function wouldInterrupt(): boolean {
-  if (document.querySelector('[role="dialog"]') != null) {
+  if (document.querySelector(INTERRUPTIBLE_OVERLAYS) != null) {
     return true;
   }
   const active = document.activeElement;
@@ -122,18 +122,39 @@ function wouldInterrupt(): boolean {
 }
 
 /**
+ * Latches the once-per-visit prompt outside React, because the component does
+ * not survive a full page lifetime: `/toolbox` and `/privacy` nest
+ * `LoggedInLayout` under their own layout, so navigating there and back remounts
+ * it. A ref would reset and re-open a prompt the athlete has already dismissed —
+ * with the acknowledgement still in flight, its result also still cached.
+ */
+let promptResolvedThisLoad = false;
+
+/** Test seam: the module-level latch has to be clearable between cases. */
+export function resetLinkPromptLatch() {
+  promptResolvedThisLoad = false;
+}
+
+/**
  * Offers to reconcile planned trainings with activities imported since the last
  * visit, on load, anywhere in the app — the Journal's Mark done picker only
  * helps once you already suspect a match is waiting.
  *
- * Closing it by any route (linking, "Not now", Escape, backdrop) acknowledges
- * the whole batch: having been shown the prompt once is the point, and re-asking
- * on every load until the athlete formally answers would be nagging. Anything
- * skipped stays reachable from the Journal.
+ * Closing it by any route ("Not now", Escape, backdrop) acknowledges the whole
+ * batch: having been shown the prompt once is the point, and re-asking on every
+ * load until the athlete formally answers would be nagging. Anything skipped —
+ * including everything linked, since linking leaves the dialog open — stays
+ * reachable from the Journal.
+ *
+ * A batch with nothing to offer is acknowledged *without* opening anything. That
+ * is what keeps the watermark moving for the athlete who imports rides but plans
+ * none of them: otherwise it would freeze at its initial value and the candidate
+ * query would re-scan an ever-growing slice of their history on every load.
  */
 export function LinkActivityPrompt() {
   const t = useT();
-  const { athleteId, pairs, watermark, isReady } = useNewActivityMatches();
+  const { pairs, hasDeferred, watermark, isReady } = useNewActivityMatches();
+  const athleteId = useAthleteId();
   const utils = trpc.useUtils();
   const acknowledgeMut =
     trpc.plannedTrainings.acknowledgeNewActivities.useMutation({
@@ -148,33 +169,65 @@ export function LinkActivityPrompt() {
   // acknowledging on close invalidates the activity list while base-ui is still
   // animating the popup out. The watermark is frozen alongside so the athlete
   // acknowledges exactly the batch they were shown, not a newer one that a
-  // background refetch slipped in.
+  // background refetch slipped in. Doubles as the "already opened" latch.
   const [batch, setBatch] = React.useState<{
     pairs: typeof pairs;
     watermark: number;
   } | null>(null);
-  // Latches so the prompt opens at most once per session.
-  const shown = React.useRef(false);
+
+  // `useValueAsRef` so the frame callback below reads the current mutation
+  // without the effect re-running (and re-scheduling) on every render.
+  const acknowledgeRef = useValueAsRef(acknowledgeMut);
 
   React.useEffect(() => {
-    if (shown.current || !isReady || pairs.length === 0 || watermark == null) {
+    if (
+      promptResolvedThisLoad ||
+      batch != null ||
+      !isReady ||
+      watermark == null ||
+      athleteId == null
+    ) {
       return;
     }
+
+    // Nothing worth interrupting for, but the batch still has to be retired or
+    // the watermark never advances. No dialog, no frame wait — just record it.
+    //
+    // Unless something was only held back because its session isn't due yet:
+    // retiring the batch now would throw the activity away before the plan it
+    // may well belong to has even started. That stall lasts until the end of the
+    // day at worst, and only while such a plan exists.
+    if (pairs.length === 0) {
+      if (!hasDeferred) {
+        promptResolvedThisLoad = true;
+        acknowledgeRef.current.mutate({ athleteId, watermark });
+      }
+      return;
+    }
+
     // A frame later, so the focus check reads a settled DOM rather than the one
     // mid-update from the render the queries settling just caused.
     const frame = requestAnimationFrame(() => {
-      // Bailing without latching `shown`: nothing has been acknowledged, so the
-      // prompt just comes back on the next load rather than fighting for the
-      // caret now. A retry loop isn't worth it for a once-a-day prompt.
+      // Bailing without latching: nothing has been acknowledged, so the prompt
+      // just comes back on the next load rather than fighting for the caret now.
+      // A retry loop isn't worth it for a once-a-day prompt.
       if (wouldInterrupt()) {
         return;
       }
-      shown.current = true;
+      promptResolvedThisLoad = true;
       setBatch({ pairs, watermark });
       setOpen(true);
     });
     return () => cancelAnimationFrame(frame);
-  }, [isReady, pairs, watermark]);
+  }, [
+    isReady,
+    pairs,
+    hasDeferred,
+    watermark,
+    athleteId,
+    batch,
+    acknowledgeRef,
+  ]);
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
@@ -189,7 +242,13 @@ export function LinkActivityPrompt() {
 
   return (
     <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
-      <ResponsiveDialogContent>
+      {/* Nothing opened this dialog, so base-ui's default "restore focus to the
+          previously focused element" lands on <body> and a keyboard athlete
+          dismissing it restarts tabbing from the top of the document. Hand focus
+          to the page's main region instead. */}
+      <ResponsiveDialogContent
+        finalFocus={() => document.querySelector("main")}
+      >
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
             {t("journal.linkPrompt.title")}

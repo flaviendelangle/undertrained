@@ -28,6 +28,7 @@ import {
   computeSpeedEfforts,
   resolveRiderSettings,
 } from "./computeScores";
+import { resetLastSeenActivityId } from "./linkPromptWatermark";
 import type { normalizeStreams } from "./strava";
 import {
   fetchAthleteStats,
@@ -522,6 +523,15 @@ async function computeScoresPhase(
     cursorDate = last.startDate;
     cursorId = last.id;
     if (batch.length < BATCH_SIZE) break;
+  }
+
+  // `reload_all` deleted every activity before re-importing, so each row came
+  // back with a fresh serial id above the link prompt's watermark. Left alone,
+  // the next app load would read the athlete's whole history as "imported since
+  // your last visit" and offer to link all of it. Re-baseline now that the
+  // re-import is finished and the ids are final.
+  if (job.mode === "reload_all") {
+    await resetLastSeenActivityId(db, athleteId);
   }
 
   await db

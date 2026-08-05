@@ -6,8 +6,7 @@ import {
   gte,
   isNotNull,
   lte,
-  max,
-  notInArray,
+  notExists,
   sql,
 } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
@@ -37,9 +36,26 @@ const trainingFields = {
   sportType: z.string().min(1),
 };
 
+/**
+ * Upper bound on one link-prompt batch. The prompt shows one row per pairing and
+ * is meant to cover "what arrived since yesterday", so this only ever bites if a
+ * watermark goes stale — it keeps that from becoming a whole-history payload.
+ */
+const NEW_ACTIVITY_LIMIT = 50;
+
 /** Build the absolute iCal feed URL when the public origin is configured. */
 function buildFeedUrl(token: string): string | null {
   return env.APP_URL ? `${env.APP_URL}/api/calendar/${token}.ics` : null;
+}
+
+/** Postgres `unique_violation`, the class of error the partial index raises. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
+  );
 }
 
 /**
@@ -104,65 +120,81 @@ export const plannedTrainingsRouter = router({
   /**
    * Activities imported since the athlete last had the link prompt shown to
    * them, as the raw candidate set for that prompt — the day/sport matching runs
-   * on the client, because `~/utils/sportConfig` pulls in `lucide-react` icons
-   * and has no business in the server bundle.
+   * on the client, because `~/utils/sportConfig` is already loaded there and the
+   * rule needs to agree with the Journal's picker to the letter.
    *
-   * `activities.id` is a serial and both the backfill sync and the webhook
-   * upsert on `strava_id`, so a re-sync never mints new ids: `id > watermark` is
-   * an exact "imported since the last visit" test.
+   * `activities.id` is a serial and the ordinary sync/webhook paths upsert on
+   * `strava_id`, so `id > watermark` is an "imported since the last visit" test.
+   * The paths that delete activities reset the watermark themselves (see
+   * `resetLastSeenActivityId`), because re-importing mints fresh ids.
    *
-   * The first ever call has no watermark to compare against, so it silently
-   * adopts the current maximum and reports nothing new — otherwise every athlete
-   * would be greeted with their entire history the first time they load the app
-   * after this ships. Writing from a query mirrors the lazy `calendarToken`
-   * creation in `getCalendarToken` below.
+   * Commutes are excluded and plans are matched client-side only once their day
+   * has started: the rule knows nothing about time of day, so a morning commute
+   * would otherwise be offered as having completed tonight's interval session.
    */
   newActivities: protectedProcedure
     .input(z.object({ athleteId: z.number() }))
     .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
-      const athlete = await ctx.db.query.athletes.findFirst({
-        where: eq(athletes.id, input.athleteId),
-        columns: { lastSeenActivityId: true },
-      });
-      if (!athlete) {
+      // Watermark and current maximum in one statement: the scalar subquery is
+      // an index-only probe of `(athlete, id)`, and the two values are always
+      // read together.
+      const [row] = await ctx.db
+        .select({
+          lastSeen: athletes.lastSeenActivityId,
+          maxId: sql<number>`coalesce((select max(${activities.id}) from ${activities} where ${activities.athlete} = ${input.athleteId}), 0)`,
+        })
+        .from(athletes)
+        .where(eq(athletes.id, input.athleteId));
+      if (!row) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
+      const watermark = Number(row.maxId);
 
-      const [maxRow] = await ctx.db
-        .select({ maxId: max(activities.id) })
-        .from(activities)
-        .where(eq(activities.athlete, input.athleteId));
-      const watermark = maxRow?.maxId ?? 0;
-
-      if (athlete.lastSeenActivityId == null) {
-        await ctx.db
-          .update(athletes)
-          .set({ lastSeenActivityId: watermark })
-          .where(eq(athletes.id, input.athleteId));
+      // The overwhelmingly common path: nothing imported since the last visit.
+      // Bail before touching `activities` again — the candidate scan below can
+      // only return rows when the maximum has moved past the watermark.
+      if (watermark <= row.lastSeen) {
         return { watermark, activities: [] };
-      }
-
-      const linked = await getLinkedActivityIds(ctx.db, input.athleteId);
-      const conditions = [
-        eq(activities.athlete, input.athleteId),
-        gt(activities.id, athlete.lastSeenActivityId),
-      ];
-      if (linked.length > 0) {
-        conditions.push(notInArray(activities.id, linked));
       }
 
       const rows = await ctx.db
         .select({
-          id: activities.id,
           stravaId: activities.stravaId,
           type: activities.type,
           name: activities.name,
           startDateLocal: activities.startDateLocal,
         })
         .from(activities)
-        .where(and(...conditions))
-        .orderBy(asc(activities.startDateLocal));
+        .where(
+          and(
+            eq(activities.athlete, input.athleteId),
+            gt(activities.id, row.lastSeen),
+            // Bounded above by the watermark the caller will acknowledge, so a
+            // webhook inserting between the two statements can't land in a batch
+            // that the acknowledgement then fails to cover.
+            lte(activities.id, watermark),
+            eq(activities.commute, false),
+            // An activity already reconciled with a plan is never a candidate.
+            // An anti-join rather than shipping every linked id to node and back
+            // as `not in (...)`, which grows without bound and re-plans per size.
+            notExists(
+              ctx.db
+                .select({ one: sql`1` })
+                .from(plannedTrainings)
+                .where(
+                  and(
+                    eq(plannedTrainings.athlete, input.athleteId),
+                    eq(plannedTrainings.linkedActivityId, activities.id),
+                  ),
+                ),
+            ),
+          ),
+        )
+        .orderBy(asc(activities.startDateLocal))
+        // A backstop, not a business rule: the batch is normally a handful of
+        // activities. It bounds the payload if a watermark ever goes stale.
+        .limit(NEW_ACTIVITY_LIMIT);
 
       return { watermark, activities: rows };
     }),
@@ -171,16 +203,22 @@ export const plannedTrainingsRouter = router({
    * Records that the athlete has been shown the link prompt for everything up to
    * `watermark`, so it doesn't come back on the next load. `greatest` keeps a
    * stale in-flight acknowledgement from rewinding a watermark a later one moved
-   * forward.
+   * forward; `least` clamps to what actually exists, so a bad client value can't
+   * push the column past every future id and mute the prompt permanently.
    */
   acknowledgeNewActivities: protectedProcedure
-    .input(z.object({ athleteId: z.number(), watermark: z.number().int() }))
+    .input(
+      z.object({
+        athleteId: z.number(),
+        watermark: z.number().int().nonnegative(),
+      }),
+    )
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       await ctx.db
         .update(athletes)
         .set({
-          lastSeenActivityId: sql`greatest(coalesce(${athletes.lastSeenActivityId}, 0), ${input.watermark})`,
+          lastSeenActivityId: sql`greatest(${athletes.lastSeenActivityId}, least(${input.watermark}, (select coalesce(max(${activities.id}), 0) from ${activities} where ${activities.athlete} = ${input.athleteId})))`,
         })
         .where(eq(athletes.id, input.athleteId));
     }),
@@ -309,23 +347,37 @@ export const plannedTrainingsRouter = router({
         workout_type: workoutType,
       });
 
-      await ctx.db.transaction(async (tx) => {
-        await tx
-          .update(activities)
-          .set({
-            name: plan.title,
-            ...(workoutType != null ? { workoutType } : {}),
-          })
-          .where(eq(activities.id, activity.id));
-        await tx
-          .update(plannedTrainings)
-          .set({
-            status: "completed",
-            linkedActivityId: activity.id,
-            updatedAt: Date.now(),
-          })
-          .where(eq(plannedTrainings.id, plan.id));
-      });
+      try {
+        await ctx.db.transaction(async (tx) => {
+          await tx
+            .update(activities)
+            .set({
+              name: plan.title,
+              ...(workoutType != null ? { workoutType } : {}),
+            })
+            .where(eq(activities.id, activity.id));
+          await tx
+            .update(plannedTrainings)
+            .set({
+              status: "completed",
+              linkedActivityId: activity.id,
+              updatedAt: Date.now(),
+            })
+            .where(eq(plannedTrainings.id, plan.id));
+        });
+      } catch (error) {
+        // The pre-check above and this write are separated by a Strava
+        // round-trip, so a concurrent link can slip in between them. The partial
+        // unique index on `linked_activity_id` is what actually holds the
+        // invariant; translate its violation into the same error the check gives.
+        if (isUniqueViolation(error)) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "This activity is already linked to a planned training.",
+          });
+        }
+        throw error;
+      }
     }),
 
   /** Returns (lazily creating) the athlete's secret iCal subscription token + URL. */

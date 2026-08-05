@@ -30,6 +30,10 @@ import {
 } from "~/components/ui/responsive-dialog";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import {
+  markDoneErrorKey,
+  useMarkPlannedTrainingDone,
+} from "~/hooks/useMarkPlannedTrainingDone";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
@@ -104,16 +108,7 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
       onClose();
     },
   });
-  const markDoneMut = trpc.plannedTrainings.markDone.useMutation({
-    onSuccess: () => {
-      void invalidateList();
-      void utils.activities.list.invalidate();
-      // The activity is now spoken for; without this the picker keeps offering it
-      // from cache for the next plan opened.
-      void utils.plannedTrainings.linkedActivityIds.invalidate();
-      onClose();
-    },
-  });
+  const markDoneMut = useMarkPlannedTrainingDone({ onSuccess: onClose });
 
   const pending =
     createMut.isPending || updateMut.isPending || deleteMut.isPending;
@@ -254,8 +249,11 @@ function MarkDoneSection({
   const [selectedStravaId, setSelectedStravaId] = React.useState<string>("");
 
   // Candidates share the plan's sport category and fall in its week, split into
-  // "Perfect matches" (same calendar day) and "Other matches" (same week, other
-  // day). Anything outside those criteria, or already linked, is dropped.
+  // "Perfect matches" (`isPerfectMatch` — same calendar day, and the same exact
+  // type within the catch-all `other` category) and "Other matches" (everything
+  // else that week, which therefore includes a same-day activity whose `other`
+  // type differs). Anything outside those criteria, or already linked, is
+  // dropped.
   const { groups, byStravaId } = React.useMemo(() => {
     const linked = new Set(linkedActivityIds ?? []);
     const plannedCategory = getSportConfig(training.sportType).category;
@@ -384,11 +382,7 @@ function MarkDoneSection({
       )}
       {markDoneMut.isError && (
         <p className="text-destructive text-sm">
-          {t(
-            markDoneMut.error.data?.code === "CONFLICT"
-              ? "journal.dialog.markDoneConflict"
-              : "journal.dialog.markDoneError",
-          )}
+          {t(markDoneErrorKey(markDoneMut.error))}
         </p>
       )}
     </div>

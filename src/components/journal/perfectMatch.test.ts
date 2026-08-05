@@ -106,14 +106,43 @@ describe("pairPerfectMatches", () => {
     ]);
   });
 
+  it("declines to choose when two plans match one activity", () => {
+    // Planned a recovery spin *and* an interval session, rode only one of them.
+    // Which plan the ride fulfilled is unknowable from day + sport alone, and
+    // picking the earlier one renames the ride with the wrong title on Strava
+    // and completes a session that never happened.
+    const recovery = plan("2026-03-04T07:00:00", "Ride");
+    const intervals = plan("2026-03-04T17:00:00", "Ride");
+    const only = activity("2026-03-04T18:00:00", "Ride");
+
+    expect(pairPerfectMatches([recovery, intervals], [only])).toEqual([]);
+  });
+
   it("never gives one activity to two plans", () => {
     const first = plan("2026-03-04T07:00:00", "Ride");
     const second = plan("2026-03-04T17:00:00", "Ride");
     const only = activity("2026-03-04T18:00:00", "Ride");
 
     const pairs = pairPerfectMatches([first, second], [only]);
+    const used = pairs.map((p) => p.activity);
 
-    expect(pairs).toEqual([{ plan: first, activity: only }]);
+    expect(new Set(used).size).toBe(used.length);
+  });
+
+  it("still pairs same-day plans in different sports", () => {
+    // Two plans on one day is only ambiguous when they compete for the same
+    // activity. A brick day pairs both, and the order is chronological.
+    const swim = plan("2026-03-04T07:00:00", "Swim");
+    const ride = plan("2026-03-04T17:00:00", "Ride");
+    const swimActivity = activity("2026-03-04T07:30:00", "Swim");
+    const rideActivity = activity("2026-03-04T18:00:00", "Ride");
+
+    expect(
+      pairPerfectMatches([ride, swim], [rideActivity, swimActivity]),
+    ).toEqual([
+      { plan: swim, activity: swimActivity },
+      { plan: ride, activity: rideActivity },
+    ]);
   });
 
   it("declines to choose when a plan matches two activities", () => {

@@ -155,6 +155,13 @@
       "when": 1785394149421,
       "tag": "0021_handy_blue_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1785939703095,
+      "tag": "0022_empty_grandmaster",
+      "breakpoints": true
     }
   ]
 }

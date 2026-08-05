@@ -8,8 +8,9 @@ import { getSportConfig } from "~/utils/sportConfig";
  * living here rather than in either consumer, so the two can never drift.
  *
  * Category, not exact type, so a `VirtualRide` fulfils a planned `Ride` — except
- * in the `other` category, which is `sportConfig`'s fallback for every type it
- * has no entry for and so groups nothing meaningful together.
+ * in the `other` category, which holds both the types `sportConfig` has no entry
+ * for and the configured-but-uncategorised ones (the three ski types, all of
+ * them plannable). Sharing it therefore says nothing about two activities.
  */
 
 /** Local day key (yyyy-MM-dd) of a floating-local ISO datetime string. */
@@ -41,9 +42,10 @@ export function isPerfectMatch(
   if (planCategory !== getSportConfig(activity.type).category) {
     return false;
   }
-  // `other` is the bucket every type `sportConfig` has no entry for, so landing
-  // in it together means nothing — a Yoga session and a planned `AlpineSki` are
-  // both "other". Only the exact type tells them apart there.
+  // `other` is both `sportConfig`'s fallback for unmapped types and the default
+  // category of the types it configures without one, so landing in it together
+  // means nothing — a Yoga session and a planned `AlpineSki` are both "other",
+  // as are `AlpineSki` and `NordicSki`. Only the exact type separates them.
   if (planCategory === "other") {
     return plan.sportType === activity.type;
   }
@@ -51,17 +53,24 @@ export function isPerfectMatch(
 }
 
 /**
- * Strictly unambiguous 1:1 pairing: a plan is paired only when exactly one
- * not-yet-claimed activity perfectly matches it.
+ * Strictly unambiguous 1:1 pairing: a plan and an activity are paired only when
+ * they are each other's *only* perfect match.
  *
- * Linking is destructive (it renames the activity on Strava), so this never
- * guesses. Neither side of a "perfect match" carries enough signal to choose
- * between alternatives: the rule is day + sport category, which says nothing
- * about time of day or duration — so on a day with a bike commute *and* an
- * interval session, "the earlier one" would be exactly the wrong answer as often
- * as the right one. Plans are walked in chronological order only to make the
- * outcome deterministic when several compete for one activity: the earliest plan
- * claims it, the rest are left alone.
+ * Linking is destructive — it renames the activity on Strava — so this never
+ * guesses, in either direction. A "perfect match" is day + sport category, which
+ * says nothing about time of day or duration, so neither side carries the signal
+ * needed to choose between alternatives:
+ *
+ * - One plan, two matching rides (the commute-plus-intervals day): picking "the
+ *   earlier one" is wrong as often as it is right.
+ * - Two plans, one matching ride (planned a recovery spin *and* intervals, rode
+ *   only one of them): picking the earlier plan renames the ride with the wrong
+ *   title and completes the session that never happened.
+ *
+ * The second case needs its own guard rather than falling out of a greedy walk:
+ * because the rule depends only on (day, category), same-day plans always see an
+ * identical candidate set, so a first-come-first-served loop would hand the
+ * activity to whichever plan it happened to visit first.
  *
  * Everything it declines to pair stays reachable from the Journal's Mark done
  * picker, which shows all the candidates and lets the athlete choose.
@@ -70,21 +79,29 @@ export function pairPerfectMatches<
   P extends MatchablePlan,
   A extends MatchableActivity,
 >(plans: readonly P[], activities: readonly A[]): { plan: P; activity: A }[] {
+  // Chronological only so the output order is stable and readable in the prompt;
+  // no plan gets priority over another for the same activity — ties are dropped.
   const sortedPlans = [...plans].sort((a, b) =>
     a.plannedDate.localeCompare(b.plannedDate),
   );
-  const claimed = new Set<A>();
   const pairs: { plan: P; activity: A }[] = [];
 
   for (const plan of sortedPlans) {
-    const candidates = activities.filter(
-      (candidate) => !claimed.has(candidate) && isPerfectMatch(plan, candidate),
+    const candidates = activities.filter((candidate) =>
+      isPerfectMatch(plan, candidate),
     );
     if (candidates.length !== 1) {
       continue;
     }
-    claimed.add(candidates[0]);
-    pairs.push({ plan, activity: candidates[0] });
+    const activity = candidates[0];
+    // …and the activity must not be claimable by any other plan either.
+    const competing = sortedPlans.some(
+      (other) => other !== plan && isPerfectMatch(other, activity),
+    );
+    if (competing) {
+      continue;
+    }
+    pairs.push({ plan, activity });
   }
 
   return pairs;
