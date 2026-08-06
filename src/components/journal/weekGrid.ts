@@ -1,3 +1,5 @@
+import { addDays, format } from "date-fns";
+
 import type { PlannedTraining } from "@server/db/types";
 import type { BusyEvent } from "@server/lib/icalFeed";
 
@@ -52,6 +54,8 @@ export type WeekEvent =
       activity: JournalActivity;
       startMinutes: number;
       endMinutes: number;
+      /** True for the day-N segment of an event begun on an earlier day. */
+      continued: boolean;
     }
   | {
       kind: "planned";
@@ -59,6 +63,8 @@ export type WeekEvent =
       training: PlannedTraining;
       startMinutes: number;
       endMinutes: number;
+      /** True for the day-N segment of an event begun on an earlier day. */
+      continued: boolean;
     }
   | {
       kind: "busy";
@@ -66,6 +72,8 @@ export type WeekEvent =
       busy: BusyEvent;
       startMinutes: number;
       endMinutes: number;
+      /** Always false — busy events are clamped to their start day, not fanned. */
+      continued: boolean;
     };
 
 /** A {@link WeekEvent} with its resolved geometry within a day column. */
@@ -106,30 +114,100 @@ export function snapMinutes(minutes: number): number {
   return Math.max(0, Math.min(MINUTES_PER_DAY - SNAP_MINUTES, snapped));
 }
 
-/** The timed events of a day, activities and still-planned trainings combined. */
+/**
+ * Cap on how many extra days an event fans out over, so a typo'd duration
+ * can't explode the journal's week range. Mirrors the iCal feed's
+ * `MAX_ALLDAY_SPAN_DAYS` so both multi-day fan-outs truncate at the same
+ * horizon.
+ */
+const MAX_EVENT_SPAN_DAYS = 90;
+
+/**
+ * The local calendar-day keys (`yyyy-MM-dd`) covered by an event starting at
+ * the given floating-local ISO datetime and lasting `durationSeconds`. An event
+ * crossing midnight yields one key per day it touches, so multi-day sessions
+ * can render on each of them; one ending exactly at midnight doesn't cover the
+ * next day. Capped at {@link MAX_EVENT_SPAN_DAYS} continuation days.
+ */
+export function coveredDayKeys(
+  startIso: string,
+  durationSeconds: number,
+): string[] {
+  const startKey = startIso.slice(0, 10);
+  const endMinutes = minutesFromIso(startIso) + durationSeconds / 60;
+  const lastOffset = Math.min(
+    MAX_EVENT_SPAN_DAYS,
+    Math.max(0, Math.ceil(endMinutes / MINUTES_PER_DAY) - 1),
+  );
+  if (lastOffset === 0) {
+    return [startKey];
+  }
+  const start = new Date(`${startKey}T00:00:00`);
+  const keys: string[] = [startKey];
+  for (let i = 1; i <= lastOffset; i += 1) {
+    keys.push(format(addDays(start, i), "yyyy-MM-dd"));
+  }
+  return keys;
+}
+
+/**
+ * Whole calendar days between the date part of a floating-local ISO datetime
+ * and the given local day. Computed in UTC from the date components alone so a
+ * DST transition inside the span can't skew the count.
+ */
+function dayOffsetFromIso(iso: string, day: Date): number {
+  const isoUtc = Date.UTC(
+    Number(iso.slice(0, 4)),
+    Number(iso.slice(5, 7)) - 1,
+    Number(iso.slice(8, 10)),
+  );
+  const dayUtc = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate());
+  return Math.round((dayUtc - isoUtc) / 86_400_000);
+}
+
+/**
+ * The timed events of a day, activities and still-planned trainings combined.
+ * A multi-day event sits in the bucket of every day it covers (see
+ * {@link coveredDayKeys}); on continuation days its start shifts negative by
+ * the day offset, so the clamps below carve out exactly this day's segment.
+ */
 export function buildDayEvents(day: JournalDay): WeekEvent[] {
   const events: WeekEvent[] = [];
   for (const activity of day.activities) {
-    const start = minutesFromIso(activity.startDateLocal);
+    const offset = dayOffsetFromIso(activity.startDateLocal, day.date);
+    const start =
+      minutesFromIso(activity.startDateLocal) - offset * MINUTES_PER_DAY;
     events.push({
       kind: "activity",
-      id: `activity-${activity.stravaId}`,
+      id:
+        offset === 0
+          ? `activity-${activity.stravaId}`
+          : `activity-${activity.stravaId}-day${offset}`,
       activity,
-      startMinutes: start,
+      startMinutes: Math.max(0, start),
       endMinutes: Math.min(MINUTES_PER_DAY, start + activity.elapsedTime / 60),
+      continued: offset > 0,
     });
   }
   for (const training of day.plannedTrainings) {
-    const start = minutesFromIso(training.plannedDate);
+    const offset = dayOffsetFromIso(training.plannedDate, day.date);
+    const start =
+      minutesFromIso(training.plannedDate) - offset * MINUTES_PER_DAY;
     events.push({
       kind: "planned",
-      id: `planned-${training.id}`,
+      // The start segment must keep the bare `planned-<id>` — drag rescheduling
+      // parses the training id back out of it.
+      id:
+        offset === 0
+          ? `planned-${training.id}`
+          : `planned-${training.id}-day${offset}`,
       training,
-      startMinutes: start,
+      startMinutes: Math.max(0, start),
       endMinutes: Math.min(
         MINUTES_PER_DAY,
         start + training.durationSeconds / 60,
       ),
+      continued: offset > 0,
     });
   }
   return events;
@@ -148,7 +226,9 @@ export function buildBusyEvents(day: JournalDay): WeekEvent[] {
     }
     const start = minutesFromIso(busy.startLocal);
     const rawEnd = minutesFromIso(busy.endLocal);
-    // A feed event can cross midnight; like activities, clamp it to the day end.
+    // A feed event can cross midnight; unlike activities and plans (which fan
+    // out onto every day they cover), it's just clamped to its start day's end
+    // — busy blocks are availability hints, not schedule entries.
     const endMinutes =
       rawEnd > start ? Math.min(MINUTES_PER_DAY, rawEnd) : MINUTES_PER_DAY;
     events.push({
@@ -157,6 +237,7 @@ export function buildBusyEvents(day: JournalDay): WeekEvent[] {
       busy,
       startMinutes: start,
       endMinutes,
+      continued: false,
     });
   });
   return events;

@@ -324,7 +324,8 @@ export const plannedTrainings = pgTable(
       .references(() => athletes.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     // Floating local ISO datetime (no timezone), mirroring `activities.startDateLocal`.
-    // Bucketed onto a Journal day via `plannedDate.slice(0, 10)`.
+    // Bucketed onto every Journal day the plan covers, start day first (see
+    // the Journal's `coveredDayKeys`).
     plannedDate: text("planned_date").notNull(),
     durationSeconds: integer("duration_seconds").notNull(),
     // Strava activity-type string (e.g. "Ride", "Run", "Swim"), understood by
