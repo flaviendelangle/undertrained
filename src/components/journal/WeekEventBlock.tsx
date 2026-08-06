@@ -168,19 +168,37 @@ export function WeekBusyBlock({
  * A still-planned training as a dashed, draggable block. Dragging reschedules it
  * (handled by the grid's `onDragEnd`); a plain click opens the edit dialog. The
  * default pointer sensor only starts a drag after a small move or short hold, so
- * clicks aren't swallowed.
+ * clicks aren't swallowed. Continuation segments of a multi-day training aren't
+ * draggable (rescheduling moves the start day's segment), but still open the
+ * edit dialog on click.
  */
 export function WeekPlannedBlock({
   training,
+  dragId,
+  continued,
+  dimmed,
   compact,
 }: {
   training: PlannedTraining;
+  /** Unique draggable id — `planned-<id>` on the start day (the drag handlers parse the training id back out of it), suffixed on continuation days. */
+  dragId: string;
+  /** True for the continuation segment of a training begun on an earlier day. */
+  continued?: boolean;
+  /**
+   * Externally-driven dimming for continuation segments while their start
+   * segment is dragged — they're separate draggables, so their own `isDragging`
+   * stays false during that drag.
+   */
+  dimmed?: boolean;
   compact?: boolean;
 }) {
   const t = useT();
   const planner = useJournalPlanner();
   const config = getSportConfig(training.sportType);
-  const { ref, isDragging } = useDraggable({ id: `planned-${training.id}` });
+  const { ref, isDragging } = useDraggable({
+    id: dragId,
+    disabled: continued,
+  });
 
   return (
     <button
@@ -194,8 +212,9 @@ export function WeekPlannedBlock({
       style={plannedBlockStyle(config.color)}
       className={cn(
         PLANNED_BLOCK_CLASS,
-        "h-full w-full cursor-grab transition-[filter] hover:brightness-95 active:cursor-grabbing dark:hover:brightness-110",
-        isDragging && "opacity-30",
+        "h-full w-full transition-[filter] hover:brightness-95 dark:hover:brightness-110",
+        continued ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
+        (isDragging || dimmed) && "opacity-30",
       )}
     >
       <PlannedBlockBody

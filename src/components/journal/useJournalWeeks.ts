@@ -19,6 +19,8 @@ import {
 } from "~/utils/getActivityLoad";
 import { type SportCategory, getSportConfig } from "~/utils/sportConfig";
 
+import { coveredDayKeys } from "./weekGrid";
+
 export type JournalActivity = Omit<ListActivity, "mapPolyline">;
 
 /** Per-category duration/load totals within a single week. */
@@ -162,17 +164,23 @@ export function useJournalWeeks(
   plannedTrainings?: PlannedTraining[],
   busyEvents?: BusyEvent[],
 ): JournalWeeksResult {
-  // Bucket planned trainings onto their local calendar day, same key scheme as
-  // activities (the date portion of the stored floating-local datetime).
+  // Bucket planned trainings onto every local calendar day they cover, same key
+  // scheme as activities (the date portion of the stored floating-local
+  // datetime). A training whose duration crosses midnight lands in each day's
+  // bucket so its continuation renders past the first day.
   const plannedByDay = React.useMemo(() => {
     const map = new Map<string, PlannedTraining[]>();
     for (const planned of plannedTrainings ?? []) {
-      const key = planned.plannedDate.slice(0, 10);
-      const bucket = map.get(key);
-      if (bucket) {
-        bucket.push(planned);
-      } else {
-        map.set(key, [planned]);
+      for (const key of coveredDayKeys(
+        planned.plannedDate,
+        planned.durationSeconds,
+      )) {
+        const bucket = map.get(key);
+        if (bucket) {
+          bucket.push(planned);
+        } else {
+          map.set(key, [planned]);
+        }
       }
     }
     return map;
@@ -209,15 +217,21 @@ export function useJournalWeeks(
     return map;
   }, [activities, loadPreferences]);
 
+  // Same fan-out as planned trainings: an activity crossing midnight (a
+  // multi-day trek, an overnight ride) sits in every day it covers.
   const activitiesByDay = React.useMemo(() => {
     const map = new Map<string, JournalActivity[]>();
     for (const activity of activities ?? []) {
-      const key = activityDayKey(activity);
-      const bucket = map.get(key);
-      if (bucket) {
-        bucket.push(activity);
-      } else {
-        map.set(key, [activity]);
+      for (const key of coveredDayKeys(
+        activity.startDateLocal,
+        activity.elapsedTime,
+      )) {
+        const bucket = map.get(key);
+        if (bucket) {
+          bucket.push(activity);
+        } else {
+          map.set(key, [activity]);
+        }
       }
     }
     // Order each day's activities by training load, heaviest first, so the most
@@ -319,6 +333,11 @@ export function useJournalWeeks(
         const dayBusy = busyByDay.get(dayKey) ?? [];
         let dayLoad = 0;
         for (const activity of dayActivities) {
+          // A multi-day activity appears in every day it covers, but its time
+          // and load count once, on its start day.
+          if (activityDayKey(activity) !== dayKey) {
+            continue;
+          }
           const load = loadByStravaId.get(activity.stravaId) ?? 0;
           totalSeconds += activity.movingTime;
           dayLoad += load;
@@ -335,7 +354,11 @@ export function useJournalWeeks(
           }
         }
         for (const planned of dayPlanned) {
-          plannedSeconds += planned.durationSeconds;
+          // Same as activities: a multi-day plan's duration counts once, on its
+          // start day (and so entirely in its start week).
+          if (planned.plannedDate.slice(0, 10) === dayKey) {
+            plannedSeconds += planned.durationSeconds;
+          }
         }
         totalLoad += dayLoad;
         days.push({
@@ -348,7 +371,12 @@ export function useJournalWeeks(
           busyEvents: dayBusy,
           totalLoad: dayLoad,
         });
-        weekActivities.push(...dayActivities);
+        // Continuation copies excluded, so the summary lists each activity once.
+        weekActivities.push(
+          ...dayActivities.filter(
+            (activity) => activityDayKey(activity) === dayKey,
+          ),
+        );
       }
 
       const sportBreakdown: WeekSportStat[] = Array.from(

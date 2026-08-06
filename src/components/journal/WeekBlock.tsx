@@ -45,10 +45,15 @@ export interface DropPreview {
 
 /** The snapped, full-opacity drop target shown in a day column while dragging. */
 function PreviewGhost({ preview }: { preview: DropPreview }) {
-  const durationMinutes = preview.training.durationSeconds / 60;
+  // Clamp to midnight like the real blocks — a multi-day training's ghost
+  // would otherwise overflow the bottom of the grid.
+  const visibleMinutes = Math.min(
+    preview.training.durationSeconds / 60,
+    MINUTES_PER_DAY - preview.minutes,
+  );
   const height = Math.max(
     MIN_BLOCK_HEIGHT,
-    (durationMinutes / 60) * HOUR_HEIGHT,
+    (visibleMinutes / 60) * HOUR_HEIGHT,
   );
   return (
     <div
@@ -75,6 +80,7 @@ function DayColumn({
   positioned,
   busy,
   preview,
+  draggedTrainingId,
 }: {
   date: Date;
   positioned: PositionedEvent[];
@@ -82,6 +88,12 @@ function DayColumn({
   busy: PositionedEvent[];
   /** Snapped ghost shown while a drag hovers this day (null otherwise). */
   preview: DropPreview | null;
+  /**
+   * Id of the training currently being dragged anywhere in the grid, so the
+   * continuation segments of a multi-day training dim along with the dragged
+   * start segment (they're separate draggables, so `isDragging` misses them).
+   */
+  draggedTrainingId: number | null;
 }) {
   const { ref, isDropTarget } = useDroppable({
     id: format(date, "yyyy-MM-dd"),
@@ -157,6 +169,11 @@ function DayColumn({
           ) : event.kind === "planned" ? (
             <WeekPlannedBlock
               training={event.training}
+              dragId={event.id}
+              continued={event.continued}
+              dimmed={
+                event.continued && event.training.id === draggedTrainingId
+              }
               compact={height < COMPACT_BLOCK_HEIGHT}
             />
           ) : null}
@@ -365,6 +382,7 @@ export function WeekBlock({
               positioned={dayEvents[index]}
               busy={dayBusyEvents[index]}
               preview={preview?.dayKey === dayKey ? preview : null}
+              draggedTrainingId={preview?.training.id ?? null}
             />
           );
         })}
@@ -373,12 +391,17 @@ export function WeekBlock({
   );
 }
 
-/** Earliest event start (minutes since midnight) across this week, or `Infinity`. */
+/**
+ * Earliest event start (minutes since midnight) across this week, or
+ * `Infinity`. Continuation segments of multi-day events are skipped — they sit
+ * at midnight but span the whole day, so anchoring the initial scroll on a real
+ * start keeps them visible without pinning the grid to 00:00.
+ */
 export function earliestMinutesOfWeek(week: JournalWeek): number {
   let min = Infinity;
   for (const day of week.days) {
     for (const event of buildDayEvents(day)) {
-      if (event.startMinutes < min) {
+      if (!event.continued && event.startMinutes < min) {
         min = event.startMinutes;
       }
     }
