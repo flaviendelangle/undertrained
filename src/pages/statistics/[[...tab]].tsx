@@ -30,10 +30,13 @@ const loadPowerCurve = () =>
   import("~/components/charts/PowerCurve").then((m) => m.PowerCurve);
 const loadEddingtonChart = () =>
   import("~/components/charts/EddingtonChart").then((m) => m.EddingtonChart);
+const loadTimeInZones = () =>
+  import("~/components/charts/TimeInZones").then((m) => m.TimeInZones);
 
 const CHART_LOADERS = [
   loadFitnessChart,
   loadActivitiesTimeline,
+  loadTimeInZones,
   loadActivitiesCumulativeTimeline,
   loadPowerCurve,
   loadEddingtonChart,
@@ -47,6 +50,7 @@ const ActivitiesCumulativeTimeline = nextDynamic(
 );
 const PowerCurve = nextDynamic(loadPowerCurve, { ssr: false });
 const EddingtonChart = nextDynamic(loadEddingtonChart, { ssr: false });
+const TimeInZones = nextDynamic(loadTimeInZones, { ssr: false });
 
 const StatisticsPage: NextPageWithLayout = () => {
   const t = useT();
@@ -95,6 +99,7 @@ const StatisticsPage: NextPageWithLayout = () => {
               <PowerCurve
                 activityTypes={getActivityTypesByCategory("cycling")}
               />
+              <TimeInZones />
               <ActivitiesCumulativeTimeline />
               <EddingtonChart />
             </div>

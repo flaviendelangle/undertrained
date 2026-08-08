@@ -24,6 +24,7 @@ import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
+import { findRunningPaceZone } from "~/sensors/paceZones";
 import {
   type RiderSettings,
   findHeartRateZone,
@@ -45,7 +46,6 @@ import {
 } from "../ChartTooltipSurface";
 import type { StructureAnnotation } from "../shared/StructureBrackets";
 import { StructureBrackets } from "../shared/StructureBrackets";
-import { findRunningPaceZone } from "./lapZones";
 
 /** Subset of the stored lap shape consumed by the chart. */
 interface LapDatum {

@@ -420,6 +420,18 @@ const fr: Messages = {
     cumulativeTimeline: {
       title: "Progression d'année en année",
     },
+    timeInZones: {
+      title: "Temps par zone",
+      info: "Part du temps en mouvement passée dans chaque zone d'entraînement sur la période sélectionnée. Chaque sport utilise sa métrique de charge par défaut : zones de puissance pour le vélo, zones d'allure pour la course, zones de fréquence cardiaque sinon. Le temps des activités sans cette métrique est classé en Inconnue.",
+      empty: "Aucune donnée disponible",
+      unknown: "Inconnue",
+      timeSpanLabel: "Période",
+      timeSpan: {
+        week: "Cette semaine",
+        month: "Ce mois-ci",
+        year: "Cette année",
+      },
+    },
     eddington: {
       title: "Nombre d'Eddington",
       info: "Votre nombre d'Eddington E est le plus grand nombre tel que vous avez parcouru à vélo au moins E km sur E jours différents. Chaque barre indique le nombre de jours où vous avez roulé au moins cette distance.",

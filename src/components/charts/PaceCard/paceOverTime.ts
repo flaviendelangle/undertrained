@@ -22,7 +22,7 @@
  * client consumes Strava streams (the `time` stream isn't surfaced to the
  * client, so streams are read as 1 Hz — see `ActivityStreams`).
  */
-import { RUNNING_PACE_ZONES } from "../ActivityLaps/lapZones";
+import { RUNNING_PACE_ZONES } from "~/sensors/paceZones";
 
 /** Clamp a sample to a usable, non-negative speed (m/s); garbage → 0. */
 function sanitizeSpeed(value: number): number {

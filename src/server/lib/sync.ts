@@ -26,8 +26,10 @@ import {
   computeHeartrateBests,
   computePowerBests,
   computeSpeedEfforts,
+  computeZoneSeconds,
   resolveRiderSettings,
 } from "./computeScores";
+import type { ZoneSecondsByMetric } from "./computeScores";
 import { resetLastSeenActivityId } from "./linkPromptWatermark";
 import type { normalizeStreams } from "./strava";
 import {
@@ -755,6 +757,7 @@ export async function computeActivityScoresInternal(
     speedEfforts?: Record<number, number> | null;
     biggestClimb?: number | null;
     heartrateBests?: Record<number, number> | null;
+    zoneSeconds?: ZoneSecondsByMetric | null;
   } = {};
 
   const sc = getSportConfig(activity.type);
@@ -800,6 +803,13 @@ export async function computeActivityScoresInternal(
         ));
 
     const timeData = streamData(streamDocs, "time", activity.id);
+    const wattsData = sc.hasPowerMetrics
+      ? streamData(streamDocs, "watts", activity.id)
+      : undefined;
+    const velocityData =
+      sc.category === "running"
+        ? streamData(streamDocs, "velocity_smooth", activity.id)
+        : undefined;
 
     // HR powers both HRSS (needs settings) and HR bests (running & cycling,
     // including indoor — HR is a real sensor metric).
@@ -818,11 +828,6 @@ export async function computeActivityScoresInternal(
       sc.category === "running" &&
       settings.runThresholdPace > 0
     ) {
-      const velocityData = streamData(
-        streamDocs,
-        "velocity_smooth",
-        activity.id,
-      );
       if (velocityData && timeData) {
         patch.tss = Math.round(
           calculateRunningTSS(
@@ -835,7 +840,6 @@ export async function computeActivityScoresInternal(
     }
 
     if (sc.hasPowerMetrics) {
-      const wattsData = streamData(streamDocs, "watts", activity.id);
       if (wattsData) {
         patch.powerBests = computePowerBests(wattsData, timeData);
       }
@@ -864,6 +868,20 @@ export async function computeActivityScoresInternal(
       patch.speedEfforts = null;
       patch.biggestClimb = null;
     }
+
+    // Always set-or-null so stale zone data clears when settings or the
+    // sport classification change.
+    patch.zoneSeconds = settings
+      ? computeZoneSeconds({
+          isRunning: sc.category === "running",
+          hasPowerMetrics: sc.hasPowerMetrics,
+          settings,
+          timeData,
+          wattsData,
+          hrData,
+          velocityData,
+        })
+      : null;
   }
 
   if (Object.keys(patch).length > 0) {

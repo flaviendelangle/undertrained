@@ -2,6 +2,8 @@
  * Server-side score computation utilities.
  * Pure functions — no runtime dependencies.
  */
+import { findRunningPaceZone } from "../../sensors/paceZones";
+import { findHeartRateZone, findPowerZone } from "../../sensors/types";
 import { resolveTimeline } from "../../utils/resolveTimeline";
 
 /**
@@ -174,6 +176,95 @@ export function calculateSwimmingTSS(
   const hours = movingTime / 3600;
 
   return intensityFactor * intensityFactor * intensityFactor * hours * 100;
+}
+
+/**
+ * Seconds spent in each training zone, per metric. Arrays are length 7,
+ * indexed by the shared zone ramp (chartTokens `tokens.zones`); `hr` populates
+ * only ramps 0,1,2,3,5 (HR_ZONES skips ramp 4). Every available metric is
+ * stored so the client can pick per sport at render time without a recompute.
+ */
+export interface ZoneSecondsByMetric {
+  power?: number[];
+  pace?: number[];
+  hr?: number[];
+}
+
+/**
+ * Computes time-in-zone (seconds, bucketed by ramp index) for every metric the
+ * activity's streams and settings support. Sample weighting mirrors
+ * {@link calculateHRSS}: actual time deltas when a time stream exists, else
+ * 1 s per sample. Returns null when no metric qualifies.
+ */
+export function computeZoneSeconds(args: {
+  /** Sport category is running — enables pace zones. */
+  isRunning: boolean;
+  /** Sport supports power — enables power zones. */
+  hasPowerMetrics: boolean;
+  settings: {
+    ftp: number;
+    maxHr: number;
+    restingHr: number;
+    runThresholdPace: number;
+  };
+  timeData?: number[];
+  wattsData?: number[];
+  hrData?: number[];
+  velocityData?: number[];
+}): ZoneSecondsByMetric | null {
+  const { isRunning, hasPowerMetrics, settings, timeData } = args;
+
+  const accumulate = (
+    samples: number[],
+    rampOf: (value: number) => number,
+  ): number[] => {
+    const buckets = new Array<number>(7).fill(0);
+    for (let i = 0; i < samples.length; i++) {
+      const value = samples[i];
+      if (!Number.isFinite(value)) continue;
+
+      let dtSeconds = 1;
+      if (timeData && i > 0) {
+        dtSeconds = timeData[i] - timeData[i - 1];
+        if (dtSeconds <= 0 || !Number.isFinite(dtSeconds)) continue;
+      }
+
+      buckets[rampOf(value)] += dtSeconds;
+    }
+    return buckets.map((s) => Math.round(s));
+  };
+
+  const result: ZoneSecondsByMetric = {};
+
+  if (hasPowerMetrics && settings.ftp > 0 && args.wattsData) {
+    result.power = accumulate(
+      args.wattsData,
+      (w) => findPowerZone(w, settings.ftp).zone.ramp,
+    );
+  }
+
+  // Same guard as rTSS: pace zones need real time deltas to be meaningful.
+  if (
+    isRunning &&
+    settings.runThresholdPace > 0 &&
+    args.velocityData &&
+    timeData
+  ) {
+    result.pace = accumulate(
+      args.velocityData,
+      (v) => findRunningPaceZone(v, settings.runThresholdPace).ramp,
+    );
+  }
+
+  if (args.hrData && settings.maxHr > settings.restingHr) {
+    result.hr = accumulate(
+      args.hrData,
+      (hr) =>
+        findHeartRateZone(hr, settings.maxHr, settings.restingHr).zone.ramp,
+    );
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
 }
 
 /**
