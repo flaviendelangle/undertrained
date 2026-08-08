@@ -18,10 +18,8 @@
  * client consumes Strava streams (the `time` stream isn't surfaced to the
  * client, so streams are read as 1 Hz — see `ActivityStreams`).
  */
-import {
-  RUNNING_PACE_ZONES,
-  findRunningPaceZone,
-} from "../ActivityLaps/lapZones";
+import { RUNNING_PACE_ZONES, findRunningPaceZone } from "~/sensors/paceZones";
+
 import { paceFromSpeed } from "./paceOverTime";
 
 /**

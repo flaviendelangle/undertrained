@@ -4,7 +4,7 @@
  * modules (`metric`, `split`, `cluster`, `sets`, `confidence`) for the
  * individual steps and their tunable constants.
  */
-import { findRunningPaceZone } from "~/components/charts/ActivityLaps/lapZones";
+import { findRunningPaceZone } from "~/sensors/paceZones";
 import type { RiderSettings } from "~/sensors/types";
 import { findPowerZone } from "~/sensors/types";
 

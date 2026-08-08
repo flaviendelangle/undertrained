@@ -15,6 +15,7 @@ import type { ActivityStats } from "strava-v3";
 
 import type { StructuredWorkout } from "~/utils/structuredWorkout";
 
+import type { ZoneSecondsByMetric } from "../lib/computeScores";
 import type { StoredLap } from "../lib/stravaTypes";
 
 // ── Enums ──────────────────────────────────────────────────────────────
@@ -112,6 +113,10 @@ export const activities = pgTable(
     // Max average heart rate (bpm) sustained per duration, from the heartrate
     // stream (running & cycling, including indoor — HR is a real sensor metric).
     heartrateBests: jsonb("heartrate_bests").$type<Record<number, number>>(),
+    // Seconds spent in each training zone per metric (power/pace/hr), indexed
+    // by the shared 7-stop zone ramp. Computed from streams at scoring time;
+    // the client picks the metric per sport at render time.
+    zoneSeconds: jsonb("zone_seconds").$type<ZoneSecondsByMetric>(),
     // Lap (interval) splits derived from the DetailedActivity `laps` array — no
     // extra Strava request. Null = never captured (rendered only when length > 1).
     laps: jsonb("laps").$type<StoredLap[]>(),

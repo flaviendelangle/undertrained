@@ -397,6 +397,18 @@ const en = {
     cumulativeTimeline: {
       title: "Year-over-Year Progress",
     },
+    timeInZones: {
+      title: "Time in Zones",
+      info: "Share of moving time spent in each training zone over the selected period. Each sport uses its default load metric: power zones for cycling, pace zones for running, heart-rate zones otherwise. Time from activities missing that metric lands in Unknown.",
+      empty: "No data available",
+      unknown: "Unknown",
+      timeSpanLabel: "Time span",
+      timeSpan: {
+        week: "This week",
+        month: "This month",
+        year: "This year",
+      },
+    },
     eddington: {
       title: "Eddington Number",
       info: "Your Eddington number E is the largest number such that you have cycled at least E km on E different days. Each bar shows how many days you rode at least that distance.",

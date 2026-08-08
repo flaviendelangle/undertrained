@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { RUNNING_PACE_ZONES } from "../ActivityLaps/lapZones";
+import { RUNNING_PACE_ZONES } from "~/sensors/paceZones";
+
 import {
   buildPaceZoneGradientStops,
   paceFromSpeed,

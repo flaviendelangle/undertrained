@@ -1,8 +1,9 @@
 /**
- * Running pace-zone logic for the activity Laps chart. Kept local to this chart
- * (the Toolbox Zone Calculator uses its own Daniels model). Zones follow the
- * intervals.icu Run pace model, and laps are classified by each lap's raw
- * average speed (the value Strava reports).
+ * Running pace-zone model, shared by the activity charts (Laps, Pace) and the
+ * server-side zone-time computation. Kept separate from the Daniels VDOT model
+ * in `types.ts` (used by the Toolbox Zone Calculator). Zones follow the
+ * intervals.icu Run pace model, classified by raw average speed (the value
+ * Strava reports).
  */
 
 /** A pace zone defined by the upper bound of its speed ratio to threshold pace. */

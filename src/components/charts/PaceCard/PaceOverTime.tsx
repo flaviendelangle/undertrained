@@ -13,9 +13,9 @@ import {
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useT } from "~/i18n/useT";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
+import { findRunningPaceZone } from "~/sensors/paceZones";
 import { formatElapsed, formatMinutesSeconds } from "~/utils/format";
 
-import { findRunningPaceZone } from "../ActivityLaps/lapZones";
 import { ChartMessage } from "../ChartMessage";
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import {

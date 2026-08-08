@@ -64,7 +64,9 @@ export const activitiesRouter = router({
       // Omit the heavy jsonb columns (and mapPolyline unless requested) from the
       // list projection — none of the list consumers read them, so shipping them
       // wastes Postgres deserialization, wire, and client parsing on every load.
-      // Use `activities.get` when those columns are needed.
+      // Use `activities.get` when those columns are needed. `zoneSeconds` is
+      // intentionally kept: it is small (≤ 21 ints) and the statistics Time in
+      // Zones card aggregates it from this list.
       const {
         powerBests: _powerBests,
         heartrateBests: _heartrateBests,
