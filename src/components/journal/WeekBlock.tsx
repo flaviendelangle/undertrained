@@ -3,7 +3,8 @@ import * as React from "react";
 import { format } from "date-fns";
 import type { Locale } from "date-fns";
 
-import { useDroppable } from "@dnd-kit/react";
+import { type DragModifiers } from "@base-ui/plus/draggable";
+import { DropTarget } from "@base-ui/plus/drop-target";
 import type { PlannedTraining } from "@server/db/types";
 
 import { useT } from "~/i18n/useT";
@@ -14,8 +15,13 @@ import {
   WeekActivityBlock,
   WeekBusyBlock,
   WeekPlannedBlock,
-  WeekPlannedBlockGhost,
 } from "./WeekEventBlock";
+import {
+  JOURNAL_DAY_SNAP_STEPS,
+  type JournalDrop,
+  journalDayDropKind,
+  plannedTrainingDragKind,
+} from "./journalDnd";
 import { useJournalPlanner } from "./journalPlanner";
 import type { JournalDay, JournalWeek } from "./useJournalWeeks";
 import {
@@ -25,49 +31,14 @@ import {
   HOUR_HEIGHT,
   MINUTES_PER_DAY,
   MINUTES_PER_PIXEL,
-  MIN_BLOCK_HEIGHT,
   type PositionedEvent,
   buildBusyEvents,
   buildDayEvents,
-  minutesToTimeLabel,
   packDayEvents,
   snapMinutes,
 } from "./weekGrid";
 
 const TOTAL_HEIGHT = (MINUTES_PER_DAY / 60) * HOUR_HEIGHT;
-
-/** Live drop preview: which day and the snapped start minute, plus the training. */
-export interface DropPreview {
-  dayKey: string;
-  minutes: number;
-  training: PlannedTraining;
-}
-
-/** The snapped, full-opacity drop target shown in a day column while dragging. */
-function PreviewGhost({ preview }: { preview: DropPreview }) {
-  // Clamp to midnight like the real blocks — a multi-day training's ghost
-  // would otherwise overflow the bottom of the grid.
-  const visibleMinutes = Math.min(
-    preview.training.durationSeconds / 60,
-    MINUTES_PER_DAY - preview.minutes,
-  );
-  const height = Math.max(
-    MIN_BLOCK_HEIGHT,
-    (visibleMinutes / 60) * HOUR_HEIGHT,
-  );
-  return (
-    <div
-      className="pointer-events-none absolute right-0 left-0 z-20 pr-1.5"
-      style={{ top: (preview.minutes / 60) * HOUR_HEIGHT, height }}
-    >
-      <WeekPlannedBlockGhost
-        training={preview.training}
-        time={minutesToTimeLabel(preview.minutes)}
-        compact={height < COMPACT_BLOCK_HEIGHT}
-      />
-    </div>
-  );
-}
 
 /**
  * One day's column in the time-grid: a drop target carrying its date, with
@@ -79,26 +50,31 @@ function DayColumn({
   date,
   positioned,
   busy,
-  preview,
   draggedTrainingId,
+  dragModifiers,
+  previewContainer,
+  onTrainingDragStart,
+  onTrainingDrop,
+  onTrainingDragEnd,
 }: {
   date: Date;
   positioned: PositionedEvent[];
   /** Timed busy events, packed into their own behind-the-training back layer. */
   busy: PositionedEvent[];
-  /** Snapped ghost shown while a drag hovers this day (null otherwise). */
-  preview: DropPreview | null;
   /**
    * Id of the training currently being dragged anywhere in the grid, so the
    * continuation segments of a multi-day training dim along with the dragged
-   * start segment (they're separate draggables, so `isDragging` misses them).
+   * start segment (they're separate draggable roots, so local state misses them).
    */
   draggedTrainingId: number | null;
+  dragModifiers: DragModifiers;
+  previewContainer: React.RefObject<HTMLElement | null>;
+  onTrainingDragStart: (training: PlannedTraining) => void;
+  onTrainingDrop: (training: PlannedTraining, drop: JournalDrop) => void;
+  onTrainingDragEnd: () => void;
 }) {
-  const { ref, isDropTarget } = useDroppable({
-    id: format(date, "yyyy-MM-dd"),
-  });
   const planner = useJournalPlanner();
+  const dayKey = format(date, "yyyy-MM-dd");
 
   // Double-click an empty slot to plan a training on this day, prefilled to the
   // time under the cursor (snapped to the grid).
@@ -111,13 +87,15 @@ function DayColumn({
   };
 
   return (
-    <div
-      ref={ref}
+    <DropTarget.Root
+      accept={plannedTrainingDragKind}
+      kind={journalDayDropKind}
+      payload={dayKey}
+      label={dayKey}
+      snap={{ y: JOURNAL_DAY_SNAP_STEPS }}
+      data-journal-day-column=""
       onDoubleClick={handleDoubleClick}
-      className={cn(
-        "border-border relative border-l transition-colors",
-        isDropTarget && "bg-primary/5",
-      )}
+      className="border-border data-over:bg-primary/5 relative border-l transition-colors"
       style={{ height: TOTAL_HEIGHT }}
     >
       {HOURS.map((hour) => (
@@ -147,7 +125,6 @@ function DayColumn({
           </div>
         ) : null,
       )}
-      {preview != null && <PreviewGhost preview={preview} />}
       {positioned.map(({ event, top, height, leftPct, widthPct }) => (
         <div
           key={event.id}
@@ -169,17 +146,19 @@ function DayColumn({
           ) : event.kind === "planned" ? (
             <WeekPlannedBlock
               training={event.training}
-              dragId={event.id}
               continued={event.continued}
-              dimmed={
-                event.continued && event.training.id === draggedTrainingId
-              }
+              dimmed={event.training.id === draggedTrainingId}
               compact={height < COMPACT_BLOCK_HEIGHT}
+              dragModifiers={dragModifiers}
+              previewContainer={previewContainer}
+              onDragStart={onTrainingDragStart}
+              onDrop={onTrainingDrop}
+              onDragEnd={onTrainingDragEnd}
             />
           ) : null}
         </div>
       ))}
-    </div>
+    </DropTarget.Root>
   );
 }
 
@@ -277,7 +256,12 @@ export function WeekBlock({
   week,
   dayLoadScale,
   allDayRowHeight,
-  preview,
+  draggedTrainingId,
+  dragModifiers,
+  previewContainer,
+  onTrainingDragStart,
+  onTrainingDrop,
+  onTrainingDragEnd,
   dateLocale,
   style,
 }: {
@@ -290,8 +274,13 @@ export function WeekBlock({
    * in lock-step with the gutter spacer in {@link JournalWeekView}.
    */
   allDayRowHeight: number;
-  /** Drop preview from the parent; only matches a day in this week is shown. */
-  preview: DropPreview | null;
+  /** Training currently moving, used to dim its continuation segments. */
+  draggedTrainingId: number | null;
+  dragModifiers: DragModifiers;
+  previewContainer: React.RefObject<HTMLElement | null>;
+  onTrainingDragStart: (training: PlannedTraining) => void;
+  onTrainingDrop: (training: PlannedTraining, drop: JournalDrop) => void;
+  onTrainingDragEnd: () => void;
   dateLocale: Locale;
   style: React.CSSProperties;
 }) {
@@ -374,15 +363,18 @@ export function WeekBlock({
       </div>
       <div className="grid grid-cols-7" style={{ height: TOTAL_HEIGHT }}>
         {week.days.map((day, index) => {
-          const dayKey = format(day.date, "yyyy-MM-dd");
           return (
             <DayColumn
               key={day.date.toISOString()}
               date={day.date}
               positioned={dayEvents[index]}
               busy={dayBusyEvents[index]}
-              preview={preview?.dayKey === dayKey ? preview : null}
-              draggedTrainingId={preview?.training.id ?? null}
+              draggedTrainingId={draggedTrainingId}
+              dragModifiers={dragModifiers}
+              previewContainer={previewContainer}
+              onTrainingDragStart={onTrainingDragStart}
+              onTrainingDrop={onTrainingDrop}
+              onTrainingDragEnd={onTrainingDragEnd}
             />
           );
         })}

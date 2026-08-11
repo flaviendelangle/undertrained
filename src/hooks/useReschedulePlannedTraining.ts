@@ -41,18 +41,26 @@ export function useReschedulePlannedTraining() {
   });
 
   /** Move `training` to `plannedDate`, keeping its other fields unchanged. */
-  const reschedule = (training: PlannedTraining, plannedDate: string) => {
+  const reschedule = (
+    training: PlannedTraining,
+    plannedDate: string,
+    options?: { onSettled?: () => void },
+  ) => {
     if (athleteId == null || plannedDate === training.plannedDate) {
-      return;
+      return false;
     }
-    mutation.mutate({
-      athleteId,
-      id: training.id,
-      plannedDate,
-      title: training.title,
-      durationSeconds: training.durationSeconds,
-      sportType: training.sportType,
-    });
+    mutation.mutate(
+      {
+        athleteId,
+        id: training.id,
+        plannedDate,
+        title: training.title,
+        durationSeconds: training.durationSeconds,
+        sportType: training.sportType,
+      },
+      { onSettled: options?.onSettled },
+    );
+    return true;
   };
 
   return reschedule;

@@ -2,19 +2,12 @@ import * as React from "react";
 
 import { addDays, format, isSameMonth } from "date-fns";
 import { ChevronDownIcon } from "lucide-react";
+import { flushSync } from "react-dom";
 
+import { DragAutoScroll } from "@base-ui/plus/drag-auto-scroll";
+import type { DragModifier, DragModifiers } from "@base-ui/plus/draggable";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
-import { PointerActivationConstraints } from "@dnd-kit/dom";
-import {
-  DragDropProvider,
-  type DragEndEvent,
-  type DragMoveEvent,
-  DragOverlay,
-  type DragStartEvent,
-  KeyboardSensor,
-  PointerSensor,
-} from "@dnd-kit/react";
 import type { PlannedTraining } from "@server/db/types";
 
 import {
@@ -27,11 +20,13 @@ import { useReschedulePlannedTraining } from "~/hooks/useReschedulePlannedTraini
 import { useLocale, useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
+import { WeekBlock, earliestMinutesOfWeek } from "./WeekBlock";
 import {
-  type DropPreview,
-  WeekBlock,
-  earliestMinutesOfWeek,
-} from "./WeekBlock";
+  JOURNAL_DAY_COLUMN_SELECTOR,
+  JOURNAL_SLOT_HEIGHT,
+  type JournalDrop,
+  plannedTrainingDragKind,
+} from "./journalDnd";
 import { buildWeekGroups } from "./journalView";
 import type { JournalWeek } from "./useJournalWeeks";
 import { useWeekHorizontalVirtualizer } from "./useWeekHorizontalVirtualizer";
@@ -42,9 +37,9 @@ import {
   HOURS,
   HOUR_HEIGHT,
   MINUTES_PER_DAY,
-  MINUTES_PER_PIXEL,
+  SNAP_MINUTES,
+  coveredDayKeys,
   minutesToTimeLabel,
-  snapMinutes,
 } from "./weekGrid";
 
 const TOTAL_HEIGHT = (MINUTES_PER_DAY / 60) * HOUR_HEIGHT;
@@ -55,23 +50,76 @@ const DEFAULT_SCROLL_HOUR = 6;
 /** Fallback URL-sync timeout when `scrollend` isn't supported (Safari < 17.4). */
 const SCROLL_END_FALLBACK_MS = 150;
 
-// Start a drag after a small move (no delay) so a click still opens the editor.
-// `preventActivation: () => false` is essential here: the draggable is a
-// `<button>`, and the sensor's default would refuse to start a drag whenever the
-// press lands on an interactive element (which a button always is) — so the
-// whole block, button included, stays draggable.
-const SENSORS = [
-  PointerSensor.configure({
-    activationConstraints: [
-      new PointerActivationConstraints.Distance({ value: 4 }),
-    ],
-    preventActivation: () => false,
-  }),
-  KeyboardSensor,
-];
+interface JournalDragBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
 
-/** Matches a droppable id (`yyyy-MM-dd`). */
-const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+interface PendingTrainingDrop {
+  training: PlannedTraining;
+  plannedDate: string;
+}
+
+/** Locally place a dropped training while the query cache catches up. */
+function applyPendingTrainingDrop(
+  weeks: JournalWeek[],
+  pendingDrop: PendingTrainingDrop,
+): JournalWeek[] {
+  const movedTraining = {
+    ...pendingDrop.training,
+    plannedDate: pendingDrop.plannedDate,
+  };
+  const coveredDays = new Set(
+    coveredDayKeys(movedTraining.plannedDate, movedTraining.durationSeconds),
+  );
+
+  return weeks.map((week) => {
+    let changed = false;
+    const days = week.days.map((day) => {
+      const containsTraining = day.plannedTrainings.some(
+        (training) => training.id === movedTraining.id,
+      );
+      const containsDestination = coveredDays.has(
+        format(day.date, "yyyy-MM-dd"),
+      );
+      if (!containsTraining && !containsDestination) {
+        return day;
+      }
+
+      changed = true;
+      const plannedTrainings = day.plannedTrainings.filter(
+        (training) => training.id !== movedTraining.id,
+      );
+      if (containsDestination) {
+        plannedTrainings.push(movedTraining);
+      }
+      return { ...day, plannedTrainings };
+    });
+    return changed ? { ...week, days } : week;
+  });
+}
+
+/** The visible timed-grid viewport, excluding its sticky gutter and headers. */
+function getJournalDragBounds(
+  scrollElement: HTMLDivElement,
+  topOffset: number,
+): JournalDragBounds {
+  const rect = scrollElement.getBoundingClientRect();
+  const contentLeft = rect.left + scrollElement.clientLeft;
+  const contentTop = rect.top + scrollElement.clientTop;
+  return {
+    left: contentLeft + GUTTER_WIDTH_PX,
+    top: contentTop + topOffset,
+    right: contentLeft + scrollElement.clientWidth,
+    bottom: contentTop + scrollElement.clientHeight,
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, Math.max(min, max)));
+}
 
 /** The fixed left column of hour labels, aligned to the grid's hour lines. */
 function TimeAxis() {
@@ -150,87 +198,163 @@ function JournalWeekViewImpl({
   // month for scannability.
   const weekGroups = React.useMemo(() => buildWeekGroups(weeks), [weeks]);
 
-  // Live ghost shown at the prospective drop slot (Google-Calendar style).
-  const [preview, setPreview] = React.useState<DropPreview | null>(null);
+  const dragSurfaceRef = React.useRef<HTMLDivElement>(null);
+  const pendingTrainingDropRef = React.useRef<PendingTrainingDrop | null>(null);
+  const [pendingTrainingDrop, setPendingTrainingDrop] =
+    React.useState<PendingTrainingDrop | null>(null);
+  const [draggedTrainingId, setDraggedTrainingId] = React.useState<
+    number | null
+  >(null);
 
-  // All planned trainings by id, so a drag starting in a virtualized neighbour
-  // week resolves regardless of which week the active anchor sits on. Cheap to
-  // build — at most a few weeks worth of trainings.
-  const trainingsById = React.useMemo(() => {
-    const map = new Map<number, PlannedTraining>();
-    for (const w of weeks) {
-      for (const day of w.days) {
-        for (const training of day.plannedTrainings) {
-          map.set(training.id, training);
+  const displayedRenderedWeeks = React.useMemo(
+    () =>
+      pendingTrainingDrop == null
+        ? renderedWeeks
+        : applyPendingTrainingDrop(renderedWeeks, pendingTrainingDrop),
+    [pendingTrainingDrop, renderedWeeks],
+  );
+
+  const handleTrainingDragStart = React.useCallback(
+    (training: PlannedTraining) => {
+      pendingTrainingDropRef.current = null;
+      setPendingTrainingDrop(null);
+      setDraggedTrainingId(training.id);
+    },
+    [],
+  );
+
+  const handleTrainingDragEnd = React.useCallback(() => {
+    // A committed drop owns a local destination until its mutation settles.
+    // Clearing here would hand rendering back to the still-stale query cache.
+    if (pendingTrainingDropRef.current == null) {
+      setDraggedTrainingId(null);
+    }
+  }, []);
+
+  // Snap the drag itself to the nearest mounted day and 15-minute slot. Base UI
+  // Plus applies this point to the clone, hit test, and reported drag location,
+  // so the preview and the eventual drop cannot disagree.
+  const snapTrainingToGrid = React.useCallback<DragModifier>(
+    ({ point, input, previewOffset }) => {
+      const scrollElement = scrollRef.current;
+      if (!scrollElement) {
+        return point;
+      }
+      const visibleBounds = getJournalDragBounds(scrollElement, topOffset);
+      let nearest: { element: HTMLElement; rect: DOMRect } | null = null;
+      let nearestDistance = Infinity;
+      const columns = dragSurfaceRef.current?.querySelectorAll<HTMLElement>(
+        JOURNAL_DAY_COLUMN_SELECTOR,
+      );
+      for (const element of columns ?? []) {
+        const rect = element.getBoundingClientRect();
+        if (
+          rect.right <= visibleBounds.left ||
+          rect.left >= visibleBounds.right
+        ) {
+          continue;
+        }
+        const distance = Math.max(rect.left - input.x, input.x - rect.right, 0);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearest = { element, rect };
         }
       }
-    }
-    return map;
-  }, [weeks]);
+      if (!nearest) {
+        return point;
+      }
 
-  // Resolve a drag operation to its target day + snapped start minute. The
-  // draggable id is `planned-<id>` and the droppable (column) id is `yyyy-MM-dd`;
-  // the new time is the original start plus the vertical drag delta, snapped.
-  const resolveDrop = (operation: DragMoveEvent["operation"]) => {
-    const { source, target } = operation;
-    if (source == null || target == null) {
-      return null;
-    }
-    const sourceId = String(source.id);
-    const dayKey = String(target.id);
-    if (!sourceId.startsWith("planned-") || !DAY_KEY_RE.test(dayKey)) {
-      return null;
-    }
-    const trainingId = Number(sourceId.slice("planned-".length));
-    const training = trainingsById.get(trainingId);
-    if (training == null) {
-      return null;
-    }
-    const originalMinutes =
-      Number(training.plannedDate.slice(11, 13)) * 60 +
-      Number(training.plannedDate.slice(14, 16));
-    const minutes = snapMinutes(
-      originalMinutes + (operation.transform?.y ?? 0) * MINUTES_PER_PIXEL,
-    );
-    return { dayKey, training, minutes };
-  };
+      const { element, rect } = nearest;
+      const originX = rect.left + element.clientLeft;
+      const originY = rect.top + element.clientTop;
+      const maxSlot = (MINUTES_PER_DAY - SNAP_MINUTES) / SNAP_MINUTES;
+      const slot = Math.min(
+        maxSlot,
+        Math.max(
+          0,
+          Math.round(
+            (point.y - previewOffset.y - originY) / JOURNAL_SLOT_HEIGHT,
+          ),
+        ),
+      );
+      return {
+        x: originX + previewOffset.x,
+        y: originY + slot * JOURNAL_SLOT_HEIGHT + previewOffset.y,
+      };
+    },
+    [topOffset],
+  );
 
-  const updatePreview = (operation: DragMoveEvent["operation"]) => {
-    const drop = resolveDrop(operation);
-    if (drop == null) {
-      setPreview(null);
-      return;
-    }
-    setPreview((prev) =>
-      prev?.dayKey === drop.dayKey && prev?.minutes === drop.minutes
-        ? prev
-        : {
-            dayKey: drop.dayKey,
-            minutes: drop.minutes,
-            training: drop.training,
-          },
-    );
-  };
+  // Keep the cloned preview, hit test, and virtual cursor inside the visible
+  // timed grid. The scroll root itself is too broad: it also contains the
+  // sticky week/time gutter and headers, which are not valid drop surfaces.
+  const restrictTrainingToGrid = React.useCallback<DragModifier>(
+    ({ point, previewOffset, previewRect }) => {
+      const scrollElement = scrollRef.current;
+      if (!scrollElement) {
+        return point;
+      }
+      const bounds = getJournalDragBounds(scrollElement, topOffset);
+      const width = previewRect?.width ?? 0;
+      const height = previewRect?.height ?? 0;
+      return {
+        x: clamp(
+          point.x,
+          bounds.left + previewOffset.x,
+          bounds.right - width + previewOffset.x,
+        ),
+        y: clamp(
+          point.y,
+          bounds.top + previewOffset.y,
+          bounds.bottom - height + previewOffset.y,
+        ),
+      };
+    },
+    [topOffset],
+  );
 
-  const handleDragStart = (event: DragStartEvent) =>
-    updatePreview(event.operation);
-  const handleDragMove = (event: DragMoveEvent) =>
-    updatePreview(event.operation);
+  const trainingDragModifiers = React.useMemo<DragModifiers>(
+    () => [snapTrainingToGrid, restrictTrainingToGrid],
+    [restrictTrainingToGrid, snapTrainingToGrid],
+  );
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    setPreview(null);
-    if (event.canceled) {
-      return;
-    }
-    const drop = resolveDrop(event.operation);
-    if (drop == null) {
-      return;
-    }
-    reschedule(
-      drop.training,
-      `${drop.dayKey}T${minutesToTimeLabel(drop.minutes)}:00`,
-    );
-  };
+  const handleTrainingDrop = React.useCallback(
+    (training: PlannedTraining, drop: JournalDrop) => {
+      const plannedDate = `${drop.dayKey}T${minutesToTimeLabel(drop.minutes)}:00`;
+      if (plannedDate === training.plannedDate) {
+        return;
+      }
+      const pendingDrop = { training, plannedDate };
+      pendingTrainingDropRef.current = pendingDrop;
+      // Base UI removes the drag clone immediately after this handler. Commit
+      // the local destination first so one or the other exists in every paint.
+      flushSync(() => setPendingTrainingDrop(pendingDrop));
+      const scheduled = reschedule(training, plannedDate, {
+        onSettled: () => {
+          if (pendingTrainingDropRef.current !== pendingDrop) {
+            return;
+          }
+          pendingTrainingDropRef.current = null;
+          setPendingTrainingDrop((current) =>
+            current === pendingDrop ? null : current,
+          );
+          setDraggedTrainingId((current) =>
+            current === training.id ? null : current,
+          );
+        },
+      });
+      if (!scheduled) {
+        pendingTrainingDropRef.current = null;
+        flushSync(() => setPendingTrainingDrop(null));
+      }
+    },
+    [reschedule],
+  );
+
+  // A pending drop has already been locally moved, so only an active drag still
+  // needs the source dimming treatment.
+  const visibleDraggedTrainingId =
+    pendingTrainingDrop == null ? draggedTrainingId : null;
 
   // ---- Horizontal scroll: mount, resize, and explicit re-anchor ("Today") ----
 
@@ -497,8 +621,10 @@ function JournalWeekViewImpl({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div
+      <DragAutoScroll.Root
         ref={scrollRef}
+        accept={plannedTrainingDragKind}
+        allowedAxis="vertical"
         className={cn(
           "relative min-h-0 flex-1 overflow-auto",
           // Programmatic scrollToIndex glides; users who prefer reduced motion
@@ -511,146 +637,138 @@ function JournalWeekViewImpl({
           "[scroll-snap-type:x_mandatory]",
         )}
       >
-        <DragDropProvider
-          sensors={SENSORS}
-          onDragStart={handleDragStart}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEnd}
+        <div
+          className="flex"
+          style={{
+            width: GUTTER_WIDTH_PX + totalSize,
+            height: topOffset + TOTAL_HEIGHT,
+          }}
         >
-          <div
-            className="flex"
-            style={{
-              width: GUTTER_WIDTH_PX + totalSize,
-              height: topOffset + TOTAL_HEIGHT,
-            }}
-          >
-            {/* Left gutter: sticky-left pins the column. Inside, the week
+          {/* Left gutter: sticky-left pins the column. Inside, the week
                 picker is sticky-top so it also pins to the corner; the time
                 axis scrolls vertically with the body. The z-index sits above
                 each WeekBlock's sticky day-header strip (z-30) so the corner
                 picker stays on top; the opaque background keeps day columns
                 of neighbour weeks from bleeding through during horizontal
                 scroll. */}
-            <div
-              className="bg-background sticky left-0 z-40 shrink-0"
-              style={{ width: GUTTER_WIDTH_PX }}
-            >
-              {/* `modal={false}`: a modal popup locks `<body>` scroll, which
+          <div
+            className="bg-background sticky left-0 z-40 shrink-0"
+            style={{ width: GUTTER_WIDTH_PX }}
+          >
+            {/* `modal={false}`: a modal popup locks `<body>` scroll, which
                   swings the body width by the scrollbar gutter on open/close.
                   Here that swing propagates into our `clientWidth` and shifts
                   `weekWidth`, firing the resize re-anchor mid-scroll and
                   hijacking the click-triggered scroll to the in-flight
                   `activeIndex` instead of the picked week. */}
-              <SelectPrimitive.Root
-                modal={false}
-                value={format(activeWeek.weekStart, "yyyy-MM-dd")}
-                onValueChange={(value) => {
-                  const targetIndex = renderedWeeks.findIndex(
-                    (item) => format(item.weekStart, "yyyy-MM-dd") === value,
-                  );
-                  if (targetIndex >= 0) {
-                    jumpToWeek(targetIndex);
-                  }
-                }}
-              >
-                <SelectPrimitive.Trigger
-                  title={t("journal.jumpToWeek")}
-                  className="bg-accent border-border hover:bg-background/60 sticky top-0 z-40 flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-b transition-colors outline-none"
-                  style={{ height: HEADER_HEIGHT_PX }}
-                >
-                  <span className="text-foreground flex items-center gap-0.5 text-[11px] leading-none font-semibold">
-                    <SelectPrimitive.Value>
-                      {() =>
-                        format(activeWeek.weekStart, "'W'w", localeOptions)
-                      }
-                    </SelectPrimitive.Value>
-                    <ChevronDownIcon className="size-3" />
-                  </span>
-                  <span className="text-muted-foreground text-[10px] leading-none tabular-nums">
-                    {format(activeWeek.weekStart, "yyyy")}
-                  </span>
-                </SelectPrimitive.Trigger>
-                <SelectContent align="start" className="max-h-80 w-52">
-                  {weekGroups.map((group) => (
-                    <SelectGroup key={group.month.toISOString()}>
-                      <SelectLabel>
-                        {format(group.month, "MMMM yyyy", localeOptions)}
-                      </SelectLabel>
-                      {group.weeks.map((item) => {
-                        const end = addDays(item.weekStart, 6);
-                        const range = isSameMonth(item.weekStart, end)
-                          ? `${format(item.weekStart, "d")}–${format(end, "d MMM", localeOptions)}`
-                          : `${format(item.weekStart, "d MMM", localeOptions)} – ${format(end, "d MMM", localeOptions)}`;
-                        return (
-                          <SelectItem
-                            key={item.weekStart.toISOString()}
-                            value={format(item.weekStart, "yyyy-MM-dd")}
-                            className="tabular-nums"
-                          >
-                            <span>
-                              {format(item.weekStart, "'W'w", localeOptions)}
-                            </span>
-                            <span className="text-muted-foreground ml-auto text-xs">
-                              {range}
-                            </span>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectGroup>
-                  ))}
-                </SelectContent>
-              </SelectPrimitive.Root>
-              {/* Gutter slot aligning the hour axis with the grid's all-day
-                  strip; sticky just below the week picker so it pins with it. */}
-              {allDayRowHeight > 0 && (
-                <div
-                  aria-hidden
-                  className="bg-background border-border sticky z-40 border-b"
-                  style={{ top: HEADER_HEIGHT_PX, height: allDayRowHeight }}
-                />
-              )}
-              <TimeAxis />
-            </div>
-
-            {/* Right: virtualized week blocks, each absolute-positioned at the
-                slot the virtualizer assigned. */}
-            <div
-              style={{
-                position: "relative",
-                width: totalSize,
-                height: topOffset + TOTAL_HEIGHT,
+            <SelectPrimitive.Root
+              modal={false}
+              value={format(activeWeek.weekStart, "yyyy-MM-dd")}
+              onValueChange={(value) => {
+                const targetIndex = renderedWeeks.findIndex(
+                  (item) => format(item.weekStart, "yyyy-MM-dd") === value,
+                );
+                if (targetIndex >= 0) {
+                  jumpToWeek(targetIndex);
+                }
               }}
             >
-              {virtualizer.getVirtualItems().map((item) => {
-                const w = renderedWeeks[item.index];
-                return (
-                  <WeekBlock
-                    key={w.weekStart.toISOString()}
-                    week={w}
-                    dayLoadScale={dayLoadScale}
-                    allDayRowHeight={allDayRowHeight}
-                    preview={preview}
-                    dateLocale={dateLocale}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: item.start,
-                      width: item.size,
-                      height: topOffset + TOTAL_HEIGHT,
-                      scrollSnapAlign: "end",
-                    }}
-                  />
-                );
-              })}
-            </div>
+              <SelectPrimitive.Trigger
+                title={t("journal.jumpToWeek")}
+                className="bg-accent border-border hover:bg-background/60 sticky top-0 z-40 flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 border-b transition-colors outline-none"
+                style={{ height: HEADER_HEIGHT_PX }}
+              >
+                <span className="text-foreground flex items-center gap-0.5 text-[11px] leading-none font-semibold">
+                  <SelectPrimitive.Value>
+                    {() => format(activeWeek.weekStart, "'W'w", localeOptions)}
+                  </SelectPrimitive.Value>
+                  <ChevronDownIcon className="size-3" />
+                </span>
+                <span className="text-muted-foreground text-[10px] leading-none tabular-nums">
+                  {format(activeWeek.weekStart, "yyyy")}
+                </span>
+              </SelectPrimitive.Trigger>
+              <SelectContent align="start" className="max-h-80 w-52">
+                {weekGroups.map((group) => (
+                  <SelectGroup key={group.month.toISOString()}>
+                    <SelectLabel>
+                      {format(group.month, "MMMM yyyy", localeOptions)}
+                    </SelectLabel>
+                    {group.weeks.map((item) => {
+                      const end = addDays(item.weekStart, 6);
+                      const range = isSameMonth(item.weekStart, end)
+                        ? `${format(item.weekStart, "d")}–${format(end, "d MMM", localeOptions)}`
+                        : `${format(item.weekStart, "d MMM", localeOptions)} – ${format(end, "d MMM", localeOptions)}`;
+                      return (
+                        <SelectItem
+                          key={item.weekStart.toISOString()}
+                          value={format(item.weekStart, "yyyy-MM-dd")}
+                          className="tabular-nums"
+                        >
+                          <span>
+                            {format(item.weekStart, "'W'w", localeOptions)}
+                          </span>
+                          <span className="text-muted-foreground ml-auto text-xs">
+                            {range}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </SelectPrimitive.Root>
+            {/* Gutter slot aligning the hour axis with the grid's all-day
+                  strip; sticky just below the week picker so it pins with it. */}
+            {allDayRowHeight > 0 && (
+              <div
+                aria-hidden
+                className="bg-background border-border sticky z-40 border-b"
+                style={{ top: HEADER_HEIGHT_PX, height: allDayRowHeight }}
+              />
+            )}
+            <TimeAxis />
           </div>
 
-          {/* Empty overlay: suppresses the floating drag clone (and its
-              fly-back animation) so the dragged event simply dims in place
-              while the snapped ghost shows the target. */}
-          <DragOverlay dropAnimation={null}>{null}</DragOverlay>
-        </DragDropProvider>
-      </div>
+          {/* Right: virtualized week blocks, each absolute-positioned at the
+                slot the virtualizer assigned. */}
+          <div
+            ref={dragSurfaceRef}
+            style={{
+              position: "relative",
+              width: totalSize,
+              height: topOffset + TOTAL_HEIGHT,
+            }}
+          >
+            {virtualizer.getVirtualItems().map((item) => {
+              const w = displayedRenderedWeeks[item.index];
+              return (
+                <WeekBlock
+                  key={w.weekStart.toISOString()}
+                  week={w}
+                  dayLoadScale={dayLoadScale}
+                  allDayRowHeight={allDayRowHeight}
+                  draggedTrainingId={visibleDraggedTrainingId}
+                  dragModifiers={trainingDragModifiers}
+                  previewContainer={scrollRef}
+                  onTrainingDragStart={handleTrainingDragStart}
+                  onTrainingDrop={handleTrainingDrop}
+                  onTrainingDragEnd={handleTrainingDragEnd}
+                  dateLocale={dateLocale}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: item.start,
+                    width: item.size,
+                    height: topOffset + TOTAL_HEIGHT,
+                    scrollSnapAlign: "end",
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </DragAutoScroll.Root>
     </div>
   );
 }

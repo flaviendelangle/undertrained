@@ -18,12 +18,13 @@ import type { DropPosition } from "~/utils/structuredWorkout/edit";
  * is how a step gets moved in and out of a group without a separate gesture.
  */
 
-/** Tag shared by every row, so only workout rows can be dropped on each other. */
-export const STEP_DRAG_KIND = "workout-node";
-
 export interface StepDragPayload {
   id: string;
 }
+
+/** Kind shared by every row, so only workout rows can be dropped on each other. */
+export const STEP_DRAG_KIND =
+  Draggable.createKind<StepDragPayload>("workout-node");
 
 /** Fraction of the row height at each edge that reads as before / after. */
 const EDGE_BAND = 1 / 3;
@@ -63,9 +64,8 @@ export function StepDropZone({
   const [position, setPosition] = React.useState<DropPosition | null>(null);
 
   return (
-    <DropTarget.Root<StepDragPayload>
-      kind={STEP_DRAG_KIND}
-      acceptKinds={[STEP_DRAG_KIND]}
+    <DropTarget.Root
+      accept={STEP_DRAG_KIND}
       label={label}
       // A row can't be dropped on itself, and the tree guards the rest
       // (dropping a repeat into its own subtree) inside `moveNodeTo`.
@@ -150,7 +150,7 @@ export function StepDraggable({
   className?: string;
 }) {
   return (
-    <Draggable.Root<StepDragPayload>
+    <Draggable.Root
       kind={STEP_DRAG_KIND}
       payload={{ id }}
       label={label}

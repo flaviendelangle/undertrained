@@ -3,8 +3,8 @@ import * as React from "react";
 import { CalendarIcon, FlagIcon, MedalIcon } from "lucide-react";
 import Link from "next/link";
 
+import { type DragModifiers, Draggable } from "@base-ui/plus/draggable";
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
-import { useDraggable } from "@dnd-kit/react";
 import type { PlannedTraining } from "@server/db/types";
 import type { BusyEvent } from "@server/lib/icalFeed";
 
@@ -15,6 +15,12 @@ import { getSportConfig } from "~/utils/sportConfig";
 
 import { useMapPrefetch } from "./ActivityPreviewCard";
 import { JournalRecordsContext, RACE_WORKOUT_TYPES } from "./JournalDayCell";
+import {
+  type JournalDrop,
+  journalKeyboardMovement,
+  plannedTrainingDragKind,
+  resolveJournalDrop,
+} from "./journalDnd";
 import { useJournalPlanner } from "./journalPlanner";
 import { useJournalPreviewHandles } from "./journalPreview";
 import { useJournalActivityHref } from "./journalView";
@@ -166,7 +172,7 @@ export function WeekBusyBlock({
 
 /**
  * A still-planned training as a dashed, draggable block. Dragging reschedules it
- * (handled by the grid's `onDragEnd`); a plain click opens the edit dialog. The
+ * (committed from the source's `onDrop`); a plain click opens the edit dialog. The
  * default pointer sensor only starts a drag after a small move or short hold, so
  * clicks aren't swallowed. Continuation segments of a multi-day training aren't
  * draggable (rescheduling moves the start day's segment), but still open the
@@ -174,47 +180,70 @@ export function WeekBusyBlock({
  */
 export function WeekPlannedBlock({
   training,
-  dragId,
   continued,
   dimmed,
   compact,
+  dragModifiers,
+  previewContainer,
+  onDragStart,
+  onDrop,
+  onDragEnd,
 }: {
   training: PlannedTraining;
-  /** Unique draggable id — `planned-<id>` on the start day (the drag handlers parse the training id back out of it), suffixed on continuation days. */
-  dragId: string;
   /** True for the continuation segment of a training begun on an earlier day. */
   continued?: boolean;
   /**
-   * Externally-driven dimming for continuation segments while their start
-   * segment is dragged — they're separate draggables, so their own `isDragging`
-   * stays false during that drag.
+   * Externally-driven dimming while this training is dragged or waiting for its
+   * optimistic move. Continuations are separate draggable roots, so their own
+   * drag state stays false during the source segment's drag.
    */
   dimmed?: boolean;
   compact?: boolean;
+  /** Snaps the preview, hit test, and reported input to a day/time slot. */
+  dragModifiers: DragModifiers;
+  /** Visible scroll container that hosts and bounds the cloned preview. */
+  previewContainer: React.RefObject<HTMLElement | null>;
+  onDragStart: (training: PlannedTraining) => void;
+  onDrop: (training: PlannedTraining, drop: JournalDrop) => void;
+  onDragEnd: () => void;
 }) {
   const t = useT();
   const planner = useJournalPlanner();
   const config = getSportConfig(training.sportType);
-  const { ref, isDragging } = useDraggable({
-    id: dragId,
-    disabled: continued,
-  });
+  const label = t("journal.plannedLabel", { title: training.title });
 
   return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        planner?.onEditPlanned(training);
+    <Draggable.Root
+      kind={plannedTrainingDragKind}
+      payload={training}
+      label={label}
+      disabled={continued}
+      modifiers={dragModifiers}
+      keyboardMovement={journalKeyboardMovement}
+      onDragStart={({ source }) => onDragStart(source.payload)}
+      onDrop={({ source, location }) => {
+        const drop = resolveJournalDrop(location);
+        if (drop) {
+          onDrop(source.payload, drop);
+        }
       }}
-      aria-label={t("journal.plannedLabel", { title: training.title })}
+      onDragEnd={onDragEnd}
+      render={
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            planner?.onEditPlanned(training);
+          }}
+          aria-label={label}
+        />
+      }
       style={plannedBlockStyle(config.color)}
       className={cn(
         PLANNED_BLOCK_CLASS,
-        "h-full w-full transition-[filter] hover:brightness-95 dark:hover:brightness-110",
+        "h-full w-full transition-[filter] hover:brightness-95 data-dragging:opacity-30 dark:hover:brightness-110",
         continued ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
-        (isDragging || dimmed) && "opacity-30",
+        dimmed && "opacity-30",
       )}
     >
       <PlannedBlockBody
@@ -224,41 +253,7 @@ export function WeekPlannedBlock({
         durationSeconds={training.durationSeconds}
         compact={compact}
       />
-    </button>
-  );
-}
-
-/**
- * A non-interactive, full-opacity copy of a planned block, rendered at the
- * prospective drop slot while dragging so the target reads exactly like the
- * event itself (with the snapped start time).
- */
-export function WeekPlannedBlockGhost({
-  training,
-  time,
-  compact,
-}: {
-  training: PlannedTraining;
-  /** Snapped start time as `HH:mm`. */
-  time: string;
-  compact?: boolean;
-}) {
-  const config = getSportConfig(training.sportType);
-  return (
-    <div
-      style={plannedBlockStyle(config.color)}
-      className={cn(
-        PLANNED_BLOCK_CLASS,
-        "pointer-events-none h-full w-full shadow-md",
-      )}
-    >
-      <PlannedBlockBody
-        sportType={training.sportType}
-        title={training.title}
-        time={time}
-        durationSeconds={training.durationSeconds}
-        compact={compact}
-      />
-    </div>
+      <Draggable.ClonedPreview container={previewContainer} />
+    </Draggable.Root>
   );
 }

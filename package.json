@@ -23,11 +23,9 @@
     "webhook:delete": "tsx scripts/manage-webhook.ts delete"
   },
   "dependencies": {
-    "@base-ui/plus": "https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@c8addde",
+    "@base-ui/plus": "https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@fe92a22",
     "@base-ui/react": "^1.5.0",
     "@base-ui/utils": "^0.2.9",
-    "@dnd-kit/dom": "^0.4.0",
-    "@dnd-kit/react": "^0.4.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@markw65/fit-file-writer": "^0.1.9",
