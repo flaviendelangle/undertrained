@@ -1,5 +1,8 @@
 import * as React from "react";
 
+import { Toggle } from "@base-ui/react/toggle";
+import { ToggleGroup } from "@base-ui/react/toggle-group";
+
 import { Tooltip } from "~/components/primitives/Tooltip";
 
 interface SegmentedToggleProps<T extends string> {
@@ -16,6 +19,8 @@ interface SegmentedToggleProps<T extends string> {
    * (text-sm, h-9-ish padding) so it sits alongside text fields and selects.
    */
   size?: "sm" | "default";
+  /** Accessible name for the group when there is no nearby visible label. */
+  ariaLabel?: string;
 }
 
 export function SegmentedToggle<T extends string>({
@@ -23,6 +28,7 @@ export function SegmentedToggle<T extends string>({
   onChange,
   options,
   size = "sm",
+  ariaLabel,
 }: SegmentedToggleProps<T>) {
   // `default` is laid out for form fields, where the parent is usually a
   // `flex-col` that stretches its children — so the wrapper fills the row and
@@ -35,24 +41,29 @@ export function SegmentedToggle<T extends string>({
   const button =
     size === "default" ? "flex-1 rounded px-3 py-1.5" : "rounded px-2 py-0.5";
   return (
-    <div className={wrapper}>
+    <ToggleGroup
+      aria-label={ariaLabel}
+      value={[value]}
+      onValueChange={(nextValue) => {
+        // A segmented control must always retain one selected option.
+        const selected = nextValue[0];
+        if (selected) onChange(selected);
+      }}
+      className={wrapper}
+    >
       {options.map((option) => {
         const control = (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            className={`${button} transition-colors ${
-              value === option.value
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+          <Toggle
+            value={option.value}
+            className={`${button} text-muted-foreground hover:text-foreground data-pressed:bg-background data-pressed:text-foreground transition-colors data-pressed:shadow-sm`}
           >
             {option.label}
-          </button>
+          </Toggle>
         );
 
-        if (!option.tooltip) return control;
+        if (!option.tooltip) {
+          return <React.Fragment key={option.value}>{control}</React.Fragment>;
+        }
 
         return (
           <Tooltip key={option.value} label={option.tooltip} side="bottom">
@@ -60,6 +71,6 @@ export function SegmentedToggle<T extends string>({
           </Tooltip>
         );
       })}
-    </div>
+    </ToggleGroup>
   );
 }

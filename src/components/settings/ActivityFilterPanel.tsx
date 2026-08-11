@@ -1,5 +1,8 @@
 import { SearchIcon, XIcon } from "lucide-react";
 
+import { Toggle } from "@base-ui/react/toggle";
+import { ToggleGroup } from "@base-ui/react/toggle-group";
+
 import { Button } from "~/components/ui/button";
 import {
   Select,
@@ -15,7 +18,6 @@ import { useAthleteId } from "~/hooks/useAthleteId";
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import { cn } from "~/lib/utils";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
@@ -61,6 +63,13 @@ export function ActivityFilterPanel({
   const { data: periods } = trpc.timePeriods.list.useQuery(
     { athleteId: athleteId! },
     { enabled: !!athleteId },
+  );
+  const availableWorkoutGroups = WORKOUT_TYPE_GROUPS.map((group) => ({
+    ...group,
+    presentTypes: group.types.filter((type) => workoutTypes?.includes(type)),
+  })).filter((group) => group.presentTypes.length > 0);
+  const groupedWorkoutTypes = new Set(
+    availableWorkoutGroups.flatMap((group) => group.presentTypes),
   );
 
   return (
@@ -143,32 +152,27 @@ export function ActivityFilterPanel({
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-1.5">
+        <ToggleGroup
+          multiple
+          aria-label={t("settings.filter.sportTypes")}
+          value={filter.activityTypes}
+          onValueChange={filter.setActivityTypes}
+          className="grid grid-cols-2 gap-1.5"
+        >
           {activityTypes?.map((type) => {
             const Icon = getSportConfig(type).icon;
-            const active = filter.activityTypes.includes(type);
             return (
-              <button
+              <Toggle
                 key={type}
-                onClick={() => {
-                  const next = active
-                    ? filter.activityTypes.filter((t) => t !== type)
-                    : [...filter.activityTypes, type];
-                  filter.setActivityTypes(next);
-                }}
-                className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors",
-                  active
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
+                value={type}
+                className="border-border text-muted-foreground hover:bg-accent hover:text-foreground data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:border-primary inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors"
               >
                 <Icon className="size-3.5 shrink-0" />
                 <span className="truncate">{sportTypeLabel(type, t)}</span>
-              </button>
+              </Toggle>
             );
           })}
-        </div>
+        </ToggleGroup>
       </div>
 
       {/* Workout types */}
@@ -185,43 +189,49 @@ export function ActivityFilterPanel({
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {WORKOUT_TYPE_GROUPS.map((group) => {
-              const presentTypes = group.types.filter((t) =>
-                workoutTypes.includes(t),
+          <ToggleGroup
+            multiple
+            aria-label={t("settings.filter.workoutType")}
+            value={availableWorkoutGroups
+              .filter((group) =>
+                group.presentTypes.every((type) =>
+                  filter.workoutTypes.includes(type),
+                ),
+              )
+              .map((group) => group.id)}
+            onValueChange={(selectedGroups) => {
+              const ungroupedTypes = filter.workoutTypes.filter(
+                (type) => !groupedWorkoutTypes.has(type),
               );
-              if (presentTypes.length === 0) return null;
-              const active = presentTypes.every((t) =>
-                filter.workoutTypes.includes(t),
-              );
-              return (
-                <button
-                  key={group.id}
-                  onClick={() => {
-                    const next = active
-                      ? filter.workoutTypes.filter(
-                          (t) => !presentTypes.includes(t),
-                        )
-                      : [
-                          ...filter.workoutTypes.filter(
-                            (t) => !presentTypes.includes(t),
-                          ),
-                          ...presentTypes,
-                        ];
-                    filter.setWorkoutTypes(next);
-                  }}
-                  className={cn(
-                    "inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors",
-                    active
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
-                  )}
-                >
-                  <span className="truncate">{t(group.labelKey)}</span>
-                </button>
-              );
-            })}
-          </div>
+              const selectedTypes = availableWorkoutGroups.flatMap((group) => {
+                if (selectedGroups.includes(group.id)) {
+                  return group.presentTypes;
+                }
+                const wasFullySelected = group.presentTypes.every((type) =>
+                  filter.workoutTypes.includes(type),
+                );
+                // Keep legacy/partially selected values when another group is
+                // toggled; only remove a group that was fully selected.
+                return wasFullySelected
+                  ? []
+                  : group.presentTypes.filter((type) =>
+                      filter.workoutTypes.includes(type),
+                    );
+              });
+              filter.setWorkoutTypes([...ungroupedTypes, ...selectedTypes]);
+            }}
+            className="grid grid-cols-2 gap-1.5"
+          >
+            {availableWorkoutGroups.map((group) => (
+              <Toggle
+                key={group.id}
+                value={group.id}
+                className="border-border text-muted-foreground hover:bg-accent hover:text-foreground data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:border-primary inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors"
+              >
+                <span className="truncate">{t(group.labelKey)}</span>
+              </Toggle>
+            ))}
+          </ToggleGroup>
         </div>
       )}
 

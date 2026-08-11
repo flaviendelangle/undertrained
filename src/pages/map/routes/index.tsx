@@ -8,6 +8,8 @@ import { Map } from "~/components/Map";
 import { MapToolbar } from "~/components/Map/MapToolbar";
 import { SendToDeviceMenu } from "~/components/routes/SendToDeviceMenu";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
+import { showErrorToast } from "~/components/ui/toast";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
 import { isRoutesEnabled } from "~/lib/features";
@@ -34,7 +36,7 @@ function RouteCard({
     elevationGain: number | null;
     mapPolyline: string;
   };
-  onDelete: (id: number) => void;
+  onDelete: (id: number) => void | Promise<void>;
 }) {
   const t = useT();
   const positions = React.useMemo(
@@ -75,14 +77,22 @@ function RouteCard({
             elevation={[]}
             distance={route.distance}
           />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("routes.deleteRoute")}
-            onClick={() => onDelete(route.id)}
-          >
-            <Trash2Icon className="text-muted-foreground size-4" />
-          </Button>
+          <ConfirmDialog
+            trigger={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("routes.deleteRoute")}
+              >
+                <Trash2Icon className="text-muted-foreground size-4" />
+              </Button>
+            }
+            title={t("common.deleteConfirmTitle", { name: route.name })}
+            description={t("common.deleteConfirmDescription")}
+            confirmLabel={t("common.delete")}
+            pendingLabel={t("common.deleting")}
+            onConfirm={() => onDelete(route.id)}
+          />
         </div>
       </div>
     </div>
@@ -101,11 +111,12 @@ const RoutesPage: NextPageWithLayout = () => {
 
   const deleteMutation = trpc.routes.delete.useMutation({
     onSuccess: () => utils.routes.list.invalidate(),
+    onError: () => showErrorToast(t("common.deleteError")),
   });
 
-  const onDelete = (id: number) => {
+  const onDelete = async (id: number) => {
     if (!athleteId) return;
-    deleteMutation.mutate({ athleteId, id });
+    await deleteMutation.mutateAsync({ athleteId, id });
   };
 
   return (

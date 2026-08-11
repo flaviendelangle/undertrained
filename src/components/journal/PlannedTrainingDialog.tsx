@@ -19,6 +19,13 @@ import {
   ComboboxTrigger,
   ComboboxValue,
 } from "~/components/ui/combobox";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
+import {
+  Field,
+  FieldControl,
+  FieldError,
+  FieldLabel,
+} from "~/components/ui/field";
 import { Label } from "~/components/ui/label";
 import { NumberField } from "~/components/ui/number-field";
 import {
@@ -28,6 +35,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "~/components/ui/responsive-dialog";
+import { showErrorToast } from "~/components/ui/toast";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import {
@@ -43,9 +51,6 @@ import { trpc } from "~/utils/trpc";
 import type { ActivityOptionData } from "./ActivityOption";
 import { ActivityOption } from "./ActivityOption";
 import { dayKey, isPerfectMatch } from "./perfectMatch";
-
-const NATIVE_INPUT_CLASS =
-  "border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none";
 
 /** What the planner dialog is currently doing, owned by the Journal. */
 export type PlannerDialogState =
@@ -95,18 +100,21 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
       void invalidateList();
       onClose();
     },
+    onError: () => showErrorToast(t("common.saveError")),
   });
   const updateMut = trpc.plannedTrainings.update.useMutation({
     onSuccess: () => {
       void invalidateList();
       onClose();
     },
+    onError: () => showErrorToast(t("common.saveError")),
   });
   const deleteMut = trpc.plannedTrainings.delete.useMutation({
     onSuccess: () => {
       void invalidateList();
       onClose();
     },
+    onError: () => showErrorToast(t("common.deleteError")),
   });
   const markDoneMut = useMarkPlannedTrainingDone({ onSuccess: onClose });
 
@@ -143,17 +151,17 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="planned-title">{t("journal.dialog.title")}</Label>
-        <input
-          id="planned-title"
+      <Field name="title">
+        <FieldLabel>{t("journal.dialog.title")}</FieldLabel>
+        <FieldControl
+          required
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onValueChange={setTitle}
           placeholder={t("journal.dialog.titlePlaceholder")}
           autoFocus
-          className={NATIVE_INPUT_CLASS}
         />
-      </div>
+        <FieldError />
+      </Field>
 
       <div className="flex flex-col gap-1.5">
         <Label>{t("journal.dialog.sport")}</Label>
@@ -161,26 +169,26 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
       </div>
 
       <div className="flex gap-3">
-        <div className="flex flex-1 flex-col gap-1.5">
-          <Label htmlFor="planned-date">{t("journal.dialog.date")}</Label>
-          <input
-            id="planned-date"
+        <Field name="plannedDate" className="flex-1">
+          <FieldLabel>{t("journal.dialog.date")}</FieldLabel>
+          <FieldControl
+            required
             type="date"
             value={dateStr}
-            onChange={(e) => setDateStr(e.target.value)}
-            className={NATIVE_INPUT_CLASS}
+            onValueChange={setDateStr}
           />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="planned-time">{t("journal.dialog.start")}</Label>
-          <input
-            id="planned-time"
+          <FieldError />
+        </Field>
+        <Field name="plannedTime">
+          <FieldLabel>{t("journal.dialog.start")}</FieldLabel>
+          <FieldControl
+            required
             type="time"
             value={timeStr}
-            onChange={(e) => setTimeStr(e.target.value)}
-            className={NATIVE_INPUT_CLASS}
+            onValueChange={setTimeStr}
           />
-        </div>
+          <FieldError />
+        </Field>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -203,15 +211,25 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
 
       <ResponsiveDialogFooter>
         {isEdit && existing && (
-          <Button
-            type="button"
-            variant="destructive"
-            className="w-full sm:mr-auto sm:w-auto"
-            disabled={pending}
-            onClick={() => deleteMut.mutate({ athleteId, id: existing.id })}
-          >
-            {t("common.delete")}
-          </Button>
+          <ConfirmDialog
+            trigger={
+              <Button
+                type="button"
+                variant="destructive"
+                className="w-full sm:mr-auto sm:w-auto"
+                disabled={pending}
+              >
+                {t("common.delete")}
+              </Button>
+            }
+            title={t("common.deleteConfirmTitle", { name: existing.title })}
+            description={t("common.deleteConfirmDescription")}
+            confirmLabel={t("common.delete")}
+            pendingLabel={t("common.deleting")}
+            onConfirm={() =>
+              deleteMut.mutateAsync({ athleteId, id: existing.id })
+            }
+          />
         )}
         <Button type="button" variant="outline" onClick={onClose}>
           {t("common.cancel")}

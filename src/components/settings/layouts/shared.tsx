@@ -2,17 +2,9 @@ import * as React from "react";
 
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Label } from "~/components/ui/label";
 import { NumberField } from "~/components/ui/number-field";
-import {
-  ResponsiveDialog,
-  ResponsiveDialogContent,
-  ResponsiveDialogDescription,
-  ResponsiveDialogFooter,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-  ResponsiveDialogTrigger,
-} from "~/components/ui/responsive-dialog";
 import {
   Select,
   SelectContent,
@@ -183,41 +175,20 @@ export function DangerZone({
       <p className="text-muted-foreground mb-4 text-sm">
         {t("settings.dangerZone.description")}
       </p>
-      <ResponsiveDialog
+      <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-      >
-        <ResponsiveDialogTrigger render={<Button variant="destructive" />}>
-          {t("settings.dangerZone.deleteAll")}
-        </ResponsiveDialogTrigger>
-        <ResponsiveDialogContent>
-          <ResponsiveDialogHeader>
-            <ResponsiveDialogTitle>
-              {t("settings.dangerZone.dialogTitle")}
-            </ResponsiveDialogTitle>
-            <ResponsiveDialogDescription>
-              {t("settings.dangerZone.dialogDescription")}
-            </ResponsiveDialogDescription>
-          </ResponsiveDialogHeader>
-          <ResponsiveDialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={deleting}
-              onClick={onDeleteAllData}
-            >
-              {deleting
-                ? t("settings.dangerZone.deleting")
-                : t("settings.dangerZone.confirm")}
-            </Button>
-          </ResponsiveDialogFooter>
-        </ResponsiveDialogContent>
-      </ResponsiveDialog>
+        trigger={
+          <Button variant="destructive" disabled={deleting}>
+            {t("settings.dangerZone.deleteAll")}
+          </Button>
+        }
+        title={t("settings.dangerZone.dialogTitle")}
+        description={t("settings.dangerZone.dialogDescription")}
+        confirmLabel={t("settings.dangerZone.confirm")}
+        pendingLabel={t("settings.dangerZone.deleting")}
+        onConfirm={onDeleteAllData}
+      />
     </>
   );
 

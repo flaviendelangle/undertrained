@@ -15,6 +15,8 @@ import type { ListStructuredWorkout } from "@server/db/types";
 
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
+import { showErrorToast } from "~/components/ui/toast";
 import { WorkoutMiniPreview } from "~/components/workouts/WorkoutMiniPreview";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
@@ -37,7 +39,7 @@ function WorkoutCard({
 }: {
   workout: ListStructuredWorkout;
   onDuplicate: (workout: ListStructuredWorkout) => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: number) => void | Promise<void>;
 }) {
   const t = useT();
 
@@ -84,14 +86,22 @@ function WorkoutCard({
           >
             <CopyIcon className="text-muted-foreground size-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("workouts.deleteWorkout")}
-            onClick={() => onDelete(workout.id)}
-          >
-            <Trash2Icon className="text-muted-foreground size-4" />
-          </Button>
+          <ConfirmDialog
+            trigger={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("workouts.deleteWorkout")}
+              >
+                <Trash2Icon className="text-muted-foreground size-4" />
+              </Button>
+            }
+            title={t("common.deleteConfirmTitle", { name: workout.name })}
+            description={t("common.deleteConfirmDescription")}
+            confirmLabel={t("common.delete")}
+            pendingLabel={t("common.deleting")}
+            onConfirm={() => onDelete(workout.id)}
+          />
         </div>
       </div>
     </div>
@@ -112,9 +122,11 @@ const WorkoutsPage: NextPageWithLayout = () => {
   const invalidate = () => utils.structuredWorkouts.list.invalidate();
   const deleteMutation = trpc.structuredWorkouts.delete.useMutation({
     onSuccess: invalidate,
+    onError: () => showErrorToast(t("common.deleteError")),
   });
   const duplicateMutation = trpc.structuredWorkouts.duplicate.useMutation({
     onSuccess: invalidate,
+    onError: () => showErrorToast(t("common.saveError")),
   });
 
   const filtered = React.useMemo(() => {
@@ -126,9 +138,9 @@ const WorkoutsPage: NextPageWithLayout = () => {
     );
   }, [workouts, search]);
 
-  const onDelete = (id: number) => {
+  const onDelete = async (id: number) => {
     if (!athleteId) return;
-    deleteMutation.mutate({ athleteId, id });
+    await deleteMutation.mutateAsync({ athleteId, id });
   };
 
   const onDuplicate = (workout: ListStructuredWorkout) => {

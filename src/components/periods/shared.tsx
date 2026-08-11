@@ -17,12 +17,10 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { TimePeriodForm } from "~/components/periods/TimePeriodForm";
 import { StatCard } from "~/components/primitives/StatCard";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import {
   ResponsiveDialog,
-  ResponsiveDialogClose,
   ResponsiveDialogContent,
-  ResponsiveDialogDescription,
-  ResponsiveDialogFooter,
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
@@ -150,49 +148,31 @@ export function DeletePeriodButton({
 }) {
   const t = useT();
   return (
-    <ResponsiveDialog>
-      <ResponsiveDialogTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t("periods.deletePeriod")}
-            className={cn(
-              "text-muted-foreground hover:text-destructive relative z-10 opacity-0 transition-opacity group-hover:opacity-100",
-              className,
-            )}
-            // Inside clickable cards/rows: keep the click from triggering navigation.
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          />
-        }
-      >
-        <TrashIcon className="size-3.5" />
-      </ResponsiveDialogTrigger>
-      <ResponsiveDialogContent showCloseButton={false}>
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>
-            {t("periods.deleteConfirmTitle", { name })}
-          </ResponsiveDialogTitle>
-          <ResponsiveDialogDescription>
-            {t("periods.deleteConfirmDescription")}
-          </ResponsiveDialogDescription>
-        </ResponsiveDialogHeader>
-        <ResponsiveDialogFooter>
-          <ResponsiveDialogClose render={<Button variant="outline" />}>
-            {t("common.cancel")}
-          </ResponsiveDialogClose>
-          <ResponsiveDialogClose
-            render={<Button variant="destructive" />}
-            onClick={onDelete}
-          >
-            {t("common.delete")}
-          </ResponsiveDialogClose>
-        </ResponsiveDialogFooter>
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
+    <ConfirmDialog
+      trigger={
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t("periods.deletePeriod")}
+          className={cn(
+            "text-muted-foreground hover:text-destructive relative z-10 opacity-0 transition-opacity group-hover:opacity-100",
+            className,
+          )}
+          // Inside clickable cards/rows: keep the click from triggering navigation.
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          <TrashIcon className="size-3.5" />
+        </Button>
+      }
+      title={t("periods.deleteConfirmTitle", { name })}
+      description={t("periods.deleteConfirmDescription")}
+      confirmLabel={t("common.delete")}
+      pendingLabel={t("common.deleting")}
+      onConfirm={onDelete}
+    />
   );
 }
 

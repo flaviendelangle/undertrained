@@ -8,9 +8,19 @@ import {
   Trash2Icon,
 } from "lucide-react";
 
+import { Radio } from "@base-ui/react/radio";
+import { RadioGroup } from "@base-ui/react/radio-group";
 import type { CalendarSubscription } from "@server/db/types";
 
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
+import {
+  Field,
+  FieldControl,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "~/components/ui/field";
 import { Label } from "~/components/ui/label";
 import {
   ResponsiveDialog,
@@ -20,6 +30,7 @@ import {
   ResponsiveDialogTitle,
 } from "~/components/ui/responsive-dialog";
 import { Switch } from "~/components/ui/switch";
+import { showErrorToast } from "~/components/ui/toast";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useBusyCalendars } from "~/hooks/useBusyCalendars";
 import { useT } from "~/i18n/useT";
@@ -35,9 +46,6 @@ const CALENDAR_COLORS = [
   "#f59e0b", // amber
   "#f43f5e", // rose
 ] as const;
-
-const INPUT_CLASS =
-  "border-input bg-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-2.5 py-1 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none";
 
 function parseHttpUrl(value: string): URL | null {
   try {
@@ -121,62 +129,65 @@ function CalendarForm({
       onSubmit={submit}
       className="border-border flex flex-col gap-3 rounded-md border p-3"
     >
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="calendar-url" className="text-xs">
+      <Field
+        name="icalUrl"
+        validationMode="onBlur"
+        validate={(value) =>
+          parseHttpUrl(String(value)) ? null : t("journal.calendars.invalidUrl")
+        }
+      >
+        <FieldLabel className="text-xs">
           {t("journal.calendars.url")}
-        </Label>
-        <input
-          id="calendar-url"
+        </FieldLabel>
+        <FieldControl
+          required
           type="url"
           inputMode="url"
           autoFocus
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onValueChange={setUrl}
           placeholder={t("journal.calendars.urlPlaceholder")}
-          className={INPUT_CLASS}
         />
-        <p className="text-muted-foreground text-[11px] leading-snug">
+        <FieldDescription className="text-[11px]">
           {t("journal.calendars.urlHint")}
-        </p>
-      </div>
+        </FieldDescription>
+        <FieldError />
+      </Field>
 
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="calendar-name" className="text-xs">
+      <Field name="name">
+        <FieldLabel className="text-xs">
           {t("journal.calendars.name")}
-        </Label>
-        <input
-          id="calendar-name"
+        </FieldLabel>
+        <FieldControl
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onValueChange={setName}
           placeholder={t("journal.calendars.namePlaceholder")}
-          className={INPUT_CLASS}
         />
-      </div>
+      </Field>
 
       <div className="flex flex-col gap-1.5">
         <Label className="text-xs">{t("journal.calendars.color")}</Label>
-        <div className="flex items-center gap-1.5">
+        <RadioGroup
+          aria-label={t("journal.calendars.color")}
+          value={color}
+          onValueChange={setColor}
+          className="flex items-center gap-1.5"
+        >
           {CALENDAR_COLORS.map((swatch) => (
-            <button
+            <Radio.Root
               key={swatch}
-              type="button"
+              value={swatch}
               aria-label={swatch}
-              onClick={() => setColor(swatch)}
               style={{ backgroundColor: swatch }}
-              className={cn(
-                "flex size-6 items-center justify-center rounded-full transition-transform",
-                color === swatch
-                  ? "ring-foreground/40 ring-offset-background ring-2 ring-offset-2"
-                  : "hover:scale-110",
-              )}
+              className="data-checked:ring-foreground/40 ring-offset-background flex size-6 cursor-pointer items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 data-checked:scale-100 data-checked:ring-2 data-checked:ring-offset-2"
             >
-              {color === swatch && (
+              <Radio.Indicator>
                 <CheckIcon className="size-3.5 text-white drop-shadow" />
-              )}
-            </button>
+              </Radio.Indicator>
+            </Radio.Root>
           ))}
-        </div>
+        </RadioGroup>
       </div>
 
       {error && <p className="text-destructive text-xs">{error}</p>}
@@ -278,6 +289,7 @@ export function CalendarOverlayPanel() {
       void utils.calendarSubscriptions.events.invalidate();
       setEditing(null);
     },
+    onError: () => showErrorToast(t("common.deleteError")),
   });
 
   return (
@@ -304,18 +316,26 @@ export function CalendarOverlayPanel() {
                   existing={calendar}
                   onClose={() => setEditing(null)}
                 />
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  disabled={removeMut.isPending}
-                  onClick={() =>
-                    removeMut.mutate({ athleteId: athleteId!, id: calendar.id })
+                <ConfirmDialog
+                  trigger={
+                    <Button type="button" variant="destructive" size="sm">
+                      <Trash2Icon />
+                      {t("journal.calendars.remove")}
+                    </Button>
                   }
-                >
-                  <Trash2Icon />
-                  {t("journal.calendars.remove")}
-                </Button>
+                  title={t("common.deleteConfirmTitle", {
+                    name: calendar.name,
+                  })}
+                  description={t("common.deleteConfirmDescription")}
+                  confirmLabel={t("journal.calendars.remove")}
+                  pendingLabel={t("common.deleting")}
+                  onConfirm={() =>
+                    removeMut.mutateAsync({
+                      athleteId: athleteId!,
+                      id: calendar.id,
+                    })
+                  }
+                />
               </div>
             ) : (
               <CalendarRow

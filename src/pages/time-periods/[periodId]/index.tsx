@@ -20,16 +20,8 @@ import { CardTitle } from "~/components/primitives/CardTitle";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { Button } from "~/components/ui/button";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
-import {
-  ResponsiveDialog,
-  ResponsiveDialogClose,
-  ResponsiveDialogContent,
-  ResponsiveDialogDescription,
-  ResponsiveDialogFooter,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-  ResponsiveDialogTrigger,
-} from "~/components/ui/responsive-dialog";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
+import { showErrorToast } from "~/components/ui/toast";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useTypedParams } from "~/hooks/useTypedParams";
 import { sportTypeLabel } from "~/i18n/labels";
@@ -208,45 +200,27 @@ function DeletePeriodButton({
       void utils.timePeriods.invalidate();
       void router.push("/time-periods");
     },
+    onError: () => showErrorToast(t("common.deleteError")),
   });
 
   return (
     <div className="border-border mt-4 flex items-center justify-between border-t pt-4">
       <p className="text-muted-foreground text-sm">{t("periods.deleteHint")}</p>
-      <ResponsiveDialog>
-        <ResponsiveDialogTrigger
-          render={<Button variant="destructive" size="sm" />}
-        >
-          {t("common.delete")}
-        </ResponsiveDialogTrigger>
-        <ResponsiveDialogContent showCloseButton={false}>
-          <ResponsiveDialogHeader>
-            <ResponsiveDialogTitle>
-              {t("periods.deleteConfirmTitle", { name: period.name })}
-            </ResponsiveDialogTitle>
-            <ResponsiveDialogDescription>
-              {t("periods.deleteConfirmDescription")}
-            </ResponsiveDialogDescription>
-          </ResponsiveDialogHeader>
-          <ResponsiveDialogFooter>
-            <ResponsiveDialogClose render={<Button variant="outline" />}>
-              {t("common.cancel")}
-            </ResponsiveDialogClose>
-            <Button
-              variant="destructive"
-              disabled={deleteMutation.isPending}
-              onClick={() => {
-                if (!athleteId) return;
-                deleteMutation.mutate({ athleteId, id: period.id });
-              }}
-            >
-              {deleteMutation.isPending
-                ? t("periods.deleting")
-                : t("common.delete")}
-            </Button>
-          </ResponsiveDialogFooter>
-        </ResponsiveDialogContent>
-      </ResponsiveDialog>
+      <ConfirmDialog
+        trigger={
+          <Button variant="destructive" size="sm">
+            {t("common.delete")}
+          </Button>
+        }
+        title={t("periods.deleteConfirmTitle", { name: period.name })}
+        description={t("periods.deleteConfirmDescription")}
+        confirmLabel={t("common.delete")}
+        pendingLabel={t("periods.deleting")}
+        onConfirm={async () => {
+          if (!athleteId) return;
+          await deleteMutation.mutateAsync({ athleteId, id: period.id });
+        }}
+      />
     </div>
   );
 }

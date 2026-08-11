@@ -24,6 +24,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { Tooltip, TooltipProps } from "~/components/primitives/Tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLinkItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { useT } from "~/i18n/useT";
@@ -311,88 +319,93 @@ function MobileTabLink({
 
 export function MobileBottomBar() {
   const t = useT();
-  const [moreOpen, setMoreOpen] = React.useState(false);
   const { resolvedTheme, setTheme } = useTheme();
 
   return (
-    <>
-      {/* More menu overlay */}
-      {moreOpen && (
-        <div
-          className="bg-background/30 fixed inset-0 z-40 backdrop-blur-[1px] md:hidden"
-          onClick={() => setMoreOpen(false)}
-        />
-      )}
-      {moreOpen && (
-        <div className="bg-popover border-border fixed right-2 bottom-16 z-50 rounded-xl border p-1 shadow-lg md:hidden">
-          <Link
-            href="/personal-bests"
-            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-            onClick={() => setMoreOpen(false)}
+    <nav className="bg-sidebar border-sidebar-border fixed right-0 bottom-0 left-0 z-30 flex h-14 items-stretch border-t md:hidden">
+      <MobileTabLink
+        icon={CalendarDaysIcon}
+        label={t("nav.journal")}
+        href="/journal"
+      />
+      <MobileTabLink
+        icon={ListIcon}
+        label={t("nav.activities")}
+        href="/activities"
+      />
+      <MobileTabLink
+        icon={MapIcon}
+        label={t("nav.map")}
+        href="/map/heatmap"
+        activeFor="/map"
+      />
+      <MobileTabLink
+        icon={BarChart3Icon}
+        label={t("nav.statistics")}
+        href="/statistics"
+      />
+      <DropdownMenu>
+        <DropdownMenuTrigger className="text-muted-foreground data-popup-open:text-primary active:text-foreground flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors">
+          <EllipsisIcon className="size-5" />
+          <span>{t("nav.more")}</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          side="top"
+          align="end"
+          sideOffset={8}
+          className="w-56 rounded-xl"
+        >
+          <DropdownMenuLinkItem
+            closeOnClick
+            render={<Link href="/personal-bests" />}
           >
             <TrophyIcon className="size-4" />
             {t("nav.personalBests")}
-          </Link>
-          <Link
-            href="/time-periods"
-            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-            onClick={() => setMoreOpen(false)}
+          </DropdownMenuLinkItem>
+          <DropdownMenuLinkItem
+            closeOnClick
+            render={<Link href="/time-periods" />}
           >
             <CalendarIcon className="size-4" />
             {t("nav.timePeriods")}
-          </Link>
-          <Link
-            href="/toolbox"
-            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-            onClick={() => setMoreOpen(false)}
-          >
+          </DropdownMenuLinkItem>
+          <DropdownMenuLinkItem closeOnClick render={<Link href="/toolbox" />}>
             <WrenchIcon className="size-4" />
             {t("nav.toolbox")}
-          </Link>
-          <Link
-            href="/settings"
-            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-            onClick={() => setMoreOpen(false)}
-          >
+          </DropdownMenuLinkItem>
+          <DropdownMenuLinkItem closeOnClick render={<Link href="/settings" />}>
             <span className="relative">
               <SettingsIcon className="size-4" />
               <SettingsSetupDot />
             </span>
             {t("nav.settings")}
-          </Link>
+          </DropdownMenuLinkItem>
           {isLiveTrainingEnabled && (
-            <Link
-              href="/live-training"
-              className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-              onClick={() => setMoreOpen(false)}
+            <DropdownMenuLinkItem
+              closeOnClick
+              render={<Link href="/live-training" />}
             >
               <PlayCircleIcon className="size-4" />
               {t("nav.liveTraining")}
-            </Link>
+            </DropdownMenuLinkItem>
           )}
           {isStructuredWorkoutsEnabled && (
-            <Link
-              href="/workouts"
-              className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-              onClick={() => setMoreOpen(false)}
+            <DropdownMenuLinkItem
+              closeOnClick
+              render={<Link href="/workouts" />}
             >
               <BikeIcon className="size-4" />
               {t("nav.workouts")}
-            </Link>
+            </DropdownMenuLinkItem>
           )}
-          <Link
-            href="/privacy"
-            className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-            onClick={() => setMoreOpen(false)}
-          >
+          <DropdownMenuLinkItem closeOnClick render={<Link href="/privacy" />}>
             <ShieldCheckIcon className="size-4" />
             {t("nav.privacy")}
-          </Link>
-          <button
-            className="text-foreground hover:bg-accent flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
+          </DropdownMenuLinkItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
             onClick={() => {
               setTheme(resolvedTheme === "dark" ? "light" : "dark");
-              setMoreOpen(false);
             }}
           >
             {resolvedTheme === "dark" ? (
@@ -401,53 +414,13 @@ export function MobileBottomBar() {
               <MoonIcon className="size-4" />
             )}
             {resolvedTheme === "dark" ? t("nav.lightMode") : t("nav.darkMode")}
-          </button>
-          <button
-            className="text-foreground hover:bg-accent flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
-            onClick={() => signOut({ callbackUrl: "/login" })}
-          >
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
             <LogOutIcon className="size-4" />
             {t("nav.logout")}
-          </button>
-        </div>
-      )}
-
-      {/* Bottom tab bar */}
-      <nav className="bg-sidebar border-sidebar-border fixed right-0 bottom-0 left-0 z-30 flex h-14 items-stretch border-t md:hidden">
-        <MobileTabLink
-          icon={CalendarDaysIcon}
-          label={t("nav.journal")}
-          href="/journal"
-        />
-        <MobileTabLink
-          icon={ListIcon}
-          label={t("nav.activities")}
-          href="/activities"
-        />
-        <MobileTabLink
-          icon={MapIcon}
-          label={t("nav.map")}
-          href="/map/heatmap"
-          activeFor="/map"
-        />
-        <MobileTabLink
-          icon={BarChart3Icon}
-          label={t("nav.statistics")}
-          href="/statistics"
-        />
-        <button
-          className={cn(
-            "flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors",
-            moreOpen
-              ? "text-primary"
-              : "text-muted-foreground active:text-foreground",
-          )}
-          onClick={() => setMoreOpen((prev) => !prev)}
-        >
-          <EllipsisIcon className="size-5" />
-          <span>{t("nav.more")}</span>
-        </button>
-      </nav>
-    </>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </nav>
   );
 }

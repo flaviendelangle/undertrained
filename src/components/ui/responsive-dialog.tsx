@@ -26,35 +26,38 @@ import { useIsMobile } from "~/hooks/useIsMobile";
 
 /**
  * Picks the modal presentation for the current viewport: a centered Dialog on
- * desktop, a bottom-sheet Drawer on mobile. Both are built on the same base-ui
- * `Dialog.Root`, so open state, focus-trap and Escape behave identically — only
- * the popup styling differs. The set mirrors the Dialog API, so migrating a form
- * is a mechanical import swap.
+ * desktop, a swipe-aware bottom-sheet Drawer on mobile. The set mirrors the
+ * Dialog API, so migrating a form is a mechanical import swap.
  */
 const ResponsiveDialogContext = React.createContext(false);
 
 function ResponsiveDialog(props: DialogPrimitive.Root.Props) {
   const isMobile = useIsMobile();
-  const Root = isMobile ? Drawer : Dialog;
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>
-      <Root {...props} />
+      {isMobile ? (
+        <Drawer {...(props as React.ComponentProps<typeof Drawer>)} />
+      ) : (
+        <Dialog {...props} />
+      )}
     </ResponsiveDialogContext.Provider>
   );
 }
 
 function ResponsiveDialogTrigger(props: DialogPrimitive.Trigger.Props) {
   const isMobile = React.useContext(ResponsiveDialogContext);
-  const Trigger = isMobile ? DrawerTrigger : DialogTrigger;
-  return <Trigger {...props} />;
+  return isMobile ? <DrawerTrigger {...props} /> : <DialogTrigger {...props} />;
 }
 
 function ResponsiveDialogContent(
   props: DialogPrimitive.Popup.Props & { showCloseButton?: boolean },
 ) {
   const isMobile = React.useContext(ResponsiveDialogContext);
-  const Content = isMobile ? DrawerContent : DialogContent;
-  return <Content {...props} />;
+  return isMobile ? (
+    <DrawerContent {...(props as React.ComponentProps<typeof DrawerContent>)} />
+  ) : (
+    <DialogContent {...props} />
+  );
 }
 
 function ResponsiveDialogHeader(props: React.ComponentProps<"div">) {
@@ -73,20 +76,21 @@ function ResponsiveDialogFooter(
 
 function ResponsiveDialogTitle(props: DialogPrimitive.Title.Props) {
   const isMobile = React.useContext(ResponsiveDialogContext);
-  const Title = isMobile ? DrawerTitle : DialogTitle;
-  return <Title {...props} />;
+  return isMobile ? <DrawerTitle {...props} /> : <DialogTitle {...props} />;
 }
 
 function ResponsiveDialogDescription(props: DialogPrimitive.Description.Props) {
   const isMobile = React.useContext(ResponsiveDialogContext);
-  const Description = isMobile ? DrawerDescription : DialogDescription;
-  return <Description {...props} />;
+  return isMobile ? (
+    <DrawerDescription {...props} />
+  ) : (
+    <DialogDescription {...props} />
+  );
 }
 
 function ResponsiveDialogClose(props: DialogPrimitive.Close.Props) {
   const isMobile = React.useContext(ResponsiveDialogContext);
-  const Close = isMobile ? DrawerClose : DialogClose;
-  return <Close {...props} />;
+  return isMobile ? <DrawerClose {...props} /> : <DialogClose {...props} />;
 }
 
 export {

@@ -3,6 +3,7 @@ import { CalendarIcon } from "lucide-react";
 import { PeriodsDashboard } from "~/components/periods/PeriodsDashboard";
 import { PeriodsEmptyState } from "~/components/periods/shared";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
+import { showErrorToast } from "~/components/ui/toast";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
@@ -20,6 +21,7 @@ const PeriodsPage: NextPageWithLayout = () => {
 
   const deleteMutation = trpc.timePeriods.delete.useMutation({
     onSuccess: () => utils.timePeriods.invalidate(),
+    onError: () => showErrorToast(t("common.deleteError")),
   });
 
   const onDelete = (id: number) => {

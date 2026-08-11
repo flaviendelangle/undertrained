@@ -1,5 +1,7 @@
 import type { PlannedTraining } from "@server/db/types";
 
+import { showErrorToast } from "~/components/ui/toast";
+import { useT } from "~/i18n/useT";
 import { trpc } from "~/utils/trpc";
 
 import { useAthleteId } from "./useAthleteId";
@@ -13,6 +15,7 @@ import { useAthleteId } from "./useAthleteId";
  */
 export function useReschedulePlannedTraining() {
   const athleteId = useAthleteId();
+  const t = useT();
   const utils = trpc.useUtils();
 
   const mutation = trpc.plannedTrainings.update.useMutation({
@@ -34,6 +37,7 @@ export function useReschedulePlannedTraining() {
       if (athleteId != null && context?.previous != null) {
         utils.plannedTrainings.list.setData({ athleteId }, context.previous);
       }
+      showErrorToast(t("common.saveError"));
     },
     onSettled: () => {
       void utils.plannedTrainings.list.invalidate();

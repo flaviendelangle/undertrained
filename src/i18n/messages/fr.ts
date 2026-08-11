@@ -10,6 +10,12 @@ const fr: Messages = {
     cancel: "Annuler",
     save: "Enregistrer",
     delete: "Supprimer",
+    deleting: "Suppression…",
+    deleteConfirmTitle: "Supprimer « {name} » ?",
+    deleteConfirmDescription: "Cette action est irréversible.",
+    saveError:
+      "Impossible d'enregistrer vos modifications. Veuillez réessayer.",
+    deleteError: "Impossible de supprimer cet élément. Veuillez réessayer.",
     close: "Fermer",
     dismiss: "Ignorer",
     loading: "Chargement…",
