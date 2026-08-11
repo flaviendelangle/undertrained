@@ -12,7 +12,6 @@ import {
   MenuIcon,
   MoonIcon,
   PlayCircleIcon,
-  RepeatIcon,
   SettingsIcon,
   ShieldCheckIcon,
   SunIcon,
@@ -226,7 +225,7 @@ export function NavBar() {
           {isStructuredWorkoutsEnabled && (
             <TooltipIfMenuCollapsed label={t("nav.workouts")}>
               <NavBarLink
-                icon={RepeatIcon}
+                icon={BikeIcon}
                 label={t("nav.workouts")}
                 href="/workouts"
               />
@@ -373,7 +372,7 @@ export function MobileBottomBar() {
               className="text-foreground hover:bg-accent flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium"
               onClick={() => setMoreOpen(false)}
             >
-              <RepeatIcon className="size-4" />
+              <BikeIcon className="size-4" />
               {t("nav.workouts")}
             </Link>
           )}
