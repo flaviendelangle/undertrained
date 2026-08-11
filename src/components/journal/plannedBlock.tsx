@@ -35,8 +35,8 @@ export function PlannedBlockBody({
 }: {
   sportType: string;
   title: string;
-  /** Start time as `HH:mm`. */
-  time: string;
+  /** Start time as `HH:mm`; omitted when a drag is outside a valid target. */
+  time?: string;
   durationSeconds: number;
   /** Hide the time / duration line when too short to fit a second row. */
   compact?: boolean;
@@ -56,7 +56,8 @@ export function PlannedBlockBody({
       </span>
       {!compact && (
         <span className="text-muted-foreground truncate text-[11px] tabular-nums">
-          {time} · {formatCompactDuration(durationSeconds, { subHour: "min" })}
+          {time != null && <>{time} · </>}
+          {formatCompactDuration(durationSeconds, { subHour: "min" })}
         </span>
       )}
     </>

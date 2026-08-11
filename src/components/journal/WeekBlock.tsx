@@ -3,9 +3,7 @@ import * as React from "react";
 import { format } from "date-fns";
 import type { Locale } from "date-fns";
 
-import { type DragModifiers } from "@base-ui/plus/draggable";
 import { DropTarget } from "@base-ui/plus/drop-target";
-import type { PlannedTraining } from "@server/db/types";
 
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
@@ -18,7 +16,6 @@ import {
 } from "./WeekEventBlock";
 import {
   JOURNAL_DAY_SNAP_STEPS,
-  type JournalDrop,
   journalDayDropKind,
   plannedTrainingDragKind,
 } from "./journalDnd";
@@ -51,11 +48,6 @@ function DayColumn({
   positioned,
   busy,
   draggedTrainingId,
-  dragModifiers,
-  previewContainer,
-  onTrainingDragStart,
-  onTrainingDrop,
-  onTrainingDragEnd,
 }: {
   date: Date;
   positioned: PositionedEvent[];
@@ -67,11 +59,6 @@ function DayColumn({
    * start segment (they're separate draggable roots, so local state misses them).
    */
   draggedTrainingId: number | null;
-  dragModifiers: DragModifiers;
-  previewContainer: React.RefObject<HTMLElement | null>;
-  onTrainingDragStart: (training: PlannedTraining) => void;
-  onTrainingDrop: (training: PlannedTraining, drop: JournalDrop) => void;
-  onTrainingDragEnd: () => void;
 }) {
   const planner = useJournalPlanner();
   const dayKey = format(date, "yyyy-MM-dd");
@@ -149,11 +136,6 @@ function DayColumn({
               continued={event.continued}
               dimmed={event.training.id === draggedTrainingId}
               compact={height < COMPACT_BLOCK_HEIGHT}
-              dragModifiers={dragModifiers}
-              previewContainer={previewContainer}
-              onDragStart={onTrainingDragStart}
-              onDrop={onTrainingDrop}
-              onDragEnd={onTrainingDragEnd}
             />
           ) : null}
         </div>
@@ -257,11 +239,6 @@ export function WeekBlock({
   dayLoadScale,
   allDayRowHeight,
   draggedTrainingId,
-  dragModifiers,
-  previewContainer,
-  onTrainingDragStart,
-  onTrainingDrop,
-  onTrainingDragEnd,
   dateLocale,
   style,
 }: {
@@ -276,11 +253,6 @@ export function WeekBlock({
   allDayRowHeight: number;
   /** Training currently moving, used to dim its continuation segments. */
   draggedTrainingId: number | null;
-  dragModifiers: DragModifiers;
-  previewContainer: React.RefObject<HTMLElement | null>;
-  onTrainingDragStart: (training: PlannedTraining) => void;
-  onTrainingDrop: (training: PlannedTraining, drop: JournalDrop) => void;
-  onTrainingDragEnd: () => void;
   dateLocale: Locale;
   style: React.CSSProperties;
 }) {
@@ -370,11 +342,6 @@ export function WeekBlock({
               positioned={dayEvents[index]}
               busy={dayBusyEvents[index]}
               draggedTrainingId={draggedTrainingId}
-              dragModifiers={dragModifiers}
-              previewContainer={previewContainer}
-              onTrainingDragStart={onTrainingDragStart}
-              onTrainingDrop={onTrainingDrop}
-              onTrainingDragEnd={onTrainingDragEnd}
             />
           );
         })}

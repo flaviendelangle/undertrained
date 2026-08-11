@@ -5,7 +5,13 @@ import { ChevronDownIcon } from "lucide-react";
 import { flushSync } from "react-dom";
 
 import { DragAutoScroll } from "@base-ui/plus/drag-auto-scroll";
-import type { DragModifier, DragModifiers } from "@base-ui/plus/draggable";
+import {
+  type DragLocationHistory,
+  type DragModifier,
+  type DragModifiers,
+  Draggable,
+} from "@base-ui/plus/draggable";
+import { useDragMonitor } from "@base-ui/plus/use-drag-monitor";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 import type { PlannedTraining } from "@server/db/types";
@@ -23,10 +29,13 @@ import { cn } from "~/lib/utils";
 import { WeekBlock, earliestMinutesOfWeek } from "./WeekBlock";
 import {
   JOURNAL_DAY_COLUMN_SELECTOR,
+  JOURNAL_DRAG_AUTO_SCROLL_AXIS,
   JOURNAL_SLOT_HEIGHT,
   type JournalDrop,
   plannedTrainingDragKind,
+  resolveJournalDrop,
 } from "./journalDnd";
+import { JournalDragPreviewProvider } from "./journalDragPreview";
 import { buildWeekGroups } from "./journalView";
 import type { JournalWeek } from "./useJournalWeeks";
 import { useWeekHorizontalVirtualizer } from "./useWeekHorizontalVirtualizer";
@@ -205,6 +214,8 @@ function JournalWeekViewImpl({
   const [draggedTrainingId, setDraggedTrainingId] = React.useState<
     number | null
   >(null);
+  const [dragPreviewDrop, setDragPreviewDrop] =
+    React.useState<JournalDrop | null>(null);
 
   const displayedRenderedWeeks = React.useMemo(
     () =>
@@ -215,15 +226,17 @@ function JournalWeekViewImpl({
   );
 
   const handleTrainingDragStart = React.useCallback(
-    (training: PlannedTraining) => {
+    (training: PlannedTraining, location: DragLocationHistory) => {
       pendingTrainingDropRef.current = null;
       setPendingTrainingDrop(null);
       setDraggedTrainingId(training.id);
+      setDragPreviewDrop(resolveJournalDrop(location));
     },
     [],
   );
 
   const handleTrainingDragEnd = React.useCallback(() => {
+    setDragPreviewDrop(null);
     // A committed drop owns a local destination until its mutation settles.
     // Clearing here would hand rendering back to the still-stale query cache.
     if (pendingTrainingDropRef.current == null) {
@@ -231,9 +244,21 @@ function JournalWeekViewImpl({
     }
   }, []);
 
-  // Snap the drag itself to the nearest mounted day and 15-minute slot. Base UI
-  // Plus applies this point to the clone, hit test, and reported drag location,
-  // so the preview and the eventual drop cannot disagree.
+  const updateDragPreview = React.useCallback(
+    (location: DragLocationHistory) => {
+      const next = resolveJournalDrop(location);
+      setDragPreviewDrop((current) =>
+        current?.dayKey === next?.dayKey && current?.minutes === next?.minutes
+          ? current
+          : next,
+      );
+    },
+    [],
+  );
+
+  // Snap only the visual preview to the nearest mounted day and 15-minute slot.
+  // The semantic cursor remains raw, so releasing over the sticky chrome or
+  // outside the calendar has no drop target and cancels the move.
   const snapTrainingToGrid = React.useCallback<DragModifier>(
     ({ point, input, previewOffset }) => {
       const scrollElement = scrollRef.current;
@@ -285,9 +310,9 @@ function JournalWeekViewImpl({
     [topOffset],
   );
 
-  // Keep the cloned preview, hit test, and virtual cursor inside the visible
-  // timed grid. The scroll root itself is too broad: it also contains the
-  // sticky week/time gutter and headers, which are not valid drop surfaces.
+  // Keep only the visual preview inside the visible timed grid. The scroll root
+  // itself is too broad: it also contains the sticky week/time gutter and
+  // headers, which are not valid drop surfaces.
   const restrictTrainingToGrid = React.useCallback<DragModifier>(
     ({ point, previewOffset, previewRect }) => {
       const scrollElement = scrollRef.current;
@@ -313,7 +338,7 @@ function JournalWeekViewImpl({
     [topOffset],
   );
 
-  const trainingDragModifiers = React.useMemo<DragModifiers>(
+  const trainingPreviewModifiers = React.useMemo<DragModifiers>(
     () => [snapTrainingToGrid, restrictTrainingToGrid],
     [restrictTrainingToGrid, snapTrainingToGrid],
   );
@@ -350,6 +375,23 @@ function JournalWeekViewImpl({
     },
     [reschedule],
   );
+
+  // One monitor replaces per-source lifecycle props. It also keeps the custom
+  // preview's content synchronized with the same snapped target used on drop.
+  useDragMonitor({
+    accept: plannedTrainingDragKind,
+    onDragStart: ({ source, location }) =>
+      handleTrainingDragStart(source.payload, location),
+    onDrag: ({ location }) => updateDragPreview(location),
+    onDropTargetChange: ({ location }) => updateDragPreview(location),
+    onDrop: ({ source, location }) => {
+      const drop = resolveJournalDrop(location);
+      if (drop != null) {
+        handleTrainingDrop(source.payload, drop);
+      }
+    },
+    onDragEnd: handleTrainingDragEnd,
+  });
 
   // A pending drop has already been locally moved, so only an active drag still
   // needs the source dimming treatment.
@@ -619,12 +661,15 @@ function JournalWeekViewImpl({
 
   const totalSize = virtualizer.getTotalSize();
 
-  return (
+  const journalGrid = (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <DragAutoScroll.Root
         ref={scrollRef}
         accept={plannedTrainingDragKind}
-        allowedAxis="vertical"
+        // Horizontal edge scrolling is intentionally disabled: each virtualized
+        // item is a full week, so the auto-scroller advances several weeks per
+        // second and makes precise cross-week drops unusable.
+        allowedAxis={JOURNAL_DRAG_AUTO_SCROLL_AXIS}
         className={cn(
           "relative min-h-0 flex-1 overflow-auto",
           // Programmatic scrollToIndex glides; users who prefer reduced motion
@@ -749,11 +794,6 @@ function JournalWeekViewImpl({
                   dayLoadScale={dayLoadScale}
                   allDayRowHeight={allDayRowHeight}
                   draggedTrainingId={visibleDraggedTrainingId}
-                  dragModifiers={trainingDragModifiers}
-                  previewContainer={scrollRef}
-                  onTrainingDragStart={handleTrainingDragStart}
-                  onTrainingDrop={handleTrainingDrop}
-                  onTrainingDragEnd={handleTrainingDragEnd}
                   dateLocale={dateLocale}
                   style={{
                     position: "absolute",
@@ -770,6 +810,17 @@ function JournalWeekViewImpl({
         </div>
       </DragAutoScroll.Root>
     </div>
+  );
+
+  return (
+    <JournalDragPreviewProvider
+      modifiers={trainingPreviewModifiers}
+      drop={dragPreviewDrop}
+    >
+      <Draggable.PreviewProvider container={scrollRef}>
+        {journalGrid}
+      </Draggable.PreviewProvider>
+    </JournalDragPreviewProvider>
   );
 }
 

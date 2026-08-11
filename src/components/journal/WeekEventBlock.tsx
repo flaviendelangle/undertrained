@@ -3,7 +3,7 @@ import * as React from "react";
 import { CalendarIcon, FlagIcon, MedalIcon } from "lucide-react";
 import Link from "next/link";
 
-import { type DragModifiers, Draggable } from "@base-ui/plus/draggable";
+import { Draggable } from "@base-ui/plus/draggable";
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import type { PlannedTraining } from "@server/db/types";
 import type { BusyEvent } from "@server/lib/icalFeed";
@@ -16,11 +16,14 @@ import { getSportConfig } from "~/utils/sportConfig";
 import { useMapPrefetch } from "./ActivityPreviewCard";
 import { JournalRecordsContext, RACE_WORKOUT_TYPES } from "./JournalDayCell";
 import {
-  type JournalDrop,
+  getJournalDragPreviewTime,
   journalKeyboardMovement,
   plannedTrainingDragKind,
-  resolveJournalDrop,
 } from "./journalDnd";
+import {
+  useJournalDragPreviewDrop,
+  useJournalDragPreviewModifiers,
+} from "./journalDragPreview";
 import { useJournalPlanner } from "./journalPlanner";
 import { useJournalPreviewHandles } from "./journalPreview";
 import { useJournalActivityHref } from "./journalView";
@@ -170,24 +173,49 @@ export function WeekBusyBlock({
   );
 }
 
+function WeekPlannedBlockPreview({
+  training,
+  compact,
+  width,
+  height,
+}: {
+  training: PlannedTraining;
+  compact?: boolean;
+  width: number;
+  height: number;
+}) {
+  const drop = useJournalDragPreviewDrop();
+  const config = getSportConfig(training.sportType);
+
+  return (
+    <div
+      className={cn(PLANNED_BLOCK_CLASS, "pointer-events-none")}
+      style={{ ...plannedBlockStyle(config.color), width, height }}
+    >
+      <PlannedBlockBody
+        sportType={training.sportType}
+        title={training.title}
+        time={getJournalDragPreviewTime(drop)}
+        durationSeconds={training.durationSeconds}
+        compact={compact}
+      />
+    </div>
+  );
+}
+
 /**
  * A still-planned training as a dashed, draggable block. Dragging reschedules it
- * (committed from the source's `onDrop`); a plain click opens the edit dialog. The
- * default pointer sensor only starts a drag after a small move or short hold, so
- * clicks aren't swallowed. Continuation segments of a multi-day training aren't
- * draggable (rescheduling moves the start day's segment), but still open the
- * edit dialog on click.
+ * (committed by the week view's drag monitor); a plain click opens the edit
+ * dialog. The default pointer sensor only starts a drag after a small move or
+ * short hold, so clicks aren't swallowed. Continuation segments of a multi-day
+ * training aren't draggable (rescheduling moves the start day's segment), but
+ * still open the edit dialog on click.
  */
 export function WeekPlannedBlock({
   training,
   continued,
   dimmed,
   compact,
-  dragModifiers,
-  previewContainer,
-  onDragStart,
-  onDrop,
-  onDragEnd,
 }: {
   training: PlannedTraining;
   /** True for the continuation segment of a training begun on an earlier day. */
@@ -199,18 +227,12 @@ export function WeekPlannedBlock({
    */
   dimmed?: boolean;
   compact?: boolean;
-  /** Snaps the preview, hit test, and reported input to a day/time slot. */
-  dragModifiers: DragModifiers;
-  /** Visible scroll container that hosts and bounds the cloned preview. */
-  previewContainer: React.RefObject<HTMLElement | null>;
-  onDragStart: (training: PlannedTraining) => void;
-  onDrop: (training: PlannedTraining, drop: JournalDrop) => void;
-  onDragEnd: () => void;
 }) {
   const t = useT();
   const planner = useJournalPlanner();
   const config = getSportConfig(training.sportType);
   const label = t("journal.plannedLabel", { title: training.title });
+  const previewModifiers = useJournalDragPreviewModifiers();
 
   return (
     <Draggable.Root
@@ -218,16 +240,7 @@ export function WeekPlannedBlock({
       payload={training}
       label={label}
       disabled={continued}
-      modifiers={dragModifiers}
       keyboardMovement={journalKeyboardMovement}
-      onDragStart={({ source }) => onDragStart(source.payload)}
-      onDrop={({ source, location }) => {
-        const drop = resolveJournalDrop(location);
-        if (drop) {
-          onDrop(source.payload, drop);
-        }
-      }}
-      onDragEnd={onDragEnd}
       render={
         <button
           type="button"
@@ -253,7 +266,23 @@ export function WeekPlannedBlock({
         durationSeconds={training.durationSeconds}
         compact={compact}
       />
-      <Draggable.ClonedPreview container={previewContainer} />
+      <Draggable.Preview
+        kind={plannedTrainingDragKind}
+        modifiers={previewModifiers}
+        className="pointer-events-none"
+      >
+        {({ source }) => {
+          const rect = source.element.getBoundingClientRect();
+          return (
+            <WeekPlannedBlockPreview
+              training={source.payload}
+              compact={compact}
+              width={rect.width}
+              height={rect.height}
+            />
+          );
+        }}
+      </Draggable.Preview>
     </Draggable.Root>
   );
 }

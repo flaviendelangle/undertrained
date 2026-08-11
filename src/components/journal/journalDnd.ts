@@ -9,6 +9,7 @@ import {
   HOUR_HEIGHT,
   MINUTES_PER_DAY,
   SNAP_MINUTES,
+  minutesToTimeLabel,
   snapMinutes,
 } from "./weekGrid";
 
@@ -36,6 +37,15 @@ export interface JournalDrop {
   minutes: number;
 }
 
+export const JOURNAL_DRAG_AUTO_SCROLL_AXIS = "vertical" as const;
+
+/** Prospective time displayed by the drag preview, or nothing off-target. */
+export function getJournalDragPreviewTime(
+  drop: JournalDrop | null,
+): string | undefined {
+  return drop == null ? undefined : minutesToTimeLabel(drop.minutes);
+}
+
 /**
  * Reads the day and time that the active drag would commit. The source anchor
  * makes the training's top edge select the slot, regardless of where it was
@@ -48,6 +58,19 @@ export function resolveJournalDrop(
     journalDayDropKind.matches(target),
   );
   if (!day || !journalDayDropKind.matches(day)) {
+    return null;
+  }
+  // Root modifiers also change hit-testing. Keep this raw-coordinate guard so
+  // a stale target record or a future modifier cannot turn a release over the
+  // sticky header/gutter into a valid calendar drop.
+  const rect = day.element.getBoundingClientRect();
+  const { clientX, clientY } = location.current.input;
+  if (
+    clientX < rect.left ||
+    clientX > rect.right ||
+    clientY < rect.top ||
+    clientY > rect.bottom
+  ) {
     return null;
   }
   return {
