@@ -1,26 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#1E293B"/>
-      <stop offset="100%" stop-color="#0F172A"/>
-    </linearGradient>
-    <linearGradient id="line" x1="12" y1="0" x2="52" y2="0" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#38BDF8"/>
-      <stop offset="60%" stop-color="#818CF8"/>
-      <stop offset="100%" stop-color="#F472B6"/>
-    </linearGradient>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Undertrained</title>
 
-  <!-- Rounded square background -->
-  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <rect width="64" height="64" rx="14" fill="#1c2128" />
 
-  <!-- Lucide Activity icon (path converted to 64x64 space) -->
   <path
-    d="M52 32h-4.96a4 4 0 0 0-3.86 2.92l-4.7 16.72a.5.5 0 0 1-.96 0L26.48 12.36a.5.5 0 0 0-.96 0l-4.7 16.72A4 4 0 0 1 16.98 32H12"
+    d="M18 18v15c0 8.2 4.8 13.1 11.2 14.6"
     fill="none"
-    stroke="url(#line)"
-    stroke-width="3.5"
+    stroke="#f7f4ec"
+    stroke-width="5.5"
     stroke-linecap="round"
-    stroke-linejoin="round"
   />
+  <path
+    d="M46 18v15c0 8.2-4.8 13.1-11.2 14.6"
+    fill="none"
+    stroke="#f7f4ec"
+    stroke-width="5.5"
+    stroke-linecap="round"
+  />
+
+  <rect x="30.5" y="45" width="3" height="6" rx="1.5" fill="#44b589" />
 </svg>

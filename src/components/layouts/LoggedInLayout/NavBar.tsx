@@ -9,7 +9,6 @@ import {
   ListIcon,
   LogOutIcon,
   MapIcon,
-  MenuIcon,
   MoonIcon,
   PlayCircleIcon,
   SettingsIcon,
@@ -20,6 +19,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -158,15 +158,19 @@ export function NavBar() {
               }
               onClick={() => setIsMenuExpanded((prev) => !prev)}
             >
+              <Image
+                src="/favicon.svg"
+                alt=""
+                width={20}
+                height={20}
+                className="size-5 shrink-0"
+              />
               {isMenuExpanded ? (
                 <>
-                  <BikeIcon className="text-primary size-4.5 shrink-0" />
                   <span className="text-foreground flex-1">Undertrained</span>
                   <XIcon className="text-muted-foreground size-4" />
                 </>
-              ) : (
-                <MenuIcon className="text-muted-foreground size-4.5 shrink-0" />
-              )}
+              ) : null}
             </button>
           </TooltipIfMenuCollapsed>
 
