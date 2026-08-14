@@ -5,7 +5,7 @@ import type {
   DragKeyboardMoveDetails,
   DragLocationHistory,
   DropTargetRecord,
-} from "@base-ui/plus/draggable";
+} from "@base-ui/react/draggable";
 import type { PlannedTraining } from "@server/db/types";
 
 import {

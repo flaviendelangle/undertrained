@@ -4,15 +4,15 @@ import { addDays, format, isSameMonth } from "date-fns";
 import { ChevronDownIcon } from "lucide-react";
 import { flushSync } from "react-dom";
 
-import { DragAutoScroll } from "@base-ui/plus/drag-auto-scroll";
+import { DragAutoScroll } from "@base-ui/react/drag-auto-scroll";
 import {
   type DragLocationHistory,
   type DragModifier,
   type DragModifiers,
   Draggable,
-} from "@base-ui/plus/draggable";
-import { useDragMonitor } from "@base-ui/plus/use-drag-monitor";
+} from "@base-ui/react/draggable";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
+import { useDragMonitor } from "@base-ui/react/use-drag-monitor";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 import type { PlannedTraining } from "@server/db/types";
 

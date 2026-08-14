@@ -3,7 +3,7 @@ import * as React from "react";
 import { CalendarIcon, FlagIcon, MedalIcon } from "lucide-react";
 import Link from "next/link";
 
-import { Draggable } from "@base-ui/plus/draggable";
+import { Draggable } from "@base-ui/react/draggable";
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import type { PlannedTraining } from "@server/db/types";
 import type { BusyEvent } from "@server/lib/icalFeed";

@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import type { DragModifiers } from "@base-ui/plus/draggable";
+import type { DragModifiers } from "@base-ui/react/draggable";
 
 import type { JournalDrop } from "./journalDnd";
 

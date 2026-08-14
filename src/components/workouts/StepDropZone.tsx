@@ -2,8 +2,8 @@ import * as React from "react";
 
 import { GripVerticalIcon } from "lucide-react";
 
-import { Draggable } from "@base-ui/plus/draggable";
-import { DropTarget } from "@base-ui/plus/drop-target";
+import { Draggable } from "@base-ui/react/draggable";
+import { DropTarget } from "@base-ui/react/drop-target";
 
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";

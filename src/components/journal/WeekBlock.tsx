@@ -3,7 +3,7 @@ import * as React from "react";
 import { format } from "date-fns";
 import type { Locale } from "date-fns";
 
-import { DropTarget } from "@base-ui/plus/drop-target";
+import { DropTarget } from "@base-ui/react/drop-target";
 
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";

@@ -44,7 +44,9 @@ function ResponsiveDialog(props: DialogPrimitive.Root.Props) {
   );
 }
 
-function ResponsiveDialogTrigger(props: DialogPrimitive.Trigger.Props) {
+function ResponsiveDialogTrigger(
+  props: Omit<DialogPrimitive.Trigger.Props, "handle">,
+) {
   const isMobile = React.useContext(ResponsiveDialogContext);
   return isMobile ? <DrawerTrigger {...props} /> : <DialogTrigger {...props} />;
 }

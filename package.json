@@ -23,9 +23,9 @@
     "webhook:delete": "tsx scripts/manage-webhook.ts delete"
   },
   "dependencies": {
-    "@base-ui/plus": "https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@fe92a22",
-    "@base-ui/react": "^1.5.0",
-    "@base-ui/utils": "^0.2.9",
+    "@base-ui/plus": "https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@8688a28",
+    "@base-ui/react": "https://pkg.pr.new/mui/base-ui/@base-ui/react@78446e4",
+    "@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@78446e4",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@markw65/fit-file-writer": "^0.1.9",
@@ -102,5 +102,10 @@
   },
   "publishConfig": {
     "access": "restricted"
+  },
+  "pnpm": {
+    "overrides": {
+      "@base-ui/react>@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@78446e4"
+    }
   }
 }
