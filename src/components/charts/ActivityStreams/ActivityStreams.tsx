@@ -14,6 +14,7 @@ import { trpc } from "~/utils/trpc";
 
 import { ChartMessage } from "../ChartMessage";
 import { MultiPanelChart } from "./MultiPanelChart";
+import { computeStreamStats } from "./streamStats";
 import type { PreparedStream, StreamStats, XAxisMode } from "./types";
 
 const createXAxisOptions = (
@@ -163,17 +164,8 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
         const yData = parseStreamData(stream.data);
         if (!yData) return null;
 
-        let yMin = Infinity;
-        let yMax = -Infinity;
-        let sum = 0;
-        for (const v of yData) {
-          if (v < yMin) yMin = v;
-          if (v > yMax) yMax = v;
-          sum += v;
-        }
-        if (!Number.isFinite(yMin)) yMin = 0;
-        if (!Number.isFinite(yMax)) yMax = 1;
-        const avg = yData.length > 0 ? sum / yData.length : 0;
+        const stats = computeStreamStats(def.type, yData);
+        const { min: yMin, max: yMax } = stats;
         const range = yMax - yMin;
         const padding = range > 0 ? range * 0.05 : 1;
 
@@ -182,7 +174,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
           yData,
           yMin: yMin - padding,
           yMax: yMax + padding,
-          stats: { min: yMin, max: yMax, avg },
+          stats,
         };
       })
       .filter(

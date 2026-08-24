@@ -15,7 +15,7 @@ export interface StreamStats {
   min: number;
   /** Actual (unpadded) maximum of the data. */
   max: number;
-  /** Arithmetic mean of the data. */
+  /** Arithmetic mean. Zero samples are excluded for HR, cadence, and speed. */
   avg: number;
 }
 
