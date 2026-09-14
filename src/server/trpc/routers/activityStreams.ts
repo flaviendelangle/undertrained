@@ -59,6 +59,7 @@ export const activityStreamsRouter = router({
     .input(z.object({ stravaId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const activity = await ctx.db.query.activities.findFirst({
+        columns: { id: true, areStreamsLoaded: true },
         where: and(
           eq(activities.stravaId, input.stravaId),
           eq(activities.athlete, ctx.session.athleteId),

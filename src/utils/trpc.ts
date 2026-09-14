@@ -2,7 +2,12 @@ import { signOut } from "next-auth/react";
 import superjson from "superjson";
 
 import type { AppRouter } from "@server/trpc/root";
-import { TRPCClientError, httpBatchLink } from "@trpc/client";
+import {
+  TRPCClientError,
+  httpBatchLink,
+  httpLink,
+  splitLink,
+} from "@trpc/client";
 import { createTRPCNext } from "@trpc/next";
 
 function getBaseUrl() {
@@ -27,9 +32,22 @@ export const trpc = createTRPCNext<AppRouter>({
   config() {
     return {
       links: [
-        httpBatchLink({
-          url: `${getBaseUrl()}/api/trpc`,
-          transformer: superjson,
+        splitLink({
+          // Slow analytics and external feeds must not delay essential data in
+          // the same batch. Each secondary request can finish independently.
+          condition: (op) =>
+            op.type === "query" &&
+            (op.path.startsWith("analytics.") ||
+              op.path === "records.getRecordHolders" ||
+              op.path === "calendarSubscriptions.events"),
+          true: httpLink({
+            url: `${getBaseUrl()}/api/trpc`,
+            transformer: superjson,
+          }),
+          false: httpBatchLink({
+            url: `${getBaseUrl()}/api/trpc`,
+            transformer: superjson,
+          }),
         }),
       ],
       queryClientConfig: {

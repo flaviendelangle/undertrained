@@ -13,6 +13,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import { workoutChoiceToValue } from "../../../utils/sportConfig";
+import type { Database } from "../../db";
 import { activities, riderSettings } from "../../db/schema";
 import { getAccessToken, updateActivityOnStrava } from "../../lib/strava";
 import { computeActivityScoresInternal } from "../../lib/sync";
@@ -23,43 +24,51 @@ import {
   validateAthleteOwnership,
 } from "../index";
 
+const activityFilters = z.object({
+  athleteId: z.number(),
+  activityTypes: z.array(z.string()).optional(),
+  workoutTypes: z.array(z.number()).optional(),
+  timePeriodId: z.number().optional(),
+  hideCommutes: z.boolean().optional(),
+});
+
+async function activityConditions(
+  db: Database,
+  input: z.infer<typeof activityFilters>,
+) {
+  const { periodDateFrom, periodDateTo, periodSportTypes } =
+    await resolveTimePeriod(db, input.timePeriodId, input.athleteId);
+
+  // Build filter conditions
+  const conditions = [eq(activities.athlete, input.athleteId)];
+  if (input.activityTypes && input.activityTypes.length > 0) {
+    conditions.push(inArray(activities.type, input.activityTypes));
+  }
+  if (periodSportTypes) {
+    conditions.push(inArray(activities.type, periodSportTypes));
+  }
+  if (input.workoutTypes && input.workoutTypes.length > 0) {
+    conditions.push(inArray(activities.workoutType, input.workoutTypes));
+  }
+  if (input.hideCommutes) {
+    conditions.push(eq(activities.commute, false));
+  }
+  if (periodDateFrom) {
+    conditions.push(gte(activities.startDate, periodDateFrom));
+  }
+  if (periodDateTo) {
+    conditions.push(lte(activities.startDate, periodDateTo + "T23:59:59Z"));
+  }
+
+  return conditions;
+}
+
 export const activitiesRouter = router({
   list: protectedProcedure
-    .input(
-      z.object({
-        athleteId: z.number(),
-        activityTypes: z.array(z.string()).optional(),
-        workoutTypes: z.array(z.number()).optional(),
-        includeMap: z.boolean().optional(),
-        timePeriodId: z.number().optional(),
-        hideCommutes: z.boolean().optional(),
-      }),
-    )
+    .input(activityFilters.extend({ includeMap: z.boolean().optional() }))
     .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
-      const { periodDateFrom, periodDateTo, periodSportTypes } =
-        await resolveTimePeriod(ctx.db, input.timePeriodId, input.athleteId);
-
-      // Build filter conditions
-      const conditions = [eq(activities.athlete, input.athleteId)];
-      if (input.activityTypes && input.activityTypes.length > 0) {
-        conditions.push(inArray(activities.type, input.activityTypes));
-      }
-      if (periodSportTypes) {
-        conditions.push(inArray(activities.type, periodSportTypes));
-      }
-      if (input.workoutTypes && input.workoutTypes.length > 0) {
-        conditions.push(inArray(activities.workoutType, input.workoutTypes));
-      }
-      if (input.hideCommutes) {
-        conditions.push(eq(activities.commute, false));
-      }
-      if (periodDateFrom) {
-        conditions.push(gte(activities.startDate, periodDateFrom));
-      }
-      if (periodDateTo) {
-        conditions.push(lte(activities.startDate, periodDateTo + "T23:59:59Z"));
-      }
+      const conditions = await activityConditions(ctx.db, input);
 
       // Omit the heavy jsonb columns (and mapPolyline unless requested) from the
       // list projection — none of the list consumers read them, so shipping them
@@ -99,6 +108,30 @@ export const activitiesRouter = router({
           mapPolyline: null as string | null,
         })),
       };
+    }),
+
+  // Routes and tooltip fields only; chart metrics stay in the shared list cache.
+  maps: protectedProcedure
+    .input(activityFilters)
+    .use(validateAthleteOwnership)
+    .query(async ({ ctx, input }) => {
+      const conditions = await activityConditions(ctx.db, input);
+      return ctx.db
+        .select({
+          id: activities.id,
+          stravaId: activities.stravaId,
+          type: activities.type,
+          name: activities.name,
+          startDate: activities.startDate,
+          startDateLocal: activities.startDateLocal,
+          distance: activities.distance,
+          movingTime: activities.movingTime,
+          totalElevationGain: activities.totalElevationGain,
+          mapPolyline: activities.mapPolyline,
+        })
+        .from(activities)
+        .where(and(...conditions, isNotNull(activities.mapPolyline)))
+        .orderBy(desc(activities.startDate));
     }),
 
   /**

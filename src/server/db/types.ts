@@ -30,6 +30,20 @@ export type ListActivity = Omit<
   | "description"
   | "privateNote"
 >;
+/** Fields used to draw routes and identify activities in map tooltips. */
+export type MapActivity = Pick<
+  Activity,
+  | "id"
+  | "stravaId"
+  | "type"
+  | "name"
+  | "startDate"
+  | "startDateLocal"
+  | "distance"
+  | "movingTime"
+  | "totalElevationGain"
+  | "mapPolyline"
+>;
 export type ActivityStream = InferSelectModel<typeof activityStreams>;
 export type RiderSettingsRow = InferSelectModel<typeof riderSettings>;
 export type SyncJob = InferSelectModel<typeof syncJobs>;

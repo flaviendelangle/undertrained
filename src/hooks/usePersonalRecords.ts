@@ -14,7 +14,7 @@ export function usePersonalRecords(): Map<number, string[]> {
 
   const result = trpc.records.getRecordHolders.useQuery(
     { athleteId: athleteId! },
-    { enabled: athleteId != null },
+    { enabled: athleteId != null, meta: { background: true } },
   );
 
   return React.useMemo(() => {

@@ -115,6 +115,7 @@ function EditActivityForm({
       await Promise.all([
         utils.activities.get.invalidate({ stravaId: activity.stravaId }),
         utils.activities.list.invalidate(),
+        utils.activities.maps.invalidate(),
       ]);
       onClose();
     },

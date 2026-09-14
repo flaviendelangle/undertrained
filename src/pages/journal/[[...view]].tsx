@@ -27,11 +27,8 @@ const JournalPage: NextPageWithLayout = () => {
   // so this resolves instantly without a network call.
   useActivitiesQuery();
 
-  // The reveal long pole differs by entry path: on a fresh load it's the data
-  // fetches, but on SPA navigation the data is already cached and the Journal
-  // *module* is what we're waiting on. So gate the reveal on the module being
-  // loaded; the hook then reveals once nothing is in flight (instantly when
-  // cached, or after the fetches resolve on a fresh load).
+  // Overlap module loading with data, then reveal without waiting for optional
+  // analytics, record badges, or calendar feeds.
   const [moduleReady, setModuleReady] = React.useState(false);
   React.useEffect(() => {
     let cancelled = false;
@@ -45,7 +42,11 @@ const JournalPage: NextPageWithLayout = () => {
     };
   }, []);
 
-  const ready = useInitialLoadComplete(moduleReady);
+  const ready = useInitialLoadComplete(moduleReady, 10000, [
+    "activities.list",
+    "riderSettings.get",
+    "plannedTrainings.list",
+  ]);
 
   return (
     <>

@@ -21,6 +21,7 @@ export function useMarkPlannedTrainingDone(options?: {
     onSuccess: () => {
       void utils.plannedTrainings.list.invalidate();
       void utils.activities.list.invalidate();
+      void utils.activities.maps.invalidate();
       // The activity is now spoken for; without this the pickers keep offering
       // it from cache and would link it to a second plan.
       void utils.plannedTrainings.linkedActivityIds.invalidate();

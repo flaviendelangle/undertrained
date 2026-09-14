@@ -383,9 +383,11 @@ export function SyncPanel() {
     if (isInProgress) {
       wasSyncingRef.current = true;
       void utils.activities.list.invalidate();
+      void utils.activities.maps.invalidate();
     } else if (wasSyncingRef.current) {
       wasSyncingRef.current = false;
       void utils.activities.list.invalidate();
+      void utils.activities.maps.invalidate();
       void utils.activities.get.invalidate();
       void utils.analytics.getPowerCurve.invalidate();
       void utils.analytics.getPowerCurveYears.invalidate();

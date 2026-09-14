@@ -14,7 +14,7 @@ import {
 } from "~/components/ui/field";
 import { Label } from "~/components/ui/label";
 import { showErrorToast } from "~/components/ui/toast";
-import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
+import { useActivityFilterOptions } from "~/hooks/useActivityFilterOptions";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
@@ -43,7 +43,7 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
   const t = useT();
   const athleteId = useAthleteId();
   const utils = trpc.useUtils();
-  const { allTypes: activityTypes } = useActivitiesQuery();
+  const { allTypes: activityTypes } = useActivityFilterOptions();
 
   const [form, setForm] = React.useState<TimePeriodFormData>(() => ({
     name: period?.name ?? "",
@@ -82,6 +82,7 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
       // Fire-and-forget: refresh the lists without blocking the form close.
       void utils.timePeriods.invalidate();
       void utils.activities.list.invalidate();
+      void utils.activities.maps.invalidate();
       onSuccess?.();
     },
     onError: () => showErrorToast(t("common.saveError")),

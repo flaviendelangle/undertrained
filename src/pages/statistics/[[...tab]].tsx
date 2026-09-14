@@ -60,11 +60,8 @@ const StatisticsPage: NextPageWithLayout = () => {
   // the cache is warm, so this resolves instantly without a network call.
   useActivitiesQuery({ activityTypes: [] });
 
-  // The reveal long pole differs by entry path: on a fresh load it's the data
-  // fetches, but on SPA navigation the data is already cached and the chart
-  // *modules* are what we're waiting on. So gate the reveal on the modules being
-  // loaded; the hook then reveals once nothing is in flight (instantly when
-  // cached, or after the fetches resolve on a fresh load).
+  // Overlap module loading with data, then reveal without waiting for optional
+  // analytics, record badges, or calendar feeds.
   const [modulesReady, setModulesReady] = React.useState(false);
   React.useEffect(() => {
     let cancelled = false;
@@ -78,7 +75,10 @@ const StatisticsPage: NextPageWithLayout = () => {
     };
   }, []);
 
-  const ready = useInitialLoadComplete(modulesReady);
+  const ready = useInitialLoadComplete(modulesReady, 10000, [
+    "activities.list",
+    "riderSettings.get",
+  ]);
 
   return (
     <>

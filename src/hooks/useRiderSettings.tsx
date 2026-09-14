@@ -47,6 +47,7 @@ export function RiderSettingsProvider({
       // Scores are recomputed in the background — invalidate dependent queries
       // so they refetch once recomputation finishes.
       void utils.activities.list.invalidate();
+      void utils.activities.maps.invalidate();
       void utils.analytics.getPowerCurve.invalidate();
       void utils.analytics.getPowerCurveYears.invalidate();
     },

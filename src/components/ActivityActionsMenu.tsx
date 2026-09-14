@@ -65,6 +65,7 @@ export function ActivityActionsMenu(props: ActivityActionsMenuProps) {
                 utils.activities.get.invalidate({ stravaId }),
                 utils.activityStreams.getStreams.invalidate({ stravaId }),
                 utils.activities.list.invalidate(),
+                utils.activities.maps.invalidate(),
               ]);
             } finally {
               setLoading(false);

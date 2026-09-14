@@ -12,7 +12,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 
-import type { ListActivity } from "@server/db/types";
+import type { MapActivity } from "@server/db/types";
 
 import { useExplorerTiles } from "~/hooks/useExplorerTiles";
 import { useExplorerTilesToggle } from "~/hooks/useExplorerTilesToggle";
@@ -110,7 +110,7 @@ export default function Map(props: MapProps) {
   }, [fireReadyIfDone]);
 
   const [selectedActivity, setSelectedActivity] = React.useState<{
-    activity: ListActivity;
+    activity: MapActivity;
     position: { x: number; y: number };
   } | null>(null);
 
@@ -120,7 +120,7 @@ export default function Map(props: MapProps) {
     const result: {
       id: string;
       polyline: [number, number][];
-      activity: ListActivity;
+      activity: MapActivity;
     }[] = [];
     for (const activity of activities) {
       if (activity.mapPolyline) {
@@ -241,7 +241,7 @@ export default function Map(props: MapProps) {
                       click: (e) => {
                         const { clientX, clientY } = e.originalEvent;
                         setSelectedActivity({
-                          activity: (entry as { activity: ListActivity })
+                          activity: (entry as { activity: MapActivity })
                             .activity,
                           position: { x: clientX, y: clientY },
                         });
@@ -289,7 +289,7 @@ export default function Map(props: MapProps) {
 }
 
 interface MapProps {
-  activities: ListActivity[] | null;
+  activities: MapActivity[] | null;
   /**
    * Draw every route as a thick, fully-opaque line (the single-activity look)
    * even when several routes are overlaid, instead of the faint density

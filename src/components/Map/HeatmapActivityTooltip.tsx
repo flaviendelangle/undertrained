@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import type { ListActivity } from "@server/db/types";
+import type { MapActivity } from "@server/db/types";
 
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
@@ -8,7 +8,7 @@ import { formatElapsed } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 interface HeatmapActivityTooltipProps {
-  activity: ListActivity;
+  activity: MapActivity;
   position: { x: number; y: number };
   onClose: () => void;
 }

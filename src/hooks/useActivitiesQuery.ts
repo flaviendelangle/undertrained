@@ -3,6 +3,7 @@ import { keepPreviousData } from "@tanstack/react-query";
 import { trpc } from "~/utils/trpc";
 
 import { useActivityFilter } from "./useActivityFilter";
+import { useActivityFilterOptions } from "./useActivityFilterOptions";
 import { useAthleteId } from "./useAthleteId";
 
 interface UseActivitiesQueryOptions {
@@ -35,19 +36,13 @@ export function useActivitiesQuery(options?: UseActivitiesQueryOptions) {
     { enabled: athleteId != null, placeholderData: keepPreviousData },
   );
 
-  // Filter-dropdown options depend only on the athlete, so they're a separate
-  // query keyed on athleteId alone — fetched once and shared across every
-  // `useActivitiesQuery` caller, rather than re-scanned on each filter change.
-  const filterOptions = trpc.activities.filterOptions.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  const filterOptions = useActivityFilterOptions();
 
   return {
     data: result.data?.activities,
-    allTypes: filterOptions.data?.allTypes,
-    allWorkoutTypes: filterOptions.data?.allWorkoutTypes,
+    ...filterOptions,
     isLoading: result.isLoading,
+    isFetching: result.isFetching,
     isError: result.isError,
     error: result.error,
     refetch: result.refetch,

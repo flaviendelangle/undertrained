@@ -6,19 +6,20 @@ import { useActivityFilter } from "./useActivityFilter";
 import { useAthleteId } from "./useAthleteId";
 
 export function useActivitiesWithMapQuery() {
-  const { activityTypes, workoutTypes, timePeriodId } = useActivityFilter();
+  const { activityTypes, workoutTypes, timePeriodId, hideCommutes } =
+    useActivityFilter();
   const athleteId = useAthleteId();
 
-  const result = trpc.activities.list.useQuery(
+  const result = trpc.activities.maps.useQuery(
     {
       athleteId: athleteId!,
       activityTypes,
       workoutTypes,
       timePeriodId,
-      includeMap: true,
+      hideCommutes,
     },
     { enabled: athleteId != null, placeholderData: keepPreviousData },
   );
 
-  return { data: result.data?.activities, isLoading: result.isLoading };
+  return { data: result.data, isLoading: result.isLoading };
 }

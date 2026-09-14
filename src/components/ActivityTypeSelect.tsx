@@ -1,7 +1,7 @@
 import * as React from "react";
 
 import { Label } from "~/components/ui/label";
-import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
+import { useActivityFilterOptions } from "~/hooks/useActivityFilterOptions";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 
@@ -9,7 +9,7 @@ import { Select, SelectProps } from "./primitives/Select";
 
 export function ActivityTypeSelect(props: Omit<SelectProps, "options">) {
   const t = useT();
-  const { allTypes: activityTypes } = useActivitiesQuery();
+  const { allTypes: activityTypes } = useActivityFilterOptions();
 
   const options = React.useMemo<ActivityTypeConfig[]>(() => {
     return (

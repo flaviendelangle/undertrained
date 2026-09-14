@@ -12,8 +12,8 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
-import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useActivityFilter } from "~/hooks/useActivityFilter";
+import { useActivityFilterOptions } from "~/hooks/useActivityFilterOptions";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import { sportTypeLabel } from "~/i18n/labels";
@@ -57,7 +57,7 @@ export function ActivityFilterPanel({
 } = {}) {
   const t = useT();
   const { allTypes: activityTypes, allWorkoutTypes: workoutTypes } =
-    useActivitiesQuery();
+    useActivityFilterOptions();
   const filter = useActivityFilter();
   const athleteId = useAthleteId();
   const { data: periods } = trpc.timePeriods.list.useQuery(
