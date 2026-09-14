@@ -473,6 +473,8 @@ const en = {
       wattsAxis: "Power",
       timeAxis: "Time",
       basedOnFtp: "Based on an FTP of {ftp} W.",
+      basedOnHistoricalFtp: "Based on the FTP in effect for each activity.",
+      coasting: "Coasting",
       empty: "No power data available",
       loading: "Loading power data…",
     },

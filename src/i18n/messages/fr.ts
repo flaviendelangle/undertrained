@@ -485,6 +485,8 @@ const fr: Messages = {
       wattsAxis: "Puissance",
       timeAxis: "Temps",
       basedOnFtp: "Basé sur un FTP de {ftp} W.",
+      basedOnHistoricalFtp: "Basé sur le FTP en vigueur pour chaque activité.",
+      coasting: "Roue libre",
       empty: "Aucune donnée de puissance disponible",
       loading: "Chargement des données de puissance…",
     },

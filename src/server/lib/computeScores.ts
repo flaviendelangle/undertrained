@@ -186,6 +186,8 @@ export function calculateSwimmingTSS(
  */
 export interface ZoneSecondsByMetric {
   power?: number[];
+  /** Zero-watt samples, kept separate from Z1 so coasting is not recovery. */
+  powerCoastingSeconds?: number;
   pace?: number[];
   hr?: number[];
 }
@@ -217,11 +219,12 @@ export function computeZoneSeconds(args: {
   const accumulate = (
     samples: number[],
     rampOf: (value: number) => number,
+    include: (value: number) => boolean = () => true,
   ): number[] => {
     const buckets = new Array<number>(7).fill(0);
     for (let i = 0; i < samples.length; i++) {
       const value = samples[i];
-      if (!Number.isFinite(value)) continue;
+      if (!Number.isFinite(value) || !include(value)) continue;
 
       let dtSeconds = 1;
       if (timeData && i > 0) {
@@ -240,7 +243,13 @@ export function computeZoneSeconds(args: {
     result.power = accumulate(
       args.wattsData,
       (w) => findPowerZone(w, settings.ftp).zone.ramp,
+      (w) => w > 0,
     );
+    result.powerCoastingSeconds = accumulate(
+      args.wattsData,
+      () => 0,
+      (w) => w === 0,
+    )[0];
   }
 
   // Same guard as rTSS: pace zones need real time deltas to be meaningful.

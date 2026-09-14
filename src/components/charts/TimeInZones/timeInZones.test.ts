@@ -40,6 +40,7 @@ describe("aggregateTimeInZones", () => {
     ]);
     expect(agg.rampSeconds).toEqual([60, 70, 20, 0, 0, 0, 0]);
     expect(agg.unknownSeconds).toBe(0);
+    expect(agg.coastingSeconds).toBe(0);
     expect(agg.totalSeconds).toBe(150);
     expect([...agg.metrics].sort()).toEqual(["pace", "power"]);
   });
@@ -61,6 +62,23 @@ describe("aggregateTimeInZones", () => {
     ]);
     expect(agg.unknownSeconds).toBe(20);
     expect(agg.totalSeconds).toBe(170);
+  });
+
+  it("keeps zero-watt cycling time out of Z1", () => {
+    const agg = aggregateTimeInZones([
+      {
+        type: "Ride",
+        movingTime: 100,
+        zoneSeconds: {
+          power: [70, 0, 0, 0, 0, 0, 0],
+          powerCoastingSeconds: 30,
+        },
+      },
+    ]);
+    expect(agg.rampSeconds[0]).toBe(70);
+    expect(agg.coastingSeconds).toBe(30);
+    expect(agg.unknownSeconds).toBe(0);
+    expect(agg.totalSeconds).toBe(100);
   });
 
   it("counts the whole movingTime as unknown when the metric array is missing", () => {

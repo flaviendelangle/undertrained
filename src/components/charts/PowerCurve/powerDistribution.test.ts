@@ -4,14 +4,16 @@ import { POWER_ZONES } from "~/sensors/types";
 
 import {
   computePowerSliceDistribution,
+  computePowerSliceDistributionFromFrequency,
   computePowerZoneDistribution,
 } from "./powerDistribution";
 
 describe("computePowerZoneDistribution", () => {
-  it("returns every zone (Z1→Z7) even when empty", () => {
+  it("returns coasting plus every zone (Z0→Z7) even when empty", () => {
     const buckets = computePowerZoneDistribution([], 250);
-    expect(buckets).toHaveLength(POWER_ZONES.length);
+    expect(buckets).toHaveLength(POWER_ZONES.length + 1);
     expect(buckets.map((b) => b.code)).toEqual([
+      "Z0",
       "Z1",
       "Z2",
       "Z3",
@@ -25,36 +27,42 @@ describe("computePowerZoneDistribution", () => {
 
   it("matches the Laps card zone names and ramp indices", () => {
     const buckets = computePowerZoneDistribution([], 250);
-    expect(buckets.map((b) => b.name)).toEqual(POWER_ZONES.map((z) => z.name));
+    expect(buckets.slice(1).map((b) => b.name)).toEqual(
+      POWER_ZONES.map((z) => z.name),
+    );
     // The bucket index doubles as the zone-ramp index (identity for power).
-    expect(buckets.map((b) => b.index)).toEqual(POWER_ZONES.map((z) => z.ramp));
+    expect(buckets.slice(1).map((b) => b.index)).toEqual(
+      POWER_ZONES.map((z) => z.ramp),
+    );
   });
 
   it("counts one second per sample into the right zone", () => {
     // FTP 250 → Z1 < 137.5, Z2 < 187.5, Z6 < 375, Z7 ≥ 375.
     const watts = [0, 100, 100, 160, 400];
     const buckets = computePowerZoneDistribution(watts, 250);
-    expect(buckets[0].seconds).toBe(3); // 0, 100, 100 → recovery
-    expect(buckets[1].seconds).toBe(1); // 160 → endurance
-    expect(buckets[6].seconds).toBe(1); // 400 → neuromuscular
+    expect(buckets[0].seconds).toBe(1); // 0 → coasting
+    expect(buckets[1].seconds).toBe(2); // 100, 100 → recovery
+    expect(buckets[2].seconds).toBe(1); // 160 → endurance
+    expect(buckets[7].seconds).toBe(1); // 400 → neuromuscular
     const total = buckets.reduce((sum, b) => sum + b.seconds, 0);
     expect(total).toBe(watts.length);
   });
 
   it("derives non-overlapping watt ranges from FTP", () => {
     const buckets = computePowerZoneDistribution([], 250);
-    expect(buckets[0].lowerWatts).toBe(0);
+    expect(buckets[0]).toMatchObject({ lowerWatts: 0, upperWatts: 0 });
+    expect(buckets[1].lowerWatts).toBe(1);
     // Z1 upper = round(0.55 * 250) = 138; Z2 lower = 139 (no overlap).
-    expect(buckets[0].upperWatts).toBe(138);
-    expect(buckets[1].lowerWatts).toBe(139);
+    expect(buckets[1].upperWatts).toBe(138);
+    expect(buckets[2].lowerWatts).toBe(139);
     // Top zone is open-ended.
-    expect(buckets[6].upperWatts).toBeNull();
+    expect(buckets[7].upperWatts).toBeNull();
   });
 
   it("ignores non-finite samples", () => {
     const buckets = computePowerZoneDistribution([NaN, 100, 500], 250);
-    expect(buckets[0].seconds).toBe(1); // 100 → recovery
-    expect(buckets[6].seconds).toBe(1); // 500 → neuromuscular
+    expect(buckets[1].seconds).toBe(1); // 100 → recovery
+    expect(buckets[7].seconds).toBe(1); // 500 → neuromuscular
     expect(buckets.reduce((sum, b) => sum + b.seconds, 0)).toBe(2);
   });
 
@@ -65,6 +73,19 @@ describe("computePowerZoneDistribution", () => {
 });
 
 describe("computePowerSliceDistribution", () => {
+  it("buckets compact frequency data without expanding every second", () => {
+    const slices = computePowerSliceDistributionFromFrequency(
+      [
+        { watts: 0, seconds: 30 },
+        { watts: 24, seconds: 10 },
+        { watts: 50, seconds: 5 },
+      ],
+      25,
+      250,
+    );
+    expect(slices.map((slice) => slice.seconds)).toEqual([40, 0, 5]);
+  });
+
   it("buckets samples by slice width and keeps interior gaps", () => {
     // 25 W slices: 10,20 → [0,25); 60 → [50,75). The [25,50) slice stays empty.
     const slices = computePowerSliceDistribution([10, 20, 60], 25, 250);

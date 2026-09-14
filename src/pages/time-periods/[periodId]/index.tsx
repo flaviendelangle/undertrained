@@ -159,6 +159,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
             {hasPower && powerActivityTypes.length > 0 && (
               <PowerCurve
                 activityTypes={powerActivityTypes}
+                timePeriodId={periodId}
                 defaultRanges={[
                   {
                     id: `period-${period.id}`,

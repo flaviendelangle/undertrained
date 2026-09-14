@@ -126,6 +126,7 @@ interface PowerCurveProps {
   workoutTypes?: number[];
   stravaId?: number;
   defaultRanges?: PowerCurveDateRange[];
+  timePeriodId?: number;
 }
 
 // --- Component ---
@@ -135,6 +136,7 @@ const PowerCurve = React.memo(function PowerCurve({
   workoutTypes,
   stravaId,
   defaultRanges,
+  timePeriodId,
 }: PowerCurveProps) {
   if (stravaId != null) {
     return <SingleActivityPowerCurve stravaId={stravaId} />;
@@ -145,6 +147,7 @@ const PowerCurve = React.memo(function PowerCurve({
       activityTypes={activityTypes}
       workoutTypes={workoutTypes}
       defaultRanges={defaultRanges}
+      timePeriodId={timePeriodId}
     />
   );
 });
@@ -698,10 +701,12 @@ function AggregatedPowerCurve({
   activityTypes,
   workoutTypes: workoutTypesProp,
   defaultRanges,
+  timePeriodId,
 }: {
   activityTypes?: string[];
   workoutTypes?: number[];
   defaultRanges?: PowerCurveDateRange[];
+  timePeriodId?: number;
 }) {
   const t = useT();
   const tokens = useChartTokens();
@@ -718,7 +723,48 @@ function AggregatedPowerCurve({
     [defaultRanges],
   );
   const [mode, setMode] = React.useState<PowerCurveMode>("watts");
+  const [tab, setTab] = React.useState<Exclude<PowerTab, "timeline">>("curve");
+  const [sliceWidth, setSliceWidth] = usePowerSliceWidth();
   const { resolveForDate } = useRiderSettingsTimeline();
+
+  const periodActivities = trpc.activities.list.useQuery(
+    {
+      athleteId: athleteId!,
+      activityTypes: activityTypes ?? [],
+      timePeriodId: timePeriodId!,
+    },
+    { enabled: athleteId != null && timePeriodId != null && tab === "zones" },
+  );
+  const periodDistribution = trpc.analytics.getPowerDistribution.useQuery(
+    {
+      athleteId: athleteId!,
+      activityTypes,
+      timePeriodId: timePeriodId!,
+    },
+    {
+      enabled:
+        athleteId != null && timePeriodId != null && tab === "distribution",
+    },
+  );
+
+  const periodZones = React.useMemo(() => {
+    const seconds = new Array<number>(7).fill(0);
+    let coastingSeconds = 0;
+    for (const activity of periodActivities.data?.activities ?? []) {
+      const power = activity.zoneSeconds?.power;
+      if (!power) continue;
+      for (let i = 0; i < seconds.length; i++) {
+        seconds[i] += power[i] ?? 0;
+      }
+      coastingSeconds += activity.zoneSeconds?.powerCoastingSeconds ?? 0;
+    }
+    return { seconds, coastingSeconds };
+  }, [periodActivities.data]);
+
+  const periodFtp = React.useMemo(() => {
+    const date = defaultRanges?.[0]?.dateTo ?? formatDateOnly(new Date());
+    return resolveForDate(date).ftp;
+  }, [defaultRanges, resolveForDate]);
 
   const addRange = (range: DateRange) => {
     setRanges((prev) => {
@@ -820,7 +866,23 @@ function AggregatedPowerCurve({
     };
   }, [queryResults, ranges, tokens.palette, resolveForDate, t]);
 
-  const toolbar = (
+  const toolbar = timePeriodId ? (
+    <PeriodPowerToolbar
+      tab={tab}
+      onTabChange={setTab}
+      ranges={ranges}
+      onAddRange={addRange}
+      onRemoveRange={removeRange}
+      lockedRangeIds={lockedRangeIds}
+      athleteId={athleteId}
+      activityTypes={activityTypes}
+      workoutTypes={workoutTypes}
+      mode={mode}
+      onModeChange={setMode}
+      sliceWidth={sliceWidth}
+      onSliceWidthChange={setSliceWidth}
+    />
+  ) : (
     <Toolbar
       ranges={ranges}
       onAddPreset={addRange}
@@ -835,23 +897,171 @@ function AggregatedPowerCurve({
     />
   );
 
-  if (xData.length === 0) {
-    return (
-      <ChartCard title={t("charts.powerCurve.cardTitle")} actions={toolbar}>
-        <ChartMessage>{t("charts.powerCurve.empty")}</ChartMessage>
-      </ChartCard>
-    );
-  }
-
   return (
     <ChartCard title={t("charts.powerCurve.cardTitle")} actions={toolbar}>
-      <PowerCurveWebGLChart
-        xData={xData}
-        series={series}
-        activityMetadata={activityMetadata}
-        mode={mode}
-      />
+      {(!timePeriodId || tab === "curve") &&
+        (xData.length === 0 ? (
+          <ChartMessage>{t("charts.powerCurve.empty")}</ChartMessage>
+        ) : (
+          <PowerCurveWebGLChart
+            xData={xData}
+            series={series}
+            activityMetadata={activityMetadata}
+            mode={mode}
+          />
+        ))}
+      {timePeriodId &&
+        tab === "zones" &&
+        (periodActivities.isLoading ? (
+          <StreamLoading />
+        ) : (
+          <PowerZoneDistribution
+            watts={[]}
+            ftp={periodFtp}
+            zoneSeconds={periodZones.seconds}
+            coastingSeconds={periodZones.coastingSeconds}
+            aggregate
+          />
+        ))}
+      {timePeriodId &&
+        tab === "distribution" &&
+        (periodDistribution.isLoading ? (
+          <StreamLoading />
+        ) : (
+          <PowerSliceDistribution
+            watts={[]}
+            frequency={periodDistribution.data ?? []}
+            ftp={periodFtp}
+            sliceWidth={clampSliceWidth(sliceWidth)}
+            weightedAverageWatts={null}
+          />
+        ))}
     </ChartCard>
+  );
+}
+
+function PeriodPowerToolbar(props: {
+  tab: Exclude<PowerTab, "timeline">;
+  onTabChange: (tab: Exclude<PowerTab, "timeline">) => void;
+  ranges: DateRange[];
+  onAddRange: (range: DateRange) => void;
+  onRemoveRange: (id: string) => void;
+  lockedRangeIds?: Set<string>;
+  athleteId: number | null | undefined;
+  activityTypes?: string[];
+  workoutTypes?: number[];
+  mode: PowerCurveMode;
+  onModeChange: (mode: PowerCurveMode) => void;
+  sliceWidth: number;
+  onSliceWidthChange: (width: number) => void;
+}) {
+  const t = useT();
+  const tokens = useChartTokens();
+  const settings =
+    props.tab === "curve" ? (
+      <>
+        <ResponsivePopoverHeader>
+          <ResponsivePopoverTitle>
+            {t("charts.power.curveSettings")}
+          </ResponsivePopoverTitle>
+        </ResponsivePopoverHeader>
+        <div className="flex flex-col gap-1.5">
+          <Label>{t("charts.power.unit")}</Label>
+          <ModeToggle mode={props.mode} onModeChange={props.onModeChange} />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label>{t("charts.powerCurve.dateRanges")}</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {props.ranges.map((range, index) => (
+              <RangeChip
+                key={range.id}
+                range={range}
+                color={tokens.palette[index % tokens.palette.length]}
+                onRemove={() => props.onRemoveRange(range.id)}
+                removable={!props.lockedRangeIds?.has(range.id)}
+              />
+            ))}
+            <PresetSelect
+              onSelect={props.onAddRange}
+              athleteId={props.athleteId}
+              activityTypes={props.activityTypes}
+              workoutTypes={props.workoutTypes}
+            />
+            <CustomRangePopover onAdd={props.onAddRange} />
+          </div>
+        </div>
+      </>
+    ) : props.tab === "distribution" ? (
+      <DistributionSettings
+        sliceWidth={props.sliceWidth}
+        onSliceWidthChange={props.onSliceWidthChange}
+      />
+    ) : null;
+
+  const tabOptions = [
+    {
+      value: "curve" as const,
+      tooltip: t("charts.power.tabCurve"),
+      label: (
+        <>
+          <TrendingUpIcon className="size-4" />
+          <span className="sr-only">{t("charts.power.tabCurve")}</span>
+        </>
+      ),
+    },
+    {
+      value: "zones" as const,
+      tooltip: t("charts.power.tabZones"),
+      label: (
+        <>
+          <LayersIcon className="size-4" />
+          <span className="sr-only">{t("charts.power.tabZones")}</span>
+        </>
+      ),
+    },
+    {
+      value: "distribution" as const,
+      tooltip: t("charts.power.tabDistribution"),
+      label: (
+        <>
+          <BarChart3Icon className="size-4" />
+          <span className="sr-only">{t("charts.power.tabDistribution")}</span>
+        </>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <div className="flex-1" />
+      {settings && (
+        <ResponsivePopover>
+          <ResponsivePopoverTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground size-6"
+                aria-label={t("charts.power.settings")}
+              >
+                <SlidersHorizontalIcon className="size-4" />
+              </Button>
+            }
+          />
+          <ResponsivePopoverContent
+            align="end"
+            className="flex flex-col gap-4 sm:w-72"
+          >
+            {settings}
+          </ResponsivePopoverContent>
+        </ResponsivePopover>
+      )}
+      <SegmentedToggle
+        value={props.tab}
+        onChange={props.onTabChange}
+        options={tabOptions}
+      />
+    </>
   );
 }
 

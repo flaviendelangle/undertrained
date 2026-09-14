@@ -46,7 +46,7 @@ export default function TimeInZones() {
     [activitiesQuery.allTypes],
   );
 
-  const { rows, unknownSeconds, totalSeconds, maxSeconds } =
+  const { rows, unknownSeconds, coastingSeconds, totalSeconds, maxSeconds } =
     React.useMemo(() => {
       const spanStart = startOf(new Date(), timeSpan);
       const spanActivities = (activitiesQuery.activities ?? []).filter((a) => {
@@ -59,11 +59,13 @@ export default function TimeInZones() {
       const maxSeconds = Math.max(
         1,
         agg.unknownSeconds,
+        agg.coastingSeconds,
         ...rows.map((row) => row.seconds),
       );
       return {
         rows,
         unknownSeconds: agg.unknownSeconds,
+        coastingSeconds: agg.coastingSeconds,
         totalSeconds: agg.totalSeconds,
         maxSeconds,
       };
@@ -202,6 +204,14 @@ export default function TimeInZones() {
                 tokens.zones[row.ramp],
               ),
             )}
+            {coastingSeconds > 0 &&
+              renderRow(
+                "coasting",
+                "Z0",
+                t("charts.power.coasting"),
+                coastingSeconds,
+                tokens.gridStrong.hex,
+              )}
             {unknownSeconds > 0 &&
               renderRow(
                 "unknown",

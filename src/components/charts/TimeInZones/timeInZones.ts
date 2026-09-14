@@ -11,7 +11,7 @@ import { HR_ZONES, POWER_ZONES } from "~/sensors/types";
 import type { ZoneSecondsByMetric } from "~/server/lib/computeScores";
 import { getSportConfig } from "~/utils/sportConfig";
 
-export type ZoneMetric = keyof ZoneSecondsByMetric;
+export type ZoneMetric = "power" | "pace" | "hr";
 
 export type ZoneTimeSpan = "week" | "month" | "year";
 
@@ -46,6 +46,8 @@ export interface TimeInZonesAggregate {
   rampSeconds: number[];
   /** Time from activities whose zone metric is missing. */
   unknownSeconds: number;
+  /** Zero-watt cycling time, separate from power Z1. */
+  coastingSeconds: number;
   /** Denominator for percentages: zones + unknown. */
   totalSeconds: number;
   /** Metrics that actually contributed — drives row labels. */
@@ -57,6 +59,7 @@ export function aggregateTimeInZones(
 ): TimeInZonesAggregate {
   const rampSeconds = new Array<number>(RAMP_COUNT).fill(0);
   let unknownSeconds = 0;
+  let coastingSeconds = 0;
   const metrics = new Set<ZoneMetric>();
 
   for (const activity of activities) {
@@ -70,6 +73,9 @@ export function aggregateTimeInZones(
     }
 
     metrics.add(metric);
+    if (metric === "power") {
+      coastingSeconds += activity.zoneSeconds?.powerCoastingSeconds ?? 0;
+    }
     let inZones = 0;
     for (let ramp = 0; ramp < RAMP_COUNT; ramp++) {
       const seconds = zones[ramp] ?? 0;
@@ -79,13 +85,28 @@ export function aggregateTimeInZones(
     // Zone time comes from time-stream deltas (≈ elapsed) and can exceed
     // movingTime, hence the clamp; percentages use zones + unknown as the
     // denominator so they stay consistent either way.
-    unknownSeconds += Math.max(0, activity.movingTime - inZones);
+    unknownSeconds += Math.max(
+      0,
+      activity.movingTime -
+        inZones -
+        (metric === "power"
+          ? (activity.zoneSeconds?.powerCoastingSeconds ?? 0)
+          : 0),
+    );
   }
 
   const totalSeconds =
-    rampSeconds.reduce((acc, s) => acc + s, 0) + unknownSeconds;
+    rampSeconds.reduce((acc, s) => acc + s, 0) +
+    coastingSeconds +
+    unknownSeconds;
 
-  return { rampSeconds, unknownSeconds, totalSeconds, metrics };
+  return {
+    rampSeconds,
+    unknownSeconds,
+    coastingSeconds,
+    totalSeconds,
+    metrics,
+  };
 }
 
 export interface TimeInZoneRow {

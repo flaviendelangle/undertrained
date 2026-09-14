@@ -15,9 +15,9 @@
 import { POWER_ZONES, findPowerZone } from "~/sensors/types";
 
 export interface PowerZoneBucket {
-  /** Index into {@link POWER_ZONES} (0 = Z1); also the zone-ramp index. */
-  index: number;
-  /** Short code, e.g. `"Z1"`. */
+  /** Index into {@link POWER_ZONES}; null for the zero-watt coasting bucket. */
+  index: number | null;
+  /** Short code, e.g. `"Z0"` or `"Z1"`. */
   code: string;
   /** Zone name, identical to the Laps card. */
   name: string;
@@ -49,8 +49,8 @@ function zoneBoundaries(ftp: number): number[] {
 
 /**
  * Seconds spent in each power zone for a watts stream, classified exactly like
- * the Laps card (`findPowerZone`). Coasting/zero-power samples fall into Z1.
- * Returns one bucket per zone in ascending order (Z1 → Z7), always all zones
+ * the Laps card (`findPowerZone`). Zero-power samples get their own Z0 bucket.
+ * Returns one bucket per zone in ascending order (Z0 → Z7), always all zones
  * (empty ones included) so callers can render a stable table.
  */
 export function computePowerZoneDistribution(
@@ -58,10 +58,15 @@ export function computePowerZoneDistribution(
   ftp: number,
 ): PowerZoneBucket[] {
   const seconds = new Array<number>(POWER_ZONES.length).fill(0);
+  let coastingSeconds = 0;
 
   if (ftp > 0) {
     for (const w of watts) {
       if (!Number.isFinite(w)) continue;
+      if (w === 0) {
+        coastingSeconds += 1;
+        continue;
+      }
       const { index } = findPowerZone(Math.max(0, w), ftp);
       seconds[index] += 1;
     }
@@ -70,14 +75,61 @@ export function computePowerZoneDistribution(
   const bounds = zoneBoundaries(ftp);
   const lastIndex = POWER_ZONES.length - 1;
 
-  return POWER_ZONES.map((zone, i) => ({
+  const zones = POWER_ZONES.map((zone, i) => ({
     index: i,
     code: `Z${i + 1}`,
     name: zone.name,
-    lowerWatts: i === 0 ? 0 : bounds[i - 1] + 1,
+    lowerWatts: i === 0 ? 1 : bounds[i - 1] + 1,
     upperWatts: i < lastIndex ? bounds[i] : null,
     seconds: seconds[i],
   }));
+
+  return [
+    {
+      index: null,
+      code: "Z0",
+      name: "Coasting",
+      lowerWatts: 0,
+      upperWatts: 0,
+      seconds: coastingSeconds,
+    },
+    ...zones,
+  ];
+}
+
+export interface PowerFrequency {
+  watts: number;
+  seconds: number;
+}
+
+/** Builds fixed-width histogram slices from an already aggregated frequency table. */
+export function computePowerSliceDistributionFromFrequency(
+  frequency: readonly PowerFrequency[],
+  sliceWidth: number,
+  ftp: number,
+): PowerSliceBucket[] {
+  if (sliceWidth <= 0) return [];
+
+  const secondsByBucket = new Map<number, number>();
+  let maxBucket = -1;
+  for (const entry of frequency) {
+    if (
+      !Number.isFinite(entry.watts) ||
+      entry.watts < 0 ||
+      !Number.isFinite(entry.seconds) ||
+      entry.seconds <= 0
+    ) {
+      continue;
+    }
+    const bucket = Math.floor(entry.watts / sliceWidth);
+    secondsByBucket.set(
+      bucket,
+      (secondsByBucket.get(bucket) ?? 0) + entry.seconds,
+    );
+    if (bucket > maxBucket) maxBucket = bucket;
+  }
+
+  return buildPowerSlices(secondsByBucket, maxBucket, sliceWidth, ftp);
 }
 
 /**
@@ -104,6 +156,15 @@ export function computePowerSliceDistribution(
     if (bucket > maxBucket) maxBucket = bucket;
   }
 
+  return buildPowerSlices(secondsByBucket, maxBucket, sliceWidth, ftp);
+}
+
+function buildPowerSlices(
+  secondsByBucket: ReadonlyMap<number, number>,
+  maxBucket: number,
+  sliceWidth: number,
+  ftp: number,
+): PowerSliceBucket[] {
   const slices: PowerSliceBucket[] = [];
   for (let bucket = 0; bucket <= maxBucket; bucket++) {
     const lowerWatts = bucket * sliceWidth;

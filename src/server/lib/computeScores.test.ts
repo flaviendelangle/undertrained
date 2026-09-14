@@ -39,7 +39,8 @@ describe("computeZoneSeconds", () => {
       hasPowerMetrics: true,
       wattsData: [0, 100, 100, 160, 400],
     });
-    expect(result?.power).toEqual([3, 1, 0, 0, 0, 0, 1]);
+    expect(result?.power).toEqual([2, 1, 0, 0, 0, 0, 1]);
+    expect(result?.powerCoastingSeconds).toBe(1);
     expect(result?.pace).toBeUndefined();
     expect(result?.hr).toBeUndefined();
   });
@@ -53,6 +54,7 @@ describe("computeZoneSeconds", () => {
     });
     // First sample has no previous delta → 1 s; then 5 s and 10 s.
     expect(result?.power).toEqual([6, 0, 0, 0, 0, 0, 10]);
+    expect(result?.powerCoastingSeconds).toBe(0);
   });
 
   it("skips non-positive and non-finite time deltas", () => {

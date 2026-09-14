@@ -12,6 +12,12 @@ interface PowerZoneDistributionProps {
   watts: number[];
   /** FTP in effect on the activity's date — drives the zone boundaries. */
   ftp: number;
+  /** Pre-aggregated Z1-Z7 seconds, used by date-range cards. */
+  zoneSeconds?: readonly number[];
+  /** Pre-aggregated zero-watt seconds, used by date-range cards. */
+  coastingSeconds?: number;
+  /** Zone totals were computed with each activity's date-specific FTP. */
+  aggregate?: boolean;
 }
 
 /**
@@ -22,12 +28,23 @@ interface PowerZoneDistributionProps {
 export function PowerZoneDistribution({
   watts,
   ftp,
+  zoneSeconds,
+  coastingSeconds = 0,
+  aggregate = false,
 }: PowerZoneDistributionProps) {
   const t = useT();
   const tokens = useChartTokens();
 
   const { rows, total, maxSeconds } = React.useMemo(() => {
-    const buckets = computePowerZoneDistribution(watts, ftp);
+    const buckets = computePowerZoneDistribution(watts, ftp).map((bucket) => ({
+      ...bucket,
+      seconds:
+        zoneSeconds == null
+          ? bucket.seconds
+          : bucket.index == null
+            ? coastingSeconds
+            : (zoneSeconds[bucket.index] ?? 0),
+    }));
     let total = 0;
     let maxSeconds = 1;
     for (const b of buckets) {
@@ -36,9 +53,9 @@ export function PowerZoneDistribution({
     }
     // Highest zone first, mirroring the reference layout.
     return { rows: [...buckets].reverse(), total, maxSeconds };
-  }, [watts, ftp]);
+  }, [watts, ftp, zoneSeconds, coastingSeconds]);
 
-  if (watts.length === 0 || total === 0) {
+  if ((watts.length === 0 && zoneSeconds == null) || total === 0) {
     return <ChartMessage>{t("charts.power.empty")}</ChartMessage>;
   }
 
@@ -49,9 +66,11 @@ export function PowerZoneDistribution({
           const pct = total > 0 ? (bucket.seconds / total) * 100 : 0;
           const barPct = (bucket.seconds / maxSeconds) * 100;
           const range =
-            bucket.upperWatts == null
-              ? `${bucket.lowerWatts}+ W`
-              : `${bucket.lowerWatts}–${bucket.upperWatts} W`;
+            bucket.code === "Z0"
+              ? "0 W"
+              : bucket.upperWatts == null
+                ? `${bucket.lowerWatts}+ W`
+                : `${bucket.lowerWatts}–${bucket.upperWatts} W`;
 
           return (
             <div
@@ -62,8 +81,14 @@ export function PowerZoneDistribution({
                 {bucket.code}
               </span>
               <div className="flex min-w-0 shrink-0 basis-28 flex-col leading-tight sm:basis-40">
-                <span className="truncate font-medium">{bucket.name}</span>
-                <span className="text-muted-foreground text-xs">{range}</span>
+                <span className="truncate font-medium">
+                  {bucket.code === "Z0"
+                    ? t("charts.power.coasting")
+                    : bucket.name}
+                </span>
+                {!aggregate && (
+                  <span className="text-muted-foreground text-xs">{range}</span>
+                )}
               </div>
               <span className="w-14 shrink-0 text-right font-mono text-sm font-semibold tabular-nums">
                 {formatElapsed(bucket.seconds)}
@@ -76,7 +101,10 @@ export function PowerZoneDistribution({
                   className="h-full rounded"
                   style={{
                     width: `${barPct}%`,
-                    backgroundColor: tokens.zones[bucket.index],
+                    backgroundColor:
+                      bucket.index == null
+                        ? tokens.gridStrong.hex
+                        : tokens.zones[bucket.index],
                   }}
                 />
               </div>
@@ -85,7 +113,9 @@ export function PowerZoneDistribution({
         })}
       </div>
       <div className="border-border text-muted-foreground shrink-0 border-t px-4 py-2 text-xs md:border-t-0">
-        {t("charts.power.basedOnFtp", { ftp: Math.round(ftp) })}
+        {aggregate
+          ? t("charts.power.basedOnHistoricalFtp")
+          : t("charts.power.basedOnFtp", { ftp: Math.round(ftp) })}
       </div>
     </div>
   );

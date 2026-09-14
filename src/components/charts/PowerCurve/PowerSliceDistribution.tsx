@@ -28,8 +28,10 @@ import {
   ChartTooltipSurface,
 } from "../ChartTooltipSurface";
 import {
+  type PowerFrequency,
   type PowerSliceBucket,
   computePowerSliceDistribution,
+  computePowerSliceDistributionFromFrequency,
 } from "./powerDistribution";
 
 const WATTS_AXIS_ID = "watts";
@@ -39,6 +41,8 @@ const BAR_GAP_PX = 1;
 interface PowerSliceDistributionProps {
   /** Per-second watts samples for the activity. */
   watts: number[];
+  /** Aggregated exact-watt counts for a date range. */
+  frequency?: readonly PowerFrequency[];
   /** FTP in effect on the activity's date — colours each slice by its zone. */
   ftp: number;
   /** Histogram bar width, in watts. */
@@ -62,6 +66,7 @@ interface HoverState {
  */
 export function PowerSliceDistribution({
   watts,
+  frequency,
   ftp,
   sliceWidth,
   weightedAverageWatts,
@@ -79,11 +84,13 @@ export function PowerSliceDistribution({
   // Fold the totals into the same memo so they aren't recomputed on every
   // hover-driven re-render (only when the underlying data/width/ftp change).
   const { slices, total, maxWatts, maxSeconds } = React.useMemo(() => {
-    const buckets = computePowerSliceDistribution(
-      watts,
-      deferredSliceWidth,
-      ftp,
-    );
+    const buckets = frequency
+      ? computePowerSliceDistributionFromFrequency(
+          frequency,
+          deferredSliceWidth,
+          ftp,
+        )
+      : computePowerSliceDistribution(watts, deferredSliceWidth, ftp);
     let total = 0;
     let maxSeconds = 0;
     for (const s of buckets) {
@@ -93,9 +100,13 @@ export function PowerSliceDistribution({
     const maxWatts =
       buckets.length > 0 ? buckets[buckets.length - 1].upperWatts : 0;
     return { slices: buckets, total, maxWatts, maxSeconds };
-  }, [watts, deferredSliceWidth, ftp]);
+  }, [watts, frequency, deferredSliceWidth, ftp]);
 
-  if (watts.length === 0 || total === 0 || maxSeconds <= 0) {
+  if (
+    (watts.length === 0 && frequency == null) ||
+    total === 0 ||
+    maxSeconds <= 0
+  ) {
     return <ChartMessage>{t("charts.power.empty")}</ChartMessage>;
   }
 
