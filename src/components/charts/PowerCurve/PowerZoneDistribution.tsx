@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import { formatElapsed } from "~/utils/format";
@@ -82,9 +83,9 @@ export function PowerZoneDistribution({
               </span>
               <div className="flex min-w-0 shrink-0 basis-28 flex-col leading-tight sm:basis-40">
                 <span className="truncate font-medium">
-                  {bucket.code === "Z0"
+                  {bucket.index == null
                     ? t("charts.power.coasting")
-                    : bucket.name}
+                    : powerZoneLabel(bucket.index, t)}
                 </span>
                 {!aggregate && (
                   <span className="text-muted-foreground text-xs">{range}</span>

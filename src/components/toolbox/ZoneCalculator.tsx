@@ -21,6 +21,7 @@ import {
 } from "~/components/ui/tooltip";
 import { useRiderSettings } from "~/hooks/useRiderSettings";
 import { type AppMessageKey, type TFunction } from "~/i18n/I18nProvider";
+import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import {
@@ -582,7 +583,7 @@ function PowerZonesTable({
                     <span>Z{i + 1}</span>
                   </div>
                 </ToolboxTableCell>
-                <ToolboxTableCell>{zone.name}</ToolboxTableCell>
+                <ToolboxTableCell>{powerZoneLabel(i, t)}</ToolboxTableCell>
                 <ToolboxTableCell className="text-muted-foreground tabular-nums">
                   {maxPctLabel != null
                     ? `${minPctLabel}–${maxPctLabel}%`

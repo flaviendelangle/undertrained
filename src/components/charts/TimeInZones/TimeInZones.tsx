@@ -14,6 +14,7 @@ import {
 } from "~/components/ui/responsive-popover";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useActivitiesFilteredByType } from "~/hooks/useActivitiesFilteredByType";
+import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import { startOf } from "~/utils/dateUtils";
@@ -46,30 +47,37 @@ export default function TimeInZones() {
     [activitiesQuery.allTypes],
   );
 
-  const { rows, unknownSeconds, coastingSeconds, totalSeconds, maxSeconds } =
-    React.useMemo(() => {
-      const spanStart = startOf(new Date(), timeSpan);
-      const spanActivities = (activitiesQuery.activities ?? []).filter((a) => {
-        const date = new Date(a.startDate);
-        return isValid(date) && date >= spanStart;
-      });
+  const {
+    rows,
+    powerOnly,
+    unknownSeconds,
+    coastingSeconds,
+    totalSeconds,
+    maxSeconds,
+  } = React.useMemo(() => {
+    const spanStart = startOf(new Date(), timeSpan);
+    const spanActivities = (activitiesQuery.activities ?? []).filter((a) => {
+      const date = new Date(a.startDate);
+      return isValid(date) && date >= spanStart;
+    });
 
-      const agg = aggregateTimeInZones(spanActivities);
-      const rows = buildZoneRows(agg);
-      const maxSeconds = Math.max(
-        1,
-        agg.unknownSeconds,
-        agg.coastingSeconds,
-        ...rows.map((row) => row.seconds),
-      );
-      return {
-        rows,
-        unknownSeconds: agg.unknownSeconds,
-        coastingSeconds: agg.coastingSeconds,
-        totalSeconds: agg.totalSeconds,
-        maxSeconds,
-      };
-    }, [activitiesQuery.activities, timeSpan]);
+    const agg = aggregateTimeInZones(spanActivities);
+    const rows = buildZoneRows(agg);
+    const maxSeconds = Math.max(
+      1,
+      agg.unknownSeconds,
+      agg.coastingSeconds,
+      ...rows.map((row) => row.seconds),
+    );
+    return {
+      rows,
+      powerOnly: agg.metrics.size === 1 && agg.metrics.has("power"),
+      unknownSeconds: agg.unknownSeconds,
+      coastingSeconds: agg.coastingSeconds,
+      totalSeconds: agg.totalSeconds,
+      maxSeconds,
+    };
+  }, [activitiesQuery.activities, timeSpan]);
 
   const timeSpanOptions = React.useMemo(
     () =>
@@ -199,7 +207,7 @@ export default function TimeInZones() {
               renderRow(
                 row.code,
                 row.code,
-                row.name,
+                powerOnly ? powerZoneLabel(row.ramp, t) : row.name,
                 row.seconds,
                 tokens.zones[row.ramp],
               ),

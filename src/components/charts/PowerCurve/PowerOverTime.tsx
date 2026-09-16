@@ -13,6 +13,7 @@ import {
 } from "@mui/x-charts-pro";
 
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { findPowerZone } from "~/sensors/types";
@@ -343,8 +344,9 @@ function ZonePowerArea(props: {
 
 /** Fixed-position tooltip following the cursor, styled like the slice one. */
 function PowerTooltip({ hover, ftp }: { hover: HoverState; ftp: number }) {
+  const t = useT();
   const tokens = useChartTokens();
-  const { zone } = findPowerZone(hover.watts, ftp);
+  const { zone, index } = findPowerZone(hover.watts, ftp);
   return (
     <div
       style={{ position: "fixed", left: hover.x, top: hover.y - 12 }}
@@ -355,7 +357,11 @@ function PowerTooltip({ hover, ftp }: { hover: HoverState; ftp: number }) {
         <ChartTooltipRow
           color={tokens.zones[zone.ramp]}
           value={`${Math.round(hover.watts)} W`}
-          trailing={<span className="text-muted-foreground">{zone.name}</span>}
+          trailing={
+            <span className="text-muted-foreground">
+              {powerZoneLabel(index, t)}
+            </span>
+          }
         />
       </ChartTooltipSurface>
     </div>

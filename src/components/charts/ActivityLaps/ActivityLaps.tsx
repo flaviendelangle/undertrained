@@ -22,6 +22,8 @@ import {
 } from "~/components/ui/table";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import type { TFunction } from "~/i18n/I18nProvider";
+import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { findRunningPaceZone } from "~/sensors/paceZones";
@@ -180,13 +182,16 @@ export default function ActivityLaps(props: ActivityLapsProps) {
     // lap's raw average speed, exactly as Strava reports it.
     const value = usePower ? (lap.averageWatts ?? 0) : lap.averageSpeed;
 
-    const zone = resolveLapZone({
-      value,
-      usePower,
-      isRunning,
-      settings,
-      averageHeartrate: lap.averageHeartrate ?? null,
-    });
+    const zone = resolveLapZone(
+      {
+        value,
+        usePower,
+        isRunning,
+        settings,
+        averageHeartrate: lap.averageHeartrate ?? null,
+      },
+      t,
+    );
 
     return {
       name: lap.name,
@@ -505,17 +510,21 @@ function LapTooltip({ hover }: { hover: HoverState }) {
  * - running → intervals.icu pace zones vs the run threshold pace (value is GAP),
  * - otherwise / when the primary metric is missing → heart-rate zones (Karvonen).
  */
-function resolveLapZone(opts: {
-  value: number;
-  usePower: boolean;
-  isRunning: boolean;
-  settings: RiderSettings;
-  averageHeartrate: number | null;
-}): { name: string; ramp: number } | null {
+function resolveLapZone(
+  opts: {
+    value: number;
+    usePower: boolean;
+    isRunning: boolean;
+    settings: RiderSettings;
+    averageHeartrate: number | null;
+  },
+  t: TFunction,
+): { name: string; ramp: number } | null {
   const { value, usePower, isRunning, settings, averageHeartrate } = opts;
 
   if (usePower && settings.ftp > 0 && value > 0) {
-    return findPowerZone(value, settings.ftp).zone;
+    const { zone, index } = findPowerZone(value, settings.ftp);
+    return { ...zone, name: powerZoneLabel(index, t) };
   }
   if (isRunning && settings.runThresholdPace > 0 && value > 0) {
     return findRunningPaceZone(value, settings.runThresholdPace);
