@@ -34,7 +34,6 @@ import {
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { useT } from "~/i18n/useT";
-import { isStructuredWorkoutsEnabled } from "~/lib/features";
 import { cn } from "~/lib/utils";
 
 import { NavBarContext } from "./NavBarContext";
@@ -222,15 +221,13 @@ export function NavBar() {
               href="/time-periods"
             />
           </TooltipIfMenuCollapsed>
-          {isStructuredWorkoutsEnabled && (
-            <TooltipIfMenuCollapsed label={t("nav.workouts")}>
-              <NavBarLink
-                icon={BikeIcon}
-                label={t("nav.workouts")}
-                href="/workouts"
-              />
-            </TooltipIfMenuCollapsed>
-          )}
+          <TooltipIfMenuCollapsed label={t("nav.workouts")}>
+            <NavBarLink
+              icon={BikeIcon}
+              label={t("nav.workouts")}
+              href="/workouts"
+            />
+          </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label={t("nav.toolbox")}>
             <NavBarLink
               icon={WrenchIcon}
@@ -399,19 +396,15 @@ export function MobileBottomBar() {
             </span>
             {t("nav.settings")}
           </DropdownMenuLinkItem>
-          {isStructuredWorkoutsEnabled && (
-            <DropdownMenuLinkItem
-              closeOnClick
-              aria-current={
-                pathname.startsWith("/workouts") ? "page" : undefined
-              }
-              className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
-              render={<Link href="/workouts" />}
-            >
-              <BikeIcon className="size-4" />
-              {t("nav.workouts")}
-            </DropdownMenuLinkItem>
-          )}
+          <DropdownMenuLinkItem
+            closeOnClick
+            aria-current={pathname.startsWith("/workouts") ? "page" : undefined}
+            className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+            render={<Link href="/workouts" />}
+          >
+            <BikeIcon className="size-4" />
+            {t("nav.workouts")}
+          </DropdownMenuLinkItem>
           <DropdownMenuLinkItem
             closeOnClick
             aria-current={pathname.startsWith("/privacy") ? "page" : undefined}

@@ -18,7 +18,6 @@ import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import type { TrainingPageControllerOptions } from "~/hooks/useTrainingPageController";
 import { useTrainingPageController } from "~/hooks/useTrainingPageController";
 import { useT } from "~/i18n/useT";
-import { isStructuredWorkoutsEnabled } from "~/lib/features";
 import {
   type BuiltInWorkoutId,
   builtInWorkout,
@@ -42,7 +41,6 @@ interface LiveTrainingPageProps {
 export const getServerSideProps: GetServerSideProps<
   LiveTrainingPageProps
 > = async ({ query }) => {
-  if (!isStructuredWorkoutsEnabled) return { notFound: true };
   const builtInId = isBuiltInWorkoutId(query.builtinWorkout)
     ? query.builtinWorkout
     : null;

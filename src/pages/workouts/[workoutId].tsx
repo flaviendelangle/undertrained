@@ -4,12 +4,10 @@ import { useRouter } from "next/router";
 import { WorkoutBuilder } from "~/components/workouts/WorkoutBuilder";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
-import { isStructuredWorkoutsEnabled } from "~/lib/features";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { trpc } from "~/utils/trpc";
 
 export const getServerSideProps: GetServerSideProps = async () => {
-  if (!isStructuredWorkoutsEnabled) return { notFound: true };
   return { props: {} };
 };
 

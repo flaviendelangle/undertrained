@@ -25,15 +25,11 @@ import { WorkoutMiniPreview } from "~/components/workouts/WorkoutMiniPreview";
 import { WorkoutPreviewContent } from "~/components/workouts/WorkoutPreviewContent";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
-import { isStructuredWorkoutsEnabled } from "~/lib/features";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { formatCompactDuration } from "~/utils/format";
 import { trpc } from "~/utils/trpc";
 
-// Structured workouts are opt-in (see next.config.ts). When disabled, a direct
-// visit 404s.
 export const getServerSideProps: GetServerSideProps = async () => {
-  if (!isStructuredWorkoutsEnabled) return { notFound: true };
   return { props: {} };
 };
 

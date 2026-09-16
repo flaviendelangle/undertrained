@@ -4,21 +4,12 @@ import { NextConfig } from "next";
 import { withPostHogConfig } from "@posthog/nextjs-config";
 
 /**
- * Routes (the Strava-style route builder at /routes) is opt-in too: it stays
+ * Routes (the Strava-style route builder at /routes) is opt-in: it stays
  * hidden unless ROUTES_ENABLED=true is set. Leaving it unset — as on the VPS,
  * which has no OpenRouteService key — keeps the feature off. Exposed to the
  * client as NEXT_PUBLIC_ROUTES_ENABLED below.
  */
 const routesEnabled = process.env.ROUTES_ENABLED === "true";
-
-/**
- * Structured workouts (the interval builder at /workouts, plus riding one in ERG
- * mode from Live Training) are opt-in as well, behind
- * STRUCTURED_WORKOUTS_ENABLED. Exposed to the client as
- * NEXT_PUBLIC_STRUCTURED_WORKOUTS_ENABLED below.
- */
-const structuredWorkoutsEnabled =
-  process.env.STRUCTURED_WORKOUTS_ENABLED === "true";
 
 /**
  * @see https://nextjs.org/docs/api-reference/next.config.js/introduction
@@ -37,7 +28,6 @@ const nextConfig = {
   devIndicators: false,
   env: {
     NEXT_PUBLIC_ROUTES_ENABLED: String(routesEnabled),
-    NEXT_PUBLIC_STRUCTURED_WORKOUTS_ENABLED: String(structuredWorkoutsEnabled),
   },
   /** We run typechecking as a separate task in CI */
   typescript: {
