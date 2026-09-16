@@ -14,7 +14,7 @@
  */
 
 /** Bump on any persisted-shape change; `migrate.ts` switches on it. */
-export const STRUCTURED_WORKOUT_SCHEMA_VERSION = 1;
+export const STRUCTURED_WORKOUT_SCHEMA_VERSION = 2;
 
 export type WorkoutSport = "bike" | "run";
 
@@ -32,14 +32,14 @@ export type StepIntensity =
   | "cooldown";
 
 /**
- * A power target, always expressed as a **fraction of FTP** (0.88 = 88 %).
+ * A relative target uses a **fraction of FTP** (0.88 = 88 %).
+ * Fixed-watt targets keep test protocols independent of FTP.
  *
  * Authored as a single number, never a band: a target the rider is asked to hit
  * is one number, and the tolerance around it is a property of *riding* it, not
  * of the plan. `complianceTolerance` owns that band, so the HUD and the
  * post-ride score can never disagree about what counts as on target.
- * Watts are derived at render time from the athlete's FTP-of-the-day and never
- * stored, so a saved workout rescales itself when FTP moves.
+ * Relative targets rescale with the athlete’s FTP-of-the-day; fixed watts do not.
  *
  * The fraction (rather than an integer percent) matches `POWER_ZONES[].maxPct`
  * and `.zwo`'s `Power="0.88"`, so both need zero conversion.
@@ -53,7 +53,9 @@ export type PowerTarget =
   /** Linear sweep across the step. → `.zwo` `<Warmup>`/`<Cooldown>`/`<Ramp>`. */
   | { kind: "ramp"; from: number; to: number }
   /** No target at all. → `.zwo` `<FreeRide>`; FIT `target_type: "open"`. */
-  | { kind: "free" };
+  | { kind: "free" }
+  /** Fixed watts, including linear sweeps. Independent of the rider’s FTP. */
+  | { kind: "watts"; from: number; to: number };
 
 /**
  * Optional cadence target, in rpm.
@@ -96,6 +98,8 @@ export interface StructuredWorkout {
   version: number;
   sport: WorkoutSport;
   nodes: WorkoutNode[];
+  /** Enables the corresponding FTP calculation and test playback rules. */
+  ftpTest?: "ramp-test" | "ftp-test-20";
 }
 
 /** Devices and file formats degrade past this; the UI disables "Group" at the limit. */
@@ -129,8 +133,10 @@ export function roundPct(pct: number): number {
  * The representative intensity of a target, used for zone colouring and for
  * the one-line summaries. Ranges collapse to their midpoint; `free` has none.
  */
-export function targetMidPct(target: PowerTarget): number | null {
+export function targetMidPct(target: PowerTarget, ftp = 200): number | null {
   switch (target.kind) {
+    case "watts":
+      return (target.from + target.to) / 2 / ftp;
     case "pct":
       return target.pct;
     case "ramp":
@@ -138,4 +144,16 @@ export function targetMidPct(target: PowerTarget): number | null {
     case "free":
       return null;
   }
+}
+
+/** Whether any step (including repeated steps) uses one of these target kinds. */
+export function hasPowerTarget(
+  nodes: readonly WorkoutNode[],
+  kinds: readonly PowerTarget["kind"][],
+): boolean {
+  return nodes.some((node) =>
+    node.type === "repeat"
+      ? hasPowerTarget(node.children, kinds)
+      : kinds.includes(node.power.kind),
+  );
 }

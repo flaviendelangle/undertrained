@@ -28,6 +28,7 @@ import {
   repeatSpans,
   structuredWorkoutSchema,
 } from "~/utils/structuredWorkout";
+import { hasPowerTarget } from "~/utils/structuredWorkout/types";
 import { trpc } from "~/utils/trpc";
 
 import { QuickAddBar } from "./QuickAddBar";
@@ -66,11 +67,11 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
   const router = useRouter();
   const athleteId = useAthleteId();
   const isMobile = useIsMobile();
-  const { currentSettings, hasSettings } = useRiderSettingsTimeline();
+  const { currentSettings, configuredFtp } = useRiderSettingsTimeline();
 
   // Never fall back to the 200 W default: a fabricated watt figure beside a
   // real percentage reads as fact.
-  const ftp = hasSettings ? currentSettings.ftp : null;
+  const ftp = configuredFtp;
 
   const [name, setName] = React.useState(workout?.name ?? "");
   const [description, setDescription] = React.useState(
@@ -79,13 +80,13 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
   const editor = useWorkoutEditor(workout?.structure ?? emptyWorkout());
 
   const segments = React.useMemo(
-    () => flattenWorkout(editor.workout),
-    [editor.workout],
+    () => flattenWorkout(editor.workout, currentSettings.ftp),
+    [editor.workout, currentSettings.ftp],
   );
   const spans = React.useMemo(() => repeatSpans(segments), [segments]);
   const metrics = React.useMemo(
-    // IF is FTP-independent, so an assumed FTP still yields a usable number for
-    // it even when the watt-denominated stats are suppressed downstream.
+    // Percentage-only workouts have FTP-independent IF and zones. Fixed-watt
+    // workouts require a configured FTP before those figures can be shown.
     () => computeWorkoutMetrics(segments, ftp ?? currentSettings.ftp),
     [segments, ftp, currentSettings.ftp],
   );
@@ -157,6 +158,7 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
       </div>
       <WorkoutSummaryPanel
         metrics={metrics}
+        hasFixedTargets={hasPowerTarget(editor.workout.nodes, ["watts"])}
         segmentCount={segments.length}
         ftp={ftp}
       />

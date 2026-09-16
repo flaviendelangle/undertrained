@@ -25,7 +25,8 @@ function Stat({ label, value }: { label: string; value: string }) {
 interface WorkoutSummaryPanelProps {
   metrics: WorkoutMetrics;
   segmentCount: number;
-  /** null when the athlete has never saved rider settings. */
+  hasFixedTargets?: boolean;
+  /** null when no explicit FTP is effective today. */
   ftp: number | null;
 }
 
@@ -33,13 +34,14 @@ interface WorkoutSummaryPanelProps {
  * The derived numbers for the workout being edited.
  *
  * Without a saved FTP the watt-denominated figures are hidden rather than shown
- * against the 200 W default — a fabricated TSS is worse than none. IF survives,
- * because NP and FTP scale together and it is therefore FTP-independent.
+ * against the 200 W default. IF and zones can still be shown for percentage-only
+ * workouts; fixed-watt targets need an explicit FTP for both.
  */
 export function WorkoutSummaryPanel({
   metrics,
   segmentCount,
   ftp,
+  hasFixedTargets = false,
 }: WorkoutSummaryPanelProps) {
   const t = useT();
   const tokens = useChartTokens();
@@ -56,7 +58,7 @@ export function WorkoutSummaryPanel({
         <Stat
           label={t("workouts.summary.intensityFactor")}
           value={
-            metrics.intensityFactor == null
+            metrics.intensityFactor == null || (hasFixedTargets && ftp == null)
               ? "—"
               : metrics.intensityFactor.toFixed(2)
           }
@@ -95,7 +97,7 @@ export function WorkoutSummaryPanel({
         </p>
       )}
 
-      {zoneTotal > 0 && (
+      {zoneTotal > 0 && (!hasFixedTargets || ftp != null) && (
         <div className="flex flex-col gap-1.5">
           <span className="text-muted-foreground text-xs">
             {t("workouts.summary.zoneDistribution")}

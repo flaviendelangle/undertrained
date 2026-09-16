@@ -8,7 +8,18 @@ export function useTrainingSession() {
   // When the current pause began, or null when not paused.
   const [pausedAt, setPausedAt] = useState<number | null>(null);
   const [pausedSeconds, setPausedSeconds] = useState(0);
-  const lastTickRef = useRef<number | null>(null);
+  const accumulatedSecondsRef = useRef(0);
+  const runningSinceRef = useRef<number | null>(null);
+  const [pauseIndex, setPauseIndex] = useState(0);
+  // The recorder reads this clock directly; UI updates may run late or round down.
+  const getElapsedSeconds = useCallback(
+    () =>
+      accumulatedSecondsRef.current +
+      (runningSinceRef.current == null
+        ? 0
+        : (performance.now() - runningSinceRef.current) / 1000),
+    [],
+  );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopTimer = useCallback(() => {
@@ -16,23 +27,20 @@ export function useTrainingSession() {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    lastTickRef.current = null;
-  }, []);
+    accumulatedSecondsRef.current = getElapsedSeconds();
+    runningSinceRef.current = null;
+  }, [getElapsedSeconds]);
 
   const startTimer = useCallback(() => {
     // Never stack two intervals: a second one would double the clock rate and
     // leak, since only the newest handle is kept.
     stopTimer();
-    lastTickRef.current = performance.now();
-    intervalRef.current = setInterval(() => {
-      const now = performance.now();
-      if (lastTickRef.current !== null) {
-        const delta = (now - lastTickRef.current) / 1000;
-        setElapsedSeconds((prev) => prev + delta);
-      }
-      lastTickRef.current = now;
-    }, 1000);
-  }, [stopTimer]);
+    runningSinceRef.current = performance.now();
+    intervalRef.current = setInterval(
+      () => setElapsedSeconds(getElapsedSeconds()),
+      1000,
+    );
+  }, [stopTimer, getElapsedSeconds]);
 
   const clearPause = useCallback(() => {
     setPausedAt(null);
@@ -40,20 +48,25 @@ export function useTrainingSession() {
   }, []);
 
   const start = useCallback(() => {
+    stopTimer();
+    accumulatedSecondsRef.current = 0;
+    setPauseIndex(0);
     setState("running");
     setElapsedSeconds(0);
     clearPause();
     startTimer();
-  }, [clearPause, startTimer]);
+  }, [clearPause, startTimer, stopTimer]);
 
   const pause = useCallback(() => {
     setState("paused");
     setPausedAt(performance.now());
     setPausedSeconds(0);
     stopTimer();
-  }, [stopTimer]);
+    setElapsedSeconds(getElapsedSeconds());
+  }, [stopTimer, getElapsedSeconds]);
 
   const resume = useCallback(() => {
+    setPauseIndex((index) => index + 1);
     setState("running");
     clearPause();
     startTimer();
@@ -63,13 +76,16 @@ export function useTrainingSession() {
     setState("stopped");
     clearPause();
     stopTimer();
-  }, [clearPause, stopTimer]);
+    setElapsedSeconds(getElapsedSeconds());
+  }, [clearPause, stopTimer, getElapsedSeconds]);
 
   const reset = useCallback(() => {
+    stopTimer();
+    accumulatedSecondsRef.current = 0;
+    setPauseIndex(0);
     setState("idle");
     setElapsedSeconds(0);
     clearPause();
-    stopTimer();
   }, [clearPause, stopTimer]);
 
   // How long the current pause has lasted. Lives here rather than in the page
@@ -101,6 +117,8 @@ export function useTrainingSession() {
   return {
     state,
     elapsedSeconds: Math.floor(elapsedSeconds),
+    getElapsedSeconds,
+    pauseIndex,
     pausedSeconds,
     start,
     pause,

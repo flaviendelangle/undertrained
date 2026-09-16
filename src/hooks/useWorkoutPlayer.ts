@@ -16,6 +16,7 @@ import {
   repeatSpans,
   resolveSnapshot,
 } from "~/utils/structuredWorkout";
+import type { BuiltInWorkoutId } from "~/utils/structuredWorkout/builtIn";
 
 /**
  * Plays a structured workout against the session clock.
@@ -35,6 +36,7 @@ const MIN_REMAINING_AFTER_TRIM_S = 5;
 
 export interface UseWorkoutPlayerParams {
   workout: StructuredWorkout | null;
+  ftpTest?: BuiltInWorkoutId;
   /**
    * Frozen at session start by the caller. A mid-session FTP edit must not shift
    * every target under the rider — and would make the recorded compliance
@@ -47,6 +49,8 @@ export interface UseWorkoutPlayerParams {
 
 export interface UseWorkoutPlayerResult extends PlayerSnapshot {
   segments: ResolvedSegment[];
+  testMode?: boolean;
+  finishTest?: () => void;
   spans: ReturnType<typeof repeatSpans>;
   biasPct: number;
   setBiasPct: (pct: number) => void;
@@ -68,6 +72,7 @@ export interface UseWorkoutPlayerResult extends PlayerSnapshot {
 
 export function useWorkoutPlayer({
   workout,
+  ftpTest,
   ftp,
   elapsedSeconds,
   sessionState,
@@ -77,7 +82,10 @@ export function useWorkoutPlayer({
   /** Set by `endWorkout`, so "done" survives even mid-step. */
   const [ended, setEnded] = React.useState(false);
 
-  const segments = React.useMemo(() => flattenWorkout(workout), [workout]);
+  const segments = React.useMemo(
+    () => flattenWorkout(workout, ftp),
+    [workout, ftp],
+  );
   const spans = React.useMemo(() => repeatSpans(segments), [segments]);
 
   // Reloading or clearing the workout invalidates every offset taken against
@@ -90,10 +98,17 @@ export function useWorkoutPlayer({
   }
 
   const workoutSeconds = elapsedSeconds - adjustSeconds;
+  const effectiveBiasPct = ftpTest ? 1 : biasPct;
 
   const snapshot = React.useMemo(
-    () => resolveSnapshot({ segments, workoutSeconds, ftp, biasPct }),
-    [segments, workoutSeconds, ftp, biasPct],
+    () =>
+      resolveSnapshot({
+        segments,
+        workoutSeconds,
+        ftp,
+        biasPct: effectiveBiasPct,
+      }),
+    [segments, workoutSeconds, ftp, effectiveBiasPct],
   );
 
   const snapshotRef = useValueAsRef(snapshot);
@@ -108,8 +123,14 @@ export function useWorkoutPlayer({
    *   the trainer stops holding a rider who has stepped off the bike.
    */
   const previewSnapshot = React.useMemo(
-    () => resolveSnapshot({ segments, workoutSeconds: 0, ftp, biasPct }),
-    [segments, ftp, biasPct],
+    () =>
+      resolveSnapshot({
+        segments,
+        workoutSeconds: 0,
+        ftp,
+        biasPct: effectiveBiasPct,
+      }),
+    [segments, ftp, effectiveBiasPct],
   );
 
   let targetWatts: number | null = null;
@@ -127,6 +148,7 @@ export function useWorkoutPlayer({
   }, []);
 
   const skipSegment = React.useCallback(() => {
+    if (ftpTest) return;
     const current = snapshotRef.current;
     if (current.currentSegment == null) return;
     // Skipping the last step finishes the workout rather than running the clock
@@ -136,9 +158,10 @@ export function useWorkoutPlayer({
       return;
     }
     setAdjustSeconds((prev) => prev - current.secondsRemainingInSegment);
-  }, [snapshotRef]);
+  }, [snapshotRef, ftpTest]);
 
   const previousSegment = React.useCallback(() => {
+    if (ftpTest) return;
     const current = snapshotRef.current;
     const segment = current.currentSegment;
     if (segment == null) return;
@@ -154,10 +177,11 @@ export function useWorkoutPlayer({
     setAdjustSeconds(
       (prev) => prev + current.secondsIntoSegment + previous.durationSeconds,
     );
-  }, [segments, snapshotRef]);
+  }, [segments, snapshotRef, ftpTest]);
 
   const extendSegment = React.useCallback(
     (deltaSeconds: number) => {
+      if (ftpTest) return;
       const current = snapshotRef.current;
       if (current.currentSegment == null) return;
 
@@ -189,7 +213,7 @@ export function useWorkoutPlayer({
       if (grow <= 0) return;
       setAdjustSeconds((prev) => prev + grow);
     },
-    [snapshotRef],
+    [snapshotRef, ftpTest],
   );
 
   const endWorkout = React.useCallback(() => setEnded(true), []);
@@ -214,14 +238,35 @@ export function useWorkoutPlayer({
     setAdjustSeconds(0);
   }, []);
 
+  const finishTest = React.useCallback(() => {
+    const current = snapshotRef.current;
+    const cooldown = segments.find(
+      (segment) => segment.intensity === "cooldown",
+    );
+    if (
+      ftpTest !== "ramp-test" ||
+      current.currentSegment?.intensity !== "work" ||
+      !cooldown
+    )
+      return;
+    setAdjustSeconds(
+      (prev) => prev - (cooldown.startSeconds - current.workoutSeconds),
+    );
+  }, [ftpTest, segments, snapshotRef]);
+
   return {
+    testMode: ftpTest != null,
+    finishTest:
+      ftpTest === "ramp-test" && snapshot.currentSegment?.intensity === "work"
+        ? finishTest
+        : undefined,
     ...snapshot,
     // `ended` is the rider saying "I'm done with this", which outranks the clock.
     isFinished: ended || snapshot.isFinished || workout == null,
     targetWatts,
     segments,
     spans,
-    biasPct,
+    biasPct: effectiveBiasPct,
     setBiasPct,
     adjustBias,
     skipSegment,

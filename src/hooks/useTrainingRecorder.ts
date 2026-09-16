@@ -17,6 +17,7 @@ export function useTrainingRecorder() {
       cadence: number | null;
       speed: number | null;
       elapsed: number;
+      pauseIndex?: number;
       /** Real seconds covered by this sample — see `distanceIncrementMeters`. */
       deltaSeconds: number;
       /** Structured-workout step this sample belongs to; null on a free ride. */
@@ -37,6 +38,7 @@ export function useTrainingRecorder() {
       points.push({
         timestamp: Date.now(),
         elapsed: data.elapsed,
+        pauseIndex: data.pauseIndex,
         power: data.power,
         targetPower: data.targetPower,
         heartRate: data.heartRate,

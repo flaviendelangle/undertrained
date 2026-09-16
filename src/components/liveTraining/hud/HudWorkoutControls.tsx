@@ -44,6 +44,17 @@ export function HudWorkoutControls({
     );
   }
 
+  if (player.testMode)
+    return (
+      <div className={cn("flex items-center gap-2", className)}>
+        {player.finishTest && (
+          <button type="button" onClick={player.finishTest} className={BUTTON}>
+            {t("workouts.builtIn.finish")}
+          </button>
+        )}
+      </div>
+    );
+
   return (
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
       <button

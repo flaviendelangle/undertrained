@@ -181,3 +181,40 @@ describe("useWorkoutPlayer", () => {
     expect(result.current.biasPct).toBe(1.5);
   });
 });
+
+describe("FTP tests", () => {
+  it("finishes the ramp into a full cooldown without ending the recording", () => {
+    const testWorkout = makeWorkout([
+      { ...makeStep("warm", 300, 0.5), intensity: "warmup" },
+      { ...makeStep("ramp", 600, 1.5), intensity: "work" },
+      { ...makeStep("cool", 600, 0.35), intensity: "cooldown" },
+    ]);
+    const { result, rerender } = renderHook(
+      ({ elapsedSeconds }) =>
+        useWorkoutPlayer({
+          workout: testWorkout,
+          ftpTest: "ramp-test",
+          ftp: 200,
+          elapsedSeconds,
+          sessionState: "running",
+        }),
+      { initialProps: { elapsedSeconds: 425 } },
+    );
+    expect(result.current.testMode).toBe(true);
+    act(() => {
+      result.current.adjustBias(0.2);
+      result.current.skipSegment();
+      result.current.extendSegment(60);
+    });
+    expect(result.current.targetWatts).toBe(300);
+    expect(result.current.currentSegment?.stepId).toBe("ramp");
+    expect(result.current.secondsIntoSegment).toBe(125);
+    act(() => result.current.finishTest?.());
+    expect(result.current.currentSegment?.stepId).toBe("cool");
+    expect(result.current.secondsRemainingInSegment).toBe(600);
+    expect(result.current.targetWatts).toBe(70);
+    expect(result.current.isFinished).toBe(false);
+    rerender({ elapsedSeconds: 1025 });
+    expect(result.current.isFinished).toBe(true);
+  });
+});

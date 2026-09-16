@@ -45,3 +45,16 @@ export function resolveCurrentRiderSettings(
 ): RiderSettings {
   return resolveRiderSettings(timeline, format(new Date(), "yyyy-MM-dd"));
 }
+
+/** Returns the athlete's explicit FTP, without substituting the display default. */
+export function resolveConfiguredFtp(
+  timeline: RiderSettingsTimeline,
+  targetDate: string,
+): number | null {
+  const ftp = resolveTimeline(
+    timeline.initialValues,
+    timeline.changes,
+    targetDate,
+  ).ftp;
+  return ftp != null && Number.isFinite(ftp) && ftp > 0 ? ftp : null;
+}

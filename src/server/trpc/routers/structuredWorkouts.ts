@@ -52,7 +52,9 @@ export const structuredWorkoutsRouter = router({
         let summary = "";
         try {
           const workout = migrateStructuredWorkout(structure);
-          profile = workoutProfile(flattenWorkout(workout));
+          profile = workoutProfile(
+            flattenWorkout(workout, rest.ftpAtSave ?? 200),
+          );
           summary = describeWorkoutShort(workout);
         } catch (error) {
           console.error(

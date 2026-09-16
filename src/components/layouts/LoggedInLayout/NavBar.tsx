@@ -10,7 +10,6 @@ import {
   LogOutIcon,
   MapIcon,
   MoonIcon,
-  PlayCircleIcon,
   SettingsIcon,
   ShieldCheckIcon,
   SunIcon,
@@ -35,10 +34,7 @@ import {
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { useT } from "~/i18n/useT";
-import {
-  isLiveTrainingEnabled,
-  isStructuredWorkoutsEnabled,
-} from "~/lib/features";
+import { isStructuredWorkoutsEnabled } from "~/lib/features";
 import { cn } from "~/lib/utils";
 
 import { NavBarContext } from "./NavBarContext";
@@ -226,15 +222,6 @@ export function NavBar() {
               href="/time-periods"
             />
           </TooltipIfMenuCollapsed>
-          {isLiveTrainingEnabled && (
-            <TooltipIfMenuCollapsed label={t("nav.liveTraining")}>
-              <NavBarLink
-                icon={PlayCircleIcon}
-                label={t("nav.liveTraining")}
-                href="/live-training"
-              />
-            </TooltipIfMenuCollapsed>
-          )}
           {isStructuredWorkoutsEnabled && (
             <TooltipIfMenuCollapsed label={t("nav.workouts")}>
               <NavBarLink
@@ -326,7 +313,6 @@ export function MobileBottomBar() {
     "/time-periods",
     "/toolbox",
     "/settings",
-    "/live-training",
     "/workouts",
     "/privacy",
   ].some((path) => pathname.startsWith(path));
@@ -413,19 +399,6 @@ export function MobileBottomBar() {
             </span>
             {t("nav.settings")}
           </DropdownMenuLinkItem>
-          {isLiveTrainingEnabled && (
-            <DropdownMenuLinkItem
-              closeOnClick
-              aria-current={
-                pathname.startsWith("/live-training") ? "page" : undefined
-              }
-              className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
-              render={<Link href="/live-training" />}
-            >
-              <PlayCircleIcon className="size-4" />
-              {t("nav.liveTraining")}
-            </DropdownMenuLinkItem>
-          )}
           {isStructuredWorkoutsEnabled && (
             <DropdownMenuLinkItem
               closeOnClick

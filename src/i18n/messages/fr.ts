@@ -1076,6 +1076,49 @@ const fr: Messages = {
     neuromuscular: "Neuromusculaire",
   },
   workouts: {
+    startWorkout: "Démarrer la séance",
+    ftpRequired:
+      "Renseignez votre FTP dans les réglages pour les séances avec des cibles de puissance relatives.",
+    actions: "Actions de la séance",
+    editAction: "Modifier",
+    builtIn: {
+      viewResult: "Voir le résultat FTP",
+      keepFtp: "Conserver la FTP actuelle",
+      currentFtp: "FTP actuelle : {ftp} W",
+      apply: "Utiliser cette FTP",
+      title: "Séances intégrées",
+      description:
+        "Des tests FTP prêts à utiliser, séparés de vos séances personnelles.",
+      badge: "Intégrée",
+      view: "Voir le test",
+      start: "Démarrer le test",
+      finish: "Terminer le test et récupérer",
+      result: "FTP estimée",
+      noResult:
+        "Test incomplet ou données de puissance manquantes. Aucune estimation FTP disponible.",
+      resultNote:
+        "Cette valeur est une estimation issue du test. Vérifiez-la avant de modifier votre FTP.",
+      easy: "Pédalez tranquillement pour préparer le test progressif.",
+      rampStep:
+        "Restez assis. Arrêtez de pédaler à l’épuisement ; récupération automatique après 10 s.",
+      cooldown: "Pédalez tranquillement pour récupérer.",
+      testEffort:
+        "Tenez votre meilleur effort régulier pendant 20 min, sans ERG. Gérez votre allure avec les vitesses.",
+      ftpRequired:
+        "Renseignez votre FTP actuelle dans les réglages pour adapter les intervalles de préparation.",
+      ramp: {
+        name: "Test FTP progressif",
+        duration: "Durée variable · 43 min maximum",
+        description:
+          "5 min faciles, puis des paliers de 1 min à partir de 100 W, avec 20 W de plus par minute, jusqu’à 640 W. Arrêtez de pédaler lorsque vous ne pouvez plus tenir la cible. Après 10 s, la récupération de 10 min démarre. La FTP est estimée à 75 % de votre meilleure minute continue pendant les paliers.",
+      },
+      twenty: {
+        name: "Test FTP de 20 minutes",
+        duration: "45 min",
+        description:
+          "5 min d’échauffement progressif, trois accélérations de 20 s, 3 min faciles, 5 min intenses et 6 min faciles. Ensuite, un test de 20 min à allure libre, sans ERG, puis 5 min de récupération. La FTP est estimée à 95 % de la puissance moyenne du test.",
+      },
+    },
     myWorkouts: "Mes séances",
     newWorkout: "Nouvelle séance",
     editWorkout: "Modifier la séance",
@@ -1130,6 +1173,7 @@ const fr: Messages = {
       ungroup: "Dégrouper",
       actions: "Actions de l'étape",
       kind: {
+        watts: "Watts fixes",
         label: "Type de cible",
         pct: "Constante",
         ramp: "Rampe",

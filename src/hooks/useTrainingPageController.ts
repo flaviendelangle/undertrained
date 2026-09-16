@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useTimeout } from "@base-ui/utils/useTimeout";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
@@ -8,6 +8,7 @@ import { useAntTrainer } from "~/hooks/useAntTrainer";
 import { useBleHeartRate } from "~/hooks/useBleHeartRate";
 import { useBleTrainer } from "~/hooks/useBleTrainer";
 import { useErgMode } from "~/hooks/useErgMode";
+import { useRampTestFailure } from "~/hooks/useRampTestFailure";
 import { useRiderSettings } from "~/hooks/useRiderSettings";
 import { useTrainingRecorder } from "~/hooks/useTrainingRecorder";
 import { useTrainingSession } from "~/hooks/useTrainingSession";
@@ -15,6 +16,10 @@ import { useWorkoutPlayer } from "~/hooks/useWorkoutPlayer";
 import { SpeedSimulator, msToKmh } from "~/sensors/speedFromPower";
 import type { SensorSource, SessionDataPoint } from "~/sensors/types";
 import type { StructuredWorkout } from "~/utils/structuredWorkout";
+import {
+  type BuiltInWorkoutId,
+  identifyFtpTest,
+} from "~/utils/structuredWorkout/builtIn";
 
 /** How often a sample is recorded, in milliseconds. */
 const RECORDING_INTERVAL_MS = 1000;
@@ -34,20 +39,21 @@ const CHART_REFRESH_TICKS = 3;
  * The live training page calls this hook and only handles presentation.
  */
 export interface TrainingPageControllerOptions {
-  /** The workout to ride, already fetched. Null for a free ride. */
-  workout?: { id: number; name: string; structure: StructuredWorkout } | null;
-  /**
-   * Suspends the 2 s power-based auto-start. Set while the workout picker is
-   * open: otherwise a rider spinning the cranks mid-choice starts a free ride
-   * out from under themselves.
-   */
-  autoStartSuspended?: boolean;
+  /** The selected workout, loaded before the training controller mounts. */
+  workout: {
+    id: number | string;
+    name: string;
+    structure: StructuredWorkout;
+    builtInId?: BuiltInWorkoutId;
+  };
+  /** Suspends automatic and manual starts until workout prerequisites are met. */
+  startSuspended?: boolean;
 }
 
 export function useTrainingPageController(
-  options: TrainingPageControllerOptions = {},
+  options: TrainingPageControllerOptions,
 ) {
-  const { workout = null, autoStartSuspended = false } = options;
+  const { workout, startSuspended = false } = options;
   const [hrSource, setHrSource] = useState<SensorSource>("ant+");
   const [trainerSource, setTrainerSource] = useState<SensorSource>("ant+");
 
@@ -85,10 +91,13 @@ export function useTrainingPageController(
   // `useValueAsRef` keeps each `.current` in sync with the latest render value.
   const hrDataRef = useValueAsRef(hr.data);
   const trainerDataRef = useValueAsRef(trainer.data);
+  const trainerConnectedRef = useValueAsRef(trainer.state === "connected");
+  const trainerSampleAtRef = useRef(0);
+  useEffect(() => {
+    trainerSampleAtRef.current = performance.now();
+  }, [trainer.data]);
   const riderSettingsRef = useValueAsRef(riderSettings);
-  const elapsedRef = useValueAsRef(session.elapsedSeconds);
   const ergEnabledRef = useValueAsRef(ergMode.ergEnabled);
-  const targetPowerRef = useValueAsRef(ergMode.targetPower);
   const sessionRef = useValueAsRef(session);
 
   /**
@@ -104,15 +113,30 @@ export function useTrainingPageController(
     setFtpAtStart(riderSettings.ftp);
   }
 
+  const testId = useMemo(
+    () => identifyFtpTest(workout.structure),
+    [workout.structure],
+  );
   const player = useWorkoutPlayer({
-    workout: workout?.structure ?? null,
+    workout: workout.structure,
+    ftpTest: testId,
     ftp: ftpAtStart,
     elapsedSeconds: session.elapsedSeconds,
     sessionState: session.state,
   });
-  const segmentIndexRef = useValueAsRef(
-    workout != null ? player.segmentIndex : null,
-  );
+  useRampTestFailure({
+    active:
+      testId === "ramp-test" &&
+      session.state === "running" &&
+      trainer.state === "connected" &&
+      player.finishTest != null &&
+      !player.isFinished,
+    data: trainer.data,
+    elapsedSeconds: session.elapsedSeconds,
+    onFailure: player.finishTest,
+  });
+  const workoutTargetRef = useValueAsRef(player.targetWatts);
+  const segmentIndexRef = useValueAsRef(player.segmentIndex);
 
   // Speed simulator with inertia
   const speedSimRef = useRef(new SpeedSimulator());
@@ -141,7 +165,12 @@ export function useTrainingPageController(
     tickCountRef.current = 0;
 
     recordingRef.current = setInterval(() => {
-      const trainerData = trainerDataRef.current;
+      // A stalled stream must not become invented power in an FTP estimate.
+      const trainerData =
+        trainerConnectedRef.current &&
+        performance.now() - trainerSampleAtRef.current <= 2500
+          ? trainerDataRef.current
+          : null;
       const hrData = hrDataRef.current;
       const settings = riderSettingsRef.current;
 
@@ -170,11 +199,12 @@ export function useTrainingPageController(
 
       addDataPoint({
         power,
-        targetPower: ergEnabledRef.current ? targetPowerRef.current : null,
+        targetPower: ergEnabledRef.current ? workoutTargetRef.current : null,
         heartRate,
         cadence,
         speed: speedMs,
-        elapsed: elapsedRef.current,
+        elapsed: sessionRef.current.getElapsedSeconds(),
+        pauseIndex: sessionRef.current.pauseIndex,
         deltaSeconds,
         // null on a free ride, and after the workout ends — which is what keeps
         // the cool-down out of the compliance figures and the per-step laps.
@@ -194,13 +224,14 @@ export function useTrainingPageController(
     addDataPoint,
     getDataPoints,
     stopRecording,
-    elapsedRef,
+    sessionRef,
     ergEnabledRef,
     hrDataRef,
     riderSettingsRef,
     segmentIndexRef,
-    targetPowerRef,
+    workoutTargetRef,
     trainerDataRef,
+    trainerConnectedRef,
   ]);
 
   // Start/stop recording when session state changes
@@ -229,9 +260,10 @@ export function useTrainingPageController(
 
   /** Begins a session from a clean slate. Every entry point goes through this. */
   const startSession = useCallback(() => {
+    if (startSuspended || player.segments.length === 0) return;
     clearRideState();
     sessionRef.current.start();
-  }, [clearRideState, sessionRef]);
+  }, [clearRideState, sessionRef, startSuspended, player.segments.length]);
 
   // Destructure stable setters so eslint can track dependencies
   const { setSupportsControl, setErgEnabled } = ergMode;
@@ -284,7 +316,12 @@ export function useTrainingPageController(
    * resistance.
    */
   useEffect(() => {
-    if (!ergMode.ergEnabled || !trainer.supportsControl) return;
+    if (
+      !ergMode.ergEnabled ||
+      !trainer.supportsControl ||
+      player.targetWatts == null
+    )
+      return;
     ergSyncTimeout.start(200, () => {
       setTargetPower(ergMode.targetPower).then(
         () => setErgError(false),
@@ -300,6 +337,8 @@ export function useTrainingPageController(
     return ergSyncTimeout.clear;
   }, [
     ergSyncTimeout,
+    workout,
+    player.targetWatts,
     ergEnabledRef,
     ergMode.ergEnabled,
     ergMode.targetPower,
@@ -329,11 +368,10 @@ export function useTrainingPageController(
 
   const { setTargetPower: setErgTargetPower, setTargetSource } = ergMode;
 
-  // A loaded workout takes over the target; removing it hands the ± buttons
-  // back. ERG on/off stays independent — a workout is perfectly rideable on a
-  // trainer that can only be read.
+  // Targets come from the selected workout. ERG stays optional for trainers
+  // that only report power.
   useEffect(() => {
-    setTargetSource(workout != null ? "workout" : "manual");
+    setTargetSource("workout");
   }, [workout, setTargetSource]);
 
   /**
@@ -342,7 +380,7 @@ export function useTrainingPageController(
    * working untouched.
    */
   useEffect(() => {
-    if (workout == null || player.targetWatts == null) return;
+    if (player.targetWatts == null) return;
     setErgTargetPower(player.targetWatts);
   }, [workout, player.targetWatts, setErgTargetPower]);
 
@@ -350,7 +388,7 @@ export function useTrainingPageController(
   // rather than holding the rider at 280 W while they fetch a bottle.
   const workoutReleasedRef = useRef(false);
   useEffect(() => {
-    if (workout == null || !ergMode.ergEnabled || !trainer.supportsControl) {
+    if (!ergMode.ergEnabled || !trainer.supportsControl) {
       return;
     }
     if (player.targetWatts == null) {
@@ -374,9 +412,13 @@ export function useTrainingPageController(
 
   // Selecting a workout on a controllable trainer turns ERG on — that is what
   // the rider asked for — while leaving the toggle available to opt out.
-  const lastWorkoutIdRef = useRef<number | null>(null);
+  const lastWorkoutIdRef = useRef<number | string | null>(null);
   useEffect(() => {
-    const id = workout?.id ?? null;
+    if (!trainer.supportsControl) {
+      lastWorkoutIdRef.current = null;
+      return;
+    }
+    const id = workout.id;
     if (id === lastWorkoutIdRef.current) return;
     lastWorkoutIdRef.current = id;
     if (id != null && trainer.supportsControl) setErgEnabled(true);
@@ -386,7 +428,7 @@ export function useTrainingPageController(
   useEffect(() => {
     const power = trainer.data?.power ?? null;
     if (
-      autoStartSuspended ||
+      startSuspended ||
       session.state !== "idle" ||
       power == null ||
       power <= 0
@@ -408,7 +450,7 @@ export function useTrainingPageController(
     startSession,
     sessionRef,
     autoStartTimeout,
-    autoStartSuspended,
+    startSuspended,
   ]);
 
   // Current live values
@@ -479,7 +521,7 @@ export function useTrainingPageController(
      * Structured workout playback. Grouped rather than spread across a dozen
      * more top-level keys, since the page passes it straight through to the HUD.
      */
-    workout: workout == null ? null : { ...workout, player },
+    workout: { ...workout, player },
 
     // Actions
     startSession,

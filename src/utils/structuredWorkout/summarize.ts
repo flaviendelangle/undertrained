@@ -36,6 +36,10 @@ export function formatStepDuration(seconds: number): string {
 
 export function describePowerTarget(target: PowerTarget): string {
   switch (target.kind) {
+    case "watts":
+      return target.from === target.to
+        ? `${target.from} W`
+        : `${target.from}–${target.to} W`;
     case "pct":
       return formatPct(target.pct);
     case "ramp":
@@ -177,9 +181,11 @@ export function peakPct(workout: StructuredWorkout | null | undefined): number {
       }
       const { power } = node;
       const candidates =
-        power.kind === "ramp"
-          ? [power.from, power.to]
-          : [targetMidPct(power) ?? 0];
+        power.kind === "watts"
+          ? [power.from / 200, power.to / 200]
+          : power.kind === "ramp"
+            ? [power.from, power.to]
+            : [targetMidPct(power) ?? 0];
       for (const value of candidates) peak = Math.max(peak, value);
     }
   };

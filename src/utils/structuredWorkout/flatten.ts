@@ -69,6 +69,7 @@ function segmentFromStep(
   repeatPath: ResolvedSegment["repeatPath"],
   index: number,
   startSeconds: number,
+  ftp: number,
 ): ResolvedSegment {
   const { power } = step;
   let startPct: number | null;
@@ -76,6 +77,11 @@ function segmentFromStep(
   let isRamp = false;
 
   switch (power.kind) {
+    case "watts":
+      startPct = power.from / ftp;
+      endPct = power.to / ftp;
+      isRamp = power.from !== power.to;
+      break;
     case "pct":
       startPct = power.pct;
       endPct = power.pct;
@@ -127,6 +133,7 @@ function segmentFromStep(
  */
 export function flattenWorkout(
   workout: StructuredWorkout | null | undefined,
+  ftp = 200,
 ): ResolvedSegment[] {
   const segments: ResolvedSegment[] = [];
   if (!workout) return segments;
@@ -153,6 +160,7 @@ export function flattenWorkout(
         repeatPath,
         segments.length,
         cursor,
+        ftp > 0 && Number.isFinite(ftp) ? ftp : 200,
       );
       segments.push(segment);
       cursor = segment.endSeconds;

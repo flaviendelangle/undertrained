@@ -1,50 +1,64 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { GetServerSideProps } from "next";
+import Link from "next/link";
 
 import { BrowserCompatibilityBanner } from "~/components/liveTraining/BrowserCompatibilityBanner";
-import { WorkoutPickerDialog } from "~/components/liveTraining/WorkoutPickerDialog";
+import { FtpTestResult } from "~/components/liveTraining/FtpTestResult";
 import { HudConnectionWizard } from "~/components/liveTraining/hud/HudConnectionWizard";
 import { HudMainView } from "~/components/liveTraining/hud/HudMainView";
 import { HudPauseOverlay } from "~/components/liveTraining/hud/HudPauseOverlay";
 import { HudPostTraining } from "~/components/liveTraining/hud/HudPostTraining";
 import { HudWaitingScreen } from "~/components/liveTraining/hud/HudWaitingScreen";
+import { QueryState } from "~/components/primitives/QueryState";
 import { SettingsCallout } from "~/components/primitives/SettingsCallout";
+import { Button } from "~/components/ui/button";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import type { TrainingPageControllerOptions } from "~/hooks/useTrainingPageController";
 import { useTrainingPageController } from "~/hooks/useTrainingPageController";
 import { useT } from "~/i18n/useT";
+import { isStructuredWorkoutsEnabled } from "~/lib/features";
 import {
-  isLiveTrainingEnabled,
-  isStructuredWorkoutsEnabled,
-} from "~/lib/features";
+  type BuiltInWorkoutId,
+  builtInWorkout,
+  identifyFtpTest,
+  isBuiltInWorkoutId,
+} from "~/utils/structuredWorkout/builtIn";
+import { hasPowerTarget } from "~/utils/structuredWorkout/types";
 import { trpc } from "~/utils/trpc";
 
-// Live Training is opt-in (see next.config.ts). When it's disabled the route
-// is hidden entirely — a direct visit gets a real 404 rather than the page.
 interface LiveTrainingPageProps {
   /**
    * Deep link from the workouts library or the Journal
-   * (`/live-training?workoutId=123`). Resolved here rather than in an effect so
+   * (`/workouts/live?workoutId=123`). Resolved here rather than in an effect so
    * the ride never flashes as a free ride before the workout loads. Ownership is
    * still enforced server-side by the tRPC procedure that fetches it.
    */
   initialWorkoutId: number | null;
+  initialBuiltInId: BuiltInWorkoutId | null;
 }
 
 export const getServerSideProps: GetServerSideProps<
   LiveTrainingPageProps
 > = async ({ query }) => {
-  if (!isLiveTrainingEnabled) {
-    return { notFound: true };
-  }
-  const raw = Array.isArray(query.workoutId)
-    ? query.workoutId[0]
-    : query.workoutId;
-  const parsed = raw != null ? Number(raw) : Number.NaN;
+  if (!isStructuredWorkoutsEnabled) return { notFound: true };
+  const builtInId = isBuiltInWorkoutId(query.builtinWorkout)
+    ? query.builtinWorkout
+    : null;
+  const raw = query.workoutId;
+  const workoutId =
+    typeof raw === "string" &&
+    /^[1-9]\d*$/.test(raw) &&
+    Number.isSafeInteger(Number(raw))
+      ? Number(raw)
+      : null;
+  if (!builtInId && workoutId == null)
+    return { redirect: { destination: "/workouts", permanent: false } };
   return {
     props: {
-      initialWorkoutId:
-        isStructuredWorkoutsEnabled && Number.isFinite(parsed) ? parsed : null,
+      initialBuiltInId: builtInId,
+      initialWorkoutId: builtInId ? null : workoutId,
     },
   };
 };
@@ -71,24 +85,57 @@ function getPhase(
 
 export default function LiveTrainingPage({
   initialWorkoutId,
+  initialBuiltInId,
 }: LiveTrainingPageProps) {
   const t = useT();
   const athleteId = useAthleteId();
-  const [workoutId, setWorkoutId] = useState<number | null>(initialWorkoutId);
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  const { data: workoutRow } = trpc.structuredWorkouts.get.useQuery(
-    { athleteId: athleteId!, id: workoutId! },
-    { enabled: !!athleteId && workoutId != null },
+  const builtIn = useMemo(
+    () => (initialBuiltInId ? builtInWorkout(initialBuiltInId, 200, t) : null),
+    [initialBuiltInId, t],
   );
-  // Only hand the controller a workout once it has actually loaded, so a slow
-  // fetch never leaves the player pointing at a stale tree.
+  const detail = trpc.structuredWorkouts.get.useQuery(
+    { athleteId: athleteId!, id: initialWorkoutId! },
+    { enabled: !!athleteId && initialWorkoutId != null && !builtIn },
+  );
   const workout =
-    workoutId != null && workoutRow?.id === workoutId ? workoutRow : null;
+    builtIn ?? (detail.data?.id === initialWorkoutId ? detail.data : null);
+  if (!workout)
+    return (
+      <div className="flex h-full flex-col items-center justify-center">
+        <QueryState
+          loading={!detail.isError}
+          error={detail.isError}
+          onRetry={() => void detail.refetch()}
+        />
+        <Button
+          nativeButton={false}
+          render={<Link href="/workouts" />}
+          variant="outline"
+        >
+          {t("nav.workouts")}
+        </Button>
+      </div>
+    );
+  return <LiveWorkout key={workout.id} workout={workout} />;
+}
 
+function LiveWorkout({
+  workout,
+}: {
+  workout: TrainingPageControllerOptions["workout"];
+}) {
+  const t = useT();
+  const { configuredFtp } = useRiderSettingsTimeline();
+  const ftpTest = useMemo(
+    () => identifyFtpTest(workout.structure),
+    [workout.structure],
+  );
+  const startBlocked =
+    hasPowerTarget(workout.structure.nodes, ["pct", "ramp"]) &&
+    configuredFtp == null;
   const ctrl = useTrainingPageController({
     workout,
-    autoStartSuspended: pickerOpen,
+    startSuspended: startBlocked,
   });
   // Set once the rider chooses to continue without a heart rate sensor.
   const [hrSkipped, setHrSkipped] = useState(false);
@@ -98,6 +145,11 @@ export default function LiveTrainingPage({
     <div className="relative h-full overflow-hidden">
       <div className="absolute top-0 right-0 left-0 z-[60] flex flex-col gap-2 p-2">
         <BrowserCompatibilityBanner />
+        {startBlocked && (
+          <p className="bg-card rounded p-3 text-sm">
+            {t("workouts.ftpRequired")}
+          </p>
+        )}
         {(phase === "connection" || phase === "waiting") && (
           <SettingsCallout
             hintId="callout-training-equipment"
@@ -151,24 +203,13 @@ export default function LiveTrainingPage({
           currentHr={ctrl.currentHr}
           hrConnected={ctrl.hr.state === "connected"}
           onManualStart={ctrl.startSession}
+          startDisabled={startBlocked}
           ergEnabled={ctrl.ergMode.ergEnabled}
           onErgEnabledChange={ctrl.ergMode.setErgEnabled}
-          targetPower={ctrl.ergMode.targetPower}
-          onTargetPowerChange={ctrl.ergMode.setTargetPower}
           supportsControl={ctrl.ergMode.supportsControl}
           ergError={ctrl.ergError}
           ergTargetStatus={ctrl.ergTargetStatus}
           workout={ctrl.workout}
-          onPickWorkout={() => setPickerOpen(true)}
-          onClearWorkout={() => setWorkoutId(null)}
-        />
-      )}
-
-      {isStructuredWorkoutsEnabled && (
-        <WorkoutPickerDialog
-          open={pickerOpen}
-          onOpenChange={setPickerOpen}
-          onSelect={setWorkoutId}
         />
       )}
 
@@ -180,6 +221,10 @@ export default function LiveTrainingPage({
           onResume={ctrl.session.resume}
           onStop={ctrl.handleStop}
         />
+      )}
+
+      {ftpTest && (ctrl.workout?.player.isFinished || phase === "post") && (
+        <FtpTestResult id={ftpTest} points={ctrl.recorder.getDataPoints()} />
       )}
 
       {/* Post-training slide-up */}

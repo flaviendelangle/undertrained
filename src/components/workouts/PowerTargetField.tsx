@@ -133,6 +133,7 @@ export function PowerTargetField({
   const max = maxPctFor(ftp);
 
   const KIND_LABEL: Record<PowerTarget["kind"], string> = {
+    watts: t("workouts.step.kind.watts"),
     pct: t("workouts.step.kind.pct"),
     ramp: t("workouts.step.kind.ramp"),
     free: t("workouts.step.kind.free"),
@@ -144,17 +145,31 @@ export function PowerTargetField({
    */
   const switchKind = (kind: PowerTarget["kind"]) => {
     const current =
-      value.kind === "pct" ? value.pct : value.kind === "ramp" ? value.to : 0.6;
+      value.kind === "pct"
+        ? value.pct
+        : value.kind === "ramp"
+          ? value.to
+          : value.kind === "watts"
+            ? value.to / (ftp ?? 200)
+            : 0.6;
 
     switch (kind) {
+      case "watts": {
+        const watts = Math.min(
+          MAX_TARGET_POWER_WATTS,
+          Math.round(current * (ftp ?? 200)),
+        );
+        onChange({ kind: "watts", from: watts, to: watts });
+        break;
+      }
       case "pct":
-        onChange({ kind: "pct", pct: roundPct(current) });
+        onChange({ kind: "pct", pct: roundPct(Math.min(max, current)) });
         break;
       case "ramp":
         onChange({
           kind: "ramp",
-          from: roundPct(Math.max(0, current - 0.2)),
-          to: roundPct(current),
+          from: roundPct(Math.min(max, Math.max(0, current - 0.2))),
+          to: roundPct(Math.min(max, current)),
         });
         break;
       case "free":
@@ -185,6 +200,43 @@ export function PowerTargetField({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {value.kind === "watts" && (
+          <>
+            {(["from", "to"] as const).map((end) => (
+              <label
+                key={end}
+                className="inline-flex items-center gap-1 text-xs"
+              >
+                {t(
+                  end === "from"
+                    ? "workouts.step.powerFrom"
+                    : "workouts.step.powerTo",
+                )}
+                <input
+                  type="number"
+                  min={0}
+                  max={MAX_TARGET_POWER_WATTS}
+                  step={1}
+                  className="border-input bg-background h-7 w-16 rounded-md border px-1 text-center font-mono text-sm"
+                  value={value[end]}
+                  onChange={(event) => {
+                    const watts = event.target.valueAsNumber;
+                    if (Number.isFinite(watts))
+                      onChange({
+                        ...value,
+                        [end]: Math.min(
+                          MAX_TARGET_POWER_WATTS,
+                          Math.max(0, watts),
+                        ),
+                      });
+                  }}
+                />
+                W
+              </label>
+            ))}
+          </>
+        )}
 
         {value.kind === "pct" && (
           <PctInput

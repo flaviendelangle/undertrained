@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { makeRepeat, makeStep, makeWorkout, nestedWorkout } from "./fixtures";
 import { migrateStructuredWorkout } from "./migrate";
 import { structuredWorkoutSchema } from "./schema";
-import { MAX_REPEAT_DEPTH } from "./types";
+import { MAX_REPEAT_DEPTH, STRUCTURED_WORKOUT_SCHEMA_VERSION } from "./types";
 
 function message(workout: unknown): string {
   const result = structuredWorkoutSchema.safeParse(workout);
@@ -17,6 +17,22 @@ describe("structuredWorkoutSchema", () => {
     expect(structuredWorkoutSchema.safeParse(nestedWorkout()).success).toBe(
       true,
     );
+  });
+
+  it("rejects fixed watt targets outside device limits", () => {
+    for (const from of [-1, 100000, Number.NaN, Infinity]) {
+      expect(
+        structuredWorkoutSchema.safeParse(
+          makeWorkout([makeStep("a", 60, { kind: "watts", from, to: 100 })]),
+        ).success,
+      ).toBe(false);
+    }
+  });
+  it("migrates existing percentage workouts without changing their targets", () => {
+    const old = { ...nestedWorkout(), version: 1 };
+    const migrated = migrateStructuredWorkout(old);
+    expect(migrated.nodes).toEqual(old.nodes);
+    expect(migrated.version).toBe(STRUCTURED_WORKOUT_SCHEMA_VERSION);
   });
 
   it("rejects an empty workout", () => {
@@ -102,7 +118,7 @@ describe("migrateStructuredWorkout", () => {
     const migrated = migrateStructuredWorkout(rest);
 
     expect(migrated.sport).toBe("bike");
-    expect(migrated.version).toBe(1);
+    expect(migrated.version).toBe(STRUCTURED_WORKOUT_SCHEMA_VERSION);
   });
 
   it("refuses a payload from a newer app version", () => {

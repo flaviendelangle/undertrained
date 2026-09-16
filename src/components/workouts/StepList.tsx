@@ -85,6 +85,7 @@ function useRowActions(editor: WorkoutEditor, id: string) {
 
 /** "115–179 W", or null when the athlete has no FTP saved. */
 function describeWatts(step: WorkoutStep, ftp: number | null): string | null {
+  if (step.power.kind === "watts") return describePowerTarget(step.power);
   if (ftp == null) return null;
   const { power } = step;
   switch (power.kind) {
@@ -110,7 +111,7 @@ function StepRow({
   const selected = editor.isSelected(step.id);
   const actions = useRowActions(editor, step.id);
 
-  const midPct = targetMidPct(step.power);
+  const midPct = targetMidPct(step.power, ftp ?? 200);
   const accent =
     midPct == null
       ? tokens.grid.hex

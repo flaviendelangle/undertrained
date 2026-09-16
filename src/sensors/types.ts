@@ -139,6 +139,8 @@ export const DEFAULT_RIDER_SETTINGS: RiderSettings = {
 };
 
 export interface SessionDataPoint {
+  /** Changes on resume, so even a short pause splits an FTP test effort. */
+  pauseIndex?: number;
   timestamp: number;
   elapsed: number;
   power: number | null;

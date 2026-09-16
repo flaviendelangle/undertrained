@@ -125,3 +125,26 @@ it("serializes rapid saves without replacing newer edits with an older response"
   expect(result.current.timeline.bikeWeightKg).toBe(10);
   expect(result.current.timeline.cdA).toBe(0.4);
 });
+
+it("distinguishes a configured FTP from weight-only settings and the default", async () => {
+  backend.stored = {
+    ...DEFAULT_RIDER_SETTINGS_TIMELINE,
+    initialValues: {
+      ...DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues,
+      ftp: null,
+      weightKg: 75,
+    },
+    changes: [],
+  };
+  const { result } = renderHook(useRiderSettingsTimeline, { wrapper });
+  await waitFor(() => expect(result.current.hasSettings).toBe(true));
+  expect(result.current.currentSettings.ftp).toBe(200);
+  expect(result.current.configuredFtp).toBeNull();
+});
+
+it("does not treat the fallback timeline as configured FTP before settings exist", async () => {
+  backend.stored = null;
+  const { result } = renderHook(useRiderSettingsTimeline, { wrapper });
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  expect(result.current.configuredFtp).toBeNull();
+});

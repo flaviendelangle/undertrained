@@ -14,7 +14,7 @@ import { Button } from "~/components/ui/button";
 import { useT } from "~/i18n/useT";
 
 interface ConfirmDialogProps {
-  trigger: React.ReactElement;
+  trigger?: React.ReactElement;
   title: React.ReactNode;
   description: React.ReactNode;
   confirmLabel: React.ReactNode;
@@ -60,7 +60,7 @@ export function ConfirmDialog({
 
   return (
     <AlertDialog open={currentOpen} onOpenChange={setOpen}>
-      <AlertDialogTrigger render={trigger} />
+      {trigger && <AlertDialogTrigger render={trigger} />}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>

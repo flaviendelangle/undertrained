@@ -13,6 +13,7 @@ import {
   isRepeat,
   isStep,
 } from "~/utils/structuredWorkout";
+import { identifyFtpTest } from "~/utils/structuredWorkout/builtIn";
 import {
   canWrapInRepeat,
   createId,
@@ -127,6 +128,9 @@ export function useWorkoutEditor(
   const workout = history[cursor];
 
   const commit = React.useCallback((next: StructuredWorkout) => {
+    // Changing the protocol invalidates the test, while undo restores its flag.
+    if (next.ftpTest && !identifyFtpTest(next))
+      next = { ...next, ftpTest: undefined };
     setHistory((prev) => {
       // Editing after an undo discards the redo branch, as everywhere else.
       const trimmed = [...prev.history.slice(0, prev.cursor + 1), next];

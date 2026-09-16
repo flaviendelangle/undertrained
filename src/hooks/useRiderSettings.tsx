@@ -1,5 +1,7 @@
 import * as React from "react";
 
+import { format } from "date-fns";
+
 import { useAthleteId } from "~/hooks/useAthleteId";
 import {
   DEFAULT_RIDER_SETTINGS,
@@ -8,6 +10,7 @@ import {
   type RiderSettingsTimeline,
 } from "~/sensors/types";
 import {
+  resolveConfiguredFtp,
   resolveCurrentRiderSettings,
   resolveRiderSettings,
 } from "~/utils/resolveRiderSettings";
@@ -19,6 +22,7 @@ interface RiderSettingsContextValue {
   resolveForDate: (date: string) => RiderSettings;
   currentSettings: RiderSettings;
   hasSettings: boolean;
+  configuredFtp: number | null;
   saveStatus: "idle" | "pending" | "error" | "success";
   retrySave: () => void;
 }
@@ -30,6 +34,7 @@ const RiderSettingsContext = React.createContext<RiderSettingsContextValue>({
   resolveForDate: () => DEFAULT_RIDER_SETTINGS,
   currentSettings: DEFAULT_RIDER_SETTINGS,
   hasSettings: false,
+  configuredFtp: null,
   saveStatus: "idle",
   retrySave: () => undefined,
 });
@@ -130,6 +135,10 @@ export function RiderSettingsProvider({
   );
 
   const hasSettings = stored != null;
+  const configuredFtp =
+    draft != null || hasSettings
+      ? resolveConfiguredFtp(timeline, format(new Date(), "yyyy-MM-dd"))
+      : null;
 
   const value = React.useMemo(
     () => ({
@@ -138,6 +147,7 @@ export function RiderSettingsProvider({
       resolveForDate,
       currentSettings,
       hasSettings,
+      configuredFtp,
       saveStatus: saveSettings.status,
       retrySave,
     }),
@@ -147,6 +157,7 @@ export function RiderSettingsProvider({
       resolveForDate,
       currentSettings,
       hasSettings,
+      configuredFtp,
       saveSettings.status,
       retrySave,
     ],

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { MAX_TARGET_POWER_WATTS } from "~/sensors/types";
+
 import { flattenNodeIds, maxDepth } from "./edit";
 import { resolvedSegmentCount, totalDuration } from "./flatten";
 import type { StructuredWorkout, WorkoutNode, WorkoutRepeat } from "./types";
@@ -23,6 +25,11 @@ const powerTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("pct"), pct: pctSchema }),
   z.object({ kind: z.literal("ramp"), from: pctSchema, to: pctSchema }),
   z.object({ kind: z.literal("free") }),
+  z.object({
+    kind: z.literal("watts"),
+    from: z.number().min(0).max(MAX_TARGET_POWER_WATTS),
+    to: z.number().min(0).max(MAX_TARGET_POWER_WATTS),
+  }),
 ]);
 
 const cadenceTargetSchema = z.number().int().min(30).max(200);
@@ -67,6 +74,7 @@ export const structuredWorkoutSchema: z.ZodType<StructuredWorkout> = z
   .object({
     version: z.literal(STRUCTURED_WORKOUT_SCHEMA_VERSION),
     sport: z.enum(["bike", "run"]),
+    ftpTest: z.enum(["ramp-test", "ftp-test-20"]).optional(),
     nodes: z.array(nodeSchema).min(1).max(200),
   })
   // Depth, expansion and total duration are properties of the whole tree, so

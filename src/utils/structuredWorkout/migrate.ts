@@ -6,9 +6,8 @@ import { STRUCTURED_WORKOUT_SCHEMA_VERSION } from "./types";
  * Brings a stored `structure` payload up to the current shape.
  *
  * The jsonb column is schema-less, so every read goes through here rather than
- * trusting the database. Today there is only one version and the function is a
- * validating pass-through; when the shape changes, each bump becomes one more
- * pure, individually testable step in the chain.
+ * trusting the database. Version 2 adds fixed-watt targets; version 1 percentage
+ * targets need no conversion. Both are validated against the current schema.
  *
  * Throws rather than falling back to an empty workout: a workout that silently
  * lost its intervals is worse than one that fails to open, because the rider

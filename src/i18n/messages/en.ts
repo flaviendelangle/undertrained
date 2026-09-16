@@ -1051,6 +1051,49 @@ const en = {
     neuromuscular: "Neuromuscular",
   },
   workouts: {
+    startWorkout: "Start workout",
+    ftpRequired:
+      "Set your FTP in Settings to use workouts with relative power targets.",
+    actions: "Workout actions",
+    editAction: "Edit",
+    builtIn: {
+      viewResult: "View FTP result",
+      keepFtp: "Keep current FTP",
+      currentFtp: "Current FTP: {ftp} W",
+      apply: "Use this FTP",
+      title: "Built-in workouts",
+      description:
+        "FTP assessments, ready to ride. Your personal workouts stay separate.",
+      badge: "Built-in",
+      view: "View test",
+      start: "Start test",
+      finish: "Finish test and cool down",
+      result: "Estimated FTP",
+      noResult:
+        "Test incomplete or power data missing. No FTP estimate is available.",
+      resultNote:
+        "This is an estimate from the test effort. Review it before updating your FTP.",
+      easy: "Pedal easily and prepare for the ramp.",
+      rampStep:
+        "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+      cooldown: "Pedal easily to cool down.",
+      testEffort:
+        "Ride your strongest steady 20-minute effort. ERG is released; use your gears to pace yourself.",
+      ftpRequired:
+        "Set your current FTP in Settings to scale the preparation intervals.",
+      ramp: {
+        name: "Ramp test",
+        duration: "Variable · up to 43 min",
+        description:
+          "5 min easy, then 1-minute steps starting at 100 W and increasing by 20 W, up to 640 W. Stop pedaling when you cannot hold the target. After 10 seconds, a 10-minute cooldown starts. FTP is estimated from 75% of your best continuous minute during the ramp.",
+      },
+      twenty: {
+        name: "20-minute FTP test",
+        duration: "45 min",
+        description:
+          "5 min progressive warm-up, three 20-second openers, 3 min easy, 5 min hard, and 6 min easy. Then a self-paced 20-minute test with ERG released, followed by 5 min cooldown. FTP is estimated from 95% of your average test power.",
+      },
+    },
     myWorkouts: "My workouts",
     newWorkout: "New workout",
     editWorkout: "Edit workout",
@@ -1104,6 +1147,7 @@ const en = {
       ungroup: "Ungroup",
       actions: "Step actions",
       kind: {
+        watts: "Fixed watts",
         label: "Target type",
         pct: "Steady",
         ramp: "Ramp",
