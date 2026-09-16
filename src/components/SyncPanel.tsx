@@ -443,7 +443,7 @@ export function SyncPanel() {
                   )}
                   <span>{t("sync.label")}</span>
                   {isInProgress && (
-                    <span className="bg-primary/20 text-primary-foreground size-1.5 rounded-full" />
+                    <span className="bg-primary/20 text-primary size-1.5 rounded-full" />
                   )}
                   {syncJob?.status === "failed" && (
                     <span className="size-1.5 rounded-full bg-red-500" />

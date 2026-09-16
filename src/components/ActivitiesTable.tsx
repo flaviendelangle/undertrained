@@ -1,8 +1,10 @@
 import * as React from "react";
 
 import { format } from "date-fns";
+import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import Link from "next/link";
 
+import { Toolbar } from "@base-ui/react/toolbar";
 import type { ListActivity } from "@server/db/types";
 import {
   type Row,
@@ -16,6 +18,9 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
+import { SyncPanel } from "~/components/SyncPanel";
+import { QueryState } from "~/components/primitives/QueryState";
+import { Button } from "~/components/ui/button";
 import {
   Table,
   TableBody,
@@ -25,8 +30,10 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
+import { useActivityFilter } from "~/hooks/useActivityFilter";
+import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
-import { type TFunction } from "~/i18n/I18nProvider";
+import { type AppMessageKey, type TFunction } from "~/i18n/I18nProvider";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
@@ -202,9 +209,12 @@ const createActivitySearchFilter =
 
 export function ActivitiesTable(props: {
   searchFilter?: string;
+  onClearSearch?: () => void;
   timePeriodId?: number;
 }) {
   const t = useT();
+  const isMobile = useIsMobile();
+  const filters = useActivityFilter();
   const activitiesQuery = useActivitiesQuery(
     props.timePeriodId != null
       ? { timePeriodId: props.timePeriodId }
@@ -250,10 +260,151 @@ export function ActivitiesTable(props: {
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => (isMobile ? 112 : ROW_HEIGHT),
     getScrollElement: () => tableContainerRef.current,
     overscan: VIRTUALIZER_OVERSCAN,
   });
+
+  React.useEffect(() => {
+    rowVirtualizer.measure();
+  }, [isMobile, rowVirtualizer]);
+
+  if (activitiesQuery.isError)
+    return <QueryState error onRetry={() => void activitiesQuery.refetch()} />;
+  if (!activitiesQuery.isLoading && rows.length === 0) {
+    const filtered =
+      !!props.searchFilter ||
+      (props.timePeriodId == null && filters.activeFilterCount > 0);
+    return (
+      <QueryState>
+        <p>{t(filtered ? "common.noResults" : "common.noActivities")}</p>
+        {filtered ? (
+          <Button
+            variant="outline"
+            onClick={() => {
+              props.onClearSearch?.();
+              if (props.timePeriodId == null) filters.clearAll();
+            }}
+          >
+            {t("settings.filter.clearAll")}
+          </Button>
+        ) : (
+          <Toolbar.Root aria-label={t("sync.label")}>
+            <SyncPanel />
+          </Toolbar.Root>
+        )}
+      </QueryState>
+    );
+  }
+  if (isMobile)
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="border-border flex items-center gap-2 border-b px-4 py-2 text-xs">
+          <label className="flex items-center gap-2">
+            {t("common.sortBy")}
+            <select
+              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+              value={table.getState().sorting[0]?.id ?? "startDateLocal"}
+              onChange={(event) =>
+                table.setSorting([{ id: event.target.value, desc: false }])
+              }
+            >
+              {Object.entries({
+                type: "sport",
+                name: "title",
+                startDateLocal: "date",
+                distance: "distance",
+                totalElevationGain: "elevation",
+                movingTime: "movingTime",
+                averageSpeed: "pace",
+                load: "load",
+              }).map(([id, key]) => (
+                <option key={id} value={id}>
+                  {t(`activities.columns.${key}` as AppMessageKey)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t(
+              table.getState().sorting[0]?.desc
+                ? "activities.sortAscending"
+                : "activities.sortDescending",
+            )}
+            onClick={() =>
+              table.setSorting([
+                {
+                  id: table.getState().sorting[0]?.id ?? "startDateLocal",
+                  desc: !table.getState().sorting[0]?.desc,
+                },
+              ])
+            }
+          >
+            {table.getState().sorting[0]?.desc ? (
+              <ArrowDownIcon />
+            ) : (
+              <ArrowUpIcon />
+            )}
+          </Button>
+        </div>
+        <div ref={tableContainerRef} className="min-h-0 flex-1 overflow-y-auto">
+          {activitiesQuery.isLoading ? (
+            <QueryState loading />
+          ) : (
+            <div
+              role="list"
+              style={{
+                height: rowVirtualizer.getTotalSize(),
+                position: "relative",
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((item) => {
+                const activity = rows[item.index].original;
+                const sport = getSportConfig(activity.type);
+                const Icon = sport.icon;
+                const href = `/activities/${activity.stravaId}${props.timePeriodId != null ? `?from=period&periodId=${props.timePeriodId}` : ""}`;
+                return (
+                  <div
+                    role="listitem"
+                    key={activity.stravaId}
+                    className="absolute left-0 w-full"
+                    style={{
+                      height: item.size,
+                      transform: `translateY(${item.start}px)`,
+                    }}
+                  >
+                    <Link
+                      href={href}
+                      className="border-border hover:bg-accent focus-visible:bg-accent flex h-full min-w-0 flex-col justify-center gap-1 border-b px-4"
+                    >
+                      <span className="truncate text-sm font-medium">
+                        {activity.name}
+                      </span>
+                      <span className="text-muted-foreground flex items-center gap-2 text-xs">
+                        <Icon className="size-4 shrink-0" />
+                        {sportTypeLabel(activity.type, t)} ·{" "}
+                        {format(new Date(activity.startDateLocal), "P p", {
+                          locale: getActiveDateLocale(),
+                        })}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {sport.formatDistance(activity.distance)} ·{" "}
+                        {formatDuration(activity.movingTime)}
+                        {activity.load != null
+                          ? ` · ${t("activities.columns.load")}: ${Math.round(activity.load)}`
+                          : ""}
+                      </span>
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -268,7 +419,13 @@ export function ActivitiesTable(props: {
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
-                  onClick={header.column.getToggleSortingHandler()}
+                  aria-sort={
+                    header.column.getIsSorted() === "asc"
+                      ? "ascending"
+                      : header.column.getIsSorted() === "desc"
+                        ? "descending"
+                        : "none"
+                  }
                   title={
                     header.column.getCanSort()
                       ? header.column.getNextSortingOrder() === "asc"
@@ -285,8 +442,10 @@ export function ActivitiesTable(props: {
                   }}
                 >
                   {header.isPlaceholder ? null : (
-                    <div
-                      className="inline-flex items-center data-[sortable=true]:cursor-pointer"
+                    <button
+                      type="button"
+                      onClick={header.column.getToggleSortingHandler()}
+                      className="focus-visible:ring-ring inline-flex items-center rounded focus-visible:ring-2 data-[sortable=true]:cursor-pointer"
                       data-sortable={header.column.getCanSort()}
                     >
                       {flexRender(
@@ -297,7 +456,7 @@ export function ActivitiesTable(props: {
                         asc: <span>&nbsp;&#9650;</span>,
                         desc: <span>&nbsp;&#9660;</span>,
                       }[header.column.getIsSorted() as string] ?? null}
-                    </div>
+                    </button>
                   )}
                 </TableHead>
               ))}

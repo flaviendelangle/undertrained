@@ -13,6 +13,7 @@ import {
   LoadAlgorithmFields,
 } from "~/components/settings/layouts/shared";
 import { RiderMetricCards } from "~/components/settings/rider/RiderMetricCards";
+import { Button } from "~/components/ui/button";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
@@ -21,7 +22,8 @@ import { trpc } from "~/utils/trpc";
 
 const SettingsPage: NextPageWithLayout = () => {
   const t = useT();
-  const { timeline, setTimeline, hasSettings } = useRiderSettingsTimeline();
+  const { timeline, setTimeline, hasSettings, saveStatus, retrySave } =
+    useRiderSettingsTimeline();
   const athleteId = useAthleteId();
   const deleteAllData = trpc.account.deleteAllData.useMutation();
   const [deleting, setDeleting] = React.useState(false);
@@ -40,10 +42,33 @@ const SettingsPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar label={t("settings.title")}>
+      <Toolbar
+        label={t("settings.title")}
+        actions={
+          <div role="status" className="text-muted-foreground text-xs">
+            {saveStatus === "pending"
+              ? t("common.saving")
+              : saveStatus === "success"
+                ? t("common.saved")
+                : null}
+          </div>
+        }
+      >
         <SettingsIcon className="size-4" />
         <span className="font-semibold">{t("settings.title")}</span>
       </Toolbar>
+
+      {saveStatus === "error" && (
+        <div
+          role="alert"
+          className="border-destructive/30 bg-destructive/10 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-sm"
+        >
+          <span>{t("common.saveError")}</span>
+          <Button variant="outline" size="sm" onClick={retrySave}>
+            {t("common.retry")}
+          </Button>
+        </div>
+      )}
 
       {/* Mobile (< md): full-bleed sections separated by hairline dividers,
           flush under the toolbar — matches the Statistics page. Desktop (md+):

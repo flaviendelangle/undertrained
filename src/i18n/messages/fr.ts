@@ -7,6 +7,17 @@ import type { Messages } from "./en";
  */
 const fr: Messages = {
   common: {
+    sortBy: "Trier par",
+    retry: "Réessayer",
+    loadError: "Impossible de charger ce contenu.",
+    saving: "Enregistrement…",
+    saved: "Enregistré",
+    clearSearch: "Effacer la recherche",
+    editValue: "Modifier {name}",
+    noActivities: "Aucune activité. Synchronisez avec Strava pour commencer.",
+    noResults: "Aucune activité ne correspond à vos filtres.",
+    today: "Aujourd’hui",
+
     cancel: "Annuler",
     save: "Enregistrer",
     delete: "Supprimer",

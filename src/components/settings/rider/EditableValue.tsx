@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
+import { PencilIcon } from "lucide-react";
+
 import { NumberField } from "~/components/ui/number-field";
+import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
 import { PaceInput } from "../PaceInput";
@@ -34,6 +37,7 @@ export function EditableValue({
   displayClassName,
   inputClassName = "w-24",
 }: EditableValueProps) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<number | null>(value);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -67,8 +71,9 @@ export function EditableValue({
       <button
         type="button"
         onClick={startEditing}
+        aria-label={t("common.editValue", { name: t(config.labelKey) })}
         className={cn(
-          "hover:bg-muted/60 focus-visible:ring-ring/50 rounded px-1 text-left focus-visible:ring-2 focus-visible:outline-none",
+          "hover:bg-muted/60 focus-visible:ring-ring/50 inline-flex items-center gap-1.5 rounded px-1 text-left focus-visible:ring-2 focus-visible:outline-none",
           isEmpty && "text-muted-foreground",
           displayClassName,
         )}
@@ -78,6 +83,10 @@ export function EditableValue({
             ? formatFieldValue(config, placeholderValue)
             : emptyLabel
           : formatFieldValue(config, value)}
+        <PencilIcon
+          aria-hidden="true"
+          className="text-muted-foreground size-3 shrink-0"
+        />
       </button>
     );
   }

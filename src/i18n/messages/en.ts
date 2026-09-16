@@ -9,6 +9,17 @@
  */
 const en = {
   common: {
+    sortBy: "Sort by",
+    retry: "Retry",
+    loadError: "Could not load this content.",
+    saving: "Saving…",
+    saved: "Saved",
+    clearSearch: "Clear search",
+    editValue: "Edit {name}",
+    noActivities: "No activities yet. Sync with Strava to get started.",
+    noResults: "No activities match your filters.",
+    today: "Today",
+
     cancel: "Cancel",
     save: "Save",
     delete: "Delete",

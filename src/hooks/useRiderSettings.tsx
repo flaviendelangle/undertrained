@@ -19,6 +19,8 @@ interface RiderSettingsContextValue {
   resolveForDate: (date: string) => RiderSettings;
   currentSettings: RiderSettings;
   hasSettings: boolean;
+  saveStatus: "idle" | "pending" | "error" | "success";
+  retrySave: () => void;
 }
 
 const RiderSettingsContext = React.createContext<RiderSettingsContextValue>({
@@ -28,6 +30,8 @@ const RiderSettingsContext = React.createContext<RiderSettingsContextValue>({
   resolveForDate: () => DEFAULT_RIDER_SETTINGS,
   currentSettings: DEFAULT_RIDER_SETTINGS,
   hasSettings: false,
+  saveStatus: "idle",
+  retrySave: () => undefined,
 });
 
 export function RiderSettingsProvider({
@@ -36,14 +40,16 @@ export function RiderSettingsProvider({
   children: React.ReactNode;
 }) {
   const athleteId = useAthleteId();
+  const [draft, setDraft] = React.useState<RiderSettingsTimeline | null>(null);
   const { data: stored } = trpc.riderSettings.get.useQuery(
     { athleteId: athleteId! },
     { enabled: athleteId != null },
   );
   const utils = trpc.useUtils();
   const saveSettings = trpc.riderSettings.save.useMutation({
-    onSuccess: () => {
-      void utils.riderSettings.get.invalidate();
+    scope: { id: "rider-settings-save" },
+    onSuccess: async () => {
+      await utils.riderSettings.get.invalidate();
       // Scores are recomputed in the background — invalidate dependent queries
       // so they refetch once recomputation finishes.
       void utils.activities.list.invalidate();
@@ -55,7 +61,8 @@ export function RiderSettingsProvider({
 
   const timeline: RiderSettingsTimeline = React.useMemo(
     () =>
-      stored
+      draft ??
+      (stored
         ? {
             cdA: stored.cdA,
             crr: stored.crr,
@@ -82,27 +89,35 @@ export function RiderSettingsProvider({
             },
             changes: stored.changes,
           }
-        : DEFAULT_RIDER_SETTINGS_TIMELINE,
-    [stored],
+        : DEFAULT_RIDER_SETTINGS_TIMELINE),
+    [stored, draft],
   );
 
   const setTimeline = React.useCallback(
     (newTimeline: RiderSettingsTimeline) => {
       if (athleteId == null) return;
-      saveSettings.mutate({
-        athleteId,
-        cdA: newTimeline.cdA,
-        crr: newTimeline.crr,
-        bikeWeightKg: newTimeline.bikeWeightKg,
-        cyclingLoadAlgorithm: newTimeline.cyclingLoadAlgorithm,
-        runningLoadAlgorithm: newTimeline.runningLoadAlgorithm,
-        swimmingLoadAlgorithm: newTimeline.swimmingLoadAlgorithm,
-        initialValues: newTimeline.initialValues,
-        changes: newTimeline.changes,
-      });
+      setDraft(newTimeline);
+      saveSettings.mutate(
+        {
+          athleteId,
+          cdA: newTimeline.cdA,
+          crr: newTimeline.crr,
+          bikeWeightKg: newTimeline.bikeWeightKg,
+          cyclingLoadAlgorithm: newTimeline.cyclingLoadAlgorithm,
+          runningLoadAlgorithm: newTimeline.runningLoadAlgorithm,
+          swimmingLoadAlgorithm: newTimeline.swimmingLoadAlgorithm,
+          initialValues: newTimeline.initialValues,
+          changes: newTimeline.changes,
+        },
+        { onSuccess: () => setDraft(null) },
+      );
     },
     [athleteId, saveSettings],
   );
+
+  const retrySave = React.useCallback(() => {
+    if (draft) setTimeline(draft);
+  }, [draft, setTimeline]);
 
   const resolveForDate = React.useCallback(
     (date: string) => resolveRiderSettings(timeline, date),
@@ -123,8 +138,18 @@ export function RiderSettingsProvider({
       resolveForDate,
       currentSettings,
       hasSettings,
+      saveStatus: saveSettings.status,
+      retrySave,
     }),
-    [timeline, setTimeline, resolveForDate, currentSettings, hasSettings],
+    [
+      timeline,
+      setTimeline,
+      resolveForDate,
+      currentSettings,
+      hasSettings,
+      saveSettings.status,
+      retrySave,
+    ],
   );
 
   return <RiderSettingsContext value={value}>{children}</RiderSettingsContext>;

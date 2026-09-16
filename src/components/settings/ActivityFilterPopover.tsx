@@ -17,12 +17,14 @@ export function ActivityFilterPopover({
   search,
   onSearchChange,
 }: {
-  /** When provided, a text search field is shown inside the filter panel. */
+  /** Include the page search in the badge and Clear all action. */
   search?: string;
   onSearchChange?: (value: string) => void;
 } = {}) {
   const t = useT();
   const { activeFilterCount } = useActivityFilter();
+
+  const count = activeFilterCount + (search ? 1 : 0);
 
   return (
     <ResponsiveDialog>
@@ -37,9 +39,9 @@ export function ActivityFilterPopover({
               >
                 <FilterIcon className="size-3.5" />
                 <span>{t("settings.filter.trigger")}</span>
-                {activeFilterCount > 0 && (
-                  <span className="bg-primary/20 text-primary-foreground rounded px-1 text-xs">
-                    {activeFilterCount}
+                {count > 0 && (
+                  <span className="bg-primary/20 text-primary rounded px-1 text-xs">
+                    {count}
                   </span>
                 )}
               </Button>

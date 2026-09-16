@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import { Map } from "~/components/Map";
 import { MapToolbar } from "~/components/Map/MapToolbar";
+import { QueryState } from "~/components/primitives/QueryState";
 import { SendToDeviceMenu } from "~/components/routes/SendToDeviceMenu";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
@@ -104,7 +105,12 @@ const RoutesPage: NextPageWithLayout = () => {
   const athleteId = useAthleteId();
   const utils = trpc.useUtils();
 
-  const { data: routes } = trpc.routes.list.useQuery(
+  const {
+    data: routes,
+    isPending,
+    isError,
+    refetch,
+  } = trpc.routes.list.useQuery(
     { athleteId: athleteId! },
     { enabled: !!athleteId },
   );
@@ -124,7 +130,11 @@ const RoutesPage: NextPageWithLayout = () => {
       <MapToolbar section="routes" />
 
       <div className="relative flex-1 overflow-y-auto p-3 sm:p-4">
-        {routes?.length === 0 ? (
+        {isError ? (
+          <QueryState error onRetry={() => void refetch()} />
+        ) : isPending ? (
+          <QueryState loading />
+        ) : routes?.length === 0 ? (
           <div className="text-muted-foreground flex flex-col items-center gap-3 py-16 text-center text-sm">
             <RouteIcon className="size-8 opacity-50" />
             <p>{t("routes.empty")}</p>

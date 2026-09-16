@@ -1,18 +1,13 @@
 import * as React from "react";
 
-import {
-  CopyIcon,
-  PlusIcon,
-  RepeatIcon,
-  SearchIcon,
-  Trash2Icon,
-  XIcon,
-} from "lucide-react";
+import { CopyIcon, PlusIcon, RepeatIcon, Trash2Icon } from "lucide-react";
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
 
 import type { ListStructuredWorkout } from "@server/db/types";
 
+import { QueryState } from "~/components/primitives/QueryState";
+import { SearchInput } from "~/components/primitives/SearchInput";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
@@ -114,7 +109,12 @@ const WorkoutsPage: NextPageWithLayout = () => {
   const utils = trpc.useUtils();
   const [search, setSearch] = React.useState("");
 
-  const { data: workouts } = trpc.structuredWorkouts.list.useQuery(
+  const {
+    data: workouts,
+    isPending,
+    isError,
+    refetch,
+  } = trpc.structuredWorkouts.list.useQuery(
     { athleteId: athleteId! },
     { enabled: !!athleteId },
   );
@@ -159,28 +159,16 @@ const WorkoutsPage: NextPageWithLayout = () => {
         contentClassName="mx-auto max-w-5xl"
         actions={
           <>
-            <div className="border-border focus-within:ring-ring relative flex w-36 items-center rounded-md border focus-within:ring-1 sm:w-56">
-              <SearchIcon className="text-muted-foreground pointer-events-none absolute left-2.5 size-3.5" />
-              <input
-                type="search"
-                placeholder={t("workouts.searchPlaceholder")}
+            <div className="w-36 min-w-0 sm:w-56">
+              <SearchInput
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="placeholder:text-muted-foreground h-8 w-full rounded-md bg-transparent py-1 pr-7 pl-8 text-sm outline-none"
+                onChange={setSearch}
+                placeholder={t("workouts.searchPlaceholder")}
               />
-              {search !== "" && (
-                <button
-                  type="button"
-                  aria-label={t("workouts.clearSearch")}
-                  onClick={() => setSearch("")}
-                  className="text-muted-foreground hover:text-foreground absolute right-1.5 flex size-4 items-center justify-center"
-                >
-                  <XIcon className="size-3" />
-                </button>
-              )}
             </div>
             <Button
               size="sm"
+              aria-label={t("workouts.newWorkout")}
               nativeButton={false}
               render={<Link href="/workouts/new" />}
             >
@@ -199,7 +187,11 @@ const WorkoutsPage: NextPageWithLayout = () => {
           across an ultrawide monitor turns the cards into letterboxes. */}
       <div className="relative flex flex-1 flex-col items-center overflow-y-auto p-3 sm:p-4">
         <div className="w-full max-w-5xl">
-          {workouts?.length === 0 ? (
+          {isError ? (
+            <QueryState error onRetry={() => void refetch()} />
+          ) : isPending ? (
+            <QueryState loading />
+          ) : workouts?.length === 0 ? (
             <div className="text-muted-foreground flex flex-col items-center gap-3 py-16 text-center text-sm">
               <RepeatIcon className="size-8 opacity-50" />
               <p>{t("workouts.empty")}</p>
@@ -212,9 +204,12 @@ const WorkoutsPage: NextPageWithLayout = () => {
               </Button>
             </div>
           ) : filtered?.length === 0 ? (
-            <p className="text-muted-foreground py-16 text-center text-sm">
-              {t("workouts.noMatch")}
-            </p>
+            <QueryState>
+              <p>{t("workouts.noMatch")}</p>
+              <Button variant="outline" onClick={() => setSearch("")}>
+                {t("common.clearSearch")}
+              </Button>
+            </QueryState>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered?.map((workout) => (

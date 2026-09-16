@@ -72,6 +72,7 @@ function NavBarLink({
       )}
       aria-label={label}
       href={href}
+      aria-current={isActive ? "page" : undefined}
     >
       {isActive && (
         <span className="bg-primary absolute top-1.5 bottom-1.5 left-0 w-0.75 rounded-r-full" />
@@ -304,6 +305,7 @@ function MobileTabLink({
   return (
     <Link
       href={href}
+      aria-current={isActive ? "page" : undefined}
       className={cn(
         "flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors",
         isActive
@@ -318,6 +320,16 @@ function MobileTabLink({
 }
 
 export function MobileBottomBar() {
+  const pathname = usePathname() ?? "";
+  const moreActive = [
+    "/personal-bests",
+    "/time-periods",
+    "/toolbox",
+    "/settings",
+    "/live-training",
+    "/workouts",
+    "/privacy",
+  ].some((path) => pathname.startsWith(path));
   const t = useT();
   const { resolvedTheme, setTheme } = useTheme();
 
@@ -345,7 +357,10 @@ export function MobileBottomBar() {
         href="/statistics"
       />
       <DropdownMenu>
-        <DropdownMenuTrigger className="text-muted-foreground data-popup-open:text-primary active:text-foreground flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors">
+        <DropdownMenuTrigger
+          data-active={moreActive}
+          className="text-muted-foreground data-[active=true]:text-primary data-popup-open:text-primary active:text-foreground flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors"
+        >
           <EllipsisIcon className="size-5" />
           <span>{t("nav.more")}</span>
         </DropdownMenuTrigger>
@@ -357,6 +372,10 @@ export function MobileBottomBar() {
         >
           <DropdownMenuLinkItem
             closeOnClick
+            aria-current={
+              pathname.startsWith("/personal-bests") ? "page" : undefined
+            }
+            className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
             render={<Link href="/personal-bests" />}
           >
             <TrophyIcon className="size-4" />
@@ -364,16 +383,30 @@ export function MobileBottomBar() {
           </DropdownMenuLinkItem>
           <DropdownMenuLinkItem
             closeOnClick
+            aria-current={
+              pathname.startsWith("/time-periods") ? "page" : undefined
+            }
+            className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
             render={<Link href="/time-periods" />}
           >
             <CalendarIcon className="size-4" />
             {t("nav.timePeriods")}
           </DropdownMenuLinkItem>
-          <DropdownMenuLinkItem closeOnClick render={<Link href="/toolbox" />}>
+          <DropdownMenuLinkItem
+            closeOnClick
+            aria-current={pathname.startsWith("/toolbox") ? "page" : undefined}
+            className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+            render={<Link href="/toolbox" />}
+          >
             <WrenchIcon className="size-4" />
             {t("nav.toolbox")}
           </DropdownMenuLinkItem>
-          <DropdownMenuLinkItem closeOnClick render={<Link href="/settings" />}>
+          <DropdownMenuLinkItem
+            closeOnClick
+            aria-current={pathname.startsWith("/settings") ? "page" : undefined}
+            className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+            render={<Link href="/settings" />}
+          >
             <span className="relative">
               <SettingsIcon className="size-4" />
               <SettingsSetupDot />
@@ -383,6 +416,10 @@ export function MobileBottomBar() {
           {isLiveTrainingEnabled && (
             <DropdownMenuLinkItem
               closeOnClick
+              aria-current={
+                pathname.startsWith("/live-training") ? "page" : undefined
+              }
+              className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
               render={<Link href="/live-training" />}
             >
               <PlayCircleIcon className="size-4" />
@@ -392,13 +429,22 @@ export function MobileBottomBar() {
           {isStructuredWorkoutsEnabled && (
             <DropdownMenuLinkItem
               closeOnClick
+              aria-current={
+                pathname.startsWith("/workouts") ? "page" : undefined
+              }
+              className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
               render={<Link href="/workouts" />}
             >
               <BikeIcon className="size-4" />
               {t("nav.workouts")}
             </DropdownMenuLinkItem>
           )}
-          <DropdownMenuLinkItem closeOnClick render={<Link href="/privacy" />}>
+          <DropdownMenuLinkItem
+            closeOnClick
+            aria-current={pathname.startsWith("/privacy") ? "page" : undefined}
+            className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+            render={<Link href="/privacy" />}
+          >
             <ShieldCheckIcon className="size-4" />
             {t("nav.privacy")}
           </DropdownMenuLinkItem>

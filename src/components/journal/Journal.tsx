@@ -2,7 +2,6 @@ import * as React from "react";
 
 import { format } from "date-fns";
 import {
-  CalendarCheckIcon,
   CalendarPlusIcon,
   CalendarRangeIcon,
   EllipsisIcon,
@@ -19,12 +18,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useBusyEvents } from "~/hooks/useBusyEvents";
 import { usePersonalRecords } from "~/hooks/usePersonalRecords";
@@ -225,7 +221,7 @@ export function Journal() {
         <JournalRecordsContext.Provider value={records}>
           <JournalViewContext.Provider value={view}>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="text-muted-foreground border-border flex items-center justify-between gap-3 border-b px-3 py-1.5 text-[11px]">
+              <div className="text-muted-foreground border-border flex flex-wrap items-center justify-between gap-3 border-b px-3 py-1.5 text-[11px]">
                 <div className="flex min-w-0 items-center gap-3">
                   {formZone != null && currentForm != null ? (
                     <span
@@ -255,59 +251,51 @@ export function Journal() {
                   ) : null}
                 </div>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={t("journal.options")}
-                      >
-                        <EllipsisIcon />
-                      </Button>
-                    }
+                <div className="flex flex-wrap items-center gap-2">
+                  <SegmentedToggle
+                    ariaLabel={t("journal.view.label")}
+                    value={view}
+                    onChange={setView}
+                    options={VIEW_OPTIONS.map((value) => ({
+                      value,
+                      label: t(
+                        value === "week"
+                          ? "journal.view.week"
+                          : "journal.view.month",
+                      ),
+                    }))}
                   />
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuRadioGroup
-                      value={view}
-                      onValueChange={(value) => setView(value as JournalView)}
-                    >
-                      <DropdownMenuLabel>
-                        {t("journal.view.label")}
-                      </DropdownMenuLabel>
-                      {VIEW_OPTIONS.map((option) => (
-                        <DropdownMenuRadioItem
-                          key={option}
-                          value={option}
-                          closeOnClick
+                  <Button size="sm" variant="outline" onClick={goToToday}>
+                    {t("common.today")}
+                  </Button>
+                  <Button size="sm" onClick={() => onCreatePlanned(new Date())}>
+                    <PlusIcon />
+                    {t("journal.planTraining")}
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={t("journal.options")}
                         >
-                          {option === "week"
-                            ? t("journal.view.week")
-                            : t("journal.view.month")}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem closeOnClick onClick={goToToday}>
-                      <CalendarCheckIcon />
-                      {t("journal.navigateToToday")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => onCreatePlanned(new Date())}
-                    >
-                      <PlusIcon />
-                      {t("journal.planTraining")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setSubscribeOpen(true)}>
-                      <CalendarPlusIcon />
-                      {t("journal.subscribe")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setCalendarsOpen(true)}>
-                      <CalendarRangeIcon />
-                      {t("journal.calendars.manage")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                          <EllipsisIcon />
+                        </Button>
+                      }
+                    />
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem onClick={() => setSubscribeOpen(true)}>
+                        <CalendarPlusIcon />
+                        {t("journal.subscribe")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setCalendarsOpen(true)}>
+                        <CalendarRangeIcon />
+                        {t("journal.calendars.manage")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
 
               {view === "week" && activeWeek != null ? (

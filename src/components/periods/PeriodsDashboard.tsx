@@ -25,7 +25,7 @@ const TimePeriodMap = nextDynamic(
 
 interface PeriodsDashboardProps {
   stats: PeriodStatRow[];
-  onDelete: (id: number) => void;
+  onDelete: (id: number) => Promise<void>;
 }
 
 export function PeriodsDashboard({ stats, onDelete }: PeriodsDashboardProps) {

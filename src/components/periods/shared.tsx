@@ -143,7 +143,7 @@ export function DeletePeriodButton({
   className,
 }: {
   name: string;
-  onDelete: () => void;
+  onDelete: () => Promise<void>;
   className?: string;
 }) {
   const t = useT();
@@ -188,7 +188,7 @@ export function PeriodSummaryCard({
   onDelete,
 }: {
   row: PeriodStatRow;
-  onDelete: (id: number) => void;
+  onDelete: (id: number) => Promise<void>;
 }) {
   const t = useT();
   return (

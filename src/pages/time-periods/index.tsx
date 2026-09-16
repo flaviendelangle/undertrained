@@ -2,6 +2,7 @@ import { CalendarIcon } from "lucide-react";
 
 import { PeriodsDashboard } from "~/components/periods/PeriodsDashboard";
 import { PeriodsEmptyState } from "~/components/periods/shared";
+import { QueryState } from "~/components/primitives/QueryState";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { showErrorToast } from "~/components/ui/toast";
 import { useAthleteId } from "~/hooks/useAthleteId";
@@ -14,7 +15,12 @@ const PeriodsPage: NextPageWithLayout = () => {
   const athleteId = useAthleteId();
   const utils = trpc.useUtils();
 
-  const { data: stats } = trpc.timePeriods.getStats.useQuery(
+  const {
+    data: stats,
+    isPending,
+    isError,
+    refetch,
+  } = trpc.timePeriods.getStats.useQuery(
     { athleteId: athleteId! },
     { enabled: !!athleteId },
   );
@@ -24,9 +30,9 @@ const PeriodsPage: NextPageWithLayout = () => {
     onError: () => showErrorToast(t("common.deleteError")),
   });
 
-  const onDelete = (id: number) => {
+  const onDelete = async (id: number) => {
     if (!athleteId) return;
-    deleteMutation.mutate({ athleteId, id });
+    await deleteMutation.mutateAsync({ athleteId, id });
   };
 
   const hasPeriods = stats != null && stats.length > 0;
@@ -39,7 +45,11 @@ const PeriodsPage: NextPageWithLayout = () => {
       </Toolbar>
 
       <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-3 max-sm:px-0 sm:p-4">
-        {stats == null ? null : hasPeriods ? (
+        {isError ? (
+          <QueryState error onRetry={() => void refetch()} />
+        ) : isPending ? (
+          <QueryState loading />
+        ) : hasPeriods ? (
           <PeriodsDashboard stats={stats} onDelete={onDelete} />
         ) : (
           <div className="w-full max-sm:px-3">
