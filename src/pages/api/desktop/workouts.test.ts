@@ -155,6 +155,28 @@ describe("desktop workout library", () => {
             name: "Tempo",
             durationSeconds: 1800,
             estimatedTss: null,
+            execution: {
+              referenceFtp: 200,
+              ftpTest: null,
+              segments: [
+                {
+                  durationSeconds: 1200,
+                  startWatts: 160,
+                  endWatts: 160,
+                  cadence: null,
+                  note: null,
+                  intensity: null,
+                },
+                {
+                  durationSeconds: 600,
+                  startWatts: null,
+                  endWatts: null,
+                  cadence: null,
+                  note: null,
+                  intensity: null,
+                },
+              ],
+            },
             summary: expect.any(String) as unknown,
             profile: [
               [1200, 80],

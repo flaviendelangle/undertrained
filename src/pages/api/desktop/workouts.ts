@@ -9,6 +9,10 @@ import {
 } from "~/server/db/schema";
 import { desktopBuiltInWorkouts } from "~/server/lib/desktopBuiltInWorkouts";
 import { desktopAthlete } from "~/server/lib/desktopSession";
+import {
+  desktopReferenceFtp,
+  desktopWorkoutExecution,
+} from "~/server/lib/desktopWorkoutExecution";
 import { summarizeWorkout } from "~/server/lib/workoutSummary";
 
 export default async function handler(
@@ -47,24 +51,39 @@ export default async function handler(
       columns: { language: true },
     }),
   ]);
+  const referenceFtp = desktopReferenceFtp(settings);
   return res.json({
     builtInWorkouts: desktopBuiltInWorkouts(
       settings,
       requestedLocale ?? account?.language,
     ),
     workouts: rows
-      .map(summarizeWorkout)
-      .map(({ id, name, durationSeconds, estimatedTss, summary, profile }) => ({
-        id,
-        name,
-        durationSeconds,
-        estimatedTss,
-        summary,
-        // Desktop protocol uses percentages: 80 means 80% FTP.
-        profile: profile.map(([seconds, ratio]) => [
-          seconds,
-          ratio == null ? null : ratio * 100,
-        ]),
-      })),
+      .map((row) => ({
+        ...summarizeWorkout(row),
+        execution: desktopWorkoutExecution(row.structure, referenceFtp),
+      }))
+      .map(
+        ({
+          id,
+          name,
+          durationSeconds,
+          estimatedTss,
+          summary,
+          profile,
+          execution,
+        }) => ({
+          id,
+          name,
+          durationSeconds,
+          estimatedTss,
+          summary,
+          execution,
+          // Desktop protocol uses percentages: 80 means 80% FTP.
+          profile: profile.map(([seconds, ratio]) => [
+            seconds,
+            ratio == null ? null : ratio * 100,
+          ]),
+        }),
+      ),
   });
 }

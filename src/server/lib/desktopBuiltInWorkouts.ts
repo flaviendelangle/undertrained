@@ -3,8 +3,6 @@ import { format } from "date-fns";
 import en from "~/i18n/messages/en";
 import fr from "~/i18n/messages/fr";
 import { translate } from "~/i18n/t";
-import { DEFAULT_RIDER_SETTINGS_TIMELINE } from "~/sensors/types";
-import { resolveTimeline } from "~/utils/resolveTimeline";
 import { totalDuration } from "~/utils/structuredWorkout";
 import {
   BUILT_IN_WORKOUT_IDS,
@@ -12,6 +10,10 @@ import {
 } from "~/utils/structuredWorkout/builtIn";
 
 import type { riderSettings } from "../db/schema";
+import {
+  desktopReferenceFtp,
+  desktopWorkoutExecution,
+} from "./desktopWorkoutExecution";
 
 type Settings = Pick<
   typeof riderSettings.$inferSelect,
@@ -24,10 +26,7 @@ export function desktopBuiltInWorkouts(
   language: string | null | undefined,
   date = format(new Date(), "yyyy-MM-dd"),
 ) {
-  const timeline = settings ?? DEFAULT_RIDER_SETTINGS_TIMELINE;
-  const ftp =
-    resolveTimeline(timeline.initialValues, timeline.changes, date).ftp ??
-    DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.ftp!;
+  const ftp = desktopReferenceFtp(settings, date);
   const locale = language === "fr-FR" ? "fr-FR" : "en-GB";
   return BUILT_IN_WORKOUT_IDS.map((id) => {
     const workout = builtInWorkout(id, ftp, (key, params) =>
@@ -41,6 +40,7 @@ export function desktopBuiltInWorkouts(
       durationLabel: workout.durationLabel,
       estimatedTss: null,
       referenceFtp: workout.referenceFtp,
+      execution: desktopWorkoutExecution(workout.structure, ftp),
       profile: workout.profile.map(([seconds, ratio]) => [
         seconds,
         ratio == null ? null : ratio * 100,

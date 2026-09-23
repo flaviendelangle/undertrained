@@ -28,6 +28,14 @@ describe("shared desktop built-in catalogue", () => {
         ]),
       );
       expect(entry.estimatedTss).toBeNull();
+      expect(entry.execution?.referenceFtp).toBe(200);
+      expect(entry.execution?.ftpTest).toBe(entry.id);
+      expect(
+        entry.execution?.segments.reduce(
+          (sum, s) => sum + s.durationSeconds,
+          0,
+        ),
+      ).toBe(entry.durationSeconds);
     }
   });
   it("uses the athlete's effective FTP without applying future changes", () => {
