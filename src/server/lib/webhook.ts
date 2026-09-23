@@ -9,6 +9,8 @@ import type { Database } from "../db";
 import {
   activities,
   athletes,
+  desktopCodes,
+  desktopSessions,
   riderSettings,
   syncJobs,
   timePeriods,
@@ -505,6 +507,13 @@ export async function deleteAllAthleteData(
   db: Database,
   athleteId: number,
 ): Promise<void> {
+  // The athlete row is retained, so its foreign-key cascades never run.
+  // Remove pending grants before sessions to prevent their later exchange.
+  await db.delete(desktopCodes).where(eq(desktopCodes.athlete, athleteId));
+  await db
+    .delete(desktopSessions)
+    .where(eq(desktopSessions.athlete, athleteId));
+
   // Delete all activities (streams cascade via FK)
   await db.delete(activities).where(eq(activities.athlete, athleteId));
 

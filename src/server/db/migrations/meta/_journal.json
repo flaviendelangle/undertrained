@@ -169,6 +169,13 @@
       "when": 1786193570616,
       "tag": "0023_salty_satana",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790150857083,
+      "tag": "0024_desktop_auth",
+      "breakpoints": true
     }
   ]
 }
