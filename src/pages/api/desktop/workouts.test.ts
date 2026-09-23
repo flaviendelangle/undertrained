@@ -12,11 +12,21 @@ const mocks = vi.hoisted(() => ({
   where: vi.fn(),
   orderBy: vi.fn(),
   select: vi.fn(),
+  settings: vi.fn(),
+  account: vi.fn(),
 }));
 vi.mock("~/server/lib/desktopSession", () => ({
   desktopAthlete: mocks.athlete,
 }));
-vi.mock("~/server/db", () => ({ db: { select: mocks.select } }));
+vi.mock("~/server/db", () => ({
+  db: {
+    select: mocks.select,
+    query: {
+      riderSettings: { findFirst: mocks.settings },
+      athletes: { findFirst: mocks.account },
+    },
+  },
+}));
 
 function response() {
   const res = {
@@ -34,6 +44,8 @@ beforeEach(() => {
   mocks.select.mockReturnValue({ from: () => ({ where: mocks.where }) });
   mocks.where.mockReturnValue({ orderBy: mocks.orderBy });
   mocks.orderBy.mockResolvedValue([]);
+  mocks.settings.mockResolvedValue(undefined);
+  mocks.account.mockResolvedValue({ language: "en-GB" });
 });
 
 describe("desktop workout library", () => {
@@ -55,7 +67,15 @@ describe("desktop workout library", () => {
     expect(query.sql).toContain('"structured_workouts"."athlete"');
     expect(query.sql).toContain('"structured_workouts"."sport"');
     expect(mocks.athlete).toHaveBeenCalledWith("Bearer token");
-    expect(res.json).toHaveBeenCalledWith({ workouts: [] });
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workouts: [],
+        builtInWorkouts: expect.arrayContaining([
+          expect.objectContaining({ id: "ramp-test" }),
+          expect.objectContaining({ id: "ftp-test-20" }),
+        ]) as unknown,
+      }),
+    );
     expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
   });
 
@@ -84,21 +104,23 @@ describe("desktop workout library", () => {
       { method: "GET", headers: {} } as NextApiRequest,
       res as unknown as NextApiResponse,
     );
-    expect(res.json).toHaveBeenCalledWith({
-      workouts: [
-        {
-          id: 42,
-          name: "Tempo",
-          durationSeconds: 1800,
-          estimatedTss: null,
-          summary: expect.any(String) as unknown,
-          profile: [
-            [1200, 80],
-            [600, null],
-          ],
-        },
-      ],
-    });
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workouts: [
+          {
+            id: 42,
+            name: "Tempo",
+            durationSeconds: 1800,
+            estimatedTss: null,
+            summary: expect.any(String) as unknown,
+            profile: [
+              [1200, 80],
+              [600, null],
+            ],
+          },
+        ],
+      }),
+    );
   });
 
   it("rejects unauthenticated sessions before reading workouts", async () => {

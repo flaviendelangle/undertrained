@@ -2,7 +2,12 @@ import { and, desc, eq } from "drizzle-orm";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 import { db } from "~/server/db";
-import { structuredWorkouts } from "~/server/db/schema";
+import {
+  athletes,
+  riderSettings,
+  structuredWorkouts,
+} from "~/server/db/schema";
+import { desktopBuiltInWorkouts } from "~/server/lib/desktopBuiltInWorkouts";
 import { desktopAthlete } from "~/server/lib/desktopSession";
 import { summarizeWorkout } from "~/server/lib/workoutSummary";
 
@@ -25,7 +30,17 @@ export default async function handler(
       ),
     )
     .orderBy(desc(structuredWorkouts.updatedAt), desc(structuredWorkouts.id));
+  const [settings, account] = await Promise.all([
+    db.query.riderSettings.findFirst({
+      where: eq(riderSettings.athlete, athlete.id),
+    }),
+    db.query.athletes.findFirst({
+      where: eq(athletes.id, athlete.id),
+      columns: { language: true },
+    }),
+  ]);
   return res.json({
+    builtInWorkouts: desktopBuiltInWorkouts(settings, account?.language),
     workouts: rows
       .map(summarizeWorkout)
       .map(({ id, name, durationSeconds, estimatedTss, summary, profile }) => ({
