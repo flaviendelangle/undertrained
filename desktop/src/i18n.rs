@@ -81,6 +81,22 @@ pub fn workout_meta(lang: Lang, label: Option<&str>, seconds: u32, tss: Option<f
     }
 }
 
+/// The cadence unit as each language abbreviates it.
+pub fn cadence_unit(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => "rpm",
+        Lang::Fr => "tr/min",
+    }
+}
+
+/// The name a ride without a workout is recorded under.
+pub fn free_ride_name(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => "Free ride",
+        Lang::Fr => "Sortie libre",
+    }
+}
+
 /// The device number inside an `ant:<type>:<number>:<transmission>` id.
 pub fn ant_number(id: &str) -> Option<&str> {
     id.strip_prefix("ant:")?.split(':').nth(1)

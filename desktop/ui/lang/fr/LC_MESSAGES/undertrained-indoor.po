@@ -248,9 +248,6 @@ msgstr "Obligatoire"
 msgid "Ride inside."
 msgstr "Roulez à l'intérieur."
 
-msgid "Riding a workout from the desktop app is not available yet. This screen only previews the selection: nothing is sent to your trainer and nothing is recorded."
-msgstr "Suivre une séance depuis l'application de bureau n'est pas encore disponible. Cet écran ne fait qu'afficher la sélection : rien n'est envoyé au home trainer et rien n'est enregistré."
-
 msgid "Save device setup"
 msgstr "Enregistrer la configuration"
 
@@ -322,6 +319,12 @@ msgstr "Connexion annulée."
 
 msgid "Sign-in failed."
 msgstr "La connexion a échoué."
+
+msgid "Sign-in cancelled. The ride is still here; sign in again when you are ready."
+msgstr "Connexion annulée. La sortie est toujours là ; reconnectez-vous quand vous serez prêt."
+
+msgid "Sign-in failed. The ride is still here; check the browser, then sign in again."
+msgstr "La connexion a échoué. La sortie est toujours là ; vérifiez le navigateur, puis reconnectez-vous."
 
 msgid "Signed in for this visit. The system keyring is unavailable, so sign-in could not be remembered."
 msgstr "Connecté pour cette session. Le trousseau du système est indisponible, la connexion n'a donc pas pu être mémorisée."
@@ -432,6 +435,213 @@ msgstr "Ni vos séances ni les tests intégrés ne correspondent. Essayez un nom
 
 msgid "Workouts you create on the Undertrained website appear here after a refresh."
 msgstr "Les séances que vous créez sur le site Undertrained apparaissent ici après actualisation."
+
+msgid "A ride is being recorded"
+msgstr "Une sortie est en cours d'enregistrement"
+
+msgid "AVG CADENCE"
+msgstr "CADENCE MOY."
+
+msgid "AVG HEART RATE"
+msgstr "FC MOY."
+
+msgid "AVG POWER"
+msgstr "PUISSANCE MOY."
+
+msgid "Back to the ride"
+msgstr "Retour à la sortie"
+
+msgid "Closing now would lose it. Finish the ride first, or keep recording."
+msgstr "Fermer maintenant la perdrait. Terminez d'abord la sortie, ou continuez l'enregistrement."
+
+msgid "Connect a trainer or a heart-rate sensor on the Devices screen first."
+msgstr "Connectez d'abord un home trainer ou un capteur cardiaque depuis l'écran Appareils."
+
+msgid "Could not open the recordings folder."
+msgstr "Impossible d'ouvrir le dossier des enregistrements."
+
+msgid "Finish ride"
+msgstr "Terminer la sortie"
+
+msgid "Free ride"
+msgstr "Sortie libre"
+
+msgid "HEART RATE"
+msgstr "FRÉQUENCE CARDIAQUE"
+
+msgid "Keep recording"
+msgstr "Continuer l'enregistrement"
+
+msgid "LAST 10 MINUTES"
+msgstr "10 DERNIÈRES MINUTES"
+
+msgid "Leaving now would lose it. Finish the ride to keep it, or stay and keep recording."
+msgstr "Quitter maintenant la perdrait. Terminez la sortie pour la conserver, ou restez et continuez l'enregistrement."
+
+msgid "MAX HEART RATE"
+msgstr "FC MAX."
+
+msgid "MAX POWER"
+msgstr "PUISSANCE MAX."
+
+msgid "No sensor is connected. The ride keeps running and missing readings stay empty; reconnect from the Devices screen."
+msgstr "Aucun capteur n'est connecté. La sortie continue et les mesures manquantes restent vides ; reconnectez-le depuis l'écran Appareils."
+
+msgid "Open recordings folder"
+msgstr "Ouvrir le dossier des enregistrements"
+
+msgid "POWER"
+msgstr "PUISSANCE"
+
+msgid "Pause"
+msgstr "Pause"
+
+msgid "Paused for {}. The clock is stopped; readings keep showing what the sensors send."
+msgstr "En pause depuis {}. Le chronomètre est arrêté ; les mesures continuent d'afficher ce que les capteurs envoient."
+
+msgid "Paused"
+msgstr "En pause"
+
+msgid "REFERENCE"
+msgstr "REPÈRE"
+
+msgid "RPM"
+msgstr "TR/MIN"
+
+msgid "Readings only: nothing is sent to the trainer. Speed and distance are not measured."
+msgstr "Mesures uniquement : rien n'est envoyé au home trainer. La vitesse et la distance ne sont pas mesurées."
+
+msgid "Recording"
+msgstr "Enregistrement"
+
+msgid "Resume"
+msgstr "Reprendre"
+
+msgid "Retry save"
+msgstr "Réessayer l'enregistrement"
+
+msgid "Retry the save before leaving so the ride is not lost."
+msgstr "Réessayez l'enregistrement avant de quitter pour ne pas perdre la sortie."
+
+msgid "Ride complete · {}"
+msgstr "Sortie terminée · {}"
+
+msgid "Saved on this computer as a journal and a FIT file."
+msgstr "Enregistrée sur cet ordinateur sous forme de journal et de fichier FIT."
+
+msgid "Uploading…"
+msgstr "Envoi en cours…"
+
+msgid "The ride is being uploaded"
+msgstr "La sortie est en cours d'envoi"
+
+msgid "Wait for Strava's answer before leaving, so the result is not lost."
+msgstr "Attendez la réponse de Strava avant de quitter, pour ne pas perdre le résultat."
+
+msgid "ACTIVITY NAME"
+msgstr "NOM DE L'ACTIVITÉ"
+
+msgid "Activity name"
+msgstr "Nom de l'activité"
+
+msgid "Name this ride"
+msgstr "Nommez cette sortie"
+
+msgid "Upload to Strava"
+msgstr "Envoyer sur Strava"
+
+msgid "Open in Strava"
+msgstr "Ouvrir dans Strava"
+
+msgid "Check upload"
+msgstr "Vérifier l'envoi"
+
+msgid "Check Strava"
+msgstr "Vérifier sur Strava"
+
+msgid "Give the ride a name of 1 to 200 characters."
+msgstr "Donnez à la sortie un nom de 1 à 200 caractères."
+
+msgid "Goes to Strava through your Undertrained account, and only when you choose to."
+msgstr "Envoyée sur Strava via votre compte Undertrained, et seulement si vous le demandez."
+
+msgid "Sending the ride to Strava…"
+msgstr "Envoi de la sortie sur Strava…"
+
+msgid "Uploaded to Strava."
+msgstr "Envoyée sur Strava."
+
+msgid "Strava is still processing this ride. Check again in a moment."
+msgstr "Strava traite encore cette sortie. Vérifiez à nouveau dans un instant."
+
+msgid "The ride may have reached Strava, but Undertrained did not confirm it. Check your Strava activities before uploading it again; the files stay on this computer."
+msgstr "La sortie a peut-être atteint Strava, mais Undertrained ne l'a pas confirmé. Vérifiez vos activités Strava avant de la renvoyer ; les fichiers restent sur cet ordinateur."
+
+msgid "Your session has expired. The ride stays in the recordings folder; sign in again to upload it."
+msgstr "Votre session a expiré. La sortie reste dans le dossier des enregistrements ; reconnectez-vous pour l'envoyer."
+
+msgid "This server cannot receive rides yet. Update the Undertrained backend to the release that adds desktop uploads; the ride stays on this computer."
+msgstr "Ce serveur ne peut pas encore recevoir de sorties. Mettez à jour le serveur Undertrained vers la version qui ajoute les envois depuis l'application ; la sortie reste sur cet ordinateur."
+
+msgid "Undertrained cannot post to Strava for this account. Reconnect Strava on the Undertrained website, then try again."
+msgstr "Undertrained ne peut pas publier sur Strava pour ce compte. Reconnectez Strava sur le site Undertrained, puis réessayez."
+
+msgid "Could not reach Undertrained. Check your connection, then try again."
+msgstr "Impossible de joindre Undertrained. Vérifiez votre connexion, puis réessayez."
+
+msgid "Unexpected reply from the server. Try again, or update the server if this keeps happening."
+msgstr "Réponse inattendue du serveur. Réessayez, ou mettez à jour le serveur si le problème persiste."
+
+msgid "Undertrained reported an error. Try again in a moment; the ride stays on this computer."
+msgstr "Undertrained a signalé une erreur. Réessayez dans un instant ; la sortie reste sur cet ordinateur."
+
+msgid "The ride files could not be read for upload. They stay in the recordings folder."
+msgstr "Les fichiers de la sortie n'ont pas pu être lus pour l'envoi. Ils restent dans le dossier des enregistrements."
+
+msgid "This ride was submitted from another Undertrained account. Sign in with that account to check it."
+msgstr "Cette sortie a été envoyée depuis un autre compte Undertrained. Connectez-vous avec ce compte pour la vérifier."
+
+msgid "Strava rejected this ride. The files stay on this computer."
+msgstr "Strava a refusé cette sortie. Les fichiers restent sur cet ordinateur."
+
+msgid "Could not open the browser."
+msgstr "Impossible d'ouvrir le navigateur."
+
+msgid "Sensors ready. Readings are recorded once per second."
+msgstr "Capteurs prêts. Les mesures sont enregistrées une fois par seconde."
+
+msgid "Start a free ride with the connected sensors"
+msgstr "Démarrer une sortie libre avec les capteurs connectés"
+
+msgid "Start recording"
+msgstr "Démarrer l'enregistrement"
+
+msgid "The recording could not be started."
+msgstr "L'enregistrement n'a pas pu démarrer."
+
+msgid "The ride could not be saved. The data is still in memory; fix the folder or free disk space, then retry."
+msgstr "La sortie n'a pas pu être enregistrée. Les données sont encore en mémoire ; corrigez le dossier ou libérez de l'espace disque, puis réessayez."
+
+msgid "The workout profile is shown for reference only. Nothing is sent to the trainer, steps are not timed, and no FTP result is computed. Speed and distance are not measured."
+msgstr "Le profil de la séance est affiché à titre de repère uniquement. Rien n'est envoyé au home trainer, les étapes ne sont pas chronométrées et aucun résultat FTP n'est calculé. La vitesse et la distance ne sont pas mesurées."
+
+msgid "This ride is not saved yet"
+msgstr "Cette sortie n'est pas encore enregistrée"
+
+msgid "W"
+msgstr "W"
+
+msgid "WHOLE RIDE"
+msgstr "SORTIE COMPLÈTE"
+
+msgid "Writing the recording failed, so the ride paused itself. Free some disk space or fix the folder, then resume."
+msgstr "L'écriture de l'enregistrement a échoué, la sortie s'est donc mise en pause. Libérez de l'espace disque ou corrigez le dossier, puis reprenez."
+
+msgid "Recording {}"
+msgstr "Enregistrement {}"
+
+msgid "Unsaved ride"
+msgstr "Sortie non enregistrée"
 
 msgid "{} not checked"
 msgstr "{} non vérifié"

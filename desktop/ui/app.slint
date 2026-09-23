@@ -34,6 +34,16 @@ export struct WorkoutRow {
     profile: [ProfileStep],
 }
 
+// One time bin of the ride chart. Values are fractions of their axis; a bin without a
+// reading is a gap, never a zero. zone colors the power bar like the workout charts.
+export struct ChartBin {
+    has-power: bool,
+    power: float,
+    zone: int,
+    has-hr: bool,
+    hr: float,
+}
+
 // While a dialog is open, controls behind it must not take keyboard focus.
 global Overlay {
     in-out property <bool> open: false;
@@ -67,6 +77,8 @@ export global Theme {
     out property <color> zone-6: dark ? #ff5f5b : #de3b3d;
     out property <color> zone-7: dark ? #ea3d38 : #c2181d;
     out property <color> chart-grid: dark ? #656572 : #e2e3e8;   // chartTokens grid: free-ride blocks
+    out property <color> heart: dark ? #f87171 : #dc2626;        // the HUD's heart-rate red
+    out property <color> pause: dark ? #facc15 : #a16207;        // the HUD's pause yellow
     out property <color> scrim: dark ? #000000b8 : #0f172a99;
 }
 
@@ -208,6 +220,43 @@ component WorkoutChart inherits Rectangle {
     }
 }
 
+// The ride history: power as zone-colored bars per bin, heart rate as a dotted trace.
+// Bins are laid out by index over a fixed count, so the strip scrolls as time passes and
+// stays bounded whatever the ride length. Gaps stay empty.
+component LiveChart inherits Rectangle {
+    in property <[ChartBin]> bins;
+    in property <int> count: 300;
+    property <length> slot: root.width / max(1, root.count);
+    clip: true;
+    for bin[i] in root.bins: Rectangle {
+        x: root.slot * i;
+        y: 0px;
+        width: max(1px, root.slot);
+        height: root.height;
+        if bin.has-power: Rectangle {
+            x: 0px;
+            width: parent.width;
+            y: parent.height - self.height;
+            height: max(1px, parent.height * bin.power);
+            // Zone 0 means the account's FTP is unknown: one neutral color, no zone claim.
+            background: bin.zone == 1 ? Theme.zone-1
+                : bin.zone == 2 ? Theme.zone-2
+                : bin.zone == 3 ? Theme.zone-3
+                : bin.zone == 4 ? Theme.zone-4
+                : bin.zone == 5 ? Theme.zone-5
+                : bin.zone == 6 ? Theme.zone-6
+                : bin.zone == 7 ? Theme.zone-7
+                : Theme.primary.with-alpha(0.7);
+        }
+        if bin.has-hr: Rectangle {
+            x: parent.width / 2 - 1.5px;
+            y: parent.height * (1 - bin.hr) - 1.5px;
+            width: 3px; height: 3px; border-radius: 1.5px;
+            background: Theme.heart;
+        }
+    }
+}
+
 component BuiltInBadge inherits Rectangle {
     height: 18px; width: badge.preferred-width + 12px; border-radius: 4px;
     background: Theme.primary.with-alpha(0.12);
@@ -328,6 +377,35 @@ component Caption inherits Text {
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.8px;
+}
+
+// A live reading: a large number with its unit, dimmed to a dash while no sensor delivers.
+component LiveMetric inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <string> unit;
+    in property <bool> live;
+    in property <length> size: 40px;
+    in property <color> tone: Theme.ink;
+    in property <length> unit-size: 11px;
+    spacing: 2px;
+    Caption { text: root.label; }
+    HorizontalLayout {
+        spacing: 8px; alignment: start;
+        Text { text: root.live ? root.value : "—"; color: root.live ? root.tone : Theme.faint; font-size: root.size; font-weight: 700; vertical-alignment: bottom; }
+        VerticalLayout { alignment: end; padding-bottom: root.size * 0.18; Caption { text: root.unit; font-size: root.unit-size; } }
+    }
+}
+
+component StatCard inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    border-radius: 10px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+    VerticalLayout {
+        padding: 14px; spacing: 4px;
+        Caption { text: root.label; }
+        Text { text: root.value; color: root.value == "—" ? Theme.faint : Theme.ink; font-size: 22px; font-weight: 700; }
+    }
 }
 
 // The content column every screen shares: centered and capped like the website's
@@ -573,6 +651,66 @@ export component AppWindow inherits Window {
     in-out property <int> workouts-notice: 0;
     in-out property <string> workouts-notice-detail: "";
     in-out property <WorkoutRow> selected-workout;
+    // The ride screen. phase: 0 ready, 1 running, 2 paused, 3 finished. The workout, when
+    // any, is a cloned reference copy for the whole ride: refreshes never touch it.
+    in-out property <int> ride-phase: 0;
+    in-out property <bool> ride-has-workout: false;
+    in-out property <string> ride-name: "";
+    in-out property <string> ride-meta: "";
+    in-out property <string> ride-summary: "";
+    in-out property <bool> ride-built-in: false;
+    in-out property <[ProfileStep]> ride-profile;
+    in-out property <string> ride-elapsed: "0:00";
+    in-out property <string> ride-paused-for: "0:00";
+    // Live readings and whether a sensor delivered them within the last seconds.
+    in-out property <string> ride-power: "—";
+    in-out property <string> ride-hr: "—";
+    in-out property <string> ride-cadence: "—";
+    in-out property <bool> ride-power-live: false;
+    in-out property <bool> ride-hr-live: false;
+    in-out property <bool> ride-cadence-live: false;
+    in-out property <[ChartBin]> ride-chart;
+    in-out property <int> ride-chart-bins: 300;
+    in-out property <string> ride-chart-top: "";
+    in-out property <string> ride-chart-hr-range: "";
+    in-out property <bool> ride-chart-whole: false;
+    // Completion.
+    in-out property <string> ride-avg-power: "—";
+    in-out property <string> ride-max-power: "—";
+    in-out property <string> ride-avg-hr: "—";
+    in-out property <string> ride-max-hr: "—";
+    in-out property <string> ride-avg-cadence: "—";
+    // 0 not saved yet, 1 saved, 2 save failed (detail holds the reason).
+    in-out property <int> ride-save-state: 0;
+    in-out property <string> ride-save-detail: "";
+    in-out property <string> ride-folder: "";
+    // 0 none, 1 writing samples failed so the ride paused itself (detail), 2 could not start (detail),
+    // 3 could not open the folder (detail), 4 could not open the browser (detail).
+    in-out property <int> ride-notice: 0;
+    in-out property <string> ride-notice-detail: "";
+    // The upload to Strava through the Undertrained account. Only the Upload button starts it.
+    // state: 0 not sent, 1 sending, 2 on Strava, 3 Strava still processing, 4 sent but not
+    // confirmed (never resent), 5 failed (error tells why; retry says whether trying again helps).
+    in-out property <string> ride-activity-name: "";
+    in-out property <int> ride-upload-state: 0;
+    // Error: 1 session expired, 2 server has no upload API, 3 Strava not connected on the
+    // website, 4 network, 5 server error, 6 unexpected reply, 7 local files (detail),
+    // 8 submitted from another account, 9 Strava rejected it (detail).
+    in-out property <int> ride-upload-error: 0;
+    in-out property <bool> ride-upload-retry: false;
+    in-out property <string> ride-upload-detail: "";
+    // The name goes with the first submission and cannot change afterwards.
+    in-out property <bool> ride-upload-submitted: false;
+    pure callback name-valid(string) -> bool;
+    // The leave guard: 0 closed, 1 asked by navigation, 2 by sign-out, 3 by closing the window.
+    in-out property <int> leave-guard: 0;
+    out property <bool> ride-active: root.ride-phase == 1 || root.ride-phase == 2;
+    out property <bool> ride-unsaved: root.ride-phase == 3 && root.ride-save-state != 1;
+    out property <bool> ride-uploading: root.ride-phase == 3 && root.ride-upload-state == 1;
+    // A ride at stake stays one click away from every other screen.
+    property <bool> ride-chip: root.logged-in && (root.ride-active || root.ride-unsaved || root.ride-uploading) && root.screen != 2;
+    property <bool> narrow: root.width < 1100px;
+    out property <bool> any-sensor: root.trainer-connected || root.hr-connected;
     // True only with a verified account session; browser links depend on it.
     in-out property <bool> session-live: false;
     // Radios: 0 not checked, 1 ready, 2 unavailable. Known conditions arrive as an issue code
@@ -616,6 +754,18 @@ export component AppWindow inherits Window {
     callback create-workout();
     callback select-workout(string);
     callback close-training();
+    callback start-free-ride();
+    callback start-ride();
+    callback pause-ride();
+    callback resume-ride();
+    callback finish-ride();
+    callback retry-save();
+    callback open-ride-folder();
+    callback upload-ride();
+    callback open-strava();
+    // Answers to the leave guard: keep recording, or finish the ride and stay on its summary.
+    callback keep-riding();
+    callback finish-and-stay();
 
     VerticalLayout {
         padding: 0px; spacing: 0px;
@@ -633,8 +783,24 @@ export component AppWindow inherits Window {
                 if root.logged-in: Rectangle { width: 12px; }
                 if root.logged-in: NavTab { label: @tr("Devices"); active: root.screen == 0; activated => { root.navigate(0); } }
                 if root.logged-in: NavTab { label: @tr("Workouts"); active: root.screen >= 1; activated => { root.navigate(1); } }
-                Rectangle { horizontal-stretch: 1; }
-                if root.logged-in: Text { text: root.rider-name; color: Theme.muted; font-size: 13px; vertical-alignment: center; }
+                // A ride at stake stays one click away from every screen.
+                if root.ride-chip: HorizontalLayout {
+                    spacing: 6px;
+                    Rectangle { y: (parent.height - self.height) / 2; width: 8px; height: 8px; border-radius: 4px; background: root.ride-phase == 1 ? Theme.heart : root.ride-uploading ? Theme.primary : Theme.pause; }
+                    NavTab {
+                        // Narrow windows get the clock alone; the dot already says recording or paused.
+                        label: root.ride-active ? (root.narrow ? root.ride-elapsed : @tr("Recording {}", root.ride-elapsed))
+                            : root.ride-uploading ? @tr("Uploading…") : @tr("Unsaved ride");
+                        active: false; activated => { root.navigate(2); }
+                    }
+                }
+                // The rider's name is the one thing that can go: with a ride chip in a narrow
+                // window it is hidden so the tabs, the chip and Sign out stay whole.
+                if root.logged-in && !(root.ride-chip && root.narrow): Text {
+                    text: root.rider-name; color: Theme.muted; font-size: 13px; vertical-alignment: center;
+                    horizontal-alignment: right; horizontal-stretch: 1; min-width: 0px; overflow: elide;
+                }
+                if !root.logged-in || (root.ride-chip && root.narrow): Rectangle { horizontal-stretch: 1; }
                 if root.logged-in: ActionButton {
                     y: (parent.height - self.height) / 2;
                     label: @tr("Sign out"); quiet: true; compact: true;
@@ -816,6 +982,12 @@ export component AppWindow inherits Window {
                 }
                 ActionButton {
                     y: (parent.height - self.height) / 2;
+                    label: @tr("Free ride"); enabled: root.any-sensor && !root.ride-active && !root.ride-unsaved && !root.ride-uploading;
+                    accessible-label: @tr("Start a free ride with the connected sensors");
+                    activated => { root.start-free-ride(); }
+                }
+                ActionButton {
+                    y: (parent.height - self.height) / 2;
                     label: root.setup-saved ? @tr("Setup saved") : @tr("Save device setup"); primary: true; enabled: root.trainer-connected;
                     activated => { root.save-setup(); }
                 }
@@ -969,37 +1141,315 @@ export component AppWindow inherits Window {
             }
         } }
 
-        // The training preview: the selected workout at full width, and an honest note that
-        // riding it from the desktop is not built yet. Nothing here talks to the trainer.
-        if root.logged-in && root.screen == 2: Page { VerticalLayout {
-            padding-top: 32px; padding-bottom: 32px; spacing: 16px;
+        // The ride screen: ready to record, recording, paused, finished. The workout profile,
+        // when there is one, is a reference drawn under the live numbers; nothing here
+        // commands the trainer or times the steps.
+        if root.logged-in && root.screen == 2: Page { ScrollView { VerticalLayout {
+            padding-top: 24px; padding-bottom: 24px; padding-right: 4px; spacing: 16px; alignment: start;
+            // Top row: back or the elapsed clock, and the browser link. While riding the
+            // workout name sits on the same line so the numbers get the height.
             HorizontalLayout {
                 spacing: 16px;
-                ActionButton { label: @tr("Back to workouts"); quiet: true; compact: true; y: (parent.height - self.height) / 2; activated => { root.close-training(); } }
-                Rectangle { horizontal-stretch: 1; }
-                if root.session-live: ActionButton {
+                if root.ride-phase == 0 || (root.ride-phase == 3 && root.ride-save-state == 1): ActionButton {
+                    label: @tr("Back to workouts"); quiet: true; compact: true; y: (parent.height - self.height) / 2;
+                    enabled: !root.ride-uploading;
+                    activated => { root.close-training(); }
+                }
+                if root.ride-phase == 1 || root.ride-phase == 2: HorizontalLayout {
+                    spacing: 10px; alignment: start;
+                    Rectangle {
+                        y: (parent.height - self.height) / 2; width: 10px; height: 10px; border-radius: 5px;
+                        background: root.ride-phase == 1 ? Theme.heart : Theme.pause;
+                    }
+                    Text { text: root.ride-elapsed; color: Theme.ink; font-size: 30px; font-weight: 700; vertical-alignment: center; }
+                    Text { text: root.ride-phase == 2 ? @tr("Paused") : @tr("Recording"); color: Theme.muted; font-size: 13px; vertical-alignment: center; }
+                }
+                if root.ride-active: Rectangle { width: 1px; height: 24px; y: (parent.height - self.height) / 2; background: Theme.border; }
+                if root.ride-active: HorizontalLayout {
+                    spacing: 10px; alignment: start; horizontal-stretch: 1;
+                    Text {
+                        text: root.ride-has-workout ? root.ride-name : @tr("Free ride");
+                        color: Theme.ink; font-size: 16px; font-weight: 600; overflow: elide; vertical-alignment: center;
+                    }
+                    if root.ride-built-in: BuiltInBadge { y: (parent.height - self.height) / 2; }
+                }
+                if !root.ride-active: Rectangle { horizontal-stretch: 1; }
+                if root.ride-has-workout && root.session-live && root.ride-phase != 1: ActionButton {
                     y: (parent.height - self.height) / 2;
                     label: @tr("Open in browser"); quiet: true; compact: true;
                     activated => { root.open-workout(root.selected-workout.id); }
                 }
             }
-            HorizontalLayout {
+            // Title line for the ready and finished screens.
+            if !root.ride-active: HorizontalLayout {
                 spacing: 10px; alignment: start;
-                Text { text: root.selected-workout.name; color: Theme.ink; font-size: 28px; font-weight: 600; overflow: elide; vertical-alignment: center; }
-                if root.selected-workout.built-in: BuiltInBadge { y: (parent.height - self.height) / 2; }
+                Text {
+                    text: root.ride-has-workout ? root.ride-name : @tr("Free ride");
+                    color: Theme.ink; font-size: 28px; font-weight: 600; overflow: elide; vertical-alignment: center;
+                }
+                if root.ride-built-in: BuiltInBadge { y: (parent.height - self.height) / 2; }
             }
-            Text { text: root.selected-workout.meta; color: Theme.muted; font-size: 14px; }
-            if root.selected-workout.summary != "": Text { text: root.selected-workout.summary; color: Theme.muted; font-size: 13px; wrap: word-wrap; }
-            Rectangle {
-                height: 260px; border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
-                WorkoutChart { x: 16px; y: 16px; width: parent.width - 32px; height: parent.height - 32px; steps: root.selected-workout.profile; }
+            if root.ride-phase == 0 && root.ride-meta != "": Text { text: root.ride-meta; color: Theme.muted; font-size: 14px; }
+            if root.ride-phase == 0 && root.ride-summary != "": Text { text: root.ride-summary; color: Theme.muted; font-size: 13px; wrap: word-wrap; }
+
+            // Ready: the reference profile, the live sensor check, the notice and Start.
+            if root.ride-phase == 0 && root.ride-has-workout: Rectangle {
+                height: 200px; border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                WorkoutChart { x: 16px; y: 16px; width: parent.width - 32px; height: parent.height - 32px; steps: root.ride-profile; }
             }
-            Notice {
+            if root.ride-phase == 0: Rectangle {
+                border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                HorizontalLayout {
+                    padding: 20px; spacing: 32px;
+                    LiveMetric { label: @tr("POWER"); value: root.ride-power; unit: @tr("W"); live: root.ride-power-live; size: 28px; }
+                    LiveMetric { label: @tr("HEART RATE"); value: root.ride-hr; unit: @tr("BPM"); live: root.ride-hr-live; size: 28px; tone: Theme.heart; }
+                    LiveMetric { label: @tr("CADENCE"); value: root.ride-cadence; unit: @tr("RPM"); live: root.ride-cadence-live; size: 28px; }
+                    Rectangle { horizontal-stretch: 1; }
+                    VerticalLayout {
+                        alignment: center; spacing: 6px;
+                        Text {
+                            text: root.any-sensor ? @tr("Sensors ready. Readings are recorded once per second.") : @tr("Connect a trainer or a heart-rate sensor on the Devices screen first.");
+                            color: root.any-sensor ? Theme.muted : Theme.warn; font-size: 12px; wrap: word-wrap; horizontal-alignment: right;
+                        }
+                    }
+                }
+            }
+            if root.ride-phase == 0: Notice {
                 info: true;
-                text: @tr("Riding a workout from the desktop app is not available yet. This screen only previews the selection: nothing is sent to your trainer and nothing is recorded.");
+                text: root.ride-has-workout
+                    ? @tr("The workout profile is shown for reference only. Nothing is sent to the trainer, steps are not timed, and no FTP result is computed. Speed and distance are not measured.")
+                    : @tr("Readings only: nothing is sent to the trainer. Speed and distance are not measured.");
             }
-            Rectangle { vertical-stretch: 1; min-height: 0px; }
-        } }
+            if root.ride-notice == 2: Notice { text: @tr("The recording could not be started."); detail: root.ride-notice-detail; }
+            if root.ride-phase == 0: HorizontalLayout {
+                spacing: 12px; alignment: end;
+                ActionButton {
+                    label: @tr("Start recording"); primary: true; enabled: root.any-sensor && !root.signing-in;
+                    activated => { root.start-ride(); }
+                }
+            }
+
+            // Recording or paused: the big numbers, the last ten minutes, the controls.
+            if root.ride-phase == 1 || root.ride-phase == 2: Rectangle {
+                border-radius: 14px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                HorizontalLayout {
+                    padding: 20px; padding-left: 28px; padding-right: 28px; spacing: 40px;
+                    // Sized to read from the saddle: the power figure dominates, the rest stays large.
+                    LiveMetric { label: @tr("POWER"); value: root.ride-power; unit: @tr("W"); live: root.ride-power-live; size: 96px; unit-size: 14px; }
+                    Rectangle { width: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 14px; alignment: center;
+                        LiveMetric { label: @tr("HEART RATE"); value: root.ride-hr; unit: @tr("BPM"); live: root.ride-hr-live; size: 44px; unit-size: 12px; tone: Theme.heart; }
+                        LiveMetric { label: @tr("CADENCE"); value: root.ride-cadence; unit: @tr("RPM"); live: root.ride-cadence-live; size: 44px; unit-size: 12px; }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    VerticalLayout {
+                        alignment: center; spacing: 10px;
+                        if root.ride-phase == 1: ActionButton { label: @tr("Pause"); activated => { root.pause-ride(); } }
+                        if root.ride-phase == 2: ActionButton { label: @tr("Resume"); primary: true; activated => { root.resume-ride(); } }
+                        ActionButton { label: @tr("Finish ride"); quiet: true; activated => { root.finish-ride(); } }
+                    }
+                }
+            }
+            if root.ride-phase == 2: Notice {
+                info: true;
+                text: @tr("Paused for {}. The clock is stopped; readings keep showing what the sensors send.", root.ride-paused-for);
+            }
+            if root.ride-notice == 1: Notice {
+                text: @tr("Writing the recording failed, so the ride paused itself. Free some disk space or fix the folder, then resume.");
+                detail: root.ride-notice-detail;
+            }
+            if (root.ride-phase == 1 || root.ride-phase == 2) && !root.any-sensor: Notice {
+                text: @tr("No sensor is connected. The ride keeps running and missing readings stay empty; reconnect from the Devices screen.");
+            }
+            if root.ride-phase == 1 || root.ride-phase == 2: Rectangle {
+                height: 170px; border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                VerticalLayout {
+                    padding: 14px; spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Caption { text: @tr("LAST 10 MINUTES"); }
+                        Rectangle { horizontal-stretch: 1; }
+                        if root.ride-chart-top != "": Caption { text: root.ride-chart-top; }
+                        if root.ride-chart-hr-range != "": Caption { text: root.ride-chart-hr-range; color: Theme.heart; }
+                    }
+                    LiveChart { vertical-stretch: 1; bins: root.ride-chart; count: root.ride-chart-bins; }
+                }
+            }
+            if (root.ride-phase == 1 || root.ride-phase == 2) && root.ride-has-workout: Rectangle {
+                height: 56px; border-radius: 10px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                HorizontalLayout {
+                    padding: 8px; padding-left: 14px; spacing: 14px;
+                    Caption { text: @tr("REFERENCE"); vertical-alignment: center; }
+                    WorkoutChart { horizontal-stretch: 1; steps: root.ride-profile; }
+                }
+            }
+
+            // Finished: the summary, the whole ride, where it went.
+            if root.ride-phase == 3: Text { text: @tr("Ride complete · {}", root.ride-elapsed); color: Theme.ink; font-size: 20px; font-weight: 600; }
+            if root.ride-phase == 3: HorizontalLayout {
+                spacing: 12px;
+                StatCard { label: @tr("AVG POWER"); value: root.ride-avg-power; }
+                StatCard { label: @tr("MAX POWER"); value: root.ride-max-power; }
+                StatCard { label: @tr("AVG HEART RATE"); value: root.ride-avg-hr; }
+                StatCard { label: @tr("MAX HEART RATE"); value: root.ride-max-hr; }
+                StatCard { label: @tr("AVG CADENCE"); value: root.ride-avg-cadence; }
+            }
+            if root.ride-phase == 3: Rectangle {
+                height: 190px; border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                VerticalLayout {
+                    padding: 14px; spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Caption { text: @tr("WHOLE RIDE"); }
+                        Rectangle { horizontal-stretch: 1; }
+                        if root.ride-chart-top != "": Caption { text: root.ride-chart-top; }
+                        if root.ride-chart-hr-range != "": Caption { text: root.ride-chart-hr-range; color: Theme.heart; }
+                    }
+                    LiveChart { vertical-stretch: 1; bins: root.ride-chart; count: root.ride-chart-bins; }
+                }
+            }
+            if root.ride-phase == 3 && root.ride-save-state == 2: Notice {
+                text: @tr("The ride could not be saved. The data is still in memory; fix the folder or free disk space, then retry.");
+                detail: root.ride-save-detail;
+            }
+            if root.ride-phase == 3 && root.ride-save-state == 2: HorizontalLayout {
+                spacing: 12px; alignment: end;
+                ActionButton { label: @tr("Retry save"); primary: true; activated => { root.retry-save(); } }
+            }
+            // The upload, as on the website: through the Undertrained account, and only on request.
+            if root.ride-phase == 3 && root.ride-save-state == 1: Rectangle {
+                border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                property <bool> editable: !root.ride-upload-submitted && root.ride-upload-state != 1;
+                property <bool> name-ok: root.name-valid(root.ride-activity-name);
+                // An expired session is the one failure the rider fixes right here: signing in
+                // again as the same account brings the upload action back with the ride intact.
+                property <bool> expired: root.ride-upload-state == 5 && root.ride-upload-error == 1;
+                VerticalLayout {
+                    padding: 20px; spacing: 12px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        VerticalLayout {
+                            spacing: 6px; horizontal-stretch: 1;
+                            Caption { text: @tr("ACTIVITY NAME"); }
+                            TextField {
+                                text <=> root.ride-activity-name; label: @tr("Activity name");
+                                placeholder: @tr("Name this ride"); enabled: editable; horizontal-stretch: 1;
+                            }
+                        }
+                        // The action column exists only while there is an action, so the field
+                        // keeps the full width when the outcome leaves nothing to do.
+                        if root.ride-upload-state != 5 || root.ride-upload-retry || expired: VerticalLayout {
+                            alignment: end; horizontal-stretch: 0;
+                            if root.ride-upload-state == 0 || (root.ride-upload-state == 5 && root.ride-upload-retry): ActionButton {
+                                label: root.ride-upload-state == 0 ? @tr("Upload to Strava") : @tr("Try again"); primary: true;
+                                enabled: name-ok; activated => { root.upload-ride(); }
+                            }
+                            if root.ride-upload-state == 1: ActionButton { label: @tr("Uploading…"); primary: true; enabled: false; }
+                            if root.ride-upload-state == 2: ActionButton { label: @tr("Open in Strava"); primary: true; activated => { root.open-strava(); } }
+                            if root.ride-upload-state == 3: ActionButton { label: @tr("Check upload"); primary: true; activated => { root.upload-ride(); } }
+                            if root.ride-upload-state == 4: ActionButton { label: @tr("Check Strava"); activated => { root.open-strava(); } }
+                            if expired: ActionButton {
+                                label: root.signing-in ? @tr("Waiting for the browser…") : @tr("Sign in again"); primary: true;
+                                enabled: !root.signing-in && root.server-configured;
+                                activated => { root.sign-in(); }
+                            }
+                        }
+                    }
+                    if editable && !name-ok: Text { text: @tr("Give the ride a name of 1 to 200 characters."); color: Theme.warn; font-size: 12px; wrap: word-wrap; }
+                    if root.ride-upload-state == 0 && name-ok: Text {
+                        text: @tr("Goes to Strava through your Undertrained account, and only when you choose to.");
+                        color: Theme.muted; font-size: 12px; wrap: word-wrap;
+                    }
+                    if root.ride-upload-state == 1: Pulse { }
+                    if root.ride-upload-state == 1: Text { text: @tr("Sending the ride to Strava…"); color: Theme.muted; font-size: 12px; }
+                    if root.ride-upload-state == 2: Notice { info: true; text: @tr("Uploaded to Strava."); }
+                    if root.ride-upload-state == 3: Notice { info: true; text: @tr("Strava is still processing this ride. Check again in a moment."); }
+                    if root.ride-upload-state == 4: Notice {
+                        text: @tr("The ride may have reached Strava, but Undertrained did not confirm it. Check your Strava activities before uploading it again; the files stay on this computer.");
+                        detail: root.ride-upload-detail;
+                    }
+                    if root.ride-upload-state == 5: Notice {
+                        text: root.ride-upload-error == 1 ? @tr("Your session has expired. The ride stays in the recordings folder; sign in again to upload it.")
+                            : root.ride-upload-error == 2 ? @tr("This server cannot receive rides yet. Update the Undertrained backend to the release that adds desktop uploads; the ride stays on this computer.")
+                            : root.ride-upload-error == 3 ? @tr("Undertrained cannot post to Strava for this account. Reconnect Strava on the Undertrained website, then try again.")
+                            : root.ride-upload-error == 4 ? @tr("Could not reach Undertrained. Check your connection, then try again.")
+                            : root.ride-upload-error == 5 ? @tr("Undertrained reported an error. Try again in a moment; the ride stays on this computer.")
+                            : root.ride-upload-error == 6 ? @tr("Unexpected reply from the server. Try again, or update the server if this keeps happening.")
+                            : root.ride-upload-error == 7 ? @tr("The ride files could not be read for upload. They stay in the recordings folder.")
+                            : root.ride-upload-error == 8 ? @tr("This ride was submitted from another Undertrained account. Sign in with that account to check it.")
+                            : @tr("Strava rejected this ride. The files stay on this computer.");
+                        detail: root.ride-upload-detail;
+                    }
+                    // The sign-in started from this card reports back here, not on the login
+                    // screen the rider never sees while a ride is on screen.
+                    if expired && root.signing-in: Pulse { }
+                    if expired && root.signing-in: HorizontalLayout {
+                        spacing: 12px;
+                        Text { text: @tr("Finish in the browser, then come back here."); color: Theme.muted; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
+                        ActionButton { label: @tr("Cancel"); quiet: true; compact: true; activated => { root.cancel-sign-in(); } }
+                    }
+                    if expired && !root.signing-in && (root.auth-notice == 1 || root.auth-notice == 5): Notice {
+                        text: root.auth-notice == 1 ? @tr("Sign-in cancelled. The ride is still here; sign in again when you are ready.")
+                            : @tr("Sign-in failed. The ride is still here; check the browser, then sign in again.");
+                        detail: root.auth-detail;
+                    }
+                }
+            }
+            // Where the files went: secondary, but always reachable.
+            if root.ride-phase == 3 && root.ride-save-state == 1: HorizontalLayout {
+                spacing: 12px;
+                VerticalLayout {
+                    spacing: 2px; alignment: center; horizontal-stretch: 1;
+                    Text { text: @tr("Saved on this computer as a journal and a FIT file."); color: Theme.muted; font-size: 12px; }
+                    Text { text: root.ride-folder; color: Theme.faint; font-size: 11px; overflow: elide; }
+                }
+                ActionButton { label: @tr("Open recordings folder"); quiet: true; compact: true; y: (parent.height - self.height) / 2; activated => { root.open-ride-folder(); } }
+            }
+            if root.ride-notice == 3: Notice { text: @tr("Could not open the recordings folder."); detail: root.ride-notice-detail; }
+            if root.ride-notice == 4: Notice { text: @tr("Could not open the browser."); detail: root.ride-notice-detail; }
+        } } }
+    }
+    // The leave guard: a ride is being recorded and something would take the rider away.
+    if root.leave-guard != 0: Rectangle {
+        background: Theme.scrim;
+        TouchArea { }
+        guard-keys := FocusScope {
+            init => { self.focus(); }
+            key-pressed(event) => {
+                if event.text == Key.Escape { root.keep-riding(); return accept; }
+                return reject;
+            }
+        }
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: min(480px, parent.width - 48px);
+            height: guard-layout.preferred-height;
+            background: Theme.card; border-radius: 14px; border-width: 1px; border-color: Theme.border;
+            TouchArea { }
+            guard-layout := VerticalLayout {
+                padding: 24px; spacing: 14px;
+                Text {
+                    text: root.ride-active ? @tr("A ride is being recorded") : root.ride-uploading ? @tr("The ride is being uploaded") : @tr("This ride is not saved yet");
+                    color: Theme.ink; font-size: 20px; font-weight: 600; wrap: word-wrap;
+                }
+                Text {
+                    text: root.ride-active
+                        ? (root.leave-guard == 3
+                            ? @tr("Closing now would lose it. Finish the ride first, or keep recording.")
+                            : @tr("Leaving now would lose it. Finish the ride to keep it, or stay and keep recording."))
+                        : root.ride-uploading ? @tr("Wait for Strava's answer before leaving, so the result is not lost.")
+                        : @tr("Retry the save before leaving so the ride is not lost.");
+                    color: Theme.muted; font-size: 13px; wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: 10px; alignment: end;
+                    ActionButton { label: root.ride-active ? @tr("Keep recording") : @tr("Back to the ride"); primary: true; in-dialog: true; activated => { root.keep-riding(); } }
+                    if root.ride-active: ActionButton { label: @tr("Finish ride"); quiet: true; in-dialog: true; activated => { root.finish-and-stay(); } }
+                }
+            }
+        }
     }
     if root.picker-open: Rectangle {
         background: Theme.scrim;

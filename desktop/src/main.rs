@@ -1,15 +1,20 @@
 mod ant;
 mod auth;
 mod ble;
+mod fit;
 mod i18n;
 mod model;
+mod recording;
+mod recording_view;
 mod sensors;
 mod smoke;
 mod store;
+mod upload;
 mod workouts;
 
 use crate::i18n::Lang;
 use crate::model::Device;
+use crate::recording::{Live, Phase};
 use crate::workouts::{LoadError, Workout, WorkoutId};
 use slint::{ComponentHandle, ModelRc, Timer, TimerMode, VecModel};
 use std::{
@@ -43,9 +48,281 @@ struct State {
     workout_job: Option<tokio::task::JoinHandle<()>>,
     selected_workout: Option<WorkoutId>,
     lang: Lang,
+    /// Fresh readings from both roles, fed by every real sample and cleared on disconnect.
+    sensors: recording::Sensors,
+    /// The ride being recorded, or just finished. It lives outside any screen, so navigating
+    /// away never touches it; only a successful save followed by "Back" lets go of it.
+    ride: Option<Ride>,
+    /// Numbers every upload job, so an answer for an earlier ride or account is ignored.
+    upload_jobs: u64,
+}
+
+struct Ride {
+    recording: recording::Recording,
+    /// A copy of the workout the ride follows, taken when it started. Library refreshes and
+    /// sign-out attempts never reach it.
+    workout: Option<WorkoutRow>,
+    /// The account's FTP as the server reported it when the ride started, for zone colors.
+    /// None keeps the chart neutral; a guess is never used.
+    ftp: Option<f64>,
+    /// The account (server origin, athlete id) signed in when the ride started. Uploads
+    /// go only through that account; another account signing in lets go of the ride.
+    owner: Option<(String, i64)>,
+    paused_at: Option<Instant>,
+    /// The upload job whose answer is still expected, if any.
+    upload_job: Option<u64>,
+    /// The Strava activity once Undertrained confirmed it.
+    strava_activity: Option<i64>,
 }
 
 type WorkoutResult = Result<Vec<Workout>, LoadError>;
+type UploadResult = Result<upload::Outcome, upload::Error>;
+
+/// True while leaving would lose data: a ride is running or paused, finished but not saved,
+/// or waiting for Strava's answer.
+fn ride_guarded(ui: &AppWindow) -> bool {
+    ui.get_ride_active() || ui.get_ride_unsaved() || ui.get_ride_uploading()
+}
+
+/// The account a session belongs to, as rides remember it.
+fn session_owner(session: &auth::Session) -> (String, i64) {
+    (session.origin.clone(), session.athlete.id)
+}
+
+/// Let go of the ride on screen. Its files stay where they were written.
+fn drop_ride(ui: &AppWindow, state: &mut State) {
+    state.ride = None;
+    ui.set_ride_phase(0);
+    ui.set_ride_has_workout(false);
+    reset_upload_ui(ui);
+}
+
+/// What a sign-in did to the ride on screen.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RideOnSignIn {
+    /// No ride was on screen.
+    Absent,
+    /// The account that started the ride signed in again; the ride stays, with its upload
+    /// action back.
+    Kept,
+    /// Another account signed in; the saved ride left the screen, its files untouched.
+    Dropped,
+    /// Another account signed in while the ride was at stake; the ride wins.
+    Refused,
+}
+
+/// A ride outlives a sign-in only for the account that started it. For that account an
+/// expired session was the one thing in the way of the upload, so the action comes back:
+/// the upload module resumes a submitted ride from its receipt rather than posting it again,
+/// so the click is safe whether or not the earlier attempt got that far.
+fn ride_on_sign_in(ui: &AppWindow, state: &mut State, owner: &(String, i64)) -> RideOnSignIn {
+    let same_account = match state.ride.as_ref() {
+        None => {
+            ui.set_screen(0);
+            return RideOnSignIn::Absent;
+        }
+        Some(ride) => ride.owner.as_ref() == Some(owner),
+    };
+    if !same_account {
+        if ride_guarded(ui) {
+            return RideOnSignIn::Refused;
+        }
+        drop_ride(ui, state);
+        ui.set_screen(0);
+        return RideOnSignIn::Dropped;
+    }
+    if ui.get_ride_phase() == 3
+        && ui.get_ride_upload_state() == 5
+        && ui.get_ride_upload_error() == 1
+    {
+        ui.set_ride_upload_state(0);
+        ui.set_ride_upload_error(0);
+        ui.set_ride_upload_retry(false);
+        ui.set_ride_upload_detail("".into());
+    }
+    // The saved ride is what the rider came back for: show it, upload one click away.
+    ui.set_screen(2);
+    RideOnSignIn::Kept
+}
+
+/// A fresh finished screen never shows an earlier ride's upload.
+fn reset_upload_ui(ui: &AppWindow) {
+    ui.set_ride_upload_state(0);
+    ui.set_ride_upload_error(0);
+    ui.set_ride_upload_retry(false);
+    ui.set_ride_upload_detail("".into());
+    ui.set_ride_upload_submitted(false);
+    ui.set_ride_activity_name("".into());
+}
+
+/// Show what Undertrained answered. Only Uncertain and Complete forbid another submission;
+/// the module itself never resends a ride it has a receipt or an unanswered intent for.
+fn apply_upload_result(ui: &AppWindow, ride: &mut Ride, result: &UploadResult) {
+    use upload::{Error, Outcome};
+    ui.set_ride_upload_error(0);
+    ui.set_ride_upload_retry(false);
+    ui.set_ride_upload_detail("".into());
+    match result {
+        Ok(Outcome::Complete(id)) => {
+            ride.strava_activity = Some(*id);
+            ui.set_ride_upload_state(2);
+        }
+        Ok(Outcome::Processing) => ui.set_ride_upload_state(3),
+        Err(Error::Uncertain) => ui.set_ride_upload_state(4),
+        Err(error) => {
+            let (code, retry, detail) = match error {
+                Error::Unauthorized => (1, false, String::new()),
+                Error::Unavailable => (2, true, String::new()),
+                Error::Permission => (3, true, String::new()),
+                Error::Network => (4, true, String::new()),
+                Error::Server => (5, true, String::new()),
+                Error::InvalidResponse => (6, true, String::new()),
+                Error::Local(detail) => (7, true, detail.clone()),
+                Error::DifferentAccount => (8, false, String::new()),
+                Error::Rejected(detail) => (9, false, detail.clone()),
+                Error::Uncertain => unreachable!("handled above"),
+            };
+            ui.set_ride_upload_state(5);
+            ui.set_ride_upload_error(code);
+            ui.set_ride_upload_retry(retry);
+            ui.set_ride_upload_detail(detail.into());
+        }
+    }
+}
+
+/// Show the ready-to-record screen for a workout, or a free ride when there is none.
+fn show_ready(ui: &AppWindow, workout: Option<&WorkoutRow>) {
+    ui.set_ride_phase(0);
+    ui.set_ride_notice(0);
+    ui.set_ride_notice_detail("".into());
+    ui.set_ride_save_state(0);
+    apply_ride_workout(ui, workout);
+    ui.set_ride_chart(ModelRc::new(VecModel::from(Vec::<ChartBin>::new())));
+    ui.set_ride_chart_top("".into());
+    ui.set_ride_chart_hr_range("".into());
+    ui.set_screen(2);
+}
+
+fn apply_live(ui: &AppWindow, live: &Live) {
+    ui.set_ride_power(recording_view::value(live.power).into());
+    ui.set_ride_power_live(live.power.is_some());
+    ui.set_ride_hr(recording_view::value(live.heart_rate).into());
+    ui.set_ride_hr_live(live.heart_rate.is_some());
+    ui.set_ride_cadence(recording_view::value(live.cadence).into());
+    ui.set_ride_cadence_live(live.cadence.is_some());
+}
+
+/// Redraw the ride chart: the last ten minutes while riding, the whole ride once finished.
+fn refresh_chart(ui: &AppWindow, ride: &Ride, now: Instant, whole: bool) {
+    let points: Vec<recording_view::Point> = ride
+        .recording
+        .samples()
+        .iter()
+        .map(|s| recording_view::Point {
+            elapsed: s.elapsed,
+            power: s.live.power,
+            heart_rate: s.live.heart_rate,
+        })
+        .collect();
+    let elapsed = ride.recording.elapsed(now);
+    let (from, to) = if whole {
+        (0.0, elapsed.max(1.0))
+    } else {
+        let to = elapsed.max(recording_view::WINDOW_SECONDS);
+        (to - recording_view::WINDOW_SECONDS, to)
+    };
+    let chart = recording_view::chart(&points, from, to, ride.ftp);
+    let bins: Vec<ChartBin> = chart
+        .bins
+        .iter()
+        .map(|b| ChartBin {
+            has_power: b.power.is_some(),
+            power: b.power.unwrap_or(0.0) as f32,
+            zone: b.zone,
+            has_hr: b.heart_rate.is_some(),
+            hr: b.heart_rate.unwrap_or(0.0) as f32,
+        })
+        .collect();
+    ui.set_ride_chart_bins(recording_view::CHART_BINS as i32);
+    ui.set_ride_chart(ModelRc::new(VecModel::from(bins)));
+    ui.set_ride_chart_top(
+        chart
+            .power_top
+            .map(|top| format!("↑ {} W", top.round() as i64))
+            .unwrap_or_default()
+            .into(),
+    );
+    ui.set_ride_chart_hr_range(
+        chart
+            .hr_range
+            .map(|(low, high)| {
+                format!(
+                    "{}–{} bpm",
+                    (low + 10.0).round() as i64,
+                    (high - 10.0).round() as i64
+                )
+            })
+            .unwrap_or_default()
+            .into(),
+    );
+}
+
+/// The ride screen shows the copy of the workout taken when the ride started, not the
+/// library's current row, so nothing that happens to the library changes it mid-ride.
+fn apply_ride_workout(ui: &AppWindow, workout: Option<&WorkoutRow>) {
+    ui.set_ride_has_workout(workout.is_some());
+    let row = workout.cloned().unwrap_or_default();
+    ui.set_ride_name(row.name);
+    ui.set_ride_meta(row.meta);
+    ui.set_ride_summary(row.summary);
+    ui.set_ride_built_in(row.built_in);
+    ui.set_ride_profile(row.profile);
+}
+
+/// Stop the clock and export. The phase is Finished whatever happens; a failed export keeps
+/// the samples in memory and the screen offers a retry.
+fn finish_ride(ui: &AppWindow, state: &mut State, now: Instant) {
+    let lang = state.lang;
+    let Some(ride) = state.ride.as_mut() else {
+        return;
+    };
+    if ride.recording.saved() {
+        return;
+    }
+    let result = ride.recording.finish(now);
+    ride.paused_at = None;
+    ui.set_ride_phase(3);
+    ui.set_ride_notice(0);
+    ui.set_ride_notice_detail("".into());
+    if ride.workout.is_none() {
+        ui.set_ride_name(ride.recording.name().into());
+    }
+    let summary = ride.recording.summary(now);
+    ui.set_ride_elapsed(recording_view::elapsed(summary.elapsed).into());
+    ui.set_ride_avg_power(recording_view::value_with_unit(summary.avg_power, "W").into());
+    ui.set_ride_max_power(recording_view::value_with_unit(summary.max_power, "W").into());
+    ui.set_ride_avg_hr(recording_view::value_with_unit(summary.avg_heart_rate, "bpm").into());
+    ui.set_ride_max_hr(recording_view::value_with_unit(summary.max_heart_rate, "bpm").into());
+    ui.set_ride_avg_cadence(
+        recording_view::value_with_unit(summary.avg_cadence, i18n::cadence_unit(lang)).into(),
+    );
+    refresh_chart(ui, ride, now, true);
+    match result {
+        Ok(()) => {
+            ui.set_ride_save_state(1);
+            ui.set_ride_save_detail("".into());
+            ui.set_ride_folder(ride.recording.directory().display().to_string().into());
+            // The upload title starts as the recording's name; editing it changes nothing
+            // in the saved files.
+            reset_upload_ui(ui);
+            ui.set_ride_activity_name(ride.recording.name().into());
+        }
+        Err(error) => {
+            ui.set_ride_save_state(2);
+            ui.set_ride_save_detail(format!("{error:#}").into());
+        }
+    }
+}
 
 /// Forget every outstanding workout request. Used on sign-out and account change.
 fn clear_library(state: &mut State) {
@@ -212,7 +489,8 @@ fn workout_rows(ui: &AppWindow, state: &mut State) {
             let refreshed_without_it = library.loaded && library.error.is_none();
             state.selected_workout = None;
             ui.set_selected_workout(WorkoutRow::default());
-            if ui.get_screen() == 2 {
+            // An active or unsaved ride keeps its own copy of the workout and stays put.
+            if ui.get_screen() == 2 && !ride_guarded(ui) {
                 ui.set_screen(1);
                 if refreshed_without_it {
                     ui.set_workouts_notice(5);
@@ -357,6 +635,9 @@ fn reset_session_ui(ui: &AppWindow, state: &mut State) {
     ui.set_workouts_notice(0);
     ui.set_workouts_notice_detail("".into());
     ui.set_selected_workout(WorkoutRow::default());
+    // Only reached once no ride is at stake: sign-out is guarded while one is.
+    drop_ride(ui, state);
+    ui.set_leave_guard(0);
     workout_rows(ui, state);
 }
 
@@ -364,6 +645,7 @@ fn disconnected(ui: &AppWindow, state: &mut State, role: usize) {
     ui.set_setup_saved(false);
     state.connected[role] = None;
     state.last_sample[role] = None;
+    state.sensors.disconnect(role);
     if role == 0 {
         ui.set_trainer_state(0);
         ui.set_trainer_ant(false);
@@ -463,6 +745,10 @@ fn main() -> anyhow::Result<()> {
     // demo flags, is refused rather than silently treated as a normal launch.
     let args: Vec<_> = std::env::args().skip(1).collect();
     let smoke_test = args.iter().any(|a| a == "--smoke-test");
+    // The smoke test's rides go to a throwaway folder, removed when it ends.
+    let smoke_root = smoke_test.then(|| {
+        std::env::temp_dir().join(format!("undertrained-indoor-smoke-{}", std::process::id()))
+    });
     if let Some(unsupported) = args.iter().find(|a| *a != "--smoke-test") {
         eprintln!(
             "Unsupported argument: {unsupported}. Undertrained Indoor takes no launch options apart from --smoke-test, and requires an Undertrained sign-in."
@@ -509,12 +795,17 @@ fn main() -> anyhow::Result<()> {
         library: workouts::Library::default(),
         workout_job: None,
         selected_workout: None,
+        sensors: recording::Sensors::default(),
+        ride: None,
+        upload_jobs: 0,
     }));
     {
         let lang = state.borrow().lang;
         apply_language(&ui, &mut state.borrow_mut(), lang);
     }
     let (workout_events, mut workout_receiver) = mpsc::unbounded_channel::<(u64, WorkoutResult)>();
+    let (upload_events, mut upload_receiver) = mpsc::unbounded_channel::<(u64, UploadResult)>();
+    let upload_handle = runtime.handle().clone();
     let (commands, receiver) = mpsc::unbounded_channel();
     let (events, mut event_receiver) = mpsc::unbounded_channel();
     let worker = runtime.spawn(sensors::run(receiver, events));
@@ -547,6 +838,12 @@ fn main() -> anyhow::Result<()> {
         let origin = origin.clone();
         ui.on_sign_in(move || {
             let ui = weak.unwrap();
+            // A ride at stake belongs to the current account; switching is asked about first.
+            if ride_guarded(&ui) {
+                ui.set_screen(2);
+                ui.set_leave_guard(2);
+                return;
+            }
             let Some(origin) = origin.clone() else {
                 return;
             };
@@ -590,6 +887,11 @@ fn main() -> anyhow::Result<()> {
         let credentials = credentials.clone();
         ui.on_sign_out(move || {
             let ui = weak.unwrap();
+            if ride_guarded(&ui) {
+                ui.set_screen(2);
+                ui.set_leave_guard(2);
+                return;
+            }
             cancel_auth(&mut state.borrow_mut());
             let session = state.borrow_mut().session.take();
             let events = AuthSender {
@@ -617,6 +919,11 @@ fn main() -> anyhow::Result<()> {
         let events = workout_events.clone();
         ui.on_navigate(move |screen| {
             let ui = weak.unwrap();
+            if screen == 2
+                && let Some(ride) = state.borrow().ride.as_ref()
+            {
+                apply_ride_workout(&ui, ride.workout.as_ref());
+            }
             ui.set_screen(screen);
             // Load once when the library is first opened; refresh is explicit after that.
             let untouched = {
@@ -666,11 +973,17 @@ fn main() -> anyhow::Result<()> {
                 ui.set_workouts_notice(3);
                 return;
             }
+            // One ride at a time: while one is at stake, a card just returns to it.
+            if ride_guarded(&ui) {
+                ui.set_screen(2);
+                return;
+            }
             state.selected_workout = Some(id);
             ui.set_workouts_notice(0);
             ui.set_workouts_notice_detail("".into());
             workout_rows(&ui, &mut state);
-            ui.set_screen(2);
+            let row = ui.get_selected_workout();
+            show_ready(&ui, Some(&row));
         });
     }
     {
@@ -678,9 +991,277 @@ fn main() -> anyhow::Result<()> {
         let state = state.clone();
         ui.on_close_training(move || {
             let ui = weak.unwrap();
-            state.borrow_mut().selected_workout = None;
+            if ride_guarded(&ui) {
+                return;
+            }
+            let mut state = state.borrow_mut();
+            drop_ride(&ui, &mut state);
+            state.selected_workout = None;
             ui.set_selected_workout(WorkoutRow::default());
             ui.set_screen(1);
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        ui.on_start_free_ride(move || {
+            let ui = weak.unwrap();
+            if ride_guarded(&ui) {
+                ui.set_screen(2);
+                return;
+            }
+            show_ready(&ui, None);
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        let smoke_root = smoke_root.clone();
+        ui.on_start_ride(move || {
+            let ui = weak.unwrap();
+            if ride_guarded(&ui) {
+                ui.set_screen(2);
+                return;
+            }
+            // The button is disabled without a sensor or while a sign-in is pending, since
+            // the account could change under the ride; a stray activation changes nothing.
+            if !ui.get_any_sensor() || ui.get_signing_in() {
+                return;
+            }
+            let mut state = state.borrow_mut();
+            let owner = state.session.as_ref().map(session_owner);
+            let workout = ui.get_ride_has_workout().then(|| ui.get_selected_workout());
+            let (name, key) = match &workout {
+                Some(w) => (w.name.to_string(), Some(w.id.to_string())),
+                None => (i18n::free_ride_name(state.lang).to_owned(), None),
+            };
+            // The account's FTP, as the server reported it with the built-in tests, is
+            // snapshotted now so a refresh cannot recolor a ride in progress.
+            let library = &state.library.workouts;
+            let ftp = state
+                .selected_workout
+                .as_ref()
+                .and_then(|id| library.iter().find(|w| &w.id == id))
+                .and_then(|w| w.reference_ftp)
+                .or_else(|| library.iter().find_map(|w| w.reference_ftp))
+                .filter(|f| *f > 0.0);
+            // The smoke test records under a throwaway folder; every other launch uses the
+            // real recordings folder.
+            let started = match &smoke_root {
+                Some(root) => recording::Recording::start_in(root, name, key, Instant::now()),
+                None => recording::Recording::start(name, key, Instant::now()),
+            };
+            match started {
+                Ok(recording) => {
+                    apply_ride_workout(&ui, workout.as_ref());
+                    state.ride = Some(Ride {
+                        recording,
+                        workout,
+                        ftp,
+                        owner,
+                        paused_at: None,
+                        upload_job: None,
+                        strava_activity: None,
+                    });
+                    ui.set_ride_phase(1);
+                    ui.set_ride_elapsed("0:00".into());
+                    ui.set_ride_notice(0);
+                    ui.set_ride_notice_detail("".into());
+                    ui.set_ride_save_state(0);
+                    reset_upload_ui(&ui);
+                    ui.set_screen(2);
+                }
+                Err(error) => {
+                    ui.set_ride_notice(2);
+                    ui.set_ride_notice_detail(format!("{error:#}").into());
+                }
+            }
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_pause_ride(move || {
+            let ui = weak.unwrap();
+            let mut state = state.borrow_mut();
+            let Some(ride) = state.ride.as_mut() else {
+                return;
+            };
+            let now = Instant::now();
+            // The clock stops even when the journal write fails; the failure is shown.
+            match ride.recording.pause(now) {
+                Ok(()) => {
+                    ui.set_ride_notice(0);
+                    ui.set_ride_notice_detail("".into());
+                }
+                Err(error) => {
+                    ui.set_ride_notice(1);
+                    ui.set_ride_notice_detail(format!("{error:#}").into());
+                }
+            }
+            ride.paused_at = Some(now);
+            ui.set_ride_paused_for("0:00".into());
+            ui.set_ride_phase(2);
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_resume_ride(move || {
+            let ui = weak.unwrap();
+            let mut state = state.borrow_mut();
+            let Some(ride) = state.ride.as_mut() else {
+                return;
+            };
+            match ride.recording.resume(Instant::now()) {
+                Ok(()) => {
+                    ride.paused_at = None;
+                    ui.set_ride_notice(0);
+                    ui.set_ride_notice_detail("".into());
+                    ui.set_ride_phase(1);
+                }
+                Err(error) => {
+                    ui.set_ride_notice(1);
+                    ui.set_ride_notice_detail(format!("{error:#}").into());
+                }
+            }
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_finish_ride(move || {
+            let ui = weak.unwrap();
+            finish_ride(&ui, &mut state.borrow_mut(), Instant::now());
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_retry_save(move || {
+            let ui = weak.unwrap();
+            finish_ride(&ui, &mut state.borrow_mut(), Instant::now());
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_open_ride_folder(move || {
+            let ui = weak.unwrap();
+            let state = state.borrow();
+            let Some(ride) = state.ride.as_ref() else {
+                return;
+            };
+            match open::that(ride.recording.directory()) {
+                Ok(()) => {
+                    ui.set_ride_notice(0);
+                    ui.set_ride_notice_detail("".into());
+                }
+                Err(error) => {
+                    ui.set_ride_notice(3);
+                    ui.set_ride_notice_detail(error.to_string().into());
+                }
+            }
+        });
+    }
+    ui.on_name_valid(|name| recording_view::activity_name_valid(&name));
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        let events = upload_events.clone();
+        let handle = upload_handle.clone();
+        // Only this click sends anything. The module resumes a submitted upload rather than
+        // posting the file again, and refuses one whose outcome it never learned.
+        ui.on_upload_ride(move || {
+            let ui = weak.unwrap();
+            let mut state = state.borrow_mut();
+            let phase_allows = matches!(ui.get_ride_upload_state(), 0 | 3 | 5);
+            if ui.get_ride_phase() != 3 || !phase_allows {
+                return;
+            }
+            let name = ui.get_ride_activity_name().trim().to_owned();
+            if !recording_view::activity_name_valid(&name) {
+                return;
+            }
+            let session = state.session.clone();
+            state.upload_jobs += 1;
+            let job = state.upload_jobs;
+            let Some(ride) = state.ride.as_mut() else {
+                return;
+            };
+            if !ride.recording.saved() {
+                return;
+            }
+            ui.set_ride_activity_name(name.clone().into());
+            ui.set_ride_upload_submitted(true);
+            let Some(session) = session else {
+                apply_upload_result(&ui, ride, &Err(upload::Error::Unauthorized));
+                return;
+            };
+            // The ride belongs to the account that started it, whatever is signed in now.
+            if ride.owner.as_ref() != Some(&session_owner(&session)) {
+                apply_upload_result(&ui, ride, &Err(upload::Error::DifferentAccount));
+                return;
+            }
+            ride.upload_job = Some(job);
+            ui.set_ride_upload_state(1);
+            ui.set_ride_upload_error(0);
+            ui.set_ride_upload_detail("".into());
+            let directory = ride.recording.directory().to_path_buf();
+            let events = events.clone();
+            handle.spawn(async move {
+                let result = upload::run(&session, &directory, &name).await;
+                let _ = events.send((job, result));
+            });
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_open_strava(move || {
+            let ui = weak.unwrap();
+            let state = state.borrow();
+            let Some(ride) = state.ride.as_ref() else {
+                return;
+            };
+            // The activity page once confirmed; otherwise the dashboard, where the rider
+            // can see for themselves whether the ride arrived.
+            let url = ride
+                .strava_activity
+                .and_then(recording_view::strava_activity_url)
+                .unwrap_or_else(|| recording_view::STRAVA_DASHBOARD.to_owned());
+            match open::that(&url) {
+                Ok(()) => {
+                    ui.set_ride_notice(0);
+                    ui.set_ride_notice_detail("".into());
+                }
+                Err(error) => {
+                    ui.set_ride_notice(4);
+                    ui.set_ride_notice_detail(error.to_string().into());
+                }
+            }
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_keep_riding(move || {
+            let ui = weak.unwrap();
+            ui.set_leave_guard(0);
+            // Returning to the ride redraws it from the copy the ride holds.
+            if let Some(ride) = state.borrow().ride.as_ref() {
+                apply_ride_workout(&ui, ride.workout.as_ref());
+            }
+            ui.set_screen(2);
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_finish_and_stay(move || {
+            let ui = weak.unwrap();
+            ui.set_leave_guard(0);
+            ui.set_screen(2);
+            finish_ride(&ui, &mut state.borrow_mut(), Instant::now());
         });
     }
     {
@@ -845,12 +1426,44 @@ fn main() -> anyhow::Result<()> {
                 workout_rows(&ui, &mut timer_state.borrow_mut());
             }
         }
+        while let Ok((job, result)) = upload_receiver.try_recv() {
+            let mut state = timer_state.borrow_mut();
+            // Only the answer to the ride on screen counts; a job from an earlier ride or
+            // account was dropped with that ride.
+            let Some(ride) = state.ride.as_mut().filter(|r| r.upload_job == Some(job)) else {
+                continue;
+            };
+            ride.upload_job = None;
+            apply_upload_result(&ui, ride, &result);
+            if matches!(result, Err(upload::Error::Unauthorized)) {
+                ui.set_session_live(false);
+            }
+        }
         while let Ok((generation, event)) = auth_receiver.try_recv() {
             if generation != timer_state.borrow().auth_generation {
                 continue;
             }
             match event {
                 AuthEvent::SignedIn(session) => {
+                    // The ride on screen is settled first: kept for its own account, let go
+                    // for another, and the screen is chosen accordingly.
+                    let owner = session_owner(&session);
+                    if ride_on_sign_in(&ui, &mut timer_state.borrow_mut(), &owner)
+                        == RideOnSignIn::Refused
+                    {
+                        // Not reachable from the interface, which refuses sign-in while a
+                        // ride is at stake and refuses rides while a sign-in is pending;
+                        // kept so a late answer can never switch the account under a ride.
+                        ui.set_signing_in(false);
+                        ui.set_auth_notice(5);
+                        ui.set_auth_detail(
+                            "Another account cannot sign in while a ride is at stake.".into(),
+                        );
+                        timer_handle.spawn(async move {
+                            let _ = auth::revoke(session).await;
+                        });
+                        continue;
+                    }
                     ui.set_signing_in(false);
                     ui.set_logged_in(true);
                     ui.set_rider_name(session.athlete.name.clone().into());
@@ -867,7 +1480,6 @@ fn main() -> anyhow::Result<()> {
                     timer_state.borrow_mut().session = Some(session);
                     apply_language(&ui, &mut timer_state.borrow_mut(), lang);
                     ui.set_session_live(true);
-                    ui.set_screen(0);
                     ui.set_workout_query("".into());
                     ui.set_workouts_notice(0);
                     ui.set_workouts_notice_detail("".into());
@@ -945,6 +1557,13 @@ fn main() -> anyhow::Result<()> {
                         let snapshot = timer_state.borrow().connected[role]
                             .as_ref()
                             .is_some_and(|d| d.id.starts_with("ant:"));
+                        // The recorder reads sensors, never the screen.
+                        timer_state.borrow_mut().sensors.update(
+                            role,
+                            &reading,
+                            snapshot,
+                            Instant::now(),
+                        );
                         let dash = |value: Option<String>| -> Option<slint::SharedString> {
                             match value {
                                 Some(v) => Some(v.into()),
@@ -980,6 +1599,46 @@ fn main() -> anyhow::Result<()> {
                 },
             }
         }
+        // The ride: live values from the sensors, one sample per second while running, the
+        // paused clock while paused. The screen never feeds numbers back into the recording.
+        {
+            let now = Instant::now();
+            let mut state = timer_state.borrow_mut();
+            let State { ride, sensors, .. } = &mut *state;
+            let live = sensors.live(now);
+            if ui.get_screen() == 2 || ride.is_some() {
+                apply_live(&ui, &live);
+            }
+            if let Some(ride) = ride.as_mut() {
+                match ride.recording.phase() {
+                    Phase::Running => {
+                        match ride.recording.tick(now, live) {
+                            Ok(true) => refresh_chart(&ui, ride, now, false),
+                            Ok(false) => {}
+                            Err(error) => {
+                                ride.paused_at = Some(now);
+                                ui.set_ride_paused_for("0:00".into());
+                                ui.set_ride_phase(2);
+                                ui.set_ride_notice(1);
+                                ui.set_ride_notice_detail(format!("{error:#}").into());
+                            }
+                        }
+                        ui.set_ride_elapsed(
+                            recording_view::elapsed(ride.recording.elapsed(now)).into(),
+                        );
+                    }
+                    Phase::Paused => {
+                        if let Some(at) = ride.paused_at {
+                            ui.set_ride_paused_for(
+                                recording_view::elapsed(now.duration_since(at).as_secs_f64())
+                                    .into(),
+                            );
+                        }
+                    }
+                    Phase::Finished => {}
+                }
+            }
+        }
         for role in 0..2 {
             if timer_state.borrow().last_sample[role]
                 .is_some_and(|time| time.elapsed() > Duration::from_secs(5))
@@ -1005,7 +1664,11 @@ fn main() -> anyhow::Result<()> {
             TimerMode::SingleShot,
             Duration::from_millis(200),
             move || {
-                smoke::run(&weak.unwrap(), &state);
+                smoke::run(
+                    &weak.unwrap(),
+                    &state,
+                    smoke_root.as_deref().expect("smoke root"),
+                );
                 slint::quit_event_loop().unwrap();
             },
         );
@@ -1055,6 +1718,20 @@ fn main() -> anyhow::Result<()> {
                 Err(error) => eprintln!("Screenshot failed: {error}"),
             }
             let _ = slint::quit_event_loop();
+        });
+    }
+    {
+        // Closing the window with a ride at stake shows the guard instead of losing the ride.
+        let weak = ui.as_weak();
+        ui.window().on_close_requested(move || {
+            let ui = weak.unwrap();
+            if ride_guarded(&ui) {
+                ui.set_screen(2);
+                ui.set_leave_guard(3);
+                slint::CloseRequestResponse::KeepWindowShown
+            } else {
+                slint::CloseRequestResponse::HideWindow
+            }
         });
     }
     ui.run()?;
