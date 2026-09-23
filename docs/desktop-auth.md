@@ -16,7 +16,9 @@ The new endpoints are:
 - `GET /api/desktop/session`: validate the desktop bearer session and return athlete ID/name.
 - `DELETE /api/desktop/session`: revoke the presented session.
 
-Desktop sessions currently grant profile access only and are not accepted by the existing tRPC context. Future native APIs must authenticate these sessions and check athlete ownership explicitly.
+Desktop sessions grant profile and read-only cycling workout access. They are not accepted by the existing tRPC context. Native APIs derive athlete ownership from the authenticated session.
+
+`GET /api/desktop/workouts` returns `{ workouts: [...] }`, newest updated first. Each entry contains `id`, `name`, `durationSeconds`, nullable `estimatedTss`, `summary`, and `profile` pairs of duration seconds and nullable percent FTP, for example `[600, 80]` means ten minutes at 80% FTP. It lists personal cycling workouts only. Running workouts and built-in templates are excluded. Missing, expired, and revoked bearer tokens return 401; other methods return 405. The endpoint ignores client-supplied athlete IDs and does not allow mutations. Create and edit open `/workouts/new` and `/workouts/{id}` in the browser, using the existing web session. No schema migration beyond desktop authentication is needed.
 
 Codes and session tokens are stored only as hashes. Account data deletion and confirmed Strava deauthorization explicitly revoke pending codes and desktop sessions, since those flows retain the athlete row. A physical athlete deletion also removes credentials through foreign-key cascades. Schedule routine cleanup of expired rows:
 
