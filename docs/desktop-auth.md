@@ -13,7 +13,7 @@ The new endpoints are:
 - `GET /api/desktop/authorize`: validate loopback redirect and S256 challenge, require browser login, render consent.
 - `POST /api/desktop/authorize`: verify signed consent bound to the account and request, issue a 60-second code.
 - `POST /api/desktop/token`: atomically consume the hashed code with the matching verifier, create a 30-day desktop session.
-- `GET /api/desktop/session`: validate the desktop bearer session and return athlete ID/name.
+- `GET /api/desktop/session`: validate the desktop bearer session and return athlete ID/name/language.
 - `DELETE /api/desktop/session`: revoke the presented session.
 
 Desktop sessions grant profile and read-only cycling workout access. They are not accepted by the existing tRPC context. Native APIs derive athlete ownership from the authenticated session.
@@ -30,3 +30,5 @@ DELETE FROM desktop_sessions WHERE expires_at <= EXTRACT(EPOCH FROM NOW());
 The browser confirmation form carries an HMAC over the athlete, redirect, state, challenge and expiry. The callback is restricted to `http://127.0.0.1:PORT/callback` on an unprivileged port. PKCE protects the intercepted-code case, and code consumption is a transactional delete, preventing replay across server instances.
 
 Validation performed: authentication helper tests, TypeScript checking, and ESLint on changed application files. Browser approval through an actual Strava account and a migrated database must be checked after deploying this prerequisite.
+
+The token and session responses include the account `athlete.language` preference. Desktop clients can request `GET /api/desktop/workouts?locale=en-GB` or `?locale=fr-FR` to translate built-in names, summaries and duration labels for a local language override. Without the parameter, the account language still applies. Unsupported or repeated locale parameters return 400 after authentication. This read-only override does not change the account preference or personal workout names.
