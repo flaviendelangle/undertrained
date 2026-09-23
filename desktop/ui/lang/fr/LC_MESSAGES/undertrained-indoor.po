@@ -622,9 +622,6 @@ msgstr "L'enregistrement n'a pas pu démarrer."
 msgid "The ride could not be saved. The data is still in memory; fix the folder or free disk space, then retry."
 msgstr "La sortie n'a pas pu être enregistrée. Les données sont encore en mémoire ; corrigez le dossier ou libérez de l'espace disque, puis réessayez."
 
-msgid "The workout profile is shown for reference only. Nothing is sent to the trainer, steps are not timed, and no FTP result is computed. Speed and distance are not measured."
-msgstr "Le profil de la séance est affiché à titre de repère uniquement. Rien n'est envoyé au home trainer, les étapes ne sont pas chronométrées et aucun résultat FTP n'est calculé. La vitesse et la distance ne sont pas mesurées."
-
 msgid "This ride is not saved yet"
 msgstr "Cette sortie n'est pas encore enregistrée"
 
@@ -654,3 +651,173 @@ msgstr "{} tr/min"
 
 msgid "{} unavailable"
 msgstr "{} indisponible"
+
+# The guided workout: timed steps, the target, the cues and resistance control (ERG).
+# "Étape" for a step and "cible" for the target follow the website's live-training HUD.
+
+msgid "ANT+ trainer · follow the targets yourself"
+msgstr "Home trainer ANT+ · suivez les cibles vous-même"
+
+msgid "ANT+ trainer · readings only, follow the target yourself"
+msgstr "Home trainer ANT+ · mesures uniquement, suivez la cible vous-même"
+
+msgid "Built-in test: no FTP result is computed and the app does not detect when you stop. Finish the ride once you cannot hold the target."
+msgstr "Test intégré : aucun résultat FTP n'est calculé et l'application ne détecte pas votre arrêt. Terminez la sortie dès que vous ne tenez plus la cible."
+
+msgid "Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the app does not detect when you stop. Finish the ride yourself once you cannot hold the target. Speed and distance are not measured."
+msgstr "Test intégré : les étapes sont chronométrées et la cible affichée, mais aucun résultat FTP n'est calculé et l'application ne détecte pas votre arrêt. Terminez la sortie vous-même dès que vous ne tenez plus la cible. La vitesse et la distance ne sont pas mesurées."
+
+msgid "Cadence cue {} rpm"
+msgstr "Consigne de cadence {} tr/min"
+
+msgid "Cadence off the cue of {} rpm"
+msgstr "Cadence éloignée de la consigne de {} tr/min"
+
+msgid "Cadence {} rpm"
+msgstr "Cadence {} tr/min"
+
+msgid "Cool-down"
+msgstr "Retour au calme"
+
+msgid "DONE"
+msgstr "TERMINÉE"
+
+msgid "ERG available on {}"
+msgstr "Mode ERG disponible sur {}"
+
+msgid "ERG off · target shown, resistance is yours"
+msgstr "ERG désactivé · cible affichée, résistance libre"
+
+msgid "ERG on · free step, no target"
+msgstr "ERG activé · étape libre, aucune cible"
+
+msgid "ERG on · paused, no target"
+msgstr "ERG activé · en pause, aucune cible"
+
+msgid "ERG on · workout complete, no target"
+msgstr "ERG activé · séance terminée, aucune cible"
+
+msgid "Enable ERG"
+msgstr "Activer l'ERG"
+
+msgid "FREE"
+msgstr "LIBRE"
+
+msgid "INTENSITY"
+msgstr "INTENSITÉ"
+
+msgid "Keep riding freely, or finish the ride."
+msgstr "Continuez à rouler librement, ou terminez la sortie."
+
+msgid "LAST STEP"
+msgstr "DERNIÈRE ÉTAPE"
+
+msgid "LEFT"
+msgstr "RESTANTES"
+
+msgid "Lower the intensity by 5 percent"
+msgstr "Baisser l'intensité de 5 %"
+
+msgid "NEXT"
+msgstr "ENSUITE"
+
+msgid "No trainer connected"
+msgstr "Aucun home trainer connecté"
+
+msgid "No trainer connected · follow the target yourself"
+msgstr "Aucun home trainer connecté · suivez la cible vous-même"
+
+msgid "No trainer control · follow the targets yourself"
+msgstr "Home trainer non pilotable · suivez les cibles vous-même"
+
+msgid "PLAN"
+msgstr "PLAN"
+
+msgid "Paused for {}. The clock and the workout step are stopped; readings keep showing what the sensors send."
+msgstr "En pause depuis {}. Le chrono et l'étape de la séance sont arrêtés ; les mesures continuent d'afficher ce que les capteurs envoient."
+
+msgid "REFERENCE ONLY"
+msgstr "REPÈRE UNIQUEMENT"
+
+msgid "Raise the intensity by 5 percent"
+msgstr "Augmenter l'intensité de 5 %"
+
+msgid "Recovery"
+msgstr "Récupération"
+
+msgid "Reference only: this workout came without step data, so steps are not timed and nothing is sent to the trainer."
+msgstr "Repère uniquement : cette séance est arrivée sans le détail des étapes, donc elles ne sont pas chronométrées et rien n'est envoyé au home trainer."
+
+msgid "Releasing the trainer…"
+msgstr "Relâchement du home trainer…"
+
+msgid "Rest"
+msgstr "Repos"
+
+msgid "STEP {} OF {}"
+msgstr "ÉTAPE {} SUR {}"
+
+msgid "Sending {} W to the trainer…"
+msgstr "Envoi de {} W au home trainer…"
+
+msgid "Skip step"
+msgstr "Passer l'étape"
+
+msgid "Switch resistance control off"
+msgstr "Désactiver le pilotage de la résistance"
+
+msgid "Switch resistance control on for this trainer"
+msgstr "Activer le pilotage de la résistance sur ce home trainer"
+
+msgid "TARGET"
+msgstr "CIBLE"
+
+msgid "The steps are timed from the plan and the target is shown at every moment. Resistance control (ERG) stays off until you switch it on during the ride, and needs a Bluetooth trainer that supports it. No FTP result is computed. Speed and distance are not measured."
+msgstr "Les étapes sont chronométrées d'après le plan et la cible est affichée à chaque instant. Le pilotage de la résistance (ERG) reste désactivé tant que vous ne l'activez pas pendant la sortie, et nécessite un home trainer Bluetooth compatible. Aucun résultat FTP n'est calculé. La vitesse et la distance ne sont pas mesurées."
+
+msgid "The trainer did not accept the command, so ERG control stopped. The ride keeps recording; reconnect the trainer if it stays unresponsive, then enable ERG again."
+msgstr "Le home trainer n'a pas accepté la commande, le pilotage ERG s'est donc arrêté. L'enregistrement continue ; reconnectez le home trainer s'il ne répond plus, puis réactivez l'ERG."
+
+msgid "No power reading from the trainer for five seconds, so ERG control stopped. The ride keeps recording; check the trainer's link, then enable ERG again once readings are back."
+msgstr "Aucune mesure de puissance du home trainer depuis cinq secondes, le pilotage ERG s'est donc arrêté. L'enregistrement continue ; vérifiez la liaison du home trainer, puis réactivez l'ERG quand les mesures reviennent."
+
+msgid "The trainer disconnected, so ERG is off. The ride keeps recording; reconnect the trainer from the Devices screen, then enable ERG again."
+msgstr "Le home trainer s'est déconnecté, l'ERG est donc désactivé. L'enregistrement continue ; reconnectez le home trainer depuis l'écran Appareils, puis réactivez l'ERG."
+
+msgid "This trainer takes no commands · follow the target yourself"
+msgstr "Ce home trainer n'accepte pas de commandes · suivez la cible vous-même"
+
+msgid "This workout came from a server without step data, so its profile is shown for reference only: steps are not timed and nothing is sent to the trainer. Update the Undertrained backend to ride it step by step."
+msgstr "Cette séance vient d'un serveur sans le détail des étapes : son profil est affiché à titre de repère uniquement, les étapes ne sont pas chronométrées et rien n'est envoyé au home trainer. Mettez à jour le serveur Undertrained pour la suivre étape par étape."
+
+msgid "Trainer holding {} W"
+msgstr "Home trainer maintenu à {} W"
+
+msgid "Turn ERG off"
+msgstr "Désactiver l'ERG"
+
+msgid "Warm-up"
+msgstr "Échauffement"
+
+msgid "Work"
+msgstr "Travail"
+
+msgid "Workout complete"
+msgstr "Séance terminée"
+
+msgid "Workout completed."
+msgstr "Séance terminée."
+
+msgid "Workout stopped during step {} of {}."
+msgstr "Séance arrêtée pendant l'étape {} sur {}."
+
+msgid "free riding"
+msgstr "libre"
+
+msgid "{n} timed step"
+msgid_plural "{n} timed steps"
+msgstr[0] "{n} étape chronométrée"
+msgstr[1] "{n} étapes chronométrées"
+
+msgid "{} LEFT"
+msgstr "{} RESTANTES"

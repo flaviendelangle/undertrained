@@ -3,11 +3,13 @@
 //! sensor hardware is touched, and nothing in this file is reachable from a normal launch.
 use crate::i18n::Lang;
 use crate::model::{Capabilities, Device, Reading};
+use crate::player::{Plan, Segment};
 use crate::recording::Phase;
 use crate::workouts::{Workout, WorkoutId};
 use crate::{
     AppWindow, RideOnSignIn, State, apply_language, apply_live, connected, device_rows,
-    disconnected, reset_session_ui, ride_on_sign_in, workout_rows,
+    disconnected, erg_event, guard_erg_power, refresh_player, reset_session_ui, ride_on_sign_in,
+    workout_rows,
 };
 use slint::Model;
 use std::{
@@ -66,8 +68,57 @@ fn fixture_devices() -> Vec<Device> {
     ]
 }
 
+fn segment(
+    duration_seconds: u32,
+    watts: Option<(f64, f64)>,
+    cadence: Option<u16>,
+    note: Option<&str>,
+    intensity: Option<&str>,
+) -> Segment {
+    Segment {
+        duration_seconds,
+        start_watts: watts.map(|(start, _)| start),
+        end_watts: watts.map(|(_, end)| end),
+        cadence,
+        note: note.map(str::to_owned),
+        intensity: intensity.map(str::to_owned),
+    }
+}
+
+/// The exact plan a current server sends with a workout: a ramp, a work step with cues, a
+/// free step and a cool-down, in watts already resolved against the account's FTP.
+fn fixture_plan() -> Plan {
+    Plan {
+        reference_ftp: 250.0,
+        ftp_test: None,
+        segments: vec![
+            segment(
+                120,
+                Some((100.0, 150.0)),
+                Some(90),
+                Some("Easy spin, build slowly"),
+                Some("warmup"),
+            ),
+            segment(
+                180,
+                Some((300.0, 300.0)),
+                Some(95),
+                Some("Hold it"),
+                Some("work"),
+            ),
+            segment(60, None, None, None, Some("rest")),
+            segment(60, Some((120.0, 120.0)), None, None, Some("cooldown")),
+        ],
+    }
+}
+
 fn fixture_workouts() -> Vec<Workout> {
-    let workout = |id, name: &str, tss, summary: &str, profile: Vec<(u32, Option<f64>)>| Workout {
+    let workout = |id,
+                   name: &str,
+                   tss,
+                   summary: &str,
+                   profile: Vec<(u32, Option<f64>)>,
+                   execution: Option<Plan>| Workout {
         id: WorkoutId::Personal(id),
         name: name.into(),
         duration_seconds: profile.iter().map(|(d, _)| d).sum(),
@@ -76,8 +127,10 @@ fn fixture_workouts() -> Vec<Workout> {
         reference_ftp: None,
         summary: summary.into(),
         profile,
+        execution,
     };
     vec![
+        // As an older server sends it: a chart, no plan. Reference only, never played.
         workout(
             1,
             "Sweet spot 3 × 12",
@@ -92,6 +145,7 @@ fn fixture_workouts() -> Vec<Workout> {
                 (720, Some(90.0)),
                 (360, Some(45.0)),
             ],
+            None,
         ),
         workout(
             2,
@@ -99,9 +153,18 @@ fn fixture_workouts() -> Vec<Workout> {
             Some(78.0),
             "5 × 3 min at 118%",
             vec![(900, Some(55.0)), (180, Some(118.0)), (600, Some(45.0))],
+            Some(fixture_plan()),
         ),
-        workout(3, "Free ride 45", None, "No targets", vec![(2700, None)]),
-        // A shared test as the server would send it: a slug, a duration label and no TSS.
+        workout(
+            3,
+            "Free ride 45",
+            None,
+            "No targets",
+            vec![(2700, None)],
+            None,
+        ),
+        // A shared test as the server would send it: a slug, a duration label, no TSS, and
+        // timed steps flagged as a test.
         Workout {
             id: WorkoutId::BuiltIn("fixture-step-test".into()),
             name: "Step test".into(),
@@ -111,6 +174,14 @@ fn fixture_workouts() -> Vec<Workout> {
             reference_ftp: Some(250.0),
             summary: "Ramps until you stop".into(),
             profile: vec![(300, Some(50.0)), (1200, Some(120.0))],
+            execution: Some(Plan {
+                reference_ftp: 250.0,
+                ftp_test: Some("ramp-test".into()),
+                segments: vec![
+                    segment(300, Some((125.0, 125.0)), None, None, Some("warmup")),
+                    segment(1200, Some((150.0, 400.0)), None, None, Some("work")),
+                ],
+            }),
         },
     ]
 }
@@ -316,6 +387,33 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     assert!(ui.get_ride_has_workout());
     assert_eq!(ui.get_ride_name(), "VO2 max 5 × 3");
     assert_eq!(ui.get_selected_workout().meta, "28 min · 78 TSS");
+    // The ready screen tells a guided ride from a reference-only one by the plan alone.
+    assert!(ui.get_ride_guided(), "A plan makes the ride guided");
+    assert!(!ui.get_ride_test());
+    assert_eq!(ui.get_ride_plan_steps(), 4);
+    assert_eq!(ui.get_ride_plan_total(), "7:00");
+    assert!(
+        ui.get_ride_plan().row_count() > 4,
+        "The ramp is sliced so its slope shows"
+    );
+    assert!(
+        ui.get_ride_erg_available(),
+        "The fixture trainer advertised ERG"
+    );
+    assert!(!ui.get_ride_erg_enabled(), "Never on by itself");
+    ui.invoke_select_workout("p:1".into());
+    assert!(ui.get_ride_has_workout());
+    assert!(
+        !ui.get_ride_guided(),
+        "A workout from an older server has no plan: reference only"
+    );
+    assert_eq!(ui.get_ride_plan_steps(), 0);
+    ui.invoke_select_workout("b:fixture-step-test".into());
+    assert!(
+        ui.get_ride_guided() && ui.get_ride_test(),
+        "Tests play timed steps"
+    );
+    ui.invoke_select_workout("p:2".into());
     assert!(
         ui.get_trainer_connected() && ui.get_hr_connected(),
         "The ready screen leaves pairings alone"
@@ -626,11 +724,278 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         "Navigating never touches the ride"
     );
     ui.invoke_navigate(2);
+    // The guide, refreshed as the timer does it from the plan copied into the ride and the
+    // sensor model: first step, ramp start.
+    {
+        let state = state.borrow();
+        let ride = state.ride.as_ref().unwrap();
+        let now = Instant::now();
+        refresh_player(
+            ui,
+            ride,
+            &state.sensors.live(now),
+            ride.recording.elapsed(now),
+        );
+    }
+    assert!(ui.get_ride_guided());
+    assert_eq!(ui.get_ride_step_number(), 1);
+    assert_eq!(ui.get_ride_plan_steps(), 4);
+    assert_eq!(ui.get_ride_target(), "100", "Ramp start, no bias");
+    assert_eq!(ui.get_ride_step_target(), "40 → 60 %");
+    assert_eq!(ui.get_ride_step_role(), 1, "Warm-up");
+    assert_eq!(ui.get_ride_step_note(), "Easy spin, build slowly");
+    assert_eq!(ui.get_ride_step_cadence(), "90");
+    assert!(
+        !ui.get_ride_cadence_off(),
+        "86 rpm against a 90 rpm cue is within five"
+    );
+    assert_eq!(ui.get_ride_delta(), "+98 W", "198 W measured against 100 W");
+    assert_eq!(ui.get_ride_delta_state(), 2, "Over the target");
+    assert_eq!(ui.get_ride_next_target(), "120 %");
+    assert_eq!(ui.get_ride_next_role(), 2);
+    assert!(!ui.get_ride_workout_complete());
+    assert_eq!(ui.get_ride_bias(), "100 %");
+    assert!(!ui.get_ride_erg_enabled() && ui.get_ride_erg_state() == 0);
+    // A library refresh that drops the workout, or changes it, never reaches the ride's plan.
+    {
+        let mut state = state.borrow_mut();
+        let generation = state.library.begin();
+        assert!(state.library.finish(generation, Ok(vec![])));
+        workout_rows(ui, &mut state);
+    }
+    assert_eq!(ui.get_ride_plan_steps(), 4, "The ride keeps its own copy");
+    assert_eq!(ui.get_ride_step_number(), 1);
+    {
+        let mut state = state.borrow_mut();
+        let generation = state.library.begin();
+        assert!(state.library.finish(generation, Ok(fixture_workouts())));
+        workout_rows(ui, &mut state);
+    }
+    // Intensity: five percent per step, and the target follows at once.
+    ui.invoke_adjust_bias(1);
+    assert_eq!(ui.get_ride_bias(), "105 %");
+    assert_eq!(ui.get_ride_target(), "105");
+    ui.invoke_adjust_bias(-1);
+    assert_eq!(ui.get_ride_bias(), "100 %");
+    assert_eq!(ui.get_ride_target(), "100");
+    // Answers from the trainer are fed through the same handler the sensor events use; the
+    // release a failure asks for is captured here rather than sent anywhere.
+    let (sink, mut captured) = tokio::sync::mpsc::unbounded_channel();
+    let released =
+        |captured: &mut tokio::sync::mpsc::UnboundedReceiver<crate::ble::Command>| match captured
+            .try_recv()
+        {
+            Ok(crate::ble::Command::SetErg {
+                device_id,
+                request,
+                watts,
+            }) => {
+                assert_eq!(device_id, TRAINER_ID, "Addressed to the connected trainer");
+                assert_eq!(watts, None, "A release, never a target");
+                Some(request)
+            }
+            Ok(other) => panic!("unexpected command {other:?}"),
+            Err(_) => None,
+        };
+    // ERG needs a trainer that takes commands: a read-only Bluetooth trainer is refused,
+    // and no command leaves the app.
+    let requests_before = state.borrow().erg_requests;
+    connected(ui, &mut state.borrow_mut(), &devices[0], 0, false);
+    assert!(!ui.get_ride_erg_available());
+    ui.invoke_set_erg(true);
+    assert!(!ui.get_ride_erg_enabled(), "No control without support");
+    assert_eq!(ui.get_ride_erg_state(), 0);
+    assert_eq!(state.borrow().erg_requests, requests_before, "Nothing sent");
+    // With a supporting trainer, the explicit switch sends the current target once and
+    // shows it as pending until the trainer answers.
+    connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
+    assert!(ui.get_ride_erg_available());
+    assert!(
+        !ui.get_ride_erg_enabled(),
+        "Connecting never enables control"
+    );
+    ui.invoke_set_erg(true);
+    assert!(ui.get_ride_erg_enabled());
+    assert_eq!(ui.get_ride_erg_state(), 1, "Pending, not held");
+    assert_eq!(ui.get_ride_erg_watts(), "100");
+    let request = state.borrow().erg_requests;
+    assert_eq!(request, requests_before + 1);
+    assert_eq!(
+        state.borrow().ride.as_ref().unwrap().erg.device.as_deref(),
+        Some(TRAINER_ID),
+        "The command carries the connected trainer's id"
+    );
+    // An answer to an earlier request changes nothing; the awaited one confirms the hold.
+    erg_event(
+        ui,
+        &mut state.borrow_mut(),
+        &sink,
+        request - 1,
+        &Ok(Some(100)),
+    );
+    assert_eq!(ui.get_ride_erg_state(), 1, "Old answers are ignored");
+    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(100)));
+    assert_eq!(ui.get_ride_erg_state(), 2, "Held once the trainer answered");
+    assert_eq!(ui.get_ride_erg_watts(), "100");
+    // Skip moves the workout clock alone: the recording's elapsed time does not jump.
+    let elapsed_before = {
+        let state = state.borrow();
+        let ride = state.ride.as_ref().unwrap();
+        ride.recording.elapsed(Instant::now())
+    };
+    ui.invoke_skip_step();
+    let elapsed_after = {
+        let state = state.borrow();
+        let ride = state.ride.as_ref().unwrap();
+        ride.recording.elapsed(Instant::now())
+    };
+    assert!(
+        elapsed_after - elapsed_before < 1.0,
+        "Skipping a two-minute step left the ride clock alone: {elapsed_before} → {elapsed_after}"
+    );
+    assert_eq!(ui.get_ride_step_number(), 2, "The workout moved on");
+    assert_eq!(ui.get_ride_target(), "300");
+    assert_eq!(ui.get_ride_step_remaining(), "3:00");
+    assert_eq!(ui.get_ride_step_cadence(), "95");
+    assert!(
+        ui.get_ride_cadence_off(),
+        "86 rpm against a 95 rpm cue is off by more than five"
+    );
+    assert_eq!(ui.get_ride_delta_state(), 3, "198 W is under 300 W");
+    assert_eq!(ui.get_ride_erg_state(), 1, "The new target went out");
+    assert_eq!(ui.get_ride_erg_watts(), "300");
+    assert_eq!(state.borrow().erg_requests, request + 1);
+    let request = request + 1;
+    // The trainer refusing a target switches control off, asks for one release, and says
+    // so without claiming the trainer let go. The recording is untouched.
+    erg_event(
+        ui,
+        &mut state.borrow_mut(),
+        &sink,
+        request,
+        &Err("Trainer rejected the command".into()),
+    );
+    assert!(!ui.get_ride_erg_enabled(), "Off after a failure");
+    assert_eq!(ui.get_ride_erg_state(), 4, "Releasing, not released");
+    assert_eq!(ui.get_ride_notice(), 5);
+    assert_eq!(ui.get_ride_notice_detail(), "Trainer rejected the command");
+    assert_eq!(ui.get_ride_phase(), 1, "Still recording");
+    assert_eq!(
+        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        Phase::Running
+    );
+    let release = released(&mut captured).expect("One release after the failure");
+    assert_eq!(release, request + 1);
+    assert!(released(&mut captured).is_none(), "Exactly one");
+    ui.invoke_skip_step();
+    ui.invoke_adjust_bias(1);
+    ui.invoke_adjust_bias(-1);
+    assert_eq!(state.borrow().erg_requests, release, "No retry on its own");
+    assert_eq!(ui.get_ride_step_number(), 3);
+    assert_eq!(ui.get_ride_target(), "", "A free step has no target");
+    assert_eq!(ui.get_ride_delta(), "");
+    assert_eq!(
+        ui.get_ride_erg_state(),
+        4,
+        "Still releasing until the trainer answers"
+    );
+    erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
+    assert_eq!(ui.get_ride_erg_state(), 0, "Released and off");
+    assert_eq!(ui.get_ride_notice(), 5, "The failure stays explained");
+    // Enabling again is the rider's call; a free step gives nothing to send.
+    ui.invoke_set_erg(true);
+    assert!(ui.get_ride_erg_enabled());
+    assert_eq!(ui.get_ride_erg_state(), 3, "On, nothing to hold");
+    assert_eq!(
+        ui.get_ride_notice(),
+        0,
+        "Enabling clears the failure notice"
+    );
+    assert_eq!(state.borrow().erg_requests, release, "Nothing to send");
+    ui.invoke_skip_step();
+    assert_eq!(ui.get_ride_step_number(), 4);
+    assert_eq!(ui.get_ride_target(), "120");
+    assert_eq!(ui.get_ride_erg_state(), 1, "A targeted step sends again");
+    assert_eq!(ui.get_ride_next_duration(), "", "Last step");
+    let request = state.borrow().erg_requests;
+    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
+    assert_eq!(ui.get_ride_erg_state(), 2);
+    // Permission lost after the target was confirmed: the trainer reports it against the
+    // request it was following. Control goes off, one release follows, nothing is retried.
+    erg_event(
+        ui,
+        &mut state.borrow_mut(),
+        &sink,
+        request,
+        &Err("Trainer control permission was lost".into()),
+    );
+    assert!(!ui.get_ride_erg_enabled());
+    assert_eq!(ui.get_ride_notice(), 5);
+    let release = released(&mut captured).expect("One release after the lost permission");
+    assert_eq!(release, request + 1);
+    assert_eq!(ui.get_ride_erg_state(), 4);
+    erg_event(
+        ui,
+        &mut state.borrow_mut(),
+        &sink,
+        request,
+        &Err("Trainer control permission was lost".into()),
+    );
+    assert!(
+        released(&mut captured).is_none(),
+        "A repeat changes nothing"
+    );
+    erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
+    assert_eq!(ui.get_ride_erg_state(), 0);
+    ui.invoke_set_erg(true);
+    assert_eq!(
+        ui.get_ride_erg_state(),
+        1,
+        "Enabling again sends the target"
+    );
+    let request = state.borrow().erg_requests;
+    assert_eq!(request, release + 1);
+    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
+    assert_eq!(ui.get_ride_erg_state(), 2);
+    // Pause freezes the recording clock and the workout with it, and asks for a release
+    // before the journal is written; the rider's choice stays on for Resume.
     ui.invoke_pause_ride();
     assert_eq!(ui.get_ride_phase(), 2);
     assert_eq!(
         state.borrow().ride.as_ref().unwrap().recording.phase(),
         Phase::Paused
+    );
+    assert!(ui.get_ride_erg_enabled(), "The choice survives the pause");
+    assert_eq!(ui.get_ride_erg_state(), 4, "Release in flight");
+    assert_eq!(ui.get_ride_erg_watts(), "");
+    let release = state.borrow().erg_requests;
+    assert_eq!(release, request + 1);
+    erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
+    assert_eq!(ui.get_ride_erg_state(), 3, "Paused: on, nothing held");
+    let remaining = ui.get_ride_step_remaining();
+    {
+        let state = state.borrow();
+        let ride = state.ride.as_ref().unwrap();
+        let now = Instant::now();
+        let later = now + Duration::from_secs(30);
+        assert_eq!(
+            ride.recording.elapsed(later),
+            ride.recording.elapsed(now),
+            "The clock is stopped"
+        );
+        let live = state.sensors.live(now);
+        refresh_player(ui, ride, &live, ride.recording.elapsed(later));
+    }
+    assert_eq!(
+        ui.get_ride_step_remaining(),
+        remaining,
+        "The step waits with the clock"
+    );
+    assert_eq!(ui.get_ride_step_number(), 4);
+    assert_eq!(
+        state.borrow().erg_requests,
+        release,
+        "Nothing sent while paused"
     );
     ui.invoke_resume_ride();
     assert_eq!(ui.get_ride_phase(), 1);
@@ -638,10 +1003,147 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         state.borrow().ride.as_ref().unwrap().recording.phase(),
         Phase::Running
     );
+    assert_eq!(ui.get_ride_step_number(), 4, "Resume does not skip");
+    assert_eq!(
+        ui.get_ride_erg_state(),
+        1,
+        "The target goes back out on resume"
+    );
+    assert_eq!(ui.get_ride_erg_watts(), "120");
+    let request = state.borrow().erg_requests;
+    assert_eq!(request, release + 1);
+    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
+    assert_eq!(ui.get_ride_erg_state(), 2);
+    // A trainer that stops reporting power for five seconds loses control: one release,
+    // a notice, the recording goes on, and enabling needs a fresh reading first.
+    guard_erg_power(
+        ui,
+        &mut state.borrow_mut(),
+        &sink,
+        Instant::now() + Duration::from_secs(6),
+    );
+    assert!(
+        !ui.get_ride_erg_enabled(),
+        "Stale power switches control off"
+    );
+    assert_eq!(ui.get_ride_notice(), 7);
+    assert_eq!(ui.get_ride_phase(), 1, "The recording goes on");
+    let release = released(&mut captured).expect("One release on stale power");
+    assert_eq!(release, request + 1);
+    erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
+    assert_eq!(ui.get_ride_erg_state(), 0);
+    {
+        // The reading expired for real: the sensor model, not the screen, decides.
+        let mut state = state.borrow_mut();
+        state.sensors.update(
+            0,
+            &Reading {
+                power: Some(0),
+                cadence: Some(0.0),
+                heart_rate: None,
+            },
+            false,
+            Instant::now() - Duration::from_secs(6),
+        );
+    }
+    ui.invoke_set_erg(true);
+    assert!(!ui.get_ride_erg_enabled(), "No fresh power, no control");
+    assert_eq!(ui.get_ride_notice(), 7);
+    assert_eq!(state.borrow().erg_requests, release, "Nothing sent");
+    {
+        // A measured zero is a reading: a stopped rider on a live trainer may enable.
+        let mut state = state.borrow_mut();
+        state.sensors.update(
+            0,
+            &Reading {
+                power: Some(0),
+                cadence: Some(0.0),
+                heart_rate: None,
+            },
+            false,
+            Instant::now(),
+        );
+    }
+    ui.invoke_set_erg(true);
+    assert!(ui.get_ride_erg_enabled(), "A real zero is fresh power");
+    assert_eq!(ui.get_ride_erg_state(), 1);
+    let request = state.borrow().erg_requests;
+    assert_eq!(request, release + 1);
+    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
+    assert_eq!(ui.get_ride_erg_state(), 2);
+    // The trainer dropping out switches control off and keeps the ride; a reconnection
+    // does not switch it back on.
+    disconnected(ui, &mut state.borrow_mut(), 0);
+    assert!(!ui.get_ride_erg_enabled());
+    assert_eq!(ui.get_ride_erg_state(), 0);
+    assert_eq!(ui.get_ride_notice(), 6);
+    assert_eq!(ui.get_ride_phase(), 1, "The ride goes on");
+    connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
+    assert!(!ui.get_ride_erg_enabled(), "No reacquire on reconnect");
+    assert_eq!(
+        state.borrow().erg_requests,
+        request,
+        "Nothing sent to the new connection"
+    );
+    ui.invoke_set_erg(true);
+    assert!(
+        !ui.get_ride_erg_enabled(),
+        "The reconnected trainer has not reported power yet"
+    );
+    assert_eq!(ui.get_ride_notice(), 7);
+    {
+        let mut state = state.borrow_mut();
+        state.sensors.update(
+            0,
+            &Reading {
+                power: Some(180),
+                cadence: Some(85.0),
+                heart_rate: None,
+            },
+            false,
+            Instant::now(),
+        );
+    }
+    ui.invoke_set_erg(true);
+    assert_eq!(ui.get_ride_erg_state(), 1);
+    let request = state.borrow().erg_requests;
+    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
+    assert_eq!(ui.get_ride_erg_state(), 2);
+    // Reaching the end asks for a release and keeps recording until Finish.
+    ui.invoke_skip_step();
+    assert!(ui.get_ride_workout_complete());
+    assert_eq!(ui.get_ride_phase(), 1, "Recording continues as a free ride");
+    assert_eq!(
+        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        Phase::Running
+    );
+    assert_eq!(ui.get_ride_target(), "");
+    assert_eq!(ui.get_ride_step_number(), 0);
+    assert!((ui.get_ride_workout_progress() - 1.0).abs() < 1e-6);
+    assert_eq!(ui.get_ride_erg_state(), 4, "Release in flight");
+    assert_eq!(ui.get_ride_erg_watts(), "");
+    let release = state.borrow().erg_requests;
+    assert_eq!(release, request + 1);
+    erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
+    assert_eq!(ui.get_ride_erg_state(), 3);
+    ui.invoke_skip_step();
+    assert_eq!(
+        state.borrow().erg_requests,
+        release,
+        "Nothing left to skip or send"
+    );
     ui.invoke_close_training();
     assert_eq!(ui.get_screen(), 2, "Back is refused mid-ride");
     ui.invoke_finish_ride();
     assert_eq!(ui.get_ride_phase(), 3);
+    assert!(!ui.get_ride_erg_enabled(), "Finishing leaves control off");
+    assert_eq!(ui.get_ride_erg_state(), 0);
+    assert_eq!(
+        state.borrow().erg_requests,
+        release,
+        "Already released: nothing more to send"
+    );
+    assert!(ui.get_ride_workout_complete(), "The summary says completed");
     assert_eq!(ui.get_ride_save_state(), 1, "Saved on the first try");
     assert_eq!(ui.get_ride_folder(), directory.display().to_string());
     assert_eq!(ui.get_ride_activity_name(), "VO2 max 5 × 3");
@@ -778,6 +1280,6 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     );
     assert_eq!(ui.get_screen(), 0);
     println!(
-        "Native UI smoke test passed: languages, discovery rows, pairing presentation, workouts, ride screen and guards, sign-in with a saved ride, navigation, reset."
+        "Native UI smoke test passed: languages, discovery rows, pairing presentation, workouts, ride screen and guards, guided workout with ERG control, sign-in with a saved ride, navigation, reset."
     );
 }

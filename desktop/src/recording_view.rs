@@ -76,6 +76,43 @@ pub fn strava_activity_url(id: i64) -> Option<String> {
     (id > 0).then(|| format!("https://www.strava.com/activities/{id}"))
 }
 
+/// How far from a power target still counts as on it, as the website's HUD colors it:
+/// five percent, and never less than ten watts.
+pub fn power_tolerance(target: f64) -> f64 {
+    (target * 0.05).max(10.0)
+}
+
+/// How far from a cadence target still counts as on it, in rpm either side.
+pub const CADENCE_TOLERANCE: f64 = 5.0;
+
+/// The gap between the measured power and the target as the guide prints it ("+12 W"),
+/// with a state for its color: 0 nothing to compare, 1 on target, 2 over, 3 under.
+pub fn delta(power: Option<f64>, target: Option<f64>) -> (String, i32) {
+    let (Some(power), Some(target)) = (power, target) else {
+        return (String::new(), 0);
+    };
+    let delta = (power - target).round() as i64;
+    let state = if (power - target).abs() <= power_tolerance(target) {
+        1
+    } else if delta > 0 {
+        2
+    } else {
+        3
+    };
+    (format!("{delta:+} W"), state)
+}
+
+/// True when the rider is pedalling and clearly off the cadence cue. Standing still is
+/// not "off": the cue is a reminder, not an alarm for a coasting rider.
+pub fn cadence_off(cadence: Option<f64>, target: Option<f64>) -> bool {
+    match (cadence, target) {
+        (Some(cadence), Some(target)) => {
+            cadence > 0.0 && (cadence - target).abs() > CADENCE_TOLERANCE
+        }
+        _ => false,
+    }
+}
+
 /// The website's seven power zones by percent of the account's FTP.
 fn zone_for_watts(watts: f64, ftp: f64) -> i32 {
     let pct = watts / ftp * 100.0;
@@ -265,6 +302,30 @@ mod tests {
             "{}🚴",
             "a".repeat(MAX_ACTIVITY_NAME - 1)
         )));
+    }
+
+    #[test]
+    fn deltas_follow_the_website_tolerance() {
+        assert_eq!(delta(None, Some(200.0)), (String::new(), 0));
+        assert_eq!(delta(Some(190.0), None), (String::new(), 0));
+        // Five percent of 200 W is the band; ten watts is the floor below 200 W.
+        assert_eq!(delta(Some(209.6), Some(200.0)), ("+10 W".into(), 1));
+        assert_eq!(delta(Some(211.0), Some(200.0)), ("+11 W".into(), 2));
+        assert_eq!(delta(Some(150.0), Some(160.0)), ("-10 W".into(), 1));
+        assert_eq!(delta(Some(149.0), Some(160.0)), ("-11 W".into(), 3));
+        assert_eq!(delta(Some(200.0), Some(200.0)), ("+0 W".into(), 1));
+        assert!((power_tolerance(400.0) - 20.0).abs() < 1e-9);
+        assert!((power_tolerance(50.0) - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cadence_cue_ignores_coasting_and_small_drift() {
+        assert!(!cadence_off(None, Some(90.0)));
+        assert!(!cadence_off(Some(80.0), None));
+        assert!(!cadence_off(Some(0.0), Some(90.0)), "Coasting is not off");
+        assert!(!cadence_off(Some(85.0), Some(90.0)));
+        assert!(cadence_off(Some(84.0), Some(90.0)));
+        assert!(cadence_off(Some(96.0), Some(90.0)));
     }
 
     #[test]

@@ -63,6 +63,7 @@ pub struct Workout {
     pub summary: String,
     /// Duration in seconds and percent FTP, or None for free riding.
     pub profile: Vec<(u32, Option<f64>)>,
+    pub execution: Option<crate::player::Plan>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -76,6 +77,8 @@ pub enum LoadError {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PersonalWire {
+    #[serde(default)]
+    execution: Option<crate::player::Plan>,
     id: i64,
     name: String,
     duration_seconds: u32,
@@ -87,6 +90,8 @@ struct PersonalWire {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BuiltInWire {
+    #[serde(default)]
+    execution: Option<crate::player::Plan>,
     id: String,
     name: String,
     summary: String,
@@ -139,6 +144,7 @@ fn convert(response: Response) -> Result<Vec<Workout>, LoadError> {
             reference_ftp: None,
             summary: w.summary,
             profile: w.profile,
+            execution: w.execution.filter(crate::player::Plan::valid),
         });
     }
     for w in response.built_in_workouts {
@@ -162,6 +168,7 @@ fn convert(response: Response) -> Result<Vec<Workout>, LoadError> {
             reference_ftp: Some(w.reference_ftp),
             summary: w.summary,
             profile: w.profile,
+            execution: w.execution.filter(crate::player::Plan::valid),
         });
     }
     Ok(workouts)
@@ -311,6 +318,7 @@ mod tests {
             reference_ftp: None,
             summary: "30:00 @ 80%".into(),
             profile: vec![(1800, Some(80.0))],
+            execution: None,
         }
     }
 
@@ -324,7 +332,35 @@ mod tests {
             reference_ftp: Some(250.0),
             summary: "Ramps until you stop".into(),
             profile: vec![(300, Some(50.0)), (1200, Some(120.0))],
+            execution: None,
         }
+    }
+
+    #[test]
+    fn execution_is_optional_and_invalid_targets_never_become_runnable() {
+        let value = serde_json::json!({"workouts":[{"id":1,"name":"Ramps","durationSeconds":60,"estimatedTss":null,"summary":"", "profile":[[60,80]], "execution":{"referenceFtp":250,"ftpTest":null,"segments":[{"durationSeconds":60,"startWatts":100,"endWatts":200,"cadence":90}]}}]});
+        let valid = convert(serde_json::from_value(value.clone()).unwrap()).unwrap();
+        assert_eq!(
+            valid[0].execution.as_ref().unwrap().segments[0].end_watts,
+            Some(200.0)
+        );
+        let mut invalid = value.clone();
+        invalid["workouts"][0]["execution"]["segments"][0]["endWatts"] = serde_json::Value::Null;
+        assert!(
+            convert(serde_json::from_value(invalid).unwrap()).unwrap()[0]
+                .execution
+                .is_none()
+        );
+        let mut old = value;
+        old["workouts"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("execution");
+        assert!(
+            convert(serde_json::from_value(old).unwrap()).unwrap()[0]
+                .execution
+                .is_none()
+        );
     }
 
     #[test]

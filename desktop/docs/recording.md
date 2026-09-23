@@ -1,6 +1,6 @@
 # Ride recording
 
-The desktop records the connected BLE or ANT+ sensors. A free ride can use a trainer, a heart-rate sensor, or both. A selected workout contributes its name and reference chart; this version does not advance workout steps, calculate FTP-test results or command trainer resistance.
+The desktop records the connected BLE or ANT+ sensors. A free ride can use a trainer, a heart-rate sensor, or both. A selected workout with an exact execution plan can guide timed steps and optionally control a BLE FTMS trainer. See [workout playback](workout-playback.md) for the control protocol and current limits. Older servers provide a reference chart only. FTP-test result calculation is not implemented.
 
 ## Time and measurements
 

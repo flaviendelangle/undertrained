@@ -51,6 +51,13 @@ pub async fn run(
                         if owner[role] == Some(true) { let _ = ant_tx.send(Command::Disconnect(role)); }
                         else { let _ = ble_tx.send(Command::Disconnect(role)); }
                     }
+                    Command::SetErg {device_id,request,watts} => {
+                        if owner[0]==Some(false) {
+                            let _=ble_tx.send(Command::SetErg {device_id,request,watts});
+                        } else {
+                            let _=events.send(Event::Device(ble::Event::Erg {request,result:Err("ERG requires a supported Bluetooth trainer. ANT+ currently provides measurements only.".into())}));
+                        }
+                    }
                     Command::Reset => {
                         owner = [None,None];
                         discovery = [vec![],vec![]];
@@ -109,6 +116,7 @@ fn forward(
             }
             ble::Event::ScanDone
         }
+        ble::Event::Erg { .. } if owner[0] != Some(is_ant) => return,
         ble::Event::Connecting(role)
         | ble::Event::Connected(role, _, _)
         | ble::Event::Disconnected(role)
