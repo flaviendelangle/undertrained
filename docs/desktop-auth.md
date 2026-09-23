@@ -35,7 +35,7 @@ The token and session responses include the account `athlete.language` preferenc
 
 ## Recorded ride uploads
 
-`POST /api/desktop/uploads` accepts `{ name, fitFileBase64 }` with the desktop bearer token and forwards the FIT file to the authenticated athlete's Strava account, using the same trainer-upload flow as the website. The name is limited to 200 characters and the base64 payload to 10 MiB. The server checks the FIT header, declared length and CRC. It ignores client-supplied athlete IDs. Uploads require the existing Strava `activity:write` permission; a 403 asks the rider to reconnect Strava on the website.
+`POST /api/desktop/uploads` accepts `{ name, fitFileBase64 }` with the desktop bearer token and forwards the FIT file to the authenticated athlete's Strava account, using the same trainer-upload flow as the website. The name is limited to 200 characters and the base64 payload to 10 MiB. The server checks the FIT header, declared length and CRC. It ignores client-supplied athlete IDs. Uploads require the existing Strava `activity:write` permission; a 403 asks the rider to reconnect Strava on the website. Rejected Strava credentials during submission or polling also return 403 with a reconnect message; 401 is reserved for an invalid desktop session.
 
 A successful submission returns HTTP 202 with `{ uploadId, receipt }`. `GET /api/desktop/uploads?receipt=...` returns `{ activityId, error }`, both nullable while Strava processes the file. The receipt is signed with the existing `NEXTAUTH_SECRET`, bound to the authenticated athlete and valid for seven days. It grants no access without a live desktop bearer token. Polling another athlete's receipt, tampering with it, or using an expired receipt returns 400. No database migration is required.
 

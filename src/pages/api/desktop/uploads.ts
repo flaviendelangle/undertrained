@@ -2,6 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
+import { TRPCError } from "@trpc/server";
+
 import { db } from "~/server/db";
 import { desktopAthlete } from "~/server/lib/desktopSession";
 import {
@@ -14,6 +16,9 @@ import { consumeRateLimit } from "~/server/lib/rateLimit";
 import { getAccessToken } from "~/server/lib/strava";
 
 export const config = { api: { bodyParser: { sizeLimit: "11mb" } } };
+
+const reconnectError =
+  "Strava authorization is missing or expired. Reconnect Strava on the website and allow activity uploads.";
 
 /** Uses the same Strava upload flow as the website, authenticated by desktop bearer. */
 export default async function handler(
@@ -68,12 +73,12 @@ export default async function handler(
         body: form,
         signal: AbortSignal.timeout(60_000),
       });
+      if (response.status === 401 || response.status === 403)
+        return res.status(403).json({ error: reconnectError });
       if (!response.ok)
-        return res.status(response.status === 403 ? 403 : 502).json({
+        return res.status(502).json({
           error:
-            response.status === 403
-              ? "Strava activity:write permission is required. Reconnect Strava on the website."
-              : "Strava could not accept this upload. Check Strava before retrying.",
+            "Strava could not accept this upload. Check Strava before retrying.",
         });
       const result = z
         .object({ id: z.number().int().positive().safe() })
@@ -90,6 +95,8 @@ export default async function handler(
         signal: AbortSignal.timeout(30_000),
       },
     );
+    if (response.status === 401 || response.status === 403)
+      return res.status(403).json({ error: reconnectError });
     if (!response.ok)
       return res
         .status(502)
@@ -101,7 +108,9 @@ export default async function handler(
       })
       .parse(await response.json());
     return res.json({ activityId: status.activity_id, error: status.error });
-  } catch {
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === "UNAUTHORIZED")
+      return res.status(403).json({ error: reconnectError });
     // Do not leak upstream credentials or internals; submission timeouts may have succeeded.
     return res.status(502).json({
       error: submit

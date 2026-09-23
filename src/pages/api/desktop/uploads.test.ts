@@ -1,6 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { TRPCError } from "@trpc/server";
+
 import {
   fitBytes,
   receiptUploadId,
@@ -153,6 +155,63 @@ describe("desktop recording uploads", () => {
     expect(JSON.stringify(res.json.mock.calls)).not.toContain(
       "upstream-private",
     );
+  });
+  it.each(["POST", "GET"])(
+    "asks for reconnection when token refresh is rejected during %s",
+    async (method) => {
+      mocks.token.mockRejectedValue(
+        new TRPCError({ code: "UNAUTHORIZED", message: "upstream-private" }),
+      );
+      const res = await request(
+        method,
+        { name: "Ride", fitFileBase64: fit() },
+        { receipt: uploadReceipt(7, 42, "fixture-secret") },
+      );
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({
+        error:
+          "Strava authorization is missing or expired. Reconnect Strava on the website and allow activity uploads.",
+      });
+      expect(JSON.stringify(res.json.mock.calls)).not.toContain(
+        "upstream-private",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+  it.each([
+    ["POST", 401],
+    ["POST", 403],
+    ["GET", 401],
+    ["GET", 403],
+  ])(
+    "asks for reconnection when %s receives Strava %s",
+    async (method, status) => {
+      fetchMock.mockResolvedValue(new Response("upstream-private", { status }));
+      const res = await request(
+        method,
+        { name: "Ride", fitFileBase64: fit() },
+        { receipt: uploadReceipt(7, 42, "fixture-secret") },
+      );
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({
+        error:
+          "Strava authorization is missing or expired. Reconnect Strava on the website and allow activity uploads.",
+      });
+      expect(JSON.stringify(res.json.mock.calls)).not.toContain(
+        "upstream-private",
+      );
+    },
+  );
+  it("keeps inconclusive refresh failures as gateway errors", async () => {
+    mocks.token.mockRejectedValue(
+      new TRPCError({ code: "BAD_GATEWAY", message: "upstream-private" }),
+    );
+    const res = await request("POST", { name: "Ride", fitFileBase64: fit() });
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(JSON.stringify(res.json.mock.calls)).not.toContain(
+      "upstream-private",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
   it("bounds polling requests per athlete", async () => {
     fetchMock.mockResolvedValue(new Response("{}"));
