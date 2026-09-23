@@ -15,6 +15,9 @@ use url::Url;
 pub struct Athlete {
     pub id: i64,
     pub name: String,
+    /// The account's interface language ("en-GB" or "fr-FR"). Older servers omit it.
+    #[serde(default)]
+    pub language: Option<String>,
 }
 #[derive(Deserialize)]
 struct TokenResponse {
@@ -285,8 +288,7 @@ mod tests {
                         URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes())),
                         *expected_challenge.lock().unwrap()
                     );
-                    let body =
-                        r#"{"access_token":"test-token","athlete":{"id":42,"name":"Test Rider"}}"#;
+                    let body = r#"{"access_token":"test-token","athlete":{"id":42,"name":"Test Rider","language":"fr-FR"}}"#;
                     let response = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                         body.len()
@@ -324,7 +326,13 @@ mod tests {
         .unwrap();
         assert_eq!(session.athlete.id, 42);
         assert_eq!(session.athlete.name, "Test Rider");
+        assert_eq!(session.athlete.language.as_deref(), Some("fr-FR"));
         assert_eq!(session.token, "test-token");
+        let older: Athlete = serde_json::from_str(r#"{"id":1,"name":"Rider"}"#).unwrap();
+        assert!(
+            older.language.is_none(),
+            "Servers without a language still deserialize"
+        );
         server.await.unwrap();
     }
 }

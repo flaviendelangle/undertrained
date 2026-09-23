@@ -1,7 +1,7 @@
 use crate::model::{Capabilities, Device, Reading, cycling_power, heart_rate, indoor_bike_data};
 use anyhow::{Context, Result};
 use btleplug::{
-    api::{Central, Manager as _, Peripheral as _, ScanFilter},
+    api::{Central, CentralState, Manager as _, Peripheral as _, ScanFilter},
     platform::{Adapter, Manager, Peripheral},
 };
 use futures::StreamExt;
@@ -119,12 +119,17 @@ pub async fn run(
                                 adapter = manager.adapters().await?.into_iter().next();
                             }
                             let adapter = adapter.as_ref().context("No Bluetooth adapter found. Connect an adapter and try again.")?;
+                            if adapter.adapter_state().await? == CentralState::PoweredOff {
+                                anyhow::bail!("Bluetooth is switched off or blocked by the system");
+                            }
                             adapter.start_scan(ScanFilter::default()).await?;
                             Ok::<_, anyhow::Error>(())
                         }).await;
                         match result {
                             Ok(Ok(())) => {
-                                found.clear();
+                                // The picker can still contain rows from the previous scan.
+                                // Keep their handles until reset so clicking one during a rescan
+                                // does not race the next discovery tick.
                                 scan_until = Some(Instant::now() + Duration::from_secs(12));
                                 let _ = events.send(Event::Status("Bluetooth ready".into()));
                             }
@@ -133,6 +138,9 @@ pub async fn run(
                                 let _ = events.send(Event::Status("Bluetooth unavailable".into()));
                                 let _ = events.send(Event::Error(format!("{detail}. Check Bluetooth is on and permission is granted.")));
                                 let _ = events.send(Event::ScanDone);
+                                scan_until = None;
+                                found.clear();
+                                let _ = events.send(Event::Devices(Vec::new()));
                                 adapter = None;
                             }
                         }

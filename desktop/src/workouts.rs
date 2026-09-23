@@ -1,15 +1,65 @@
 //! Read-only account workout access and UI-independent request state.
 use crate::auth::{Session, server_url};
 use serde::Deserialize;
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+/// Where a workout comes from. Personal workouts have numeric ids and their own web page.
+/// Built-in tests are shared by the server, keyed by a slug it chooses, and all live in one
+/// section of the website's workouts page.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum WorkoutId {
+    Personal(i64),
+    BuiltIn(String),
+}
+
+impl WorkoutId {
+    /// A stable row key that cannot collide across the two kinds.
+    pub fn key(&self) -> String {
+        match self {
+            WorkoutId::Personal(id) => format!("p:{id}"),
+            WorkoutId::BuiltIn(slug) => format!("b:{slug}"),
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        if let Some(id) = key.strip_prefix("p:") {
+            id.parse()
+                .ok()
+                .filter(|id| *id > 0)
+                .map(WorkoutId::Personal)
+        } else if let Some(slug) = key.strip_prefix("b:") {
+            valid_slug(slug).then(|| WorkoutId::BuiltIn(slug.to_owned()))
+        } else {
+            None
+        }
+    }
+
+    pub fn is_built_in(&self) -> bool {
+        matches!(self, WorkoutId::BuiltIn(_))
+    }
+}
+
+/// Built-in ids are server-defined slugs. The catalogue itself is never hard-coded here.
+fn valid_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug.len() <= 64
+        && !slug.starts_with('-')
+        && !slug.ends_with('-')
+        && slug
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Workout {
-    pub id: i64,
+    pub id: WorkoutId,
     pub name: String,
     pub duration_seconds: u32,
+    /// Server wording for built-in tests, whose duration is a maximum rather than a plan.
+    pub duration_label: Option<String>,
     pub estimated_tss: Option<f64>,
+    /// The FTP the server used to generate a built-in profile.
+    pub reference_ftp: Option<f64>,
     pub summary: String,
     /// Duration in seconds and percent FTP, or None for free riding.
     pub profile: Vec<(u32, Option<f64>)>,
@@ -24,23 +74,115 @@ pub enum LoadError {
 }
 
 #[derive(Deserialize)]
-struct Response {
-    workouts: Vec<Workout>,
+#[serde(rename_all = "camelCase")]
+struct PersonalWire {
+    id: i64,
+    name: String,
+    duration_seconds: u32,
+    estimated_tss: Option<f64>,
+    summary: String,
+    profile: Vec<(u32, Option<f64>)>,
 }
 
-pub async fn fetch(session: &Session) -> Result<Vec<Workout>, LoadError> {
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BuiltInWire {
+    id: String,
+    name: String,
+    summary: String,
+    duration_seconds: u32,
+    duration_label: String,
+    #[serde(default)]
+    estimated_tss: Option<f64>,
+    reference_ftp: f64,
+    profile: Vec<(u32, Option<f64>)>,
+}
+
+/// Older servers omit `builtInWorkouts`; that parses as an empty list.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Response {
+    workouts: Vec<PersonalWire>,
+    #[serde(default)]
+    built_in_workouts: Vec<BuiltInWire>,
+}
+
+fn valid_profile(profile: &[(u32, Option<f64>)], tss: Option<f64>) -> bool {
+    profile
+        .iter()
+        .try_fold(0u32, |sum, (duration, _)| sum.checked_add(*duration))
+        .is_some()
+        && !tss.is_some_and(|n| !n.is_finite() || n < 0.0)
+        && !profile
+            .iter()
+            .any(|(_, p)| p.is_some_and(|n| !n.is_finite() || n < 0.0))
+}
+
+fn convert(response: Response) -> Result<Vec<Workout>, LoadError> {
+    let mut workouts =
+        Vec::with_capacity(response.workouts.len() + response.built_in_workouts.len());
+    let mut seen = HashSet::new();
+    for w in response.workouts {
+        if w.id <= 0 || !valid_profile(&w.profile, w.estimated_tss) {
+            return Err(LoadError::InvalidResponse);
+        }
+        let id = WorkoutId::Personal(w.id);
+        if !seen.insert(id.clone()) {
+            return Err(LoadError::InvalidResponse);
+        }
+        workouts.push(Workout {
+            id,
+            name: w.name,
+            duration_seconds: w.duration_seconds,
+            duration_label: None,
+            estimated_tss: w.estimated_tss,
+            reference_ftp: None,
+            summary: w.summary,
+            profile: w.profile,
+        });
+    }
+    for w in response.built_in_workouts {
+        if !valid_slug(&w.id)
+            || w.duration_label.trim().is_empty()
+            || !(w.reference_ftp.is_finite() && w.reference_ftp > 0.0)
+            || !valid_profile(&w.profile, w.estimated_tss)
+        {
+            return Err(LoadError::InvalidResponse);
+        }
+        let id = WorkoutId::BuiltIn(w.id);
+        if !seen.insert(id.clone()) {
+            return Err(LoadError::InvalidResponse);
+        }
+        workouts.push(Workout {
+            id,
+            name: w.name,
+            duration_seconds: w.duration_seconds,
+            duration_label: Some(w.duration_label),
+            estimated_tss: w.estimated_tss,
+            reference_ftp: Some(w.reference_ftp),
+            summary: w.summary,
+            profile: w.profile,
+        });
+    }
+    Ok(workouts)
+}
+
+/// Personal workouts first, in server order, then the shared built-in tests. The locale
+/// ("en-GB" or "fr-FR") picks the language of built-in names and labels; older servers
+/// ignore it. Personal workout text is the rider's own and never translated.
+pub async fn fetch(session: &Session, locale: &str) -> Result<Vec<Workout>, LoadError> {
     let origin = server_url(&session.origin).map_err(|_| LoadError::InvalidResponse)?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|_| LoadError::Network)?;
+    let mut url = origin
+        .join("api/desktop/workouts")
+        .map_err(|_| LoadError::InvalidResponse)?;
+    url.query_pairs_mut().append_pair("locale", locale);
     let response = client
-        .get(
-            origin
-                .join("api/desktop/workouts")
-                .map_err(|_| LoadError::InvalidResponse)?,
-        )
+        .get(url)
         .bearer_auth(&session.token)
         .send()
         .await
@@ -55,20 +197,7 @@ pub async fn fetch(session: &Session) -> Result<Vec<Workout>, LoadError> {
         .json::<Response>()
         .await
         .map_err(|_| LoadError::InvalidResponse)?;
-    if result.workouts.iter().any(|w| {
-        w.id <= 0
-            || w.profile
-                .iter()
-                .try_fold(0u32, |sum, (duration, _)| sum.checked_add(*duration))
-                .is_none()
-            || w.estimated_tss.is_some_and(|n| !n.is_finite() || n < 0.0)
-            || w.profile
-                .iter()
-                .any(|(_, p)| p.is_some_and(|n| !n.is_finite() || n < 0.0))
-    }) {
-        return Err(LoadError::InvalidResponse);
-    }
-    Ok(result.workouts)
+    convert(result)
 }
 
 /// Uses a validated origin and numeric ID. Desktop credentials never enter URLs.
@@ -79,6 +208,21 @@ pub fn web_url(origin: &str, id: Option<i64>) -> anyhow::Result<String> {
         None => "workouts/new".to_owned(),
     };
     Ok(server_url(origin)?.join(&path)?.to_string())
+}
+
+/// Built-in tests have no page of their own; the website lists them in one section.
+pub fn built_in_web_url(origin: &str) -> anyhow::Result<String> {
+    let mut url = server_url(origin)?.join("workouts")?;
+    url.set_fragment(Some("built-in-workouts"));
+    Ok(url.to_string())
+}
+
+/// The website page for a workout of either kind.
+pub fn link(origin: &str, id: &WorkoutId) -> anyhow::Result<String> {
+    match id {
+        WorkoutId::Personal(id) => web_url(origin, Some(*id)),
+        WorkoutId::BuiltIn(_) => built_in_web_url(origin),
+    }
 }
 
 #[derive(Default)]
@@ -131,12 +275,21 @@ impl Library {
         true
     }
 
+    /// Case-insensitive, trimmed name search over personal and built-in workouts alike.
     pub fn filtered(&self, query: &str) -> Vec<&Workout> {
         let query = query.trim().to_lowercase();
         self.workouts
             .iter()
             .filter(|w| w.name.to_lowercase().contains(&query))
             .collect()
+    }
+
+    pub fn personal_count(&self) -> usize {
+        self.workouts.iter().filter(|w| !w.id.is_built_in()).count()
+    }
+
+    pub fn contains(&self, id: &WorkoutId) -> bool {
+        self.workouts.iter().any(|w| &w.id == id)
     }
 }
 
@@ -150,12 +303,27 @@ mod tests {
 
     fn workout() -> Workout {
         Workout {
-            id: 42,
+            id: WorkoutId::Personal(42),
             name: "Tempo ride".into(),
             duration_seconds: 1800,
+            duration_label: None,
             estimated_tss: None,
+            reference_ftp: None,
             summary: "30:00 @ 80%".into(),
             profile: vec![(1800, Some(80.0))],
+        }
+    }
+
+    fn built_in() -> Workout {
+        Workout {
+            id: WorkoutId::BuiltIn("step-test".into()),
+            name: "Step test".into(),
+            duration_seconds: 1500,
+            duration_label: Some("up to 25 min".into()),
+            estimated_tss: None,
+            reference_ftp: Some(250.0),
+            summary: "Ramps until you stop".into(),
+            profile: vec![(300, Some(50.0)), (1200, Some(120.0))],
         }
     }
 
@@ -168,15 +336,36 @@ mod tests {
         let first = library.begin();
         let latest = library.begin();
         assert!(!library.finish(first, Err(LoadError::Unauthorized)));
-        assert!(library.finish(latest, Ok(vec![workout()])));
+        assert!(library.finish(latest, Ok(vec![workout(), built_in()])));
         assert_eq!(library.filtered(" TEMPO ").len(), 1);
+        assert_eq!(
+            library.filtered("step").len(),
+            1,
+            "Built-ins are searchable"
+        );
         assert!(library.filtered("VO2").is_empty());
+        assert_eq!(library.personal_count(), 1);
+        assert!(library.contains(&WorkoutId::BuiltIn("step-test".into())));
         let refresh = library.begin();
         library.finish(refresh, Err(LoadError::Network));
-        assert_eq!(library.workouts.len(), 1);
+        assert_eq!(library.workouts.len(), 2);
         let refresh = library.begin();
         library.finish(refresh, Err(LoadError::Unauthorized));
         assert!(library.workouts.is_empty());
+    }
+
+    #[test]
+    fn row_keys_are_stable_and_kind_specific() {
+        for id in [
+            WorkoutId::Personal(7),
+            WorkoutId::BuiltIn("ramp-test".into()),
+        ] {
+            assert_eq!(WorkoutId::from_key(&id.key()), Some(id));
+        }
+        assert_eq!(WorkoutId::from_key("p:0"), None);
+        assert_eq!(WorkoutId::from_key("b:Ramp Test"), None);
+        assert_eq!(WorkoutId::from_key("b:-x"), None);
+        assert_eq!(WorkoutId::from_key("ramp-test"), None);
     }
 
     #[test]
@@ -188,6 +377,19 @@ mod tests {
         assert_eq!(
             web_url("https://undertrained.example", None).unwrap(),
             "https://undertrained.example/workouts/new"
+        );
+        assert_eq!(
+            link(
+                "https://undertrained.example",
+                &WorkoutId::BuiltIn("ramp-test".into())
+            )
+            .unwrap(),
+            "https://undertrained.example/workouts#built-in-workouts",
+            "Built-ins open the shared section, never a slug page"
+        );
+        assert_eq!(
+            link("https://undertrained.example", &WorkoutId::Personal(42)).unwrap(),
+            "https://undertrained.example/workouts/42"
         );
         assert!(web_url("https://user:secret@example.com", None).is_err());
         assert!(web_url("https://example.com", Some(-1)).is_err());
@@ -213,7 +415,10 @@ mod tests {
                 }
             }
             let request = String::from_utf8(request).unwrap().to_lowercase();
-            assert!(request.starts_with("get /api/desktop/workouts http/1.1"));
+            assert!(
+                request.starts_with("get /api/desktop/workouts?locale=fr-fr http/1.1"),
+                "The interface language travels as a query: {request}"
+            );
             assert!(request.contains("authorization: bearer test-token\r\n"));
             socket.write_all(reply.as_bytes()).await.unwrap();
         });
@@ -224,38 +429,80 @@ mod tests {
                 athlete: crate::auth::Athlete {
                     id: 1,
                     name: "Rider".into(),
+                    language: None,
                 },
             },
             task,
         )
     }
 
+    const PERSONAL: &str = r#"{"id":42,"name":"Tempo ride","durationSeconds":1800,"estimatedTss":null,"summary":"30:00 @ 80%","profile":[[1800,80]]}"#;
+    const BUILT_IN: &str = r#"{"id":"step-test","name":"Step test","summary":"Ramps until you stop","durationSeconds":1500,"durationLabel":"up to 25 min","estimatedTss":null,"referenceFtp":250,"profile":[[300,50],[1200,120]]}"#;
+
     #[tokio::test]
     async fn authenticated_list_and_failures() {
-        let (session, server) = serve("200 OK", r#"{"workouts":[{"id":42,"name":"Tempo ride","durationSeconds":1800,"estimatedTss":null,"summary":"30:00 @ 80%","profile":[[1800,80]]}]}"#).await;
-        assert_eq!(fetch(&session).await.unwrap(), vec![workout()]);
+        // A server from before built-ins existed.
+        let (session, server) = serve("200 OK", &format!(r#"{{"workouts":[{PERSONAL}]}}"#)).await;
+        assert_eq!(fetch(&session, "fr-FR").await.unwrap(), vec![workout()]);
+        server.await.unwrap();
+        // Built-ins arrive after personal workouts and keep their own identity.
+        let (session, server) = serve(
+            "200 OK",
+            &format!(r#"{{"workouts":[{PERSONAL}],"builtInWorkouts":[{BUILT_IN}]}}"#),
+        )
+        .await;
+        assert_eq!(
+            fetch(&session, "fr-FR").await.unwrap(),
+            vec![workout(), built_in()]
+        );
+        server.await.unwrap();
+        // Built-ins show even when the personal library is empty.
+        let (session, server) = serve(
+            "200 OK",
+            &format!(r#"{{"workouts":[],"builtInWorkouts":[{BUILT_IN}]}}"#),
+        )
+        .await;
+        assert_eq!(fetch(&session, "fr-FR").await.unwrap(), vec![built_in()]);
         server.await.unwrap();
         let (session, server) = serve("200 OK", r#"{"workouts":[]}"#).await;
-        assert!(fetch(&session).await.unwrap().is_empty());
+        assert!(fetch(&session, "fr-FR").await.unwrap().is_empty());
         server.await.unwrap();
+        let bad_slug = BUILT_IN.replace("\"step-test\"", "\"Step Test\"");
+        let bad_ftp = BUILT_IN.replace("\"referenceFtp\":250", "\"referenceFtp\":0");
+        let duplicate = format!(r#"{{"workouts":[],"builtInWorkouts":[{BUILT_IN},{BUILT_IN}]}}"#);
         for (status, body, error) in [
-            ("401 Unauthorized", "{}", LoadError::Unauthorized),
-            ("404 Not Found", "{}", LoadError::Unavailable),
+            ("401 Unauthorized", "{}".to_string(), LoadError::Unauthorized),
+            ("404 Not Found", "{}".to_string(), LoadError::Unavailable),
             (
                 "500 Internal Server Error",
-                "private details",
+                "private details".to_string(),
                 LoadError::Network,
             ),
-            ("302 Found", "{}", LoadError::Network),
-            ("200 OK", "<html>login</html>", LoadError::InvalidResponse),
+            ("302 Found", "{}".to_string(), LoadError::Network),
             (
                 "200 OK",
-                r#"{"workouts":[{"id":42,"name":"Invalid profile","durationSeconds":1800,"estimatedTss":null,"summary":"","profile":[[4294967295,80],[1,80]]}]}"#,
+                "<html>login</html>".to_string(),
                 LoadError::InvalidResponse,
             ),
+            (
+                "200 OK",
+                r#"{"workouts":[{"id":42,"name":"Invalid profile","durationSeconds":1800,"estimatedTss":null,"summary":"","profile":[[4294967295,80],[1,80]]}]}"#.to_string(),
+                LoadError::InvalidResponse,
+            ),
+            (
+                "200 OK",
+                format!(r#"{{"workouts":[],"builtInWorkouts":[{bad_slug}]}}"#),
+                LoadError::InvalidResponse,
+            ),
+            (
+                "200 OK",
+                format!(r#"{{"workouts":[],"builtInWorkouts":[{bad_ftp}]}}"#),
+                LoadError::InvalidResponse,
+            ),
+            ("200 OK", duplicate, LoadError::InvalidResponse),
         ] {
-            let (session, server) = serve(status, body).await;
-            assert_eq!(fetch(&session).await.unwrap_err(), error);
+            let (session, server) = serve(status, &body).await;
+            assert_eq!(fetch(&session, "fr-FR").await.unwrap_err(), error);
             server.await.unwrap();
         }
     }

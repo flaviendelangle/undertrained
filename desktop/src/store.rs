@@ -8,6 +8,10 @@ pub struct Settings {
     pub rider_name: String,
     pub trainer_id: Option<String>,
     pub heart_rate_id: Option<String>,
+    /// An explicit interface language chosen on this computer ("en-GB" or "fr-FR").
+    /// Absent means follow the account, then the operating system.
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 pub fn path() -> Result<PathBuf> {

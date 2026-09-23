@@ -1,13 +1,16 @@
+mod ant;
 mod auth;
 mod ble;
+mod i18n;
 mod model;
+mod sensors;
 mod smoke;
 mod store;
 mod workouts;
 
-use crate::model::{Capabilities, Device};
-use crate::workouts::{LoadError, Workout};
-use anyhow::Context as _;
+use crate::i18n::Lang;
+use crate::model::Device;
+use crate::workouts::{LoadError, Workout, WorkoutId};
 use slint::{ComponentHandle, ModelRc, Timer, TimerMode, VecModel};
 use std::{
     cell::RefCell,
@@ -18,6 +21,13 @@ use tokio::sync::mpsc;
 
 slint::include_modules!();
 
+/// The Undertrained origin is fixed when the binary is built. Cargo re-runs the build
+/// when this variable changes, so switching servers means rebuilding.
+const SERVER_ORIGIN: &str = match option_env!("UNDERTRAINED_SERVER_URL") {
+    Some(origin) => origin,
+    None => "https://undertrained.ovh/",
+};
+
 struct State {
     devices: Vec<Device>,
     settings: store::Settings,
@@ -26,21 +36,28 @@ struct State {
     auth_generation: u64,
     last_sample: [Option<Instant>; 2],
     selected: [Option<String>; 2],
+    /// The device behind each role while connected, so names can be reworded on a
+    /// language change and ANT+ samples can be told from Bluetooth ones.
+    connected: [Option<Device>; 2],
     library: workouts::Library,
     workout_job: Option<tokio::task::JoinHandle<()>>,
+    selected_workout: Option<WorkoutId>,
+    lang: Lang,
 }
 
 type WorkoutResult = Result<Vec<Workout>, LoadError>;
 
-/// Forget every outstanding workout request. Used on sign-out, demo entry and account change.
+/// Forget every outstanding workout request. Used on sign-out and account change.
 fn clear_library(state: &mut State) {
     if let Some(job) = state.workout_job.take() {
         job.abort();
     }
     state.library.clear();
+    state.selected_workout = None;
 }
 
-/// Start one request for the signed-in account, or fill the demo samples without any network.
+/// Start one request for the signed-in account in the current language. Without a session
+/// there is nothing to fetch.
 fn start_workout_fetch(
     ui: &AppWindow,
     state: &Rc<RefCell<State>>,
@@ -49,121 +66,131 @@ fn start_workout_fetch(
 ) {
     {
         let mut state = state.borrow_mut();
-        if ui.get_demo() {
-            let generation = state.library.begin();
-            state.library.finish(generation, Ok(demo_workouts()));
-        } else {
-            let Some(session) = state.session.clone() else {
-                return;
-            };
-            if let Some(job) = state.workout_job.take() {
-                job.abort();
-            }
-            let generation = state.library.begin();
-            let events = events.clone();
-            state.workout_job = Some(handle.spawn(async move {
-                let result = workouts::fetch(&session).await;
-                let _ = events.send((generation, result));
-            }));
-        }
-    }
-    ui.set_workouts_notice("".into());
-    workout_rows(ui, &state.borrow());
-}
-
-fn format_duration(seconds: u32) -> String {
-    let minutes = seconds.div_ceil(60).max(1);
-    match (minutes / 60, minutes % 60) {
-        (0, m) => format!("{m} min"),
-        (h, 0) => format!("{h} h"),
-        (h, m) => format!("{h} h {m:02} min"),
-    }
-}
-
-/// The chart is about 150px wide, so more bars than this would be thinner than a pixel.
-const MAX_PROFILE_BARS: usize = 64;
-
-fn profile_step(share: f64, percent: Option<f64>) -> ProfileStep {
-    ProfileStep {
-        share: share as f32,
-        // 150% of FTP fills the bar; anything above is clipped.
-        intensity: percent.map_or(0.0, |p| (p / 150.0).clamp(0.05, 1.0) as f32),
-        free: percent.is_none(),
-    }
-}
-
-/// Bars whose widths always add up to the whole workout. Short profiles keep every step;
-/// long ones are resampled into equal-time buckets holding the time-weighted mean intensity.
-fn profile_bars(profile: &[(u32, Option<f64>)]) -> Vec<ProfileStep> {
-    let total: u64 = profile.iter().map(|(d, _)| u64::from(*d)).sum();
-    if total == 0 {
-        return vec![profile_step(1.0, None)];
-    }
-    if profile.len() <= MAX_PROFILE_BARS {
-        return profile
-            .iter()
-            .filter(|(seconds, _)| *seconds > 0)
-            .map(|(seconds, percent)| profile_step(f64::from(*seconds) / total as f64, *percent))
-            .collect();
-    }
-    let bucket = total as f64 / MAX_PROFILE_BARS as f64;
-    let mut bars = Vec::with_capacity(MAX_PROFILE_BARS);
-    let mut index = 0;
-    let mut remaining = f64::from(profile[0].0);
-    let mut position = 0.0;
-    for number in 0..MAX_PROFILE_BARS {
-        let end = if number + 1 == MAX_PROFILE_BARS {
-            total as f64
-        } else {
-            (number + 1) as f64 * bucket
+        let Some(session) = state.session.clone() else {
+            return;
         };
-        let start = position;
-        let mut weighted = 0.0;
-        let mut targeted = 0.0;
-        while position < end && index < profile.len() {
-            let take = remaining.min(end - position);
-            if let Some(percent) = profile[index].1 {
-                weighted += percent * take;
-                targeted += take;
-            }
-            position += take;
-            remaining -= take;
-            if remaining <= 0.0 {
-                index += 1;
-                remaining = profile.get(index).map_or(0.0, |(d, _)| f64::from(*d));
-            }
+        if let Some(job) = state.workout_job.take() {
+            job.abort();
         }
-        let percent = (targeted > 0.0).then(|| weighted / targeted);
-        bars.push(profile_step((position - start) / total as f64, percent));
+        let generation = state.library.begin();
+        let locale = state.lang.tag();
+        let events = events.clone();
+        state.workout_job = Some(handle.spawn(async move {
+            let result = workouts::fetch(&session, locale).await;
+            let _ = events.send((generation, result));
+        }));
     }
-    bars
+    ui.set_workouts_notice(0);
+    workout_rows(ui, &mut state.borrow_mut());
 }
 
-fn workout_rows(ui: &AppWindow, state: &State) {
+/// The website's seven training zones by percent of FTP. Zero means free riding.
+fn zone(percent: Option<f64>) -> i32 {
+    match percent {
+        None => 0,
+        Some(p) if p < 55.0 => 1,
+        Some(p) if p < 75.0 => 2,
+        Some(p) if p < 90.0 => 3,
+        Some(p) if p < 105.0 => 4,
+        Some(p) if p < 120.0 => 5,
+        Some(p) if p < 150.0 => 6,
+        Some(_) => 7,
+    }
+}
+
+/// Chart height fractions the website's card preview uses on its 30-unit axis.
+const FREE_RIDE_HEIGHT: f64 = 2.0 / 30.0;
+const MIN_BAR_HEIGHT: f64 = 1.0 / 30.0;
+
+/// Runs drawn as bars, mirroring the website's card preview: widths are time shares, heights
+/// are percent of FTP against a ceiling of max(peak, 120%) plus 10% headroom, free-ride steps
+/// are low grey blocks, and adjacent steps that would draw identically are merged so a flat
+/// block has no seams. Nothing is resampled, so a ten-second sprint keeps its own bar.
+fn profile_runs(profile: &[(u32, Option<f64>)]) -> Vec<ProfileStep> {
+    let total: f64 = profile.iter().map(|(d, _)| f64::from(*d)).sum();
+    if total <= 0.0 {
+        return vec![ProfileStep {
+            start: 0.0,
+            share: 1.0,
+            height: FREE_RIDE_HEIGHT as f32,
+            zone: 0,
+        }];
+    }
+    let peak = profile
+        .iter()
+        .filter_map(|(_, p)| *p)
+        .fold(0.0_f64, f64::max);
+    let ceiling = peak.max(120.0) * 1.1;
+    let mut runs: Vec<ProfileStep> = Vec::new();
+    let mut cursor = 0.0;
+    for (seconds, percent) in profile {
+        if *seconds == 0 {
+            continue;
+        }
+        let share = f64::from(*seconds) / total;
+        let start = cursor / total;
+        cursor += f64::from(*seconds);
+        let (height, zone) = match percent {
+            None => (FREE_RIDE_HEIGHT, 0),
+            Some(p) => ((p / ceiling).max(MIN_BAR_HEIGHT), zone(Some(*p))),
+        };
+        if let Some(last) = runs.last_mut()
+            && last.zone == zone
+            && (f64::from(last.height) - height).abs() < 1e-6
+        {
+            last.share += share as f32;
+            continue;
+        }
+        runs.push(ProfileStep {
+            start: start as f32,
+            share: share as f32,
+            height: height as f32,
+            zone,
+        });
+    }
+    runs
+}
+
+fn workout_row(lang: Lang, w: &Workout) -> WorkoutRow {
+    WorkoutRow {
+        id: w.id.key().into(),
+        built_in: w.id.is_built_in(),
+        name: w.name.clone().into(),
+        meta: i18n::workout_meta(
+            lang,
+            w.duration_label.as_deref(),
+            w.duration_seconds,
+            w.estimated_tss,
+        )
+        .into(),
+        summary: w.summary.clone().into(),
+        profile: ModelRc::new(VecModel::from(profile_runs(&w.profile))),
+    }
+}
+
+/// Rebuild both card models from the library and the search. A selection that the settled
+/// library no longer contains is dropped and the preview screen gives way to the list: with a
+/// note when the list was refreshed without it, silently when the session expired, since the
+/// expired-session panel already explains the empty list.
+fn workout_rows(ui: &AppWindow, state: &mut State) {
     let library = &state.library;
     let query = ui.get_workout_query();
-    let rows: Vec<WorkoutRow> = library
+    let (built_ins, personal): (Vec<_>, Vec<_>) = library
         .filtered(&query)
         .into_iter()
-        .map(|w| {
-            let profile = profile_bars(&w.profile);
-            WorkoutRow {
-                id: w.id.to_string().into(),
-                name: w.name.clone().into(),
-                duration: format_duration(w.duration_seconds).into(),
-                tss: w
-                    .estimated_tss
-                    .map_or("No TSS estimate".to_string(), |t| {
-                        format!("{} TSS", t.round() as i64)
-                    })
-                    .into(),
-                summary: w.summary.clone().into(),
-                profile: ModelRc::new(VecModel::from(profile)),
-            }
-        })
+        .partition(|w| w.id.is_built_in());
+    let personal: Vec<WorkoutRow> = personal
+        .into_iter()
+        .map(|w| workout_row(state.lang, w))
         .collect();
-    ui.set_workouts(ModelRc::new(VecModel::from(rows)));
+    let built_ins: Vec<WorkoutRow> = built_ins
+        .into_iter()
+        .map(|w| workout_row(state.lang, w))
+        .collect();
+    ui.set_workouts(ModelRc::new(VecModel::from(personal)));
+    ui.set_built_ins(ModelRc::new(VecModel::from(built_ins)));
     ui.set_workouts_total(library.workouts.len() as i32);
+    ui.set_workouts_personal(library.personal_count() as i32);
     ui.set_workouts_loading(library.loading);
     ui.set_workouts_loaded(library.loaded);
     ui.set_workouts_error(match library.error {
@@ -173,111 +200,63 @@ fn workout_rows(ui: &AppWindow, state: &State) {
         Some(LoadError::Network) => 3,
         Some(LoadError::InvalidResponse) => 4,
     });
+    let selected = state
+        .selected_workout
+        .as_ref()
+        .and_then(|id| library.workouts.iter().find(|w| &w.id == id))
+        .map(|w| workout_row(state.lang, w));
+    match selected {
+        Some(row) => ui.set_selected_workout(row),
+        None if state.selected_workout.is_some() && !library.loading => {
+            let refreshed_without_it = library.loaded && library.error.is_none();
+            state.selected_workout = None;
+            ui.set_selected_workout(WorkoutRow::default());
+            if ui.get_screen() == 2 {
+                ui.set_screen(1);
+                if refreshed_without_it {
+                    ui.set_workouts_notice(5);
+                }
+            }
+        }
+        None => {}
+    }
 }
 
-/// Made-up workouts for demo mode. Never used as a fallback for a failed request.
-fn demo_workouts() -> Vec<Workout> {
-    fn sample(
-        id: i64,
-        name: &str,
-        tss: Option<f64>,
-        summary: &str,
-        profile: Vec<(u32, Option<f64>)>,
-    ) -> Workout {
-        Workout {
-            id,
-            name: name.into(),
-            duration_seconds: profile.iter().map(|(d, _)| d).sum(),
-            estimated_tss: tss,
-            summary: summary.into(),
-            profile,
+/// Apply a language to the window, the Rust-formatted strings and the bundled Slint
+/// translation, without touching the saved preference.
+fn apply_language(ui: &AppWindow, state: &mut State, lang: Lang) {
+    state.lang = lang;
+    if let Err(error) = slint::select_bundled_translation(lang.slint_code()) {
+        tracing::warn!(%error, language = lang.tag(), "Could not select the bundled translation");
+    }
+    ui.set_language(lang.slint_code().into());
+    device_rows(ui, state);
+    for role in 0..2 {
+        if let Some(device) = &state.connected[role] {
+            let name = i18n::device_name(lang, device);
+            if role == 0 {
+                ui.set_trainer_name(name.into());
+            } else {
+                ui.set_hr_name(name.into());
+            }
         }
     }
-    let easy = |s| (s, Some(50.0));
-    vec![
-        sample(
-            1,
-            "Sweet spot 3 × 12",
-            Some(72.0),
-            "Warm-up, then 3 × 12 min at 90% with 4 min easy between",
-            vec![
-                (600, Some(55.0)),
-                (720, Some(90.0)),
-                easy(240),
-                (720, Some(90.0)),
-                easy(240),
-                (720, Some(90.0)),
-                (360, Some(45.0)),
-            ],
-        ),
-        sample(
-            2,
-            "VO2 max 5 × 3",
-            Some(78.0),
-            "5 × 3 min at 118% with 3 min recovery",
-            vec![
-                (900, Some(55.0)),
-                (180, Some(118.0)),
-                easy(180),
-                (180, Some(118.0)),
-                easy(180),
-                (180, Some(118.0)),
-                easy(180),
-                (180, Some(118.0)),
-                easy(180),
-                (180, Some(118.0)),
-                (600, Some(45.0)),
-            ],
-        ),
-        sample(
-            3,
-            "Threshold 2 × 20",
-            Some(88.0),
-            "2 × 20 min at 100% with 5 min easy between",
-            vec![
-                (900, Some(55.0)),
-                (1200, Some(100.0)),
-                easy(300),
-                (1200, Some(100.0)),
-                (600, Some(45.0)),
-            ],
-        ),
-        sample(
-            4,
-            "Endurance 90",
-            Some(65.0),
-            "Steady 90 min at 65%",
-            vec![easy(600), (4200, Some(65.0)), easy(600)],
-        ),
-        sample(
-            5,
-            "Openers",
-            Some(35.0),
-            "Race-week activation with 3 × 1 min at 110%",
-            vec![
-                (600, Some(55.0)),
-                (60, Some(110.0)),
-                easy(120),
-                (60, Some(110.0)),
-                easy(120),
-                (60, Some(110.0)),
-                easy(600),
-            ],
-        ),
-        sample(
-            6,
-            "Free ride 45",
-            None,
-            "No targets. Ride as you like for 45 min",
-            vec![(2700, None)],
-        ),
-    ]
+    workout_rows(ui, state);
+}
+
+enum Notice {
+    KeyringUnavailable,
+    KeyringNotCleared,
+    RevokeFailed,
 }
 
 enum AuthEvent {
     SignedIn(auth::Session),
+    /// The saved session could not be verified.
+    Unverified,
+    /// A browser sign-in failed, with the reason as reported.
     Failed(String),
-    Notice(String),
+    Notice(Notice),
 }
 #[derive(Clone)]
 struct AuthSender {
@@ -298,7 +277,6 @@ fn cancel_auth(state: &mut State) {
 
 fn device_rows(ui: &AppWindow, state: &State) {
     let role = ui.get_picker_role();
-    let demo = ui.get_demo();
     let rows: Vec<_> = state
         .devices
         .iter()
@@ -316,41 +294,40 @@ fn device_rows(ui: &AppWindow, state: &State) {
                 &state.settings.trainer_id
             };
             let kind = if d.capabilities.trainer {
-                "Smart trainer"
+                0
             } else if d.capabilities.heart_rate {
-                "Heart-rate sensor"
+                1
             } else {
-                "Power meter · read only"
+                2
             };
-            // The tail of the platform id tells two same-named devices apart.
-            // Demo ids are made up, so showing part of them would only confuse.
-            let suffix: String = if demo {
-                String::new()
-            } else {
-                d.id.chars()
-                    .rev()
-                    .take(6)
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .rev()
-                    .collect()
+            // ANT+ devices are told apart by their device number; Bluetooth ones by the
+            // tail of the platform id, which is what two same-named trainers differ by.
+            let (transport, suffix) = match i18n::ant_number(&d.id) {
+                Some(number) => (1, number.to_owned()),
+                None => (
+                    0,
+                    d.id.chars()
+                        .rev()
+                        .take(6)
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect(),
+                ),
             };
-            let (signal, signal_level) = match d.rssi {
-                Some(r) if r >= -65 => ("Strong signal", 3),
-                Some(r) if r >= -80 => ("Fair signal", 2),
-                Some(_) => ("Weak signal", 1),
-                None => ("Signal unknown", 0),
+            let signal_level = match d.rssi {
+                _ if transport == 1 => -1,
+                Some(r) if r >= -65 => 3,
+                Some(r) if r >= -80 => 2,
+                Some(_) => 1,
+                None => 0,
             };
             NearbyDevice {
                 id: d.id.clone().into(),
-                name: d.name.clone().into(),
-                detail: if suffix.is_empty() {
-                    kind.to_string()
-                } else {
-                    format!("{kind} · {suffix}")
-                }
-                .into(),
-                signal: signal.into(),
+                name: i18n::device_name(state.lang, d).into(),
+                kind,
+                transport,
+                suffix: suffix.into(),
                 signal_level,
                 saved: saved.as_ref() == Some(&d.id),
             }
@@ -359,68 +336,121 @@ fn device_rows(ui: &AppWindow, state: &State) {
     ui.set_nearby(ModelRc::new(VecModel::from(rows)));
 }
 
-fn demo_devices() -> Vec<Device> {
-    vec![
-        Device {
-            id: "demo-trainer".into(),
-            name: "Wahoo KICKR · Demo".into(),
-            capabilities: Capabilities {
-                trainer: true,
-                cadence: true,
-                power: true,
-                ..Default::default()
-            },
-            rssi: Some(-48),
-        },
-        Device {
-            id: "demo-heart".into(),
-            name: "Polar H10 · Demo".into(),
-            capabilities: Capabilities {
-                heart_rate: true,
-                ..Default::default()
-            },
-            rssi: Some(-57),
-        },
-    ]
+/// Put the window back to the signed-out state. The sign-out handler adds the keyring,
+/// server revocation and radio reset around this.
+fn reset_session_ui(ui: &AppWindow, state: &mut State) {
+    disconnected(ui, state, 0);
+    disconnected(ui, state, 1);
+    ui.set_logged_in(false);
+    ui.set_picker_open(false);
+    ui.set_signing_in(false);
+    ui.set_auth_notice(0);
+    ui.set_auth_detail("".into());
+    ui.set_message_code(0);
+    ui.set_message_detail("".into());
+    state.selected = [None, None];
+    clear_library(state);
+    ui.set_session_live(false);
+    ui.set_screen(0);
+    ui.set_workout_query("".into());
+    ui.set_workouts_notice(0);
+    ui.set_workouts_notice_detail("".into());
+    ui.set_selected_workout(WorkoutRow::default());
+    workout_rows(ui, state);
 }
 
-fn disconnected(ui: &AppWindow, role: usize) {
+fn disconnected(ui: &AppWindow, state: &mut State, role: usize) {
     ui.set_setup_saved(false);
+    state.connected[role] = None;
+    state.last_sample[role] = None;
     if role == 0 {
-        ui.set_trainer_connected(false);
+        ui.set_trainer_state(0);
+        ui.set_trainer_ant(false);
         ui.set_trainer_name("".into());
-        ui.set_trainer_status("Not connected".into());
         ui.set_power("—".into());
         ui.set_cadence("—".into());
-        ui.set_resistance("Not checked".into());
+        ui.set_resistance_state(0);
     } else {
-        ui.set_hr_connected(false);
+        ui.set_hr_state(0);
+        ui.set_hr_ant(false);
         ui.set_hr_name("".into());
-        ui.set_hr_status("Not connected".into());
         ui.set_heart_rate("—".into());
     }
 }
 
-fn connected(ui: &AppWindow, device: &Device, role: usize, erg: bool) {
+fn connected(ui: &AppWindow, state: &mut State, device: &Device, role: usize, erg: bool) {
     ui.set_setup_saved(false);
     ui.set_picker_open(false);
-    ui.set_message("".into());
+    ui.set_message_code(0);
+    ui.set_message_detail("".into());
+    let ant = device.id.starts_with("ant:");
+    let name = i18n::device_name(state.lang, device);
+    state.connected[role] = Some(device.clone());
     if role == 0 {
-        ui.set_trainer_connected(true);
-        ui.set_trainer_name(device.name.clone().into());
-        ui.set_trainer_status("Connected · waiting for data".into());
-        ui.set_resistance(
-            if erg {
-                "ERG supported"
-            } else {
-                "Read only / not confirmed"
-            }
-            .into(),
-        );
+        ui.set_trainer_state(2);
+        ui.set_trainer_ant(ant);
+        ui.set_trainer_name(name.into());
+        // ANT+ trainers are received, never commanded, so "no ERG" is by design rather
+        // than a missing capability of the trainer.
+        ui.set_resistance_state(if ant {
+            3
+        } else if erg {
+            1
+        } else {
+            2
+        });
     } else {
-        ui.set_hr_connected(true);
-        ui.set_hr_name(device.name.clone().into());
-        ui.set_hr_status("Connected · waiting for data".into());
+        ui.set_hr_state(2);
+        ui.set_hr_ant(ant);
+        ui.set_hr_name(name.into());
+    }
+}
+
+/// A radio report from the sensor layer: a state code (0 not checked, 1 ready, 2 unavailable),
+/// a known-condition code the interface words itself, and the raw remainder for anything
+/// else. The aggregated statuses read "<Radio> ready" or "<Radio> unavailable: <reason>".
+/// Known conditions: Bluetooth 1 switched off or blocked, 2 no adapter; ANT+ 1 no USB stick,
+/// 2 stick busy or permission denied. Their raw text is dropped so nothing shows twice.
+fn radio_state(status: &str) -> (i32, i32, String) {
+    let lower = status.to_ascii_lowercase();
+    if lower.contains("unavailable") {
+        let detail = status
+            .split_once(':')
+            .map(|(_, rest)| rest.trim().to_owned())
+            .unwrap_or_default();
+        let issue = if detail.contains("switched off or blocked") {
+            1
+        } else if detail.starts_with("No Bluetooth adapter") {
+            2
+        } else if detail.starts_with("No ANT+ USB stick") {
+            1
+        } else if detail.contains("Cannot open ANT+ USB stick")
+            || detail.contains("busy or permission is denied")
+        {
+            2
+        } else {
+            0
+        };
+        (2, issue, if issue == 0 { detail } else { String::new() })
+    } else if lower.contains("ready") {
+        (1, 0, String::new())
+    } else {
+        (0, 0, status.to_owned())
+    }
+}
+
+/// Map a driver error, which arrives as English text, to a message code and the raw detail.
+fn device_error(message: &str) -> (i32, String) {
+    if message.starts_with("Device is no longer available") {
+        (1, String::new())
+    } else if message.starts_with("That device is already assigned") {
+        (2, String::new())
+    } else if message.contains("switched off or blocked") {
+        (4, String::new())
+    } else if let Some((detail, _)) = message.split_once(". Wake the device") {
+        (3, detail.to_owned())
+    } else {
+        (6, message.to_owned())
     }
 }
 
@@ -428,30 +458,64 @@ fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
+    // The only flag is the developer smoke test. Anything else, including the removed
+    // demo flags, is refused rather than silently treated as a normal launch.
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    let smoke_test = args.iter().any(|a| a == "--smoke-test");
+    if let Some(unsupported) = args.iter().find(|a| *a != "--smoke-test") {
+        eprintln!(
+            "Unsupported argument: {unsupported}. Undertrained Indoor takes no launch options apart from --smoke-test, and requires an Undertrained sign-in."
+        );
+        std::process::exit(2);
+    }
     let runtime = tokio::runtime::Runtime::new()?;
     let ui = AppWindow::new()?;
+    // Desktop identity: the app id matches the launcher's StartupWMClass so docks and
+    // task bars group the window under the Undertrained icon. It has to be set before the
+    // window is first shown, and only matters on X11 and Wayland.
+    if let Err(error) = slint::set_xdg_app_id("undertrained-indoor") {
+        tracing::warn!(%error, "Could not set the desktop app id");
+    }
     let settings = store::load().unwrap_or_else(|error| {
         tracing::warn!(%error, "Could not load preferences");
         store::Settings::default()
     });
-    if let Ok(origin) = std::env::var("UNDERTRAINED_SERVER_URL") {
-        ui.set_server_url(origin.into());
-    }
+    // Validate the compiled origin once. A bad build says so instead of failing at sign-in.
+    let origin: Option<String> = match auth::server_url(SERVER_ORIGIN) {
+        Ok(url) => {
+            ui.set_server_origin(url.as_str().into());
+            Some(url.to_string())
+        }
+        Err(error) => {
+            tracing::error!(%error, origin = SERVER_ORIGIN, "Invalid compiled server address");
+            ui.set_server_configured(false);
+            ui.set_auth_notice(6);
+            ui.set_auth_detail(format!("{SERVER_ORIGIN}: {error}").into());
+            None
+        }
+    };
     let state = Rc::new(RefCell::new(State {
         devices: vec![],
+        lang: i18n::resolve(settings.language.as_deref(), None),
         settings,
         session: None,
         auth_job: None,
         auth_generation: 0,
         last_sample: [None, None],
         selected: [None, None],
+        connected: [None, None],
         library: workouts::Library::default(),
         workout_job: None,
+        selected_workout: None,
     }));
+    {
+        let lang = state.borrow().lang;
+        apply_language(&ui, &mut state.borrow_mut(), lang);
+    }
     let (workout_events, mut workout_receiver) = mpsc::unbounded_channel::<(u64, WorkoutResult)>();
     let (commands, receiver) = mpsc::unbounded_channel();
     let (events, mut event_receiver) = mpsc::unbounded_channel();
-    let worker = runtime.spawn(ble::run(receiver, events));
+    let worker = runtime.spawn(sensors::run(receiver, events));
     let (auth_events, mut auth_receiver) = mpsc::unbounded_channel();
     // Serialize keyring writes. A sign-out cannot race behind a late credential save.
     let (credentials, credential_receiver) =
@@ -463,12 +527,12 @@ fn main() -> anyhow::Result<()> {
                 None => auth::forget(),
             };
             if result.is_err() {
-                let message = if session.is_some() {
-                    "Signed in for this visit. The system keyring is unavailable, so sign-in could not be remembered."
+                let notice = if session.is_some() {
+                    Notice::KeyringUnavailable
                 } else {
-                    "The system keyring could not be cleared. The server session will be revoked if reachable."
+                    Notice::KeyringNotCleared
                 };
-                let _ = events.send(AuthEvent::Notice(message.into()));
+                let _ = events.send(AuthEvent::Notice(notice));
             }
         }
     });
@@ -478,9 +542,14 @@ fn main() -> anyhow::Result<()> {
         let state = state.clone();
         let handle = runtime.handle().clone();
         let events = auth_events.clone();
-        ui.on_sign_in(move |origin| {
+        let origin = origin.clone();
+        ui.on_sign_in(move || {
             let ui = weak.unwrap();
-            ui.set_auth_message("".into());
+            let Some(origin) = origin.clone() else {
+                return;
+            };
+            ui.set_auth_notice(0);
+            ui.set_auth_detail("".into());
             ui.set_signing_in(true);
             cancel_auth(&mut state.borrow_mut());
             let events = AuthSender {
@@ -493,7 +562,7 @@ fn main() -> anyhow::Result<()> {
                         let _ = events.send(AuthEvent::SignedIn(session));
                     }
                     Err(error) => {
-                        let _ = events.send(AuthEvent::Failed(error.to_string()));
+                        let _ = events.send(AuthEvent::Failed(format!("{error:#}")));
                     }
                 }
             }));
@@ -506,7 +575,8 @@ fn main() -> anyhow::Result<()> {
             cancel_auth(&mut state.borrow_mut());
             let ui = weak.unwrap();
             ui.set_signing_in(false);
-            ui.set_auth_message("Sign-in cancelled.".into());
+            ui.set_auth_notice(1);
+            ui.set_auth_detail("".into());
         });
     }
     {
@@ -520,45 +590,57 @@ fn main() -> anyhow::Result<()> {
             let ui = weak.unwrap();
             cancel_auth(&mut state.borrow_mut());
             let session = state.borrow_mut().session.take();
-            if !ui.get_demo() {
-                let events = AuthSender { tx: events.clone(), generation: state.borrow().auth_generation };
-                let _ = credentials.send((events.clone(), None));
-                handle.spawn(async move {
-                    if let Some(session) = session
-                        && auth::revoke(session).await.is_err() {
-                            let _ = events.send(AuthEvent::Notice("Signed out locally. The server could not be reached to revoke this session.".into()));
-                        }
-                });
-            }
+            let events = AuthSender {
+                tx: events.clone(),
+                generation: state.borrow().auth_generation,
+            };
+            let _ = credentials.send((events.clone(), None));
+            handle.spawn(async move {
+                if let Some(session) = session
+                    && auth::revoke(session).await.is_err()
+                {
+                    let _ = events.send(AuthEvent::Notice(Notice::RevokeFailed));
+                }
+            });
             let _ = commands.send(ble::Command::Reset);
-            disconnected(&ui, 0); disconnected(&ui, 1);
-            ui.set_logged_in(false); ui.set_demo(false); ui.set_picker_open(false);
-            ui.set_signing_in(false); ui.set_auth_message("".into()); ui.set_message("".into());
-            state.borrow_mut().selected = [None, None];
-            clear_library(&mut state.borrow_mut());
-            ui.set_session_live(false);
-            ui.set_screen(0);
-            ui.set_workout_query("".into());
-            ui.set_workouts_notice("".into());
-            workout_rows(&ui, &state.borrow());
+            reset_session_ui(&ui, &mut state.borrow_mut());
+            // Without an account the saved preference, then the OS, decide the language.
+            let lang = {
+                let state = state.borrow();
+                i18n::resolve(state.settings.language.as_deref(), None)
+            };
+            apply_language(&ui, &mut state.borrow_mut(), lang);
         });
     }
     {
         let weak = ui.as_weak();
         let state = state.clone();
-        ui.on_preview(move || {
-            cancel_auth(&mut state.borrow_mut());
-            clear_library(&mut state.borrow_mut());
+        let handle = runtime.handle().clone();
+        let events = workout_events.clone();
+        ui.on_set_language(move |code| {
+            let Some(lang) = Lang::parse(&code) else {
+                return;
+            };
             let ui = weak.unwrap();
-            ui.set_demo(true);
-            ui.set_logged_in(true);
-            ui.set_session_live(false);
-            ui.set_screen(0);
-            ui.set_rider_name("Demo rider".into());
-            ui.set_workout_query("".into());
-            ui.set_workouts_notice("".into());
-            state.borrow_mut().devices = demo_devices();
-            workout_rows(&ui, &state.borrow());
+            {
+                let mut state = state.borrow_mut();
+                if state.lang == lang && state.settings.language.as_deref() == Some(lang.tag()) {
+                    return;
+                }
+                state.settings.language = Some(lang.tag().to_owned());
+                if let Err(error) = store::save(&state.settings) {
+                    tracing::warn!(%error, "Could not save the language preference");
+                }
+                apply_language(&ui, &mut state, lang);
+            }
+            // Built-in workouts come from the server in the interface language.
+            let refetch = {
+                let state = state.borrow();
+                state.session.is_some() && (state.library.loaded || state.library.loading)
+            };
+            if refetch {
+                start_workout_fetch(&ui, &state, &handle, &events);
+            }
         });
     }
     {
@@ -586,7 +668,7 @@ fn main() -> anyhow::Result<()> {
         let events = workout_events.clone();
         ui.on_refresh_workouts(move || {
             let ui = weak.unwrap();
-            if ui.get_demo() || state.borrow().library.loading {
+            if state.borrow().library.loading {
                 return;
             }
             start_workout_fetch(&ui, &state, &handle, &events);
@@ -600,47 +682,69 @@ fn main() -> anyhow::Result<()> {
             if ui.get_workout_query() != query {
                 ui.set_workout_query(query);
             }
-            workout_rows(&ui, &state.borrow());
+            workout_rows(&ui, &mut state.borrow_mut());
         });
     }
     {
         let weak = ui.as_weak();
         let state = state.clone();
+        ui.on_select_workout(move |key| {
+            let ui = weak.unwrap();
+            let mut state = state.borrow_mut();
+            let Some(id) = WorkoutId::from_key(&key) else {
+                ui.set_workouts_notice(2);
+                return;
+            };
+            if !state.library.contains(&id) {
+                ui.set_workouts_notice(3);
+                return;
+            }
+            state.selected_workout = Some(id);
+            ui.set_workouts_notice(0);
+            ui.set_workouts_notice_detail("".into());
+            workout_rows(&ui, &mut state);
+            ui.set_screen(2);
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_close_training(move || {
+            let ui = weak.unwrap();
+            state.borrow_mut().selected_workout = None;
+            ui.set_selected_workout(WorkoutRow::default());
+            ui.set_screen(1);
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        // Codes: 1 needs a live session, 2 not identified, 3 not in the library, 4 browser failed.
         let open_in_browser = move |id: Option<slint::SharedString>| {
             let ui = weak.unwrap();
             let state = state.borrow();
-            let result = (|| {
-                if ui.get_demo() || !ui.get_session_live() {
-                    anyhow::bail!("Browser links need a signed-in account session.");
-                }
+            let result: Result<(), (i32, String)> = (|| {
                 let session = state
                     .session
                     .as_ref()
-                    .context("Browser links need a signed-in account session.")?;
-                let id = match id {
-                    Some(id) => {
-                        let id: i64 = id
-                            .parse()
-                            .context("That workout could not be identified.")?;
-                        if !state.library.workouts.iter().any(|w| w.id == id) {
-                            anyhow::bail!(
-                                "That workout is no longer in your library. Refresh the list."
-                            );
+                    .filter(|_| ui.get_session_live())
+                    .ok_or((1, String::new()))?;
+                let url = match id {
+                    Some(key) => {
+                        let id = WorkoutId::from_key(&key).ok_or((2, String::new()))?;
+                        if !state.library.contains(&id) {
+                            return Err((3, String::new()));
                         }
-                        Some(id)
+                        workouts::link(&session.origin, &id)
                     }
-                    None => None,
-                };
-                let url = workouts::web_url(&session.origin, id)?;
-                open::that(&url).context("Could not open your browser")
-            })();
-            ui.set_workouts_notice(
-                match result {
-                    Ok(()) => String::new(),
-                    Err(error) => error.to_string(),
+                    None => workouts::web_url(&session.origin, None),
                 }
-                .into(),
-            );
+                .map_err(|error| (4, error.to_string()))?;
+                open::that(&url).map_err(|error| (4, error.to_string()))
+            })();
+            let (code, detail) = result.err().unwrap_or((0, String::new()));
+            ui.set_workouts_notice(code);
+            ui.set_workouts_notice_detail(detail.into());
         };
         let open_existing = open_in_browser.clone();
         ui.on_open_workout(move |id| open_existing(Some(id)));
@@ -654,13 +758,10 @@ fn main() -> anyhow::Result<()> {
             let ui = weak.unwrap();
             ui.set_picker_role(role);
             ui.set_picker_open(true);
-            ui.set_message("".into());
-            if ui.get_demo() {
-                ui.set_scanning(false);
-            } else {
-                ui.set_scanning(true);
-                let _ = commands.send(ble::Command::Scan);
-            }
+            ui.set_message_code(0);
+            ui.set_message_detail("".into());
+            ui.set_scanning(true);
+            let _ = commands.send(ble::Command::Scan);
             device_rows(&ui, &state.borrow());
         });
     }
@@ -670,14 +771,11 @@ fn main() -> anyhow::Result<()> {
         ui.on_close_picker(move || {
             let ui = weak.unwrap();
             ui.set_picker_open(false);
-            if !ui.get_demo() {
-                let _ = commands.send(ble::Command::StopScan);
-            }
+            let _ = commands.send(ble::Command::StopScan);
         });
     }
     {
         let weak = ui.as_weak();
-        let state = state.clone();
         let commands = commands.clone();
         ui.on_choose(move |id, role| {
             let ui = weak.unwrap();
@@ -685,22 +783,9 @@ fn main() -> anyhow::Result<()> {
             if role > 1 {
                 return;
             }
-            if ui.get_demo() {
-                let device = state
-                    .borrow()
-                    .devices
-                    .iter()
-                    .find(|d| d.id == id.as_str())
-                    .cloned();
-                if let Some(device) = device {
-                    connected(&ui, &device, role, device.capabilities.trainer);
-                    state.borrow_mut().selected[role] = Some(device.id);
-                }
-            } else {
-                ui.set_picker_open(false);
-                let _ = commands.send(ble::Command::StopScan);
-                let _ = commands.send(ble::Command::Connect(id.to_string(), role));
-            }
+            ui.set_picker_open(false);
+            let _ = commands.send(ble::Command::StopScan);
+            let _ = commands.send(ble::Command::Connect(id.to_string(), role));
         });
     }
     {
@@ -713,11 +798,9 @@ fn main() -> anyhow::Result<()> {
             if role > 1 {
                 return;
             }
-            disconnected(&ui, role);
+            disconnected(&ui, &mut state.borrow_mut(), role);
             state.borrow_mut().selected[role] = None;
-            if !ui.get_demo() {
-                let _ = commands.send(ble::Command::Disconnect(role));
-            }
+            let _ = commands.send(ble::Command::Disconnect(role));
         });
     }
     {
@@ -728,45 +811,24 @@ fn main() -> anyhow::Result<()> {
             if !ui.get_trainer_connected() {
                 return;
             }
-            if !ui.get_demo() {
-                let mut state = state.borrow_mut();
-                state.settings.rider_name = ui.get_rider_name().to_string();
-                state.settings.trainer_id = state.selected[0].clone();
-                state.settings.heart_rate_id = state.selected[1].clone();
-                if let Err(error) = store::save(&state.settings) {
-                    ui.set_message(format!("Could not save your devices: {error}").into());
-                    return;
-                }
+            let mut state = state.borrow_mut();
+            state.settings.rider_name = ui.get_rider_name().to_string();
+            state.settings.trainer_id = state.selected[0].clone();
+            state.settings.heart_rate_id = state.selected[1].clone();
+            if let Err(error) = store::save(&state.settings) {
+                ui.set_message_code(5);
+                ui.set_message_detail(error.to_string().into());
+                return;
             }
             ui.set_setup_saved(true);
-            ui.set_message(
-                if ui.get_demo() {
-                    "Demo setup only. No devices or account settings have been saved."
-                } else {
-                    ""
-                }
-                .into(),
-            );
+            ui.set_message_code(0);
+            ui.set_message_detail("".into());
         });
     }
 
-    let args: Vec<_> = std::env::args().collect();
-    if args.iter().any(|a| {
-        a == "--demo" || a == "--demo-connected" || a == "--demo-picker" || a == "--demo-workouts"
-    }) {
-        ui.invoke_preview();
-        if args.iter().any(|a| a == "--demo-connected") {
-            ui.invoke_choose("demo-trainer".into(), 0);
-            ui.invoke_choose("demo-heart".into(), 1);
-        }
-        if args.iter().any(|a| a == "--demo-picker") {
-            ui.invoke_search(0);
-        }
-        if args.iter().any(|a| a == "--demo-workouts") {
-            ui.invoke_navigate(1);
-        }
-    } else if std::env::var_os("UNDERTRAINED_SCREENSHOT").is_none()
-        && !args.iter().any(|a| a == "--smoke-test")
+    if std::env::var_os("UNDERTRAINED_SCREENSHOT").is_none()
+        && !smoke_test
+        && let Some(origin) = origin.clone()
     {
         let events = AuthSender {
             tx: auth_events.clone(),
@@ -774,9 +836,23 @@ fn main() -> anyhow::Result<()> {
         };
         let job = runtime.spawn(async move {
             if let Ok(Ok(Some(session))) = tokio::task::spawn_blocking(auth::stored).await {
+                // A session saved for another server is left alone: its token is never sent elsewhere.
+                let same_server = auth::server_url(&session.origin)
+                    .is_ok_and(|saved| saved.to_string() == origin);
+                if !same_server {
+                    tracing::info!(
+                        saved = session.origin,
+                        "Ignoring a saved session for another server"
+                    );
+                    return;
+                }
                 match auth::validate(session).await {
-                    Ok(session) => { let _ = events.send(AuthEvent::SignedIn(session)); }
-                    Err(_) => { let _ = events.send(AuthEvent::Failed("Your saved session could not be verified. Sign in again when your server is available.".into())); }
+                    Ok(session) => {
+                        let _ = events.send(AuthEvent::SignedIn(session));
+                    }
+                    Err(_) => {
+                        let _ = events.send(AuthEvent::Unverified);
+                    }
                 }
             }
         });
@@ -799,7 +875,7 @@ fn main() -> anyhow::Result<()> {
                 if expired {
                     ui.set_session_live(false);
                 }
-                workout_rows(&ui, &timer_state.borrow());
+                workout_rows(&ui, &mut timer_state.borrow_mut());
             }
         }
         while let Ok((generation, event)) = auth_receiver.try_recv() {
@@ -810,133 +886,186 @@ fn main() -> anyhow::Result<()> {
                 AuthEvent::SignedIn(session) => {
                     ui.set_signing_in(false);
                     ui.set_logged_in(true);
-                    ui.set_demo(false);
                     ui.set_rider_name(session.athlete.name.clone().into());
-                    ui.set_server_url(session.origin.clone().into());
-                    ui.set_message("".into());
+                    ui.set_message_code(0);
+                    ui.set_message_detail("".into());
                     let sender = AuthSender {
                         tx: auth_events.clone(),
                         generation,
                     };
                     let _ = credentials.send((sender, Some(session.clone())));
+                    // A new account: the saved preference still wins, then the account's
+                    // language, then the OS.
+                    let lang = {
+                        let state = timer_state.borrow();
+                        i18n::resolve(
+                            state.settings.language.as_deref(),
+                            session.athlete.language.as_deref(),
+                        )
+                    };
                     clear_library(&mut timer_state.borrow_mut());
                     timer_state.borrow_mut().session = Some(session);
-                    ui.set_bluetooth_ok(true);
-                    ui.set_bluetooth_status("Bluetooth ready to search".into());
+                    apply_language(&ui, &mut timer_state.borrow_mut(), lang);
                     ui.set_session_live(true);
                     ui.set_screen(0);
                     ui.set_workout_query("".into());
-                    ui.set_workouts_notice("".into());
+                    ui.set_workouts_notice(0);
+                    ui.set_workouts_notice_detail("".into());
                     start_workout_fetch(&ui, &timer_state, &timer_handle, &workout_events);
                 }
-                AuthEvent::Failed(message) => {
+                AuthEvent::Unverified => {
                     ui.set_signing_in(false);
-                    ui.set_auth_message(message.into());
+                    ui.set_auth_notice(4);
+                    ui.set_auth_detail("".into());
                 }
-                AuthEvent::Notice(message) => {
-                    if ui.get_logged_in() {
-                        ui.set_message(message.into());
-                    } else {
-                        ui.set_auth_message(message.into());
+                AuthEvent::Failed(detail) => {
+                    ui.set_signing_in(false);
+                    ui.set_auth_notice(5);
+                    ui.set_auth_detail(detail.into());
+                }
+                AuthEvent::Notice(notice) => match notice {
+                    Notice::KeyringUnavailable if ui.get_logged_in() => {
+                        ui.set_message_code(8);
+                        ui.set_message_detail("".into());
                     }
-                }
+                    Notice::KeyringUnavailable => ui.set_auth_notice(2),
+                    Notice::KeyringNotCleared => ui.set_auth_notice(3),
+                    Notice::RevokeFailed => ui.set_auth_notice(7),
+                },
             }
         }
         while let Ok(event) = event_receiver.try_recv() {
-            if ui.get_demo() || !ui.get_logged_in() {
+            if !ui.get_logged_in() {
                 continue;
             }
             match event {
-                ble::Event::Status(status) => {
-                    ui.set_bluetooth_ok(!status.contains("unavailable"));
-                    ui.set_bluetooth_status(status.into());
-                }
-                ble::Event::Devices(devices) => {
-                    timer_state.borrow_mut().devices = devices;
-                    device_rows(&ui, &timer_state.borrow());
-                }
-                ble::Event::ScanDone => ui.set_scanning(false),
-                ble::Event::Connecting(role) => {
-                    disconnected(&ui, role);
-                    if role == 0 {
-                        ui.set_trainer_status("Connecting…".into());
+                // Each radio reports on its own; one failing never blocks the other.
+                sensors::Event::RadioStatus { ant, status } => {
+                    let (state, issue, detail) = radio_state(&status);
+                    if ant {
+                        ui.set_ant_state(state);
+                        ui.set_ant_issue(issue);
+                        ui.set_ant_detail(detail.into());
                     } else {
-                        ui.set_hr_status("Connecting…".into());
+                        ui.set_bluetooth_state(state);
+                        ui.set_bluetooth_issue(issue);
+                        ui.set_bluetooth_detail(detail.into());
                     }
                 }
-                ble::Event::Connected(role, device, erg) => {
-                    connected(&ui, &device, role, erg);
-                    timer_state.borrow_mut().selected[role] = Some(device.id);
-                    timer_state.borrow_mut().last_sample[role] = Some(Instant::now());
-                }
-                ble::Event::Sample(role, reading) => {
-                    timer_state.borrow_mut().last_sample[role] = Some(Instant::now());
-                    if role == 0 && ui.get_trainer_connected() {
-                        if let Some(power) = reading.power {
-                            ui.set_power(power.to_string().into());
-                        }
-                        if let Some(cadence) = reading.cadence {
-                            ui.set_cadence(format!("{cadence:.0}").into());
-                        }
-                        ui.set_trainer_status("Connected · receiving data".into());
-                    } else if role == 1 && ui.get_hr_connected() {
-                        if let Some(hr) = reading.heart_rate {
-                            ui.set_heart_rate(hr.to_string().into());
-                        }
-                        ui.set_hr_status("Connected · receiving data".into());
+                sensors::Event::Device(event) => match event {
+                    ble::Event::Status(status) => {
+                        let (state, issue, detail) = radio_state(&status);
+                        ui.set_bluetooth_state(state);
+                        ui.set_bluetooth_issue(issue);
+                        ui.set_bluetooth_detail(detail.into());
                     }
-                }
-                ble::Event::Disconnected(role) => {
-                    disconnected(&ui, role);
-                    timer_state.borrow_mut().selected[role] = None;
-                }
-                ble::Event::Error(message) => ui.set_message(message.into()),
+                    ble::Event::Devices(devices) => {
+                        timer_state.borrow_mut().devices = devices;
+                        device_rows(&ui, &timer_state.borrow());
+                    }
+                    ble::Event::ScanDone => ui.set_scanning(false),
+                    ble::Event::Connecting(role) => {
+                        disconnected(&ui, &mut timer_state.borrow_mut(), role);
+                        if role == 0 {
+                            ui.set_trainer_state(1);
+                        } else {
+                            ui.set_hr_state(1);
+                        }
+                    }
+                    ble::Event::Connected(role, device, erg) => {
+                        connected(&ui, &mut timer_state.borrow_mut(), &device, role, erg);
+                        timer_state.borrow_mut().selected[role] = Some(device.id);
+                        timer_state.borrow_mut().last_sample[role] = Some(Instant::now());
+                    }
+                    ble::Event::Sample(role, reading) => {
+                        timer_state.borrow_mut().last_sample[role] = Some(Instant::now());
+                        // ANT+ sends a whole snapshot each time, so a missing field means
+                        // the sensor has no valid value right now. Bluetooth notifications
+                        // may carry one field at a time, so the others are kept.
+                        let snapshot = timer_state.borrow().connected[role]
+                            .as_ref()
+                            .is_some_and(|d| d.id.starts_with("ant:"));
+                        let dash = |value: Option<String>| -> Option<slint::SharedString> {
+                            match value {
+                                Some(v) => Some(v.into()),
+                                None if snapshot => Some("—".into()),
+                                None => None,
+                            }
+                        };
+                        if role == 0 && ui.get_trainer_connected() {
+                            if let Some(power) = dash(reading.power.map(|p| p.to_string())) {
+                                ui.set_power(power);
+                            }
+                            if let Some(cadence) = dash(reading.cadence.map(|c| format!("{c:.0}")))
+                            {
+                                ui.set_cadence(cadence);
+                            }
+                            ui.set_trainer_state(3);
+                        } else if role == 1 && ui.get_hr_connected() {
+                            if let Some(hr) = dash(reading.heart_rate.map(|h| h.to_string())) {
+                                ui.set_heart_rate(hr);
+                            }
+                            ui.set_hr_state(3);
+                        }
+                    }
+                    ble::Event::Disconnected(role) => {
+                        disconnected(&ui, &mut timer_state.borrow_mut(), role);
+                        timer_state.borrow_mut().selected[role] = None;
+                    }
+                    ble::Event::Error(message) => {
+                        let (code, detail) = device_error(&message);
+                        ui.set_message_code(code);
+                        ui.set_message_detail(detail.into());
+                    }
+                },
             }
         }
-        if ui.get_demo() {
-            if ui.get_trainer_connected() {
-                ui.set_power("186".into());
-                ui.set_cadence("88".into());
-                ui.set_trainer_status("Demo · simulated readings".into());
-            }
-            if ui.get_hr_connected() {
-                ui.set_heart_rate("132".into());
-                ui.set_hr_status("Demo · simulated readings".into());
-            }
-        } else {
-            for role in 0..2 {
-                if timer_state.borrow().last_sample[role]
-                    .is_some_and(|time| time.elapsed() > Duration::from_secs(5))
-                {
-                    if role == 0 && ui.get_trainer_connected() {
-                        ui.set_power("—".into());
-                        ui.set_cadence("—".into());
-                        ui.set_trainer_status("Connected · no recent data".into());
-                    }
-                    if role == 1 && ui.get_hr_connected() {
-                        ui.set_heart_rate("—".into());
-                        ui.set_hr_status("Connected · no recent data".into());
-                    }
+        for role in 0..2 {
+            if timer_state.borrow().last_sample[role]
+                .is_some_and(|time| time.elapsed() > Duration::from_secs(5))
+            {
+                if role == 0 && ui.get_trainer_connected() {
+                    ui.set_power("—".into());
+                    ui.set_cadence("—".into());
+                    ui.set_trainer_state(4);
+                }
+                if role == 1 && ui.get_hr_connected() {
+                    ui.set_heart_rate("—".into());
+                    ui.set_hr_state(4);
                 }
             }
         }
     });
     let screenshot_timer = Timer::default();
     let smoke_timer = Timer::default();
-    if args.iter().any(|a| a == "--smoke-test") {
+    if smoke_test {
         let weak = ui.as_weak();
+        let state = state.clone();
         smoke_timer.start(
             TimerMode::SingleShot,
             Duration::from_millis(200),
             move || {
-                smoke::run(&weak.unwrap());
+                smoke::run(&weak.unwrap(), &state);
                 slint::quit_event_loop().unwrap();
             },
         );
     }
     if let Ok(path) = std::env::var("UNDERTRAINED_SCREENSHOT") {
-        // Capture-only: UNDERTRAINED_WINDOW_SIZE=WIDTHxHEIGHT renders at another size,
-        // for checking the smallest supported window. Normal launches ignore it.
+        // Capture-only options for documentation renders. Normal launches ignore them:
+        // UNDERTRAINED_WINDOW_SIZE=WIDTHxHEIGHT renders at another size,
+        // UNDERTRAINED_COLOR_SCHEME=light|dark forces a palette instead of asking the OS, and
+        // UNDERTRAINED_LANGUAGE=en|fr forces the interface language.
+        match std::env::var("UNDERTRAINED_COLOR_SCHEME").as_deref() {
+            Ok("light") => ui.global::<Theme>().set_forced_scheme(1),
+            Ok("dark") => ui.global::<Theme>().set_forced_scheme(2),
+            _ => {}
+        }
+        if let Some(lang) = std::env::var("UNDERTRAINED_LANGUAGE")
+            .ok()
+            .and_then(|code| Lang::parse(&code))
+        {
+            apply_language(&ui, &mut state.borrow_mut(), lang);
+        }
         if let Some((width, height)) =
             std::env::var("UNDERTRAINED_WINDOW_SIZE")
                 .ok()
@@ -987,35 +1116,118 @@ mod tests {
     fn covers_whole_workout(bars: &[ProfileStep]) {
         let total: f32 = bars.iter().map(|b| b.share).sum();
         assert!((total - 1.0).abs() < 1e-3, "shares sum to {total}");
+        for pair in bars.windows(2) {
+            assert!(
+                (pair[0].start + pair[0].share - pair[1].start).abs() < 1e-5,
+                "runs are contiguous"
+            );
+        }
     }
 
     #[test]
-    fn short_profiles_keep_every_step() {
-        let bars = profile_bars(&[(600, Some(55.0)), (0, Some(200.0)), (1200, None)]);
+    fn runs_follow_the_website_preview_rules() {
+        // Zero-length steps vanish, the peak sets the ceiling with 10% headroom,
+        // and free riding is a low grey block.
+        let bars = profile_runs(&[(600, Some(55.0)), (0, Some(200.0)), (1200, None)]);
         assert_eq!(bars.len(), 2);
         assert!((bars[0].share - 1.0 / 3.0).abs() < 1e-6);
-        assert!(bars[1].free);
+        assert!((bars[0].height - 55.0 / (200.0 * 1.1)).abs() < 1e-5);
+        assert_eq!(bars[0].zone, 2);
+        assert_eq!(bars[1].zone, 0, "Free riding has no zone");
+        assert!((bars[1].height - FREE_RIDE_HEIGHT as f32).abs() < 1e-6);
+        assert_eq!(zone(Some(150.0)), 7);
+        assert_eq!(zone(Some(89.9)), 3);
         covers_whole_workout(&bars);
-        assert_eq!(profile_bars(&[]).len(), 1);
+        assert_eq!(profile_runs(&[]).len(), 1);
+        // An easy ride is not drawn as if it were all-out: the ceiling never drops below 120%.
+        let easy = profile_runs(&[(3600, Some(65.0))]);
+        assert!((easy[0].height - 65.0 / 132.0).abs() < 1e-5);
     }
 
     #[test]
-    fn dense_profiles_are_resampled_into_a_bounded_bar_count() {
-        let dense: Vec<_> = (0..400)
-            .map(|i| (15, if i % 2 == 0 { Some(120.0) } else { Some(60.0) }))
-            .collect();
-        let bars = profile_bars(&dense);
-        assert_eq!(bars.len(), MAX_PROFILE_BARS);
+    fn identical_neighbours_merge_and_short_efforts_survive() {
+        let bars = profile_runs(&[(300, Some(90.0)), (300, Some(90.0)), (300, Some(50.0))]);
+        assert_eq!(bars.len(), 2, "Equal adjacent steps become one bar");
+        assert!((bars[0].share - 2.0 / 3.0).abs() < 1e-6);
         covers_whole_workout(&bars);
-        // Each bucket averages an equal mix of 120% and 60%, so 90% of FTP.
-        assert!(
-            bars.iter()
-                .all(|b| (b.intensity - 0.6).abs() < 0.02 && !b.free)
-        );
+        let dense: Vec<_> = (0..400)
+            .map(|i| (15, if i % 2 == 0 { Some(120.0) } else { Some(70.0) }))
+            .collect();
+        let bars = profile_runs(&dense);
+        assert_eq!(bars.len(), 400, "Nothing is averaged away");
+        covers_whole_workout(&bars);
+        assert!(bars.iter().step_by(2).all(|b| b.zone == 6));
         let mut lopsided = vec![(3600, Some(100.0))];
         lopsided.extend(std::iter::repeat_n((1, None), 100));
-        let bars = profile_bars(&lopsided);
+        let bars = profile_runs(&lopsided);
+        assert_eq!(bars.len(), 2, "A hundred free seconds merge into one block");
         covers_whole_workout(&bars);
-        assert!(bars[0].intensity > 0.6 && bars.last().unwrap().free);
+        assert!(bars[0].height > 0.7 && bars[1].zone == 0);
+    }
+
+    #[test]
+    fn radio_and_driver_messages_map_to_codes_with_raw_detail() {
+        assert_eq!(radio_state("Bluetooth ready"), (1, 0, String::new()));
+        assert_eq!(radio_state("ANT+ ready"), (1, 0, String::new()));
+        // Known conditions become codes the interface words itself, with no raw echo.
+        assert_eq!(
+            radio_state(
+                "ANT+ unavailable: No ANT+ USB stick found. Plug in an ANTUSB2 or ANTUSB-m stick"
+            ),
+            (2, 1, String::new())
+        );
+        assert_eq!(
+            radio_state(
+                "ANT+ unavailable: Cannot open ANT+ USB stick. Check USB permissions or close other training apps: Access denied"
+            ),
+            (2, 2, String::new())
+        );
+        assert_eq!(
+            radio_state(
+                "Bluetooth unavailable: Bluetooth is switched off or blocked by the system. Check Bluetooth is on and permission is granted."
+            ),
+            (2, 1, String::new())
+        );
+        assert_eq!(
+            radio_state(
+                "Bluetooth unavailable: No Bluetooth adapter found. Connect an adapter and try again."
+            ),
+            (2, 2, String::new())
+        );
+        // Anything else keeps its raw text as a detail under the translated summary.
+        assert_eq!(
+            radio_state("ANT+ unavailable: libusb: pipe error"),
+            (2, 0, "libusb: pipe error".to_string())
+        );
+        assert_eq!(radio_state("Bluetooth unavailable"), (2, 0, String::new()));
+        assert_eq!(
+            radio_state("Checking"),
+            (0, 0, "Checking".to_string()),
+            "Unknown wording is shown raw"
+        );
+        assert_eq!(
+            device_error("Device is no longer available. Search again."),
+            (1, String::new())
+        );
+        assert_eq!(
+            device_error("That device is already assigned to another sensor role."),
+            (2, String::new())
+        );
+        assert_eq!(
+            device_error(
+                "Connection timed out. Wake the device, close other training apps, and retry."
+            ),
+            (3, "Connection timed out".to_string())
+        );
+        assert_eq!(
+            device_error(
+                "Bluetooth is switched off or blocked by the system. Check Bluetooth is on and permission is granted."
+            ),
+            (4, String::new())
+        );
+        assert_eq!(
+            device_error("Something else"),
+            (6, "Something else".to_string())
+        );
     }
 }

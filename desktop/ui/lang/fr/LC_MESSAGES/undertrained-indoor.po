@@ -1,0 +1,449 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: undertrained-indoor\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+# Wording follows the Undertrained website's fr-FR messages: "séance" for a workout,
+# "séances intégrées" for the built-in tests, "home trainer" and "capteur cardiaque".
+# Personal workout names, device names and raw diagnostics are never translated.
+
+msgid "A sensor radio reported an error."
+msgstr "Une radio de capteurs a signalé une erreur."
+
+msgid "ANT+ {}"
+msgstr "ANT+ {}"
+
+msgid "Any Bluetooth or ANT+ heart-rate strap, or a watch broadcast."
+msgstr "Toute ceinture cardiaque Bluetooth ou ANT+, ou une montre en diffusion."
+
+msgid "BPM"
+msgstr "BPM"
+
+msgid "Back to workouts"
+msgstr "Retour aux séances"
+
+msgid "Bluetooth FTMS trainers, ANT+ FE-C trainers, or power meters as read-only."
+msgstr "Home trainers Bluetooth FTMS ou ANT+ FE-C, ou capteurs de puissance en lecture seule."
+
+msgid "Bluetooth and ANT+ are unavailable"
+msgstr "Bluetooth et ANT+ sont indisponibles"
+
+msgid "Bluetooth is switched off or blocked by the system. Turn it on in your system settings, then search again."
+msgstr "Le Bluetooth est éteint ou bloqué par le système. Activez-le dans les réglages système, puis relancez la recherche."
+
+msgid "Bluetooth · fair signal · {}"
+msgstr "Bluetooth · signal moyen · {}"
+
+msgid "Bluetooth · strong signal · {}"
+msgstr "Bluetooth · signal fort · {}"
+
+msgid "Bluetooth · weak signal · {}"
+msgstr "Bluetooth · signal faible · {}"
+
+msgid "Bluetooth · {}"
+msgstr "Bluetooth · {}"
+
+msgid "Browser links need a signed-in account session."
+msgstr "Les liens vers le navigateur nécessitent une session de compte connectée."
+
+msgid "Built-in workouts"
+msgstr "Séances intégrées"
+
+msgid "Built-in"
+msgstr "Intégrée"
+
+msgid "CADENCE"
+msgstr "CADENCE"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "Change device"
+msgstr "Changer d'appareil"
+
+msgid "Check your connection and the server address, then try again."
+msgstr "Vérifiez votre connexion et l'adresse du serveur, puis réessayez."
+
+msgid "Choose a device to connect."
+msgstr "Choisissez un appareil à connecter."
+
+msgid "Clear search"
+msgstr "Effacer la recherche"
+
+msgid "Close"
+msgstr "Fermer"
+
+msgid "Connect a trainer to finish."
+msgstr "Connectez un home trainer pour terminer."
+
+msgid "Connect"
+msgstr "Connecter"
+
+msgid "Connected · no recent data"
+msgstr "Connecté · aucune donnée récente"
+
+msgid "Connected · receiving data"
+msgstr "Connecté · données reçues"
+
+msgid "Connected · waiting for data"
+msgstr "Connecté · en attente de données"
+
+msgid "Connecting…"
+msgstr "Connexion…"
+
+msgid "Connection help"
+msgstr "Aide à la connexion"
+
+msgid "Could not open your browser."
+msgstr "Impossible d'ouvrir votre navigateur."
+
+msgid "Could not reach Undertrained to refresh. Showing the list from the last successful load."
+msgstr "Impossible de joindre Undertrained pour actualiser. Affichage de la liste du dernier chargement réussi."
+
+msgid "Could not reach Undertrained"
+msgstr "Impossible de joindre Undertrained"
+
+msgid "Could not save your devices."
+msgstr "Impossible d'enregistrer vos appareils."
+
+msgid "Device setup"
+msgstr "Configuration des appareils"
+
+msgid "Devices"
+msgstr "Appareils"
+
+msgid "Disconnect"
+msgstr "Déconnecter"
+
+msgid "ERG supported"
+msgstr "Mode ERG pris en charge"
+
+msgid "English"
+msgstr "Anglais"
+
+msgid "FTP assessments, ready to ride. Your personal workouts stay separate."
+msgstr "Des tests FTP prêts à utiliser, séparés de vos séances personnelles."
+
+msgid "Find a heart-rate sensor"
+msgstr "Trouver un capteur cardiaque"
+
+msgid "Find device"
+msgstr "Trouver un appareil"
+
+msgid "Find your trainer"
+msgstr "Trouver votre home trainer"
+
+msgid "Finish in the browser, then come back here."
+msgstr "Terminez dans le navigateur, puis revenez ici."
+
+msgid "French"
+msgstr "Français"
+
+msgid "Heart rate is optional. Choices are stored on this computer only."
+msgstr "La fréquence cardiaque est facultative. Les choix sont conservés sur cet ordinateur uniquement."
+
+msgid "Heart rate"
+msgstr "Fréquence cardiaque"
+
+msgid "Heart-rate sensor"
+msgstr "Capteur cardiaque"
+
+msgid "Hide help"
+msgstr "Masquer l'aide"
+
+msgid "If a device does not show up"
+msgstr "Si un appareil n'apparaît pas"
+
+msgid "Listening for heart-rate sensors…"
+msgstr "À l'écoute des capteurs cardiaques…"
+
+msgid "Listening for trainers…"
+msgstr "À l'écoute des home trainers…"
+
+msgid "Loading your workouts…"
+msgstr "Chargement de vos séances…"
+
+msgid "Loading…"
+msgstr "Chargement…"
+
+msgid "New workout in browser"
+msgstr "Nouvelle séance dans le navigateur"
+
+msgid "No built-in workout matches this search."
+msgstr "Aucune séance intégrée ne correspond à cette recherche."
+
+msgid "No cycling workouts yet"
+msgstr "Aucune séance de vélo pour l'instant"
+
+msgid "No device"
+msgstr "Aucun appareil"
+
+msgid "No heart-rate sensor found"
+msgstr "Aucun capteur cardiaque trouvé"
+
+msgid "No personal workout matches this search."
+msgstr "Aucune séance personnelle ne correspond à cette recherche."
+
+msgid "No radio is available."
+msgstr "Aucune radio n'est disponible."
+
+msgid "No trainer found"
+msgstr "Aucun home trainer trouvé"
+
+msgid "No workout matches this search"
+msgstr "Aucune séance ne correspond à cette recherche"
+
+msgid "No workouts yet."
+msgstr "Aucune séance pour l'instant."
+
+msgid "Not checked"
+msgstr "Non vérifié"
+
+msgid "Not connected"
+msgstr "Non connecté"
+
+msgid "Open in browser"
+msgstr "Ouvrir dans le navigateur"
+
+msgid "Open {} in browser"
+msgstr "Ouvrir {} dans le navigateur"
+
+msgid "Open"
+msgstr "Ouvrir"
+
+msgid "Optional"
+msgstr "Facultatif"
+
+msgid "Pair a smart trainer and a heart-rate strap over Bluetooth or ANT+, then save the setup for next time."
+msgstr "Associez un home trainer connecté et une ceinture cardiaque en Bluetooth ou ANT+, puis enregistrez la configuration pour la prochaine fois."
+
+msgid "Pedal a few strokes to wake the trainer, then find it below. Saved devices are marked in the list."
+msgstr "Donnez quelques coups de pédale pour réveiller le home trainer, puis trouvez-le ci-dessous. Les appareils enregistrés sont signalés dans la liste."
+
+msgid "Personal workouts"
+msgstr "Séances personnelles"
+
+msgid "Plug the trainer in and pedal to wake it. Moisten the strap contacts and wear it. Turn Bluetooth on or plug in the ANT+ stick, close other training apps that may hold the connection, then search again. Devices that omit their service in advertisements are not listed."
+msgstr "Branchez le home trainer et pédalez pour le réveiller. Humidifiez les contacts de la ceinture et portez-la. Activez le Bluetooth ou branchez la clé ANT+, fermez les autres applications d'entraînement qui pourraient garder la connexion, puis relancez la recherche. Les appareils qui n'annoncent pas leur service ne sont pas listés."
+
+msgid "Power meter · read only"
+msgstr "Capteur de puissance · lecture seule"
+
+msgid "RESISTANCE CONTROL"
+msgstr "CONTRÔLE DE LA RÉSISTANCE"
+
+msgid "Read only · not confirmed"
+msgstr "Lecture seule · non confirmé"
+
+msgid "Read-only power meters are listed but cannot take resistance commands. ANT+ trainers deliver readings only."
+msgstr "Les capteurs de puissance en lecture seule sont listés mais ne reçoivent pas de commandes de résistance. Les home trainers ANT+ ne fournissent que des mesures."
+
+msgid "Readings only over ANT+"
+msgstr "Mesures uniquement en ANT+"
+
+msgid "Refresh"
+msgstr "Actualiser"
+
+msgid "Refreshing…"
+msgstr "Actualisation…"
+
+msgid "Required"
+msgstr "Obligatoire"
+
+msgid "Ride inside."
+msgstr "Roulez à l'intérieur."
+
+msgid "Riding a workout from the desktop app is not available yet. This screen only previews the selection: nothing is sent to your trainer and nothing is recorded."
+msgstr "Suivre une séance depuis l'application de bureau n'est pas encore disponible. Cet écran ne fait qu'afficher la sélection : rien n'est envoyé au home trainer et rien n'est enregistré."
+
+msgid "Save device setup"
+msgstr "Enregistrer la configuration"
+
+msgid "Saved"
+msgstr "Enregistré"
+
+msgid "Search again"
+msgstr "Rechercher à nouveau"
+
+msgid "Search finished."
+msgstr "Recherche terminée."
+
+msgid "Search matches any part of the name."
+msgstr "La recherche porte sur n'importe quelle partie du nom."
+
+msgid "Search workouts by name"
+msgstr "Rechercher des séances par nom"
+
+msgid "Search workouts"
+msgstr "Rechercher des séances"
+
+msgid "Searching over Bluetooth and ANT+…"
+msgstr "Recherche en Bluetooth et ANT+…"
+
+msgid "Searching…"
+msgstr "Recherche…"
+
+msgid "Select a workout to preview it. Create and edit on the website."
+msgstr "Sélectionnez une séance pour l'afficher. Créez et modifiez sur le site."
+
+msgid "Select {}"
+msgstr "Sélectionner {}"
+
+msgid "A Bluetooth sensor connected to another app may stay hidden. ANT+ sensors broadcast to every receiver."
+msgstr "Un capteur Bluetooth connecté à une autre application peut rester masqué. Les capteurs ANT+ diffusent vers tous les récepteurs."
+
+msgid "Bluetooth is switched off or blocked by the system."
+msgstr "Le Bluetooth est éteint ou bloqué par le système."
+
+msgid "No Bluetooth adapter was found."
+msgstr "Aucun adaptateur Bluetooth n'a été trouvé."
+
+msgid "No ANT+ USB stick was found. Plug in an ANTUSB2 or ANTUSB-m stick."
+msgstr "Aucune clé USB ANT+ n'a été trouvée. Branchez une clé ANTUSB2 ou ANTUSB-m."
+
+msgid "The ANT+ USB stick is busy or its permission is denied. Close other training apps or check USB permissions."
+msgstr "La clé USB ANT+ est occupée ou son accès est refusé. Fermez les autres applications d'entraînement ou vérifiez les permissions USB."
+
+msgid "Server: {}"
+msgstr "Serveur : {}"
+
+msgid "Setup saved"
+msgstr "Configuration enregistrée"
+
+msgid "Setup saved."
+msgstr "Configuration enregistrée."
+
+msgid "Sign in again to load your workouts. Browser links stay off until then."
+msgstr "Reconnectez-vous pour charger vos séances. Les liens vers le navigateur restent désactivés d'ici là."
+
+msgid "Sign in again"
+msgstr "Se reconnecter"
+
+msgid "Sign in with Undertrained"
+msgstr "Se connecter avec Undertrained"
+
+msgid "Sign in"
+msgstr "Connexion"
+
+msgid "Sign out"
+msgstr "Se déconnecter"
+
+msgid "Sign-in cancelled."
+msgstr "Connexion annulée."
+
+msgid "Sign-in failed."
+msgstr "La connexion a échoué."
+
+msgid "Signed in for this visit. The system keyring is unavailable, so sign-in could not be remembered."
+msgstr "Connecté pour cette session. Le trousseau du système est indisponible, la connexion n'a donc pas pu être mémorisée."
+
+msgid "Signed out locally. The server could not be reached to revoke this session."
+msgstr "Déconnecté localement. Le serveur n'a pas pu être joint pour révoquer cette session."
+
+msgid "Smart trainer"
+msgstr "Home trainer connecté"
+
+msgid "That device is already assigned to the other sensor role."
+msgstr "Cet appareil est déjà attribué à l'autre rôle de capteur."
+
+msgid "That device is no longer available. Search again."
+msgstr "Cet appareil n'est plus disponible. Relancez la recherche."
+
+msgid "That workout could not be identified."
+msgstr "Cette séance n'a pas pu être identifiée."
+
+msgid "That workout is no longer in your library. Refresh the list."
+msgstr "Cette séance ne figure plus dans votre bibliothèque. Actualisez la liste."
+
+msgid "The connection failed. Wake the device, close other training apps, and retry."
+msgstr "La connexion a échoué. Réveillez l'appareil, fermez les autres applications d'entraînement et réessayez."
+
+msgid "The refresh reply could not be read. Showing the list from the last successful load."
+msgstr "La réponse d'actualisation n'a pas pu être lue. Affichage de la liste du dernier chargement réussi."
+
+msgid "The selected workout is no longer in your library."
+msgstr "La séance sélectionnée ne figure plus dans votre bibliothèque."
+
+msgid "The server stopped answering the workout API. Showing the list from the last successful load."
+msgstr "Le serveur ne répond plus à l'API des séances. Affichage de la liste du dernier chargement réussi."
+
+msgid "The system keyring could not be cleared. The server session will be revoked if reachable."
+msgstr "Le trousseau du système n'a pas pu être vidé. La session serveur sera révoquée si le serveur est joignable."
+
+msgid "The workout list could not be read. Try again, or update the server if this keeps happening."
+msgstr "La liste des séances n'a pas pu être lue. Réessayez, ou mettez le serveur à jour si cela se reproduit."
+
+msgid "These devices are remembered on this computer."
+msgstr "Ces appareils sont mémorisés sur cet ordinateur."
+
+msgid "This build has an invalid server address. Rebuild with a valid UNDERTRAINED_SERVER_URL."
+msgstr "Cette version contient une adresse de serveur invalide. Recompilez avec une UNDERTRAINED_SERVER_URL valide."
+
+msgid "This server has no workout API yet"
+msgstr "Ce serveur n'a pas encore d'API des séances"
+
+msgid "Trainer connected."
+msgstr "Home trainer connecté."
+
+msgid "Try again"
+msgstr "Réessayer"
+
+msgid "Turn Bluetooth on in your system settings or plug in an ANT+ stick, then search again. The app never switches a radio itself."
+msgstr "Activez le Bluetooth dans les réglages système ou branchez une clé ANT+, puis relancez la recherche. L'application n'active jamais une radio elle-même."
+
+msgid "Unexpected reply from the server"
+msgstr "Réponse inattendue du serveur"
+
+msgid "Update the Undertrained backend to the release that adds desktop workouts, then try again."
+msgstr "Mettez à jour le serveur Undertrained vers la version qui ajoute les séances pour le bureau, puis réessayez."
+
+msgid "Use your Undertrained account. Strava sign-in opens in your browser, and this window picks up the session when you return."
+msgstr "Utilisez votre compte Undertrained. La connexion Strava s'ouvre dans votre navigateur, et cette fenêtre récupère la session à votre retour."
+
+msgid "WATTS"
+msgstr "WATTS"
+
+msgid "Waiting for the browser…"
+msgstr "En attente du navigateur…"
+
+msgid "Wake the device and keep it within a few meters."
+msgstr "Réveillez l'appareil et gardez-le à quelques mètres."
+
+msgid "Wake the device, close other training apps that may be holding it, and search again."
+msgstr "Réveillez l'appareil, fermez les autres applications d'entraînement qui pourraient l'occuper, puis relancez la recherche."
+
+msgid "Workouts you create on the Undertrained website appear here."
+msgstr "Les séances que vous créez sur le site Undertrained apparaissent ici."
+
+msgid "Workouts"
+msgstr "Séances"
+
+msgid "Your saved session could not be verified. Sign in again when your server is available."
+msgstr "Votre session enregistrée n'a pas pu être vérifiée. Reconnectez-vous quand votre serveur sera disponible."
+
+msgid "Your session has expired"
+msgstr "Votre session a expiré"
+
+msgid "{n} workout"
+msgid_plural "{n} workouts"
+msgstr[0] "{n} séance"
+msgstr[1] "{n} séances"
+
+msgid "{} not checked"
+msgstr "{} non vérifié"
+
+msgid "{} of {}"
+msgstr "{} sur {}"
+
+msgid "{} ready"
+msgstr "{} prêt"
+
+msgid "{} rpm"
+msgstr "{} tr/min"
+
+msgid "{} unavailable"
+msgstr "{} indisponible"
