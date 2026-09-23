@@ -510,7 +510,9 @@ export async function deleteAllAthleteData(
   // The athlete row is retained, so its foreign-key cascades never run.
   // Remove pending grants before sessions to prevent their later exchange.
   await db.delete(desktopCodes).where(eq(desktopCodes.athlete, athleteId));
-  await db.delete(desktopSessions).where(eq(desktopSessions.athlete, athleteId));
+  await db
+    .delete(desktopSessions)
+    .where(eq(desktopSessions.athlete, athleteId));
 
   // Delete all activities (streams cascade via FK)
   await db.delete(activities).where(eq(activities.athlete, athleteId));
