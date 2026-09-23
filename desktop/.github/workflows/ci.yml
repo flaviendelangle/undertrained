@@ -1,0 +1,34 @@
+name: Native app
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-dev xvfb
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --locked
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a cargo run --locked -- --smoke-test
+        env:
+          SLINT_BACKEND: winit-software
+      - uses: actions/upload-artifact@v4
+        with:
+          name: undertrained-indoor-${{ runner.os }}
+          path: |
+            target/debug/undertrained-indoor
+            target/debug/undertrained-indoor.exe
+          if-no-files-found: error
