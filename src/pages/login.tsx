@@ -22,9 +22,20 @@ const LoginPage: NextPageWithLayout = () => {
   const t = useT();
   const router = useRouter();
   const session = useSession();
+  const callbackUrl =
+    typeof window === "undefined"
+      ? "/journal"
+      : (() => {
+          const requested = new URLSearchParams(window.location.search).get(
+            "callbackUrl",
+          );
+          return requested?.startsWith("/api/desktop/authorize?")
+            ? requested
+            : "/journal";
+        })();
 
   if (session.data?.user) {
-    router.replace("/journal");
+    router.replace(callbackUrl);
   }
 
   if (session.status === "loading") {
@@ -49,7 +60,7 @@ const LoginPage: NextPageWithLayout = () => {
 
         <button
           className="group relative transition-transform hover:scale-105 active:scale-100"
-          onClick={() => signIn("strava", { callbackUrl: "/journal" })}
+          onClick={() => signIn("strava", { callbackUrl })}
         >
           <div className="absolute -inset-1 rounded-lg bg-[#FC4C02]/20 opacity-0 blur-md transition-opacity group-hover:opacity-100" />
           <Image

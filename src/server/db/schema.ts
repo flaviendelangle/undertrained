@@ -471,3 +471,21 @@ export const calendarSubscriptions = pgTable(
   },
   (t) => [index("calendar_subscriptions_athlete_idx").on(t.athlete)],
 );
+
+// Desktop credentials are independent from browser and Strava tokens.
+export const desktopCodes = pgTable("desktop_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  athlete: integer("athlete")
+    .notNull()
+    .references(() => athletes.id, { onDelete: "cascade" }),
+  challenge: text("challenge").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+});
+
+export const desktopSessions = pgTable("desktop_sessions", {
+  tokenHash: text("token_hash").primaryKey(),
+  athlete: integer("athlete")
+    .notNull()
+    .references(() => athletes.id, { onDelete: "cascade" }),
+  expiresAt: integer("expires_at").notNull(),
+});
