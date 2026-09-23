@@ -8,10 +8,6 @@ pub struct Settings {
     pub rider_name: String,
     pub trainer_id: Option<String>,
     pub heart_rate_id: Option<String>,
-    /// An explicit interface language chosen on this computer ("en-GB" or "fr-FR").
-    /// Absent means follow the account, then the operating system.
-    #[serde(default)]
-    pub language: Option<String>,
 }
 
 pub fn path() -> Result<PathBuf> {
@@ -36,4 +32,28 @@ pub fn save(settings: &Settings) -> Result<()> {
     fs::write(&temporary, serde_json::to_vec_pretty(settings)?)?;
     fs::rename(temporary, path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn older_files_with_a_language_entry_still_load_and_keep_their_fields() {
+        // Builds before the account-driven language wrote a desktop preference here.
+        // It must neither fail to parse nor influence anything: it is simply dropped.
+        let saved: Settings = serde_json::from_str(
+            r#"{"rider_name":"Flavien","trainer_id":"hci0/dev_AA","heart_rate_id":null,"language":"fr-FR"}"#,
+        )
+        .unwrap();
+        assert_eq!(saved.rider_name, "Flavien");
+        assert_eq!(saved.trainer_id.as_deref(), Some("hci0/dev_AA"));
+        assert!(saved.heart_rate_id.is_none());
+        let rewritten = serde_json::to_string(&saved).unwrap();
+        assert!(
+            !rewritten.contains("language"),
+            "The entry is not carried forward"
+        );
+        assert!(rewritten.contains("\"trainer_id\":\"hci0/dev_AA\""));
+    }
 }

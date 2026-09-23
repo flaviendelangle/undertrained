@@ -122,9 +122,6 @@ msgstr "Déconnecter"
 msgid "ERG supported"
 msgstr "Mode ERG pris en charge"
 
-msgid "English"
-msgstr "Anglais"
-
 msgid "FTP assessments, ready to ride. Your personal workouts stay separate."
 msgstr "Des tests FTP prêts à utiliser, séparés de vos séances personnelles."
 
@@ -139,9 +136,6 @@ msgstr "Trouver votre home trainer"
 
 msgid "Finish in the browser, then come back here."
 msgstr "Terminez dans le navigateur, puis revenez ici."
-
-msgid "French"
-msgstr "Français"
 
 msgid "Heart rate is optional. Choices are stored on this computer only."
 msgstr "La fréquence cardiaque est facultative. Les choix sont conservés sur cet ordinateur uniquement."
@@ -196,9 +190,6 @@ msgstr "Aucun home trainer trouvé"
 
 msgid "No workout matches this search"
 msgstr "Aucune séance ne correspond à cette recherche"
-
-msgid "No workouts yet."
-msgstr "Aucune séance pour l'instant."
 
 msgid "Not checked"
 msgstr "Non vérifié"
@@ -272,14 +263,8 @@ msgstr "Rechercher à nouveau"
 msgid "Search finished."
 msgstr "Recherche terminée."
 
-msgid "Search matches any part of the name."
-msgstr "La recherche porte sur n'importe quelle partie du nom."
-
 msgid "Search workouts by name"
 msgstr "Rechercher des séances par nom"
-
-msgid "Search workouts"
-msgstr "Rechercher des séances"
 
 msgid "Searching over Bluetooth and ANT+…"
 msgstr "Recherche en Bluetooth et ANT+…"
@@ -416,9 +401,6 @@ msgstr "Réveillez l'appareil et gardez-le à quelques mètres."
 msgid "Wake the device, close other training apps that may be holding it, and search again."
 msgstr "Réveillez l'appareil, fermez les autres applications d'entraînement qui pourraient l'occuper, puis relancez la recherche."
 
-msgid "Workouts you create on the Undertrained website appear here."
-msgstr "Les séances que vous créez sur le site Undertrained apparaissent ici."
-
 msgid "Workouts"
 msgstr "Séances"
 
@@ -428,16 +410,31 @@ msgstr "Votre session enregistrée n'a pas pu être vérifiée. Reconnectez-vous
 msgid "Your session has expired"
 msgstr "Votre session a expiré"
 
-msgid "{n} workout"
-msgid_plural "{n} workouts"
-msgstr[0] "{n} séance"
-msgstr[1] "{n} séances"
+msgid "{n} workout in the library"
+msgid_plural "{n} workouts in the library"
+msgstr[0] "{n} séance dans la bibliothèque"
+msgstr[1] "{n} séances dans la bibliothèque"
+
+msgid "Clear"
+msgstr "Effacer"
+
+msgid "Search all workouts"
+msgstr "Rechercher dans toutes les séances"
+
+msgid "{} of {} match"
+msgstr "{} sur {} correspondent"
+
+msgid "No personal workouts yet. Create one on the website; it appears here after a refresh."
+msgstr "Aucune séance personnelle pour l'instant. Créez-en une sur le site ; elle apparaîtra ici après actualisation."
+
+msgid "Neither your workouts nor the built-in tests match. Try a shorter name."
+msgstr "Ni vos séances ni les tests intégrés ne correspondent. Essayez un nom plus court."
+
+msgid "Workouts you create on the Undertrained website appear here after a refresh."
+msgstr "Les séances que vous créez sur le site Undertrained apparaissent ici après actualisation."
 
 msgid "{} not checked"
 msgstr "{} non vérifié"
-
-msgid "{} of {}"
-msgstr "{} sur {}"
 
 msgid "{} ready"
 msgstr "{} prêt"

@@ -52,11 +52,11 @@ pub fn os_language() -> Option<Lang> {
     sys_locale::get_locales().find_map(|value| Lang::parse(&value))
 }
 
-/// Saved desktop preference, then the account's language, then the OS, then English.
-pub fn resolve(saved: Option<&str>, account: Option<&str>) -> Lang {
-    saved
+/// The account's language when the server sends one, then the OS, then English. There is
+/// no desktop-side override: the website and the system are the sources of truth.
+pub fn resolve(account: Option<&str>) -> Lang {
+    account
         .and_then(Lang::parse)
-        .or_else(|| account.and_then(Lang::parse))
         .or_else(os_language)
         .unwrap_or_default()
 }
@@ -122,14 +122,13 @@ mod tests {
     }
 
     #[test]
-    fn saved_preference_beats_account_beats_english() {
-        assert_eq!(resolve(Some("fr-FR"), Some("en-GB")), Lang::Fr);
-        assert_eq!(resolve(None, Some("fr-FR")), Lang::Fr);
-        assert_eq!(resolve(Some("klingon"), Some("fr-FR")), Lang::Fr);
-        // Without a saved or account language the OS decides, and English is the last resort.
+    fn account_beats_system_beats_english() {
+        assert_eq!(resolve(Some("fr-FR")), Lang::Fr);
+        assert_eq!(resolve(Some("en-GB")), Lang::En);
+        // Without an account language the OS decides, and English is the last resort.
         let os = os_language().unwrap_or_default();
-        assert_eq!(resolve(None, None), os);
-        assert_eq!(resolve(None, Some("xx")), os);
+        assert_eq!(resolve(None), os);
+        assert_eq!(resolve(Some("xx")), os, "Unknown account tags fall through");
     }
 
     #[test]

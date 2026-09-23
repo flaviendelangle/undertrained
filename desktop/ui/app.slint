@@ -164,40 +164,6 @@ component NavTab inherits Rectangle {
     }
 }
 
-// The compact language switch: two codes, the active one filled. Usable before sign-in.
-component LangSwitch inherits Rectangle {
-    in property <string> current;
-    callback choose(string);
-    height: 30px;
-    width: 76px;
-    border-radius: 8px;
-    border-width: 1px;
-    border-color: Theme.border;
-    background: Theme.sunken;
-    HorizontalLayout {
-        padding: 2px; spacing: 2px;
-        for option in [{ code: "en", label: "EN", name: @tr("English") }, { code: "fr", label: "FR", name: @tr("French") }]: Rectangle {
-            property <bool> active: root.current == option.code;
-            border-radius: 6px;
-            background: active ? Theme.card : (opt-touch.has-hover ? Theme.raised : transparent);
-            accessible-role: button;
-            accessible-label: option.name;
-            accessible-checked: active;
-            accessible-action-default => { root.choose(option.code); }
-            Text { text: option.label; color: active ? Theme.ink : Theme.muted; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; horizontal-alignment: center; vertical-alignment: center; }
-            opt-focus := FocusScope {
-                enabled: !Overlay.open;
-                key-pressed(event) => {
-                    if event.text == "\n" || event.text == " " { root.choose(option.code); return accept; }
-                    return reject;
-                }
-            }
-            Rectangle { border-width: opt-focus.has-focus ? 2px : 0px; border-color: Theme.primary; border-radius: 6px; background: transparent; }
-            opt-touch := TouchArea { mouse-cursor: pointer; clicked => { opt-focus.focus(); root.choose(option.code); } }
-        }
-    }
-}
-
 // Errors and notices share one amber style; plain information uses the primary tone.
 // Color never carries the meaning alone. The detail line carries raw diagnostics.
 component Notice inherits Rectangle {
@@ -364,6 +330,32 @@ component Caption inherits Text {
     letter-spacing: 0.8px;
 }
 
+// The content column every screen shares: centered and capped like the website's
+// max-w-5xl, with side gutters that hold down to the minimum window. Type and card sizes
+// never scale; a wider monitor only gets wider margins.
+component Page inherits Rectangle {
+    in property <length> max: 1024px;
+    // A plain rectangle, not a layout: sizing the column from the parent's width keeps the
+    // outer layout from asking the column for its size in return.
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        width: min(parent.width - 64px, root.max);
+        height: parent.height;
+        @children
+    }
+}
+
+// A quiet grouped placeholder for a section with nothing to show.
+component EmptyPanel inherits Rectangle {
+    in property <string> text;
+    height: 84px;
+    border-radius: 10px;
+    background: Theme.card.with-alpha(0.6);
+    border-width: 1px;
+    border-color: Theme.border;
+    Text { x: 24px; width: parent.width - 48px; text: root.text; color: Theme.muted; font-size: 13px; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center; }
+}
+
 component SignalBars inherits Rectangle {
     in property <int> level;
     width: 18px;
@@ -431,9 +423,11 @@ component TextField inherits Rectangle {
     }
     if root.text == "": Text {
         x: 12px;
+        width: parent.width - 24px;
         text: root.placeholder;
         color: Theme.faint;
         font-size: 14px;
+        overflow: elide;
         vertical-alignment: center;
     }
 }
@@ -536,7 +530,8 @@ export component AppWindow inherits Window {
     background: Theme.background;
     default-font-family: "DejaVu Sans";
     default-font-size: 14px;
-    // "en" or "fr": what the switch shows. Rust selects the bundled translation.
+    // "en" or "fr": the language in effect, decided by the account or the system. Rust
+    // selects the bundled translation; the interface offers no switch of its own.
     in-out property <string> language: "en";
     in-out property <bool> logged-in: false;
     in-out property <string> rider-name: "";
@@ -567,6 +562,8 @@ export component AppWindow inherits Window {
     // Personal workouts within the total; the rest are tests built into Undertrained.
     in-out property <int> workouts-personal: 0;
     in-out property <string> workout-query: "";
+    // True while a non-blank search narrows both sections; set by Rust, which owns the filter.
+    in-out property <bool> workouts-filtering: false;
     in-out property <bool> workouts-loading: false;
     in-out property <bool> workouts-loaded: false;
     // 0 none, 1 session expired, 2 server has no workout API, 3 network, 4 unreadable reply.
@@ -607,7 +604,6 @@ export component AppWindow inherits Window {
     callback sign-in();
     callback cancel-sign-in();
     callback sign-out();
-    callback set-language(string);
     callback search(int);
     callback choose(string, int);
     callback disconnect-device(int);
@@ -625,8 +621,8 @@ export component AppWindow inherits Window {
         padding: 0px; spacing: 0px;
         Rectangle {
             height: 68px;
-            HorizontalLayout {
-                padding-left: 32px; padding-right: 32px;
+            // The bar spans the window; its contents align with the page column below.
+            Page { HorizontalLayout {
                 spacing: 12px;
                 Rectangle {
                     width: 30px; height: 30px; y: (parent.height - self.height) / 2; border-radius: 8px; background: Theme.primary;
@@ -639,18 +635,19 @@ export component AppWindow inherits Window {
                 if root.logged-in: NavTab { label: @tr("Workouts"); active: root.screen >= 1; activated => { root.navigate(1); } }
                 Rectangle { horizontal-stretch: 1; }
                 if root.logged-in: Text { text: root.rider-name; color: Theme.muted; font-size: 13px; vertical-alignment: center; }
-                LangSwitch { y: (parent.height - self.height) / 2; current: root.language; choose(code) => { root.set-language(code); } }
                 if root.logged-in: ActionButton {
                     y: (parent.height - self.height) / 2;
                     label: @tr("Sign out"); quiet: true; compact: true;
                     activated => { root.sign-out(); }
                 }
-            }
+            } }
         }
         Rectangle { height: 1px; background: Theme.border; }
 
-        if !root.logged-in: HorizontalLayout {
-            padding: 32px; spacing: 40px;
+        // The login block is bounded in height too, and sits centered on tall windows, so the
+        // welcome card never becomes a tower on a large monitor.
+        if !root.logged-in: Page { VerticalLayout { alignment: center; padding-top: 32px; padding-bottom: 32px; HorizontalLayout {
+            max-height: 620px; spacing: 40px;
             Rectangle {
                 horizontal-stretch: 1;
                 min-width: 380px;
@@ -724,10 +721,13 @@ export component AppWindow inherits Window {
                         : @tr("Signed out locally. The server could not be reached to revoke this session.");
                 }
             }
-        }
+        } } }
 
-        if root.logged-in && root.screen == 0: VerticalLayout {
-            padding: 32px; spacing: 20px;
+        // The block is bounded in height: on a tall monitor the action bar stays within reach
+        // of the cards instead of sinking to the bottom edge; on short windows it still pins there.
+        if root.logged-in && root.screen == 0: Page { VerticalLayout {
+            y: 0px; height: min(parent.height, 860px);
+            padding-top: 32px; padding-bottom: 32px; spacing: 20px;
             HorizontalLayout {
                 spacing: 24px;
                 VerticalLayout {
@@ -820,10 +820,10 @@ export component AppWindow inherits Window {
                     activated => { root.save-setup(); }
                 }
             }
-        }
+        } }
 
-        if root.logged-in && root.screen == 1: VerticalLayout {
-            padding: 32px; spacing: 16px;
+        if root.logged-in && root.screen == 1: Page { VerticalLayout {
+            padding-top: 32px; padding-bottom: 32px; spacing: 16px;
             HorizontalLayout {
                 spacing: 24px;
                 VerticalLayout {
@@ -863,25 +863,33 @@ export component AppWindow inherits Window {
                     ? @tr("The refresh reply could not be read. Showing the list from the last successful load.")
                     : @tr("Could not reach Undertrained to refresh. Showing the list from the last successful load.");
             }
-            HorizontalLayout {
-                spacing: 12px;
-                TextField {
-                    width: 300px;
-                    label: @tr("Search workouts by name");
-                    text <=> root.workout-query;
-                    placeholder: @tr("Search workouts");
-                    enabled: root.workouts-total > 0;
-                    edited => { root.filter-workouts(root.workout-query); }
+            // The library toolbar: one search over both sections, with a count of what it shows.
+            if root.workouts-total > 0: Rectangle {
+                border-radius: 10px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                HorizontalLayout {
+                    padding: 10px; padding-left: 12px; spacing: 12px;
+                    TextField {
+                        width: 320px;
+                        label: @tr("Search workouts by name");
+                        text <=> root.workout-query;
+                        placeholder: @tr("Search all workouts");
+                        edited => { root.filter-workouts(root.workout-query); }
+                    }
+                    Text {
+                        text: root.workouts-filtering
+                            ? @tr("{} of {} match", root.workouts.length + root.built-ins.length, root.workouts-total)
+                            : @tr("{n} workout in the library" | "{n} workouts in the library" % root.workouts-total);
+                        color: Theme.muted; font-size: 13px; vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    if root.workouts-loading: Pulse { width: 120px; y: (parent.height - self.height) / 2; }
+                    if root.workouts-filtering: ActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: @tr("Clear"); quiet: true; compact: true;
+                        accessible-label: @tr("Clear search");
+                        activated => { root.workout-query = ""; root.filter-workouts(""); }
+                    }
                 }
-                Text {
-                    text: root.workouts-total == 0 ? ""
-                        : root.workouts.length + root.built-ins.length == root.workouts-total
-                            ? @tr("{n} workout" | "{n} workouts" % root.workouts-total)
-                            : @tr("{} of {}", root.workouts.length + root.built-ins.length, root.workouts-total);
-                    color: Theme.muted; font-size: 13px; vertical-alignment: center;
-                }
-                Rectangle { horizontal-stretch: 1; }
-                if root.workouts-loading && root.workouts-total > 0: Pulse { width: 120px; y: (parent.height - self.height) / 2; }
             }
             Rectangle {
                 vertical-stretch: 1;
@@ -910,33 +918,32 @@ export component AppWindow inherits Window {
                     detail: @tr("The workout list could not be read. Try again, or update the server if this keeps happening.");
                     ActionButton { label: @tr("Try again"); activated => { root.refresh-workouts(); } }
                 }
+                // The server sent nothing at all, not even built-in tests.
                 if !root.workouts-loading && root.workouts-error == 0 && root.workouts-loaded && root.workouts-total == 0: StatePanel {
                     title: @tr("No cycling workouts yet");
-                    detail: @tr("Workouts you create on the Undertrained website appear here.");
-                    if root.session-live: ActionButton { label: @tr("New workout in browser"); primary: true; activated => { root.create-workout(); } }
+                    detail: @tr("Workouts you create on the Undertrained website appear here after a refresh.");
                 }
+                // A search that hits neither section: one library-wide state, not a claim
+                // that the account has nothing saved.
                 if root.workouts-total > 0 && root.workouts.length == 0 && root.built-ins.length == 0: StatePanel {
                     title: @tr("No workout matches this search");
-                    detail: @tr("Search matches any part of the name.");
+                    detail: @tr("Neither your workouts nor the built-in tests match. Try a shorter name.");
                     ActionButton { label: @tr("Clear search"); activated => { root.workout-query = ""; root.filter-workouts(""); } }
                 }
                 if root.workouts.length > 0 || root.built-ins.length > 0: ScrollView {
                     VerticalLayout {
                         spacing: 12px; alignment: start; padding-right: 4px;
-                        // Personal workouts first, as on the website.
-                        if root.workouts.length > 0 || root.workouts-personal > 0: SectionTitle { text: @tr("Personal workouts"); }
+                        // Personal workouts first, as on the website, always under their heading.
+                        SectionTitle { text: @tr("Personal workouts"); }
                         if root.workouts.length > 0: WorkoutGrid {
                             cards: root.workouts; live: root.session-live;
                             open(id) => { root.open-workout(id); }
                             select(id) => { root.select-workout(id); }
                         }
-                        if root.workouts.length == 0 && root.workouts-personal > 0: Text {
-                            text: @tr("No personal workout matches this search."); color: Theme.muted; font-size: 13px;
-                        }
-                        if root.workouts-personal == 0: HorizontalLayout {
-                            spacing: 12px; alignment: start;
-                            Text { text: @tr("No workouts yet."); color: Theme.muted; font-size: 13px; vertical-alignment: center; }
-                            if root.session-live: ActionButton { label: @tr("New workout in browser"); compact: true; activated => { root.create-workout(); } }
+                        if root.workouts.length == 0: EmptyPanel {
+                            text: root.workouts-filtering
+                                ? @tr("No personal workout matches this search.")
+                                : @tr("No personal workouts yet. Create one on the website; it appears here after a refresh.");
                         }
                         // Built-in tests keep their own section, separated like the website.
                         if root.workouts-total > root.workouts-personal: Rectangle { height: 8px; }
@@ -951,18 +958,18 @@ export component AppWindow inherits Window {
                             open(id) => { root.open-workout(id); }
                             select(id) => { root.select-workout(id); }
                         }
-                        if root.built-ins.length == 0 && root.workouts-total > root.workouts-personal: Text {
-                            text: @tr("No built-in workout matches this search."); color: Theme.muted; font-size: 13px;
+                        if root.built-ins.length == 0 && root.workouts-total > root.workouts-personal: EmptyPanel {
+                            text: @tr("No built-in workout matches this search.");
                         }
                     }
                 }
             }
-        }
+        } }
 
         // The training preview: the selected workout at full width, and an honest note that
         // riding it from the desktop is not built yet. Nothing here talks to the trainer.
-        if root.logged-in && root.screen == 2: VerticalLayout {
-            padding: 32px; spacing: 16px;
+        if root.logged-in && root.screen == 2: Page { VerticalLayout {
+            padding-top: 32px; padding-bottom: 32px; spacing: 16px;
             HorizontalLayout {
                 spacing: 16px;
                 ActionButton { label: @tr("Back to workouts"); quiet: true; compact: true; y: (parent.height - self.height) / 2; activated => { root.close-training(); } }
@@ -989,7 +996,7 @@ export component AppWindow inherits Window {
                 text: @tr("Riding a workout from the desktop app is not available yet. This screen only previews the selection: nothing is sent to your trainer and nothing is recorded.");
             }
             Rectangle { vertical-stretch: 1; min-height: 0px; }
-        }
+        } }
     }
     if root.picker-open: Rectangle {
         background: Theme.scrim;

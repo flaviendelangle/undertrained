@@ -189,6 +189,7 @@ fn workout_rows(ui: &AppWindow, state: &mut State) {
         .collect();
     ui.set_workouts(ModelRc::new(VecModel::from(personal)));
     ui.set_built_ins(ModelRc::new(VecModel::from(built_ins)));
+    ui.set_workouts_filtering(!query.trim().is_empty());
     ui.set_workouts_total(library.workouts.len() as i32);
     ui.set_workouts_personal(library.personal_count() as i32);
     ui.set_workouts_loading(library.loading);
@@ -496,7 +497,8 @@ fn main() -> anyhow::Result<()> {
     };
     let state = Rc::new(RefCell::new(State {
         devices: vec![],
-        lang: i18n::resolve(settings.language.as_deref(), None),
+        // Before sign-in the system decides; the account takes over once it is known.
+        lang: i18n::resolve(None),
         settings,
         session: None,
         auth_job: None,
@@ -604,43 +606,8 @@ fn main() -> anyhow::Result<()> {
             });
             let _ = commands.send(ble::Command::Reset);
             reset_session_ui(&ui, &mut state.borrow_mut());
-            // Without an account the saved preference, then the OS, decide the language.
-            let lang = {
-                let state = state.borrow();
-                i18n::resolve(state.settings.language.as_deref(), None)
-            };
-            apply_language(&ui, &mut state.borrow_mut(), lang);
-        });
-    }
-    {
-        let weak = ui.as_weak();
-        let state = state.clone();
-        let handle = runtime.handle().clone();
-        let events = workout_events.clone();
-        ui.on_set_language(move |code| {
-            let Some(lang) = Lang::parse(&code) else {
-                return;
-            };
-            let ui = weak.unwrap();
-            {
-                let mut state = state.borrow_mut();
-                if state.lang == lang && state.settings.language.as_deref() == Some(lang.tag()) {
-                    return;
-                }
-                state.settings.language = Some(lang.tag().to_owned());
-                if let Err(error) = store::save(&state.settings) {
-                    tracing::warn!(%error, "Could not save the language preference");
-                }
-                apply_language(&ui, &mut state, lang);
-            }
-            // Built-in workouts come from the server in the interface language.
-            let refetch = {
-                let state = state.borrow();
-                state.session.is_some() && (state.library.loaded || state.library.loading)
-            };
-            if refetch {
-                start_workout_fetch(&ui, &state, &handle, &events);
-            }
+            // Without an account the system decides the language again.
+            apply_language(&ui, &mut state.borrow_mut(), i18n::resolve(None));
         });
     }
     {
@@ -894,15 +861,8 @@ fn main() -> anyhow::Result<()> {
                         generation,
                     };
                     let _ = credentials.send((sender, Some(session.clone())));
-                    // A new account: the saved preference still wins, then the account's
-                    // language, then the OS.
-                    let lang = {
-                        let state = timer_state.borrow();
-                        i18n::resolve(
-                            state.settings.language.as_deref(),
-                            session.athlete.language.as_deref(),
-                        )
-                    };
+                    // The account's language wins once known; the system fills in otherwise.
+                    let lang = i18n::resolve(session.athlete.language.as_deref());
                     clear_library(&mut timer_state.borrow_mut());
                     timer_state.borrow_mut().session = Some(session);
                     apply_language(&ui, &mut timer_state.borrow_mut(), lang);

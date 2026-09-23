@@ -230,30 +230,65 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>) {
         shared.meta, "up to 25 min",
         "Built-ins use the server label"
     );
+    assert!(!ui.get_workouts_filtering(), "No search yet");
+    // One search over both sections: personal-only, built-in-only, none, then cleared.
     ui.invoke_filter_workouts("  SWEET ".into());
+    assert!(ui.get_workouts_filtering());
     assert_eq!(
         ui.get_workouts().row_count(),
         1,
         "Search is trimmed and case-insensitive"
     );
-    assert_eq!(ui.get_built_ins().row_count(), 0);
+    assert_eq!(
+        ui.get_built_ins().row_count(),
+        0,
+        "No built-in matches 'sweet'"
+    );
     ui.invoke_filter_workouts("step".into());
-    assert_eq!(ui.get_workouts().row_count(), 0);
+    assert_eq!(
+        ui.get_workouts().row_count(),
+        0,
+        "No personal match for 'step'"
+    );
     assert_eq!(
         ui.get_built_ins().row_count(),
         1,
-        "Built-ins are searchable"
+        "Built-ins are searchable on their own"
+    );
+    assert_eq!(
+        ui.get_workouts_total(),
+        4,
+        "The total stays the whole library"
     );
     ui.invoke_filter_workouts("zzz".into());
+    assert!(ui.get_workouts_filtering());
     assert_eq!(
         ui.get_workouts().row_count() + ui.get_built_ins().row_count(),
         0
     );
     assert_eq!(ui.get_workouts_total(), 4, "No matches keeps the library");
-    ui.invoke_filter_workouts("".into());
+    assert_eq!(
+        ui.get_workouts_personal(),
+        3,
+        "No matches never reads as an empty account"
+    );
+    ui.invoke_filter_workouts("   ".into());
+    assert!(!ui.get_workouts_filtering(), "Blank queries do not filter");
     assert_eq!(
         ui.get_workouts().row_count() + ui.get_built_ins().row_count(),
         4
+    );
+    ui.invoke_filter_workouts("".into());
+    assert!(!ui.get_workouts_filtering());
+    assert_eq!(
+        ui.get_workouts().row_count(),
+        3,
+        "Clearing restores personal"
+    );
+    assert_eq!(
+        ui.get_built_ins().row_count(),
+        1,
+        "Clearing restores built-ins"
     );
     for key in ["p:1", "b:fixture-step-test"] {
         ui.set_workouts_notice(0);
