@@ -79,6 +79,49 @@ describe("desktop workout library", () => {
     expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
   });
 
+  it.each(["fr-FR", "en-GB"])(
+    "uses the requested UI locale %s without changing account settings",
+    async (locale) => {
+      mocks.athlete.mockResolvedValue({ id: 7, name: "Rider" });
+      mocks.account.mockResolvedValue({
+        language: locale === "fr-FR" ? "en-GB" : "fr-FR",
+      });
+      const res = response();
+      await handler(
+        {
+          method: "GET",
+          headers: {},
+          query: { locale },
+        } as unknown as NextApiRequest,
+        res as unknown as NextApiResponse,
+      );
+      const body = res.json.mock.calls[0]?.[0] as {
+        builtInWorkouts: { name: string }[];
+      };
+      expect(body.builtInWorkouts[0]?.name).toBe(
+        locale === "fr-FR" ? "Test FTP progressif" : "Ramp test",
+      );
+    },
+  );
+
+  it.each(["de-DE", ["fr-FR", "en-GB"]])(
+    "rejects unsupported or repeated locale %s",
+    async (locale) => {
+      mocks.athlete.mockResolvedValue({ id: 7, name: "Rider" });
+      const res = response();
+      await handler(
+        {
+          method: "GET",
+          headers: {},
+          query: { locale },
+        } as unknown as NextApiRequest,
+        res as unknown as NextApiResponse,
+      );
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(mocks.select).not.toHaveBeenCalled();
+    },
+  );
+
   it("projects real interval data without leaking the structure or athlete", async () => {
     mocks.athlete.mockResolvedValue({ id: 7, name: "Rider" });
     mocks.orderBy.mockResolvedValue([

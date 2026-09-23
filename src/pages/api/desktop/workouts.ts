@@ -20,6 +20,14 @@ export default async function handler(
   if (req.method !== "GET") return res.status(405).end();
   const athlete = await desktopAthlete(req.headers.authorization);
   if (!athlete) return res.status(401).end();
+  const requestedLocale = req.query?.locale;
+  if (
+    requestedLocale !== undefined &&
+    requestedLocale !== "en-GB" &&
+    requestedLocale !== "fr-FR"
+  ) {
+    return res.status(400).json({ error: "Unsupported locale" });
+  }
   const rows = await db
     .select()
     .from(structuredWorkouts)
@@ -40,7 +48,10 @@ export default async function handler(
     }),
   ]);
   return res.json({
-    builtInWorkouts: desktopBuiltInWorkouts(settings, account?.language),
+    builtInWorkouts: desktopBuiltInWorkouts(
+      settings,
+      requestedLocale ?? account?.language,
+    ),
     workouts: rows
       .map(summarizeWorkout)
       .map(({ id, name, durationSeconds, estimatedTss, summary, profile }) => ({

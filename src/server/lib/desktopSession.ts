@@ -9,7 +9,11 @@ export async function desktopAthlete(authorization: string | undefined) {
   const token = authorization.slice(7);
   if (!validProof(token)) return null;
   const [athlete] = await db
-    .select({ id: athletes.id, name: athletes.name })
+    .select({
+      id: athletes.id,
+      name: athletes.name,
+      language: athletes.language,
+    })
     .from(desktopSessions)
     .innerJoin(athletes, eq(athletes.id, desktopSessions.athlete))
     .where(

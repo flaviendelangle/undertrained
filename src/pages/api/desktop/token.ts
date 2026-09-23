@@ -35,7 +35,11 @@ export default async function handler(
       .returning();
     if (!grant) return null;
     const [athlete] = await tx
-      .select({ id: athletes.id, name: athletes.name })
+      .select({
+        id: athletes.id,
+        name: athletes.name,
+        language: athletes.language,
+      })
       .from(athletes)
       .where(eq(athletes.id, grant.athlete));
     if (!athlete) return null;
@@ -49,7 +53,11 @@ export default async function handler(
     return {
       access_token: token,
       expires_at: expires,
-      athlete: { id: athlete.id, name: athlete.name ?? "Rider" },
+      athlete: {
+        id: athlete.id,
+        name: athlete.name ?? "Rider",
+        language: athlete.language,
+      },
     };
   });
   return result

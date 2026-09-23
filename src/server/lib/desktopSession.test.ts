@@ -38,10 +38,11 @@ describe("desktop session authentication", () => {
     expect(query.params[0]).toBe(hash(token));
     expect(query.params[1]).toBeGreaterThan(Math.floor(Date.now() / 1000) - 5);
     expect(query.sql).toContain('"expires_at" >');
-    mocks.where.mockResolvedValue([{ id: 7, name: null }]);
+    mocks.where.mockResolvedValue([{ id: 7, name: null, language: "fr-FR" }]);
     expect(await desktopAthlete("Bearer " + token)).toEqual({
       id: 7,
       name: "Rider",
+      language: "fr-FR",
     });
   });
 });
