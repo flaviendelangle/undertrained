@@ -42,13 +42,10 @@ export function receiptUploadId(
 }
 
 export function fitBytes(base64: string): Buffer | null {
-  if (
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-      base64,
-    )
-  )
+  if (base64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(base64))
     return null;
   const bytes = Buffer.from(base64, "base64");
+  if (bytes.toString("base64") !== base64) return null;
   if (
     bytes.length < 14 ||
     ![12, 14].includes(bytes[0]) ||
