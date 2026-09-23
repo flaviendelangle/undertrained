@@ -4,15 +4,13 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import {
-  describeWorkoutShort,
-  flattenWorkout,
   migrateStructuredWorkout,
   structuredWorkoutSchema,
   totalDuration,
-  workoutProfile,
 } from "../../../utils/structuredWorkout";
 import { structuredWorkouts } from "../../db/schema";
 import type { ListStructuredWorkout } from "../../db/types";
+import { summarizeWorkout } from "../../lib/workoutSummary";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 /** Shared validators for create/update, so the two can never drift apart. */
@@ -46,24 +44,7 @@ export const structuredWorkoutsRouter = router({
         .where(eq(structuredWorkouts.athlete, input.athleteId))
         .orderBy(desc(structuredWorkouts.updatedAt));
 
-      return rows.map(({ structure, description: _description, ...rest }) => {
-        // A single corrupted row must not take the whole library down with it.
-        let profile: [number, number | null][] = [];
-        let summary = "";
-        try {
-          const workout = migrateStructuredWorkout(structure);
-          profile = workoutProfile(
-            flattenWorkout(workout, rest.ftpAtSave ?? 200),
-          );
-          summary = describeWorkoutShort(workout);
-        } catch (error) {
-          console.error(
-            `[structuredWorkouts] Skipping unreadable structure for workout ${rest.id}:`,
-            error,
-          );
-        }
-        return { ...rest, profile, summary };
-      });
+      return rows.map(summarizeWorkout);
     }),
 
   get: protectedProcedure
