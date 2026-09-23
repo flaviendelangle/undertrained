@@ -186,6 +186,15 @@ fn fixture_workouts() -> Vec<Workout> {
     ]
 }
 
+fn settle_save(ui: &AppWindow, state: &Rc<RefCell<State>>) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while ui.get_ride_save_state() == 3 {
+        crate::poll_ride_save(ui, &mut state.borrow_mut());
+        assert!(Instant::now() < deadline, "Save worker timed out");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
 /// `root` is the throwaway folder the ride callbacks record under during the smoke test.
 pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     assert!(!ui.get_logged_in());
@@ -669,7 +678,14 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         directory.starts_with(root),
         "Smoke rides stay in the temp root"
     );
-    assert!(directory.join("recording.jsonl").exists());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !directory.join("recording.jsonl").exists() {
+        assert!(
+            Instant::now() < deadline,
+            "Journal worker did not initialize"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
     assert_eq!(ui.get_ride_phase(), 1);
     assert_eq!(ui.get_screen(), 2);
     assert_eq!(ui.get_ride_name(), "VO2 max 5 × 3");
@@ -1135,6 +1151,15 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     ui.invoke_close_training();
     assert_eq!(ui.get_screen(), 2, "Back is refused mid-ride");
     ui.invoke_finish_ride();
+    assert_eq!(
+        ui.get_ride_save_state(),
+        3,
+        "Finishing queues a background export"
+    );
+    assert!(ui.get_ride_unsaved(), "Saving protects the in-memory ride");
+    ui.invoke_close_training();
+    assert_eq!(ui.get_screen(), 2, "Cannot dismiss a pending export");
+    settle_save(ui, state);
     assert_eq!(ui.get_ride_phase(), 3);
     assert!(!ui.get_ride_erg_enabled(), "Finishing leaves control off");
     assert_eq!(ui.get_ride_erg_state(), 0);
@@ -1151,7 +1176,9 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     assert!(directory.join("ride.fit").exists() && directory.join("ride.json").exists());
     let fit = fs::read(directory.join("ride.fit")).unwrap();
     ui.invoke_finish_ride();
+    settle_save(ui, state);
     ui.invoke_retry_save();
+    settle_save(ui, state);
     assert_eq!(ui.get_ride_phase(), 3);
     assert_eq!(
         fs::read(directory.join("ride.fit")).unwrap(),
@@ -1159,6 +1186,14 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         "Finishing again rewrites nothing"
     );
     assert!(!ui.get_ride_unsaved() && !ui.get_ride_uploading());
+    assert!(ui.get_ride_present(), "A saved ride stays accessible");
+    ui.invoke_navigate(0);
+    assert!(ui.get_ride_present());
+    ui.invoke_navigate(2);
+    assert_eq!(ui.get_ride_phase(), 3);
+    assert_eq!(ui.get_ride_activity_name(), "VO2 max 5 × 3");
+    assert_eq!(ui.get_ride_save_state(), 1);
+
     // Uploading needs the account that started the ride; without one nothing is sent.
     ui.invoke_upload_ride();
     assert_eq!(ui.get_ride_upload_state(), 5);
@@ -1249,6 +1284,34 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     fs::remove_dir_all(root).unwrap();
     assert!(!root.exists());
 
+    // A partial BLE update must not keep the other displayed field fresh.
+    let stamp = Instant::now();
+    state.borrow_mut().sensors.update(
+        0,
+        &Reading {
+            power: Some(200),
+            cadence: Some(90.0),
+            heart_rate: None,
+        },
+        false,
+        stamp,
+    );
+    state.borrow_mut().sensors.update(
+        0,
+        &Reading {
+            power: Some(205),
+            ..Default::default()
+        },
+        false,
+        stamp + Duration::from_secs(6),
+    );
+    crate::refresh_device_readings(ui, &state.borrow(), stamp + Duration::from_secs(6));
+    assert_eq!(ui.get_power(), "205");
+    assert_eq!(
+        ui.get_cadence(),
+        "—",
+        "Cadence expires while power keeps arriving"
+    );
     ui.set_setup_saved(true);
     disconnected(ui, &mut state.borrow_mut(), 0);
     assert!(!ui.get_trainer_connected());

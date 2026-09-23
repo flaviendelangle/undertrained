@@ -16,7 +16,7 @@ Each start creates a unique `ride-<timestamp>-<random>` folder under the platfor
 - `ride.json` contains the complete metadata, samples, timer events and summary when finished.
 - `ride.fit` is an indoor cycling FIT activity with measured power, cadence and heart rate. It includes timer start/stop events, separate wall and active durations, and one session-wide lap. Speed, distance, GPS and calories are not fabricated.
 
-A write error pauses recording. Samples remain in memory while the window is open, and finishing retries a complete export. Completed exports are written through a sibling temporary file. The UI prevents leaving an unfinished or unsaved ride without addressing it.
+A dedicated file worker initializes the journal, writes samples and exports finished rides. Its queue holds at most 64 pending operations; disk I/O never runs on the UI timer. Finishing stays in a guarded saving state until the worker confirms both exports. A write error, reported back to the UI, or a full queue pauses recording. Samples remain in memory while the window is open, and finishing retries a complete export. Completed exports are written through a sibling temporary file. The UI prevents leaving an unfinished or unsaved ride without addressing it.
 
 The FIT encoder adds no dependency. Its format follows the [Garmin FIT protocol](https://developer.garmin.com/fit/articles/fit-protocol/fit_protocol.html) and public message profile. An exported fixture was independently decoded with Garmin's Python SDK to verify integrity, pause events, indoor-cycling classification, missing measurements and active versus wall time.
 

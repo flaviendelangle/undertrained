@@ -11,7 +11,7 @@ The app receives ANT+ directly from USB through `rusb` and vendored libusb. It d
 - One receive channel discovers both roles. Selecting a device filters by its full ANT device number, profile and transmission type. The receiver stays active for selected sensors and releases USB after disconnect/reset/shutdown. Idle discovery releases USB after a short selection grace period.
 - Bluetooth being unavailable does not cancel ANT discovery. Each radio reports its own status. Unplugging the ANT stick clears its devices and connections; another search retries initialization.
 
-Device setup is receive-only. FE-C resistance/ERG commands, calibration, torque-only power meters, speed/distance and ride recording are not implemented. The trainer card must not claim ERG support merely because FE-C measurements were received. ANT devices typically broadcast a numeric identity, not a friendly Bluetooth name. A dual-radio sensor can appear twice, once per transport.
+Device setup is receive-only. FE-C resistance/ERG commands, calibration, torque-only power meters, and speed/distance are not implemented. Received ANT+ measurements can be recorded and exported, as described in [Ride recording](recording.md). The trainer card must not claim ERG support merely because FE-C measurements were received. ANT devices typically broadcast a numeric identity, not a friendly Bluetooth name. A dual-radio sensor can appear twice, once per transport.
 
 ## Implementation
 

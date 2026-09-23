@@ -611,6 +611,7 @@ fn guard_erg_power(
 /// Let go of the ride on screen. Its files stay where they were written.
 fn drop_ride(ui: &AppWindow, state: &mut State) {
     state.ride = None;
+    ui.set_ride_present(false);
     ui.set_ride_phase(0);
     ui.set_ride_has_workout(false);
     apply_ride_plan(ui, None);
@@ -731,6 +732,37 @@ fn show_ready(ui: &AppWindow, workout: Option<&WorkoutRow>, plan: Option<&player
     ui.set_screen(2);
 }
 
+/// Use exactly the recorder's per-field expiry, including partial FTMS packets.
+fn refresh_device_readings(ui: &AppWindow, state: &State, now: Instant) {
+    let trainer = state.sensors.role_live(0, now);
+    let hr = state.sensors.role_live(1, now);
+    if ui.get_trainer_connected() {
+        ui.set_power(recording_view::value(trainer.power).into());
+        ui.set_cadence(recording_view::value(trainer.cadence).into());
+        ui.set_trainer_state(if trainer.power.is_some() || trainer.cadence.is_some() {
+            3
+        } else if state.last_sample[0]
+            .is_some_and(|t| now.saturating_duration_since(t) < Duration::from_secs(5))
+        {
+            2
+        } else {
+            4
+        });
+    }
+    if ui.get_hr_connected() {
+        ui.set_heart_rate(recording_view::value(hr.heart_rate).into());
+        ui.set_hr_state(if hr.heart_rate.is_some() {
+            3
+        } else if state.last_sample[1]
+            .is_some_and(|t| now.saturating_duration_since(t) < Duration::from_secs(5))
+        {
+            2
+        } else {
+            4
+        });
+    }
+}
+
 fn apply_live(ui: &AppWindow, live: &Live) {
     ui.set_ride_power(recording_view::value(live.power).into());
     ui.set_ride_power_live(live.power.is_some());
@@ -827,7 +859,7 @@ fn finish_ride(
     ride.erg.enabled = false;
     release_erg(ui, state, commands);
     let ride = state.ride.as_mut().expect("the ride is still here");
-    let result = ride.recording.finish(now);
+    let result = ride.recording.begin_finish(now);
     ride.paused_at = None;
     ui.set_ride_phase(3);
     ui.set_ride_notice(0);
@@ -845,13 +877,18 @@ fn finish_ride(
         recording_view::value_with_unit(summary.avg_cadence, i18n::cadence_unit(lang)).into(),
     );
     refresh_chart(ui, ride, now, true);
+    ui.set_ride_save_state(3);
+    if let Err(error) = result {
+        apply_save_result(ui, ride, Err(error));
+    }
+}
+
+fn apply_save_result(ui: &AppWindow, ride: &Ride, result: anyhow::Result<()>) {
     match result {
         Ok(()) => {
             ui.set_ride_save_state(1);
             ui.set_ride_save_detail("".into());
             ui.set_ride_folder(ride.recording.directory().display().to_string().into());
-            // The upload title starts as the recording's name; editing it changes nothing
-            // in the saved files.
             reset_upload_ui(ui);
             ui.set_ride_activity_name(ride.recording.name().into());
         }
@@ -859,6 +896,14 @@ fn finish_ride(
             ui.set_ride_save_state(2);
             ui.set_ride_save_detail(format!("{error:#}").into());
         }
+    }
+}
+
+fn poll_ride_save(ui: &AppWindow, state: &mut State) {
+    if let Some(ride) = state.ride.as_mut()
+        && let Some(result) = ride.recording.poll_finish()
+    {
+        apply_save_result(ui, ride, result);
     }
 }
 
@@ -1527,6 +1572,7 @@ fn main() -> anyhow::Result<()> {
                 ui.set_screen(2);
                 return;
             }
+            drop_ride(&ui, &mut state);
             state.selected_workout = Some(id.clone());
             ui.set_workouts_notice(0);
             ui.set_workouts_notice_detail("".into());
@@ -1559,12 +1605,15 @@ fn main() -> anyhow::Result<()> {
     }
     {
         let weak = ui.as_weak();
+        let state = state.clone();
         ui.on_start_free_ride(move || {
             let ui = weak.unwrap();
             if ride_guarded(&ui) {
                 ui.set_screen(2);
                 return;
             }
+            drop_ride(&ui, &mut state.borrow_mut());
+            state.borrow_mut().selected_workout = None;
             show_ready(&ui, None, None);
         });
     }
@@ -1636,6 +1685,7 @@ fn main() -> anyhow::Result<()> {
                     refresh_player(&ui, &ride, &live, 0.0);
                     apply_erg_state(&ui, &ride);
                     state.ride = Some(ride);
+                    ui.set_ride_present(true);
                     ui.set_ride_phase(1);
                     ui.set_ride_elapsed("0:00".into());
                     ui.set_ride_notice(0);
@@ -2254,28 +2304,6 @@ fn main() -> anyhow::Result<()> {
                             snapshot,
                             Instant::now(),
                         );
-                        let dash = |value: Option<String>| -> Option<slint::SharedString> {
-                            match value {
-                                Some(v) => Some(v.into()),
-                                None if snapshot => Some("—".into()),
-                                None => None,
-                            }
-                        };
-                        if role == 0 && ui.get_trainer_connected() {
-                            if let Some(power) = dash(reading.power.map(|p| p.to_string())) {
-                                ui.set_power(power);
-                            }
-                            if let Some(cadence) = dash(reading.cadence.map(|c| format!("{c:.0}")))
-                            {
-                                ui.set_cadence(cadence);
-                            }
-                            ui.set_trainer_state(3);
-                        } else if role == 1 && ui.get_hr_connected() {
-                            if let Some(hr) = dash(reading.heart_rate.map(|h| h.to_string())) {
-                                ui.set_heart_rate(hr);
-                            }
-                            ui.set_hr_state(3);
-                        }
                     }
                     ble::Event::Disconnected(role) => {
                         disconnected(&ui, &mut timer_state.borrow_mut(), role);
@@ -2303,6 +2331,8 @@ fn main() -> anyhow::Result<()> {
         {
             let now = Instant::now();
             let mut state = timer_state.borrow_mut();
+            poll_ride_save(&ui, &mut state);
+            refresh_device_readings(&ui, &state, now);
             let State { ride, sensors, .. } = &mut *state;
             let live = sensors.live(now);
             if ui.get_screen() == 2 || ride.is_some() {
@@ -2327,6 +2357,10 @@ fn main() -> anyhow::Result<()> {
                         refresh_player(&ui, ride, &live, elapsed);
                     }
                     Phase::Paused => {
+                        if let Err(error) = ride.recording.check_io(now) {
+                            ui.set_ride_notice(1);
+                            ui.set_ride_notice_detail(format!("{error:#}").into());
+                        }
                         if let Some(at) = ride.paused_at {
                             ui.set_ride_paused_for(
                                 recording_view::elapsed(now.duration_since(at).as_secs_f64())
@@ -2345,21 +2379,6 @@ fn main() -> anyhow::Result<()> {
             // quiet on power loses control first.
             guard_erg_power(&ui, &mut state, &timer_commands, now);
             sync_erg(&ui, &mut state, &timer_commands, now);
-        }
-        for role in 0..2 {
-            if timer_state.borrow().last_sample[role]
-                .is_some_and(|time| time.elapsed() > Duration::from_secs(5))
-            {
-                if role == 0 && ui.get_trainer_connected() {
-                    ui.set_power("—".into());
-                    ui.set_cadence("—".into());
-                    ui.set_trainer_state(4);
-                }
-                if role == 1 && ui.get_hr_connected() {
-                    ui.set_heart_rate("—".into());
-                    ui.set_hr_state(4);
-                }
-            }
         }
     });
     let screenshot_timer = Timer::default();

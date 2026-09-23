@@ -117,6 +117,7 @@ pub async fn run<T: Transport>(
     events: mpsc::UnboundedSender<Event>,
 ) {
     let mut held = false;
+    let mut started = false;
     let mut fault = false;
     loop {
         tokio::select! {
@@ -124,7 +125,7 @@ pub async fn run<T: Transport>(
             changed=lost.changed()=> {
                 if changed.is_err() {break;}
                 if !held {continue;} // No permission was expected while released.
-                held=false;fault=true;
+                held=false;started=false;fault=true;
                 let req=*desired.borrow();
                 if let Some(req)=req {report(&events,req,Err("Trainer control permission was lost. Enable ERG again when ready.".into()));}
                 continue;
@@ -145,6 +146,7 @@ pub async fn run<T: Transport>(
                 io.disconnect().await;
             }
             held = false;
+            started = false;
             fault = false;
             report(&events, req, result.map(|()| None));
             continue;
@@ -153,6 +155,7 @@ pub async fn run<T: Transport>(
             lost.borrow_and_update();
             if held {
                 held = false;
+                started = false;
                 fault = true;
             }
         }
@@ -175,11 +178,17 @@ pub async fn run<T: Transport>(
                 if superseded(&desired, req) {
                     return Ok(false);
                 }
+            }
+            if !started {
+                if superseded(&desired, req) {
+                    return Ok(false);
+                }
                 match io.request(vec![7]).await {
                     // Only an explicitly unsupported Start is tolerable, never a timeout.
                     Err(Failure::Rejected(2)) | Ok(()) => {}
                     Err(e) => return Err(e),
                 }
+                started = true;
             }
             if superseded(&desired, req) {
                 return Ok(false);
@@ -204,6 +213,7 @@ pub async fn run<T: Transport>(
                     }
                 }
                 held = false;
+                started = false;
                 report(&events, req, Err(error.to_string()));
             }
         }
@@ -228,6 +238,58 @@ mod tests {
             rx.await.unwrap()
         }
     }
+    #[tokio::test]
+    async fn changed_target_during_control_grant_must_still_start() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (desired, d) = watch::channel(None);
+        let (_loss, l) = watch::channel(0);
+        let (events, mut ev) = mpsc::unbounded_channel();
+        let task = tokio::spawn(run(
+            Mock { tx },
+            PowerRange::parse(&[0, 0, 0xe8, 3, 1, 0]).unwrap(),
+            d,
+            l,
+            events,
+        ));
+        desired
+            .send(Some(Request {
+                request: 1,
+                watts: Some(200),
+            }))
+            .unwrap();
+        let (cmd, ack) = rx.recv().await.unwrap();
+        assert_eq!(cmd, vec![0]);
+        desired
+            .send(Some(Request {
+                request: 2,
+                watts: Some(205),
+            }))
+            .unwrap();
+        ack.send(Ok(())).unwrap();
+        let (cmd, ack) = rx.recv().await.unwrap();
+        assert_eq!(cmd, vec![7], "coalescing target skipped Start/Resume");
+        ack.send(Ok(())).unwrap();
+        let (cmd, ack) = rx.recv().await.unwrap();
+        assert_eq!(
+            cmd,
+            vec![5, 205, 0],
+            "Only the replacement target is applied"
+        );
+        ack.send(Ok(())).unwrap();
+        assert!(matches!(
+            ev.recv().await,
+            Some(Event::Erg {
+                request: 2,
+                result: Ok(Some(205))
+            })
+        ));
+        drop(desired);
+        let (cmd, ack) = rx.recv().await.unwrap();
+        assert_eq!(cmd, vec![1]);
+        ack.send(Ok(())).unwrap();
+        task.await.unwrap();
+    }
+
     #[tokio::test]
     async fn successful_write_needs_matching_indication_and_timeout_is_bounded() {
         let (tx, mut rx) = mpsc::unbounded_channel();

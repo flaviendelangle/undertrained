@@ -538,6 +538,24 @@ msgstr "La sortie est en cours d'envoi"
 msgid "Wait for Strava's answer before leaving, so the result is not lost."
 msgstr "Attendez la réponse de Strava avant de quitter, pour ne pas perdre le résultat."
 
+msgid "Saving ride…"
+msgstr "Enregistrement de la sortie…"
+
+msgid "Saving the ride on this computer…"
+msgstr "Enregistrement de la sortie sur cet ordinateur…"
+
+msgid "The ride is being saved"
+msgstr "La sortie est en cours d'enregistrement"
+
+msgid "Wait for the save to finish before leaving, so the ride is not lost."
+msgstr "Attendez la fin de l'enregistrement avant de quitter, pour ne pas perdre la sortie."
+
+msgid "Ride summary"
+msgstr "Résumé de la sortie"
+
+msgid "Ready to ride"
+msgstr "Prêt à rouler"
+
 msgid "ACTIVITY NAME"
 msgstr "NOM DE L'ACTIVITÉ"
 

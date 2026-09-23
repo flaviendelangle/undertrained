@@ -694,6 +694,9 @@ export component AppWindow inherits Window {
     // The ride screen. phase: 0 ready, 1 running, 2 paused, 3 finished. The workout, when
     // any, is a cloned reference copy for the whole ride: refreshes never touch it.
     in-out property <int> ride-phase: 0;
+    // True while a ride exists to return to, whatever its phase: opened, recording, paused,
+    // being saved, saved and waiting on Strava. Cleared only when the ride is let go.
+    in-out property <bool> ride-present: false;
     in-out property <bool> ride-has-workout: false;
     in-out property <string> ride-name: "";
     in-out property <string> ride-meta: "";
@@ -771,7 +774,7 @@ export component AppWindow inherits Window {
     in-out property <string> ride-avg-hr: "—";
     in-out property <string> ride-max-hr: "—";
     in-out property <string> ride-avg-cadence: "—";
-    // 0 not saved yet, 1 saved, 2 save failed (detail holds the reason).
+    // 0 not saved yet, 1 saved, 2 save failed (detail holds the reason), 3 saving.
     in-out property <int> ride-save-state: 0;
     in-out property <string> ride-save-detail: "";
     in-out property <string> ride-folder: "";
@@ -800,8 +803,10 @@ export component AppWindow inherits Window {
     out property <bool> ride-active: root.ride-phase == 1 || root.ride-phase == 2;
     out property <bool> ride-unsaved: root.ride-phase == 3 && root.ride-save-state != 1;
     out property <bool> ride-uploading: root.ride-phase == 3 && root.ride-upload-state == 1;
-    // A ride at stake stays one click away from every other screen.
-    property <bool> ride-chip: root.logged-in && (root.ride-active || root.ride-unsaved || root.ride-uploading) && root.screen != 2;
+    out property <bool> ride-saving: root.ride-phase == 3 && root.ride-save-state == 3;
+    // Any ride stays one click away from every other screen: one at stake, and one finished
+    // and saved whose upload is still to start, to check or to confirm.
+    property <bool> ride-chip: root.logged-in && (root.ride-present || root.ride-active || root.ride-unsaved || root.ride-uploading) && root.screen != 2;
     property <bool> narrow: root.width < 1100px;
     out property <bool> any-sensor: root.trainer-connected || root.hr-connected;
     // True only with a verified account session; browser links depend on it.
@@ -895,14 +900,26 @@ export component AppWindow inherits Window {
                 if root.logged-in: Rectangle { width: 12px; }
                 if root.logged-in: NavTab { label: @tr("Devices"); active: root.screen == 0; activated => { root.navigate(0); } }
                 if root.logged-in: NavTab { label: @tr("Workouts"); active: root.screen >= 1; activated => { root.navigate(1); } }
-                // A ride at stake stays one click away from every screen.
+                // Any ride, at stake or saved, stays one click away from every screen.
                 if root.ride-chip: HorizontalLayout {
                     spacing: 6px;
-                    Rectangle { y: (parent.height - self.height) / 2; width: 8px; height: 8px; border-radius: 4px; background: root.ride-phase == 1 ? Theme.heart : root.ride-uploading ? Theme.primary : Theme.pause; }
+                    Rectangle {
+                        y: (parent.height - self.height) / 2; width: 8px; height: 8px; border-radius: 4px;
+                        // Red while recording, yellow when paused or not safe on disk, green
+                        // once the ride is saved and the theme color while something is in flight.
+                        background: root.ride-phase == 1 ? Theme.heart
+                            : root.ride-uploading || root.ride-saving ? Theme.primary
+                            : root.ride-phase == 3 && root.ride-save-state == 1 ? Theme.good
+                            : root.ride-phase == 0 ? Theme.muted : Theme.pause;
+                    }
                     NavTab {
                         // Narrow windows get the clock alone; the dot already says recording or paused.
                         label: root.ride-active ? (root.narrow ? root.ride-elapsed : @tr("Recording {}", root.ride-elapsed))
-                            : root.ride-uploading ? @tr("Uploading…") : @tr("Unsaved ride");
+                            : root.ride-uploading ? @tr("Uploading…")
+                            : root.ride-saving ? @tr("Saving ride…")
+                            : root.ride-phase == 3 && root.ride-save-state == 1 ? @tr("Ride summary")
+                            : root.ride-phase == 3 ? @tr("Unsaved ride")
+                            : @tr("Ready to ride");
                         active: false; activated => { root.navigate(2); }
                     }
                 }
@@ -1596,6 +1613,13 @@ export component AppWindow inherits Window {
                     LiveChart { vertical-stretch: 1; bins: root.ride-chart; count: root.ride-chart-bins; }
                 }
             }
+            // The save runs in the background; until it answers, the ride is only in memory
+            // and the leave guard keeps the rider here.
+            if root.ride-saving: VerticalLayout {
+                spacing: 8px;
+                Pulse { }
+                Text { text: @tr("Saving the ride on this computer…"); color: Theme.muted; font-size: 13px; }
+            }
             if root.ride-phase == 3 && root.ride-save-state == 2: Notice {
                 text: @tr("The ride could not be saved. The data is still in memory; fix the folder or free disk space, then retry.");
                 detail: root.ride-save-detail;
@@ -1718,7 +1742,10 @@ export component AppWindow inherits Window {
             guard-layout := VerticalLayout {
                 padding: 24px; spacing: 14px;
                 Text {
-                    text: root.ride-active ? @tr("A ride is being recorded") : root.ride-uploading ? @tr("The ride is being uploaded") : @tr("This ride is not saved yet");
+                    text: root.ride-active ? @tr("A ride is being recorded")
+                        : root.ride-uploading ? @tr("The ride is being uploaded")
+                        : root.ride-saving ? @tr("The ride is being saved")
+                        : @tr("This ride is not saved yet");
                     color: Theme.ink; font-size: 20px; font-weight: 600; wrap: word-wrap;
                 }
                 Text {
@@ -1727,6 +1754,7 @@ export component AppWindow inherits Window {
                             ? @tr("Closing now would lose it. Finish the ride first, or keep recording.")
                             : @tr("Leaving now would lose it. Finish the ride to keep it, or stay and keep recording."))
                         : root.ride-uploading ? @tr("Wait for Strava's answer before leaving, so the result is not lost.")
+                        : root.ride-saving ? @tr("Wait for the save to finish before leaving, so the ride is not lost.")
                         : @tr("Retry the save before leaving so the ride is not lost.");
                     color: Theme.muted; font-size: 13px; wrap: word-wrap;
                 }
