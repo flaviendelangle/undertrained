@@ -18,6 +18,12 @@ pub fn run(ui: &AppWindow) {
         1,
         "Heart-rate sensors must not appear as trainers"
     );
+    let row = ui.get_nearby().row_data(0).unwrap();
+    assert_eq!(
+        row.detail, "Smart trainer",
+        "Demo rows must not expose a fragment of the made-up id"
+    );
+    assert!(!row.saved, "Demo devices are never marked as saved");
     ui.invoke_choose("demo-trainer".into(), 0);
     assert!(ui.get_trainer_connected());
     assert!(!ui.get_picker_open());
@@ -29,6 +35,33 @@ pub fn run(ui: &AppWindow) {
     ui.invoke_save_setup();
     assert!(ui.get_setup_saved());
     assert!(ui.get_message().contains("Demo setup only"));
+    ui.invoke_navigate(1);
+    assert_eq!(ui.get_screen(), 1);
+    assert!(ui.get_workouts_total() > 0, "Demo shows sample workouts");
+    assert!(!ui.get_session_live(), "Demo never offers browser links");
+    let all = ui.get_workouts().row_count();
+    ui.invoke_filter_workouts("  SWEET ".into());
+    assert_eq!(
+        ui.get_workouts().row_count(),
+        1,
+        "Search is trimmed and case-insensitive"
+    );
+    ui.invoke_filter_workouts("zzz".into());
+    assert_eq!(ui.get_workouts().row_count(), 0);
+    assert!(ui.get_workouts_total() > 0, "No matches keeps the library");
+    ui.invoke_filter_workouts("".into());
+    assert_eq!(ui.get_workouts().row_count(), all);
+    ui.invoke_open_workout("1".into());
+    assert!(
+        !ui.get_workouts_notice().is_empty(),
+        "Demo must refuse browser links"
+    );
+    ui.invoke_navigate(0);
+    assert_eq!(ui.get_screen(), 0);
+    assert!(
+        ui.get_trainer_connected() && ui.get_hr_connected(),
+        "Switching screens keeps pairings"
+    );
     ui.invoke_search(0);
     ui.invoke_choose("demo-trainer".into(), 0);
     assert!(
@@ -51,7 +84,9 @@ pub fn run(ui: &AppWindow) {
     assert!(!ui.get_logged_in() && !ui.get_demo());
     assert!(!ui.get_hr_connected());
     assert_eq!(ui.get_heart_rate(), "—");
+    assert_eq!(ui.get_workouts_total(), 0, "Sign-out empties the library");
+    assert_eq!(ui.get_screen(), 0);
     println!(
-        "Native UI smoke test passed: login, filtering, pairing, change, save, disconnect, exit."
+        "Native UI smoke test passed: login, filtering, pairing, change, save, workouts, disconnect, exit."
     );
 }

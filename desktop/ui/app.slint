@@ -1,53 +1,92 @@
-import { LineEdit, ScrollView } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 
 export struct NearbyDevice {
     id: string,
     name: string,
     detail: string,
     signal: string,
+    signal-level: int,
+    saved: bool,
+}
+
+// One bar of a workout profile: share of total time, intensity scaled 0..1, or a free-ride block.
+export struct ProfileStep {
+    share: float,
+    intensity: float,
+    free: bool,
+}
+
+export struct WorkoutRow {
+    id: string,
+    name: string,
+    duration: string,
+    tss: string,
+    summary: string,
+    profile: [ProfileStep],
+}
+
+// While a dialog is open, controls behind it must not take keyboard focus.
+global Overlay {
+    in-out property <bool> open: false;
 }
 
 global Palette {
     out property <color> background: #111513;
-    out property <color> panel: #1b211e;
-    out property <color> border: #333d36;
+    out property <color> panel: #1a201c;
+    out property <color> raised: #232b25;
+    out property <color> border: #2f3832;
     out property <color> ink: #f2f4e9;
-    out property <color> muted: #a2afa5;
+    out property <color> muted: #9aa79d;
+    out property <color> faint: #5f6b62;
     out property <color> accent: #d5f780;
-    out property <color> green: #92d9ad;
+    out property <color> accent-ink: #182014;
+    out property <color> good: #92d9ad;
+    out property <color> warn: #f0c48a;
 }
 
+// One button, three looks: primary (lime), secondary (raised), quiet (outline).
 component ActionButton inherits Rectangle {
     in property <string> label;
     in property <bool> primary: false;
+    in property <bool> quiet: false;
+    in property <bool> compact: false;
     in property <bool> enabled: true;
+    in property <bool> in-dialog: false;
     callback activated();
-    height: 48px;
-    min-width: max(110px, button-label.preferred-width + 32px);
+    height: root.compact ? 36px : 44px;
+    min-width: max(root.compact ? 72px : 120px, button-label.preferred-width + (root.compact ? 28px : 40px));
     border-radius: 8px;
-    background: !root.enabled ? #252d27 : root.primary ? (touch.has-hover ? #e2ff9e : Palette.accent) : (touch.has-hover ? #303a32 : #252d27);
+    background: root.primary
+        ? (!root.enabled ? #3a4433 : touch.has-hover ? #e2ff9e : Palette.accent)
+        : root.quiet ? (touch.has-hover && root.enabled ? Palette.raised : transparent)
+        : (touch.has-hover && root.enabled ? #2c352e : Palette.raised);
     border-width: root.primary ? 0px : 1px;
-    border-color: Palette.border;
+    border-color: root.quiet ? #3d4841 : Palette.border;
     accessible-role: button;
     accessible-label: root.label;
     accessible-enabled: root.enabled;
     accessible-action-default => { if root.enabled { root.activated(); } }
     button-label := Text {
         text: root.label;
-        color: !root.enabled ? #647068 : root.primary ? #182014 : Palette.ink;
-        font-size: 14px;
+        color: root.primary ? (root.enabled ? Palette.accent-ink : #7d8a72) : (root.enabled ? Palette.ink : Palette.faint);
+        font-size: root.compact ? 13px : 14px;
         font-weight: 600;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
     focus := FocusScope {
-        enabled: root.enabled;
+        enabled: root.enabled && (root.in-dialog || !Overlay.open);
         key-pressed(event) => {
             if event.text == "\n" || event.text == " " { root.activated(); return accept; }
             return reject;
         }
     }
-    Rectangle { border-width: focus.has-focus ? 2px : 0px; border-color: Palette.ink; border-radius: 8px; background: transparent; }
+    Rectangle {
+        border-width: focus.has-focus ? 2px : 0px;
+        border-color: Palette.ink;
+        border-radius: root.border-radius;
+        background: transparent;
+    }
     touch := TouchArea {
         enabled: root.enabled;
         mouse-cursor: pointer;
@@ -55,9 +94,180 @@ component ActionButton inherits Rectangle {
     }
 }
 
+// A header tab. The underline marks the current screen.
+component NavTab inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    callback activated();
+    width: tab-label.preferred-width + 8px;
+    accessible-role: tab;
+    accessible-label: root.label;
+    accessible-checked: root.active;
+    accessible-action-default => { root.activated(); }
+    tab-label := Text {
+        text: root.label;
+        color: root.active ? Palette.ink : touch.has-hover ? Palette.ink : Palette.muted;
+        font-size: 14px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    Rectangle {
+        y: parent.height - self.height;
+        height: 3px;
+        border-radius: 1px;
+        background: root.active ? Palette.accent : transparent;
+    }
+    focus := FocusScope {
+        enabled: !Overlay.open;
+        key-pressed(event) => {
+            if event.text == "\n" || event.text == " " { root.activated(); return accept; }
+            return reject;
+        }
+    }
+    Rectangle {
+        y: 14px; height: parent.height - 28px; x: -6px; width: parent.width + 12px;
+        border-width: focus.has-focus ? 2px : 0px;
+        border-color: Palette.ink;
+        border-radius: 6px;
+        background: transparent;
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { focus.focus(); root.activated(); }
+    }
+}
+
+// Errors and notices share one warm style; plain information uses the lime tone.
+// Color never carries the meaning alone.
+component Notice inherits Rectangle {
+    in property <string> text;
+    in property <bool> info: false;
+    border-radius: 8px;
+    background: root.info ? #1d2419 : #27231c;
+    border-width: 1px;
+    border-color: root.info ? #3a4a2c : #4a4029;
+    HorizontalLayout {
+        padding: 12px; padding-left: 14px; spacing: 10px;
+        Rectangle { width: 3px; border-radius: 2px; background: root.info ? Palette.accent : Palette.warn; }
+        Text { text: root.text; color: root.info ? #c9dfb0 : Palette.warn; font-size: 13px; wrap: word-wrap; vertical-alignment: center; }
+    }
+}
+
+// A workout profile as bars: width is time share, height is intensity. Free-ride blocks are low and dim.
+// No gaps and no minimum width, so the bars always cover exactly the whole duration.
+component ProfileChart inherits Rectangle {
+    in property <[ProfileStep]> steps;
+    height: 28px;
+    clip: true;
+    HorizontalLayout {
+        spacing: 0px;
+        for step in root.steps: Rectangle {
+            width: root.width * step.share;
+            Rectangle {
+                y: parent.height - self.height;
+                width: parent.width;
+                height: max(3px, parent.height * (step.free ? 0.3 : step.intensity));
+                border-radius: 1px;
+                background: step.free ? #3a453d : step.intensity >= 0.63 ? Palette.accent : #56693f;
+            }
+        }
+    }
+}
+
+// A centered panel for empty, loading and failed library states.
+component StatePanel inherits VerticalLayout {
+    in property <string> title;
+    in property <string> detail;
+    alignment: center;
+    spacing: 8px;
+    Text { text: root.title; color: Palette.ink; font-size: 17px; font-weight: 600; horizontal-alignment: center; }
+    Text { text: root.detail; color: Palette.muted; font-size: 13px; horizontal-alignment: center; wrap: word-wrap; }
+    HorizontalLayout { alignment: center; padding-top: 8px; spacing: 8px; @children }
+}
+
+// An indeterminate progress bar for waiting states.
+component Pulse inherits Rectangle {
+    height: 3px;
+    border-radius: 2px;
+    background: Palette.border;
+    clip: true;
+    Rectangle {
+        width: parent.width * 0.35;
+        x: (mod(animation-tick() / 1ms, 1400) / 1400) * (parent.width + self.width) - self.width;
+        border-radius: 2px;
+        background: Palette.accent;
+    }
+}
+
+component Caption inherits Text {
+    color: Palette.muted;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+}
+
+component SignalBars inherits Rectangle {
+    in property <int> level;
+    width: 18px;
+    height: 14px;
+    HorizontalLayout {
+        spacing: 2px; alignment: end;
+        for h[i] in [6px, 10px, 14px]: Rectangle {
+            width: 4px;
+            Rectangle {
+                y: parent.height - self.height;
+                width: 4px; height: h; border-radius: 1px;
+                background: root.level > i ? Palette.good : #3a453d;
+            }
+        }
+    }
+}
+
+component TextField inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <bool> enabled: true;
+    in property <string> label;
+    callback accepted();
+    callback edited();
+    height: 42px;
+    border-radius: 8px;
+    background: #0d100e;
+    border-width: input.has-focus ? 2px : 1px;
+    border-color: input.has-focus ? Palette.accent : Palette.border;
+    accessible-role: text-input;
+    accessible-label: root.label;
+    accessible-value: root.text;
+    // Sits under the input so clicks on the padding focus it without stealing drags from the text.
+    TouchArea { mouse-cursor: MouseCursor.text; clicked => { input.focus(); } }
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 12px;
+        input := TextInput {
+            text <=> root.text;
+            enabled: root.enabled && !Overlay.open;
+            color: root.enabled ? Palette.ink : Palette.faint;
+            selection-background-color: #4b5d2c;
+            font-size: 14px;
+            single-line: true;
+            vertical-alignment: center;
+            accepted => { root.accepted(); }
+            edited => { root.edited(); }
+        }
+    }
+    if root.text == "": Text {
+        x: 12px;
+        text: root.placeholder;
+        color: Palette.faint;
+        font-size: 14px;
+        vertical-alignment: center;
+    }
+}
+
 component SensorCard inherits Rectangle {
     in property <string> title;
-    in property <string> subtitle;
+    in property <string> requirement;
+    in property <string> hint;
     in property <string> device;
     in property <string> status;
     in property <string> metric;
@@ -69,47 +279,76 @@ component SensorCard inherits Rectangle {
     border-radius: 12px;
     background: Palette.panel;
     border-width: 1px;
-    border-color: root.connected ? #547354 : Palette.border;
+    border-color: root.connected ? #4c6a4a : Palette.border;
     VerticalLayout {
-        padding: 24px;
-        spacing: 14px;
+        padding: 22px;
+        spacing: 16px;
         HorizontalLayout {
             spacing: 12px;
             Rectangle {
-                width: 42px; height: 42px; border-radius: 10px;
-                background: root.connected ? #303d2b : #29312b;
-                Text { text: root.symbol; color: Palette.accent; font-size: 24px; horizontal-alignment: center; vertical-alignment: center; }
+                width: 38px; height: 38px; border-radius: 9px;
+                background: root.connected ? #2f3d2a : Palette.raised;
+                Text { text: root.symbol; color: root.connected ? Palette.accent : Palette.muted; font-size: 20px; horizontal-alignment: center; vertical-alignment: center; }
             }
             VerticalLayout {
-                Text { text: root.title; color: Palette.ink; font-size: 17px; font-weight: 600; }
-                Text { text: root.subtitle; color: Palette.muted; font-size: 12px; }
+                spacing: 2px;
+                Text { text: root.title; color: Palette.ink; font-size: 16px; font-weight: 600; }
+                Text { text: root.requirement; color: Palette.muted; font-size: 12px; }
             }
         }
-        Text { text: root.device == "" ? "No device connected" : root.device; color: root.connected ? Palette.ink : Palette.muted; font-size: 15px; overflow: elide; }
-        HorizontalLayout {
-            alignment: start; spacing: 6px;
-            Text { text: root.metric; color: root.connected ? Palette.ink : #6b786d; font-size: 32px; font-weight: 600; }
-            Text { text: root.unit; color: Palette.muted; font-size: 12px; vertical-alignment: bottom; }
+        VerticalLayout {
+            spacing: 4px;
+            Text {
+                text: root.device == "" ? "No device" : root.device;
+                color: root.connected ? Palette.ink : Palette.muted;
+                font-size: 15px; font-weight: root.connected ? 600 : 400; overflow: elide;
+            }
+            HorizontalLayout {
+                spacing: 6px; alignment: start;
+                Rectangle { width: 7px; height: 7px; border-radius: 4px; background: root.connected ? Palette.good : Palette.faint; }
+                Text { text: root.status; color: root.connected ? Palette.good : Palette.muted; font-size: 12px; overflow: elide; vertical-alignment: center; }
+            }
         }
-        HorizontalLayout {
-            spacing: 8px;
-            Rectangle { width: 7px; height: 7px; border-radius: 4px; background: root.connected ? Palette.green : #77847a; }
-            Text { text: root.status; color: root.connected ? Palette.green : Palette.muted; font-size: 12px; overflow: elide; }
+        // A fixed-height slot keeps both cards the same shape whether or not a device is paired.
+        Rectangle {
+            height: 48px;
+            if root.connected: HorizontalLayout {
+                alignment: start; spacing: 6px;
+                Text { text: root.metric; color: Palette.ink; font-size: 38px; font-weight: 600; vertical-alignment: bottom; }
+                VerticalLayout { alignment: end; padding-bottom: 8px; Caption { text: root.unit; } }
+            }
+            // A named device that is not connected yet is mid-connection.
+            if !root.connected && root.device != "": Pulse { x: 0px; width: parent.width; y: (parent.height - self.height) / 2; }
+            if !root.connected && root.device == "": Text {
+                x: 0px; width: parent.width;
+                text: root.hint; color: Palette.muted; font-size: 13px; wrap: word-wrap; vertical-alignment: center;
+            }
         }
+        @children
+        Rectangle { vertical-stretch: 1; min-height: 0px; }
         HorizontalLayout {
-            spacing: 8px;
-            ActionButton { label: root.connected ? "Change device" : "Find device"; activated => { root.select(); } }
-            if root.connected: ActionButton { label: "Disconnect"; activated => { root.disconnect(); } }
+            spacing: 8px; alignment: start;
+            ActionButton { label: root.connected ? "Change device" : "Find device"; primary: !root.connected; activated => { root.select(); } }
+            if root.connected: ActionButton { label: "Disconnect"; quiet: true; activated => { root.disconnect(); } }
         }
     }
 }
 
+component MiniMetric inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <bool> active;
+    spacing: 4px;
+    Caption { text: root.label; }
+    Text { text: root.value; color: root.active ? Palette.ink : Palette.muted; font-size: 15px; font-weight: 600; }
+}
+
 export component AppWindow inherits Window {
     title: "Undertrained Indoor";
-    preferred-width: 1200px;
-    preferred-height: 820px;
-    min-width: 1000px;
-    min-height: 760px;
+    preferred-width: 1180px;
+    preferred-height: 800px;
+    min-width: 880px;
+    min-height: 620px;
     background: Palette.background;
     default-font-family: "DejaVu Sans";
     default-font-size: 14px;
@@ -121,16 +360,29 @@ export component AppWindow inherits Window {
     in-out property <string> message: "";
     in-out property <bool> demo: false;
     in-out property <bool> scanning: false;
-    in-out property <bool> picker-open: false;
+    in-out property <bool> picker-open <=> Overlay.open;
     in-out property <int> picker-role: 0;
-    in-out property <string> bluetooth-status: "Checking Bluetooth";
+    // 0 = devices, 1 = workouts.
+    in-out property <int> screen: 0;
+    in-out property <[WorkoutRow]> workouts;
+    in-out property <int> workouts-total: 0;
+    in-out property <string> workout-query: "";
+    in-out property <bool> workouts-loading: false;
+    in-out property <bool> workouts-loaded: false;
+    // 0 none, 1 session expired, 2 server has no workout API, 3 network, 4 unreadable reply.
+    in-out property <int> workouts-error: 0;
+    in-out property <string> workouts-notice: "";
+    // True only with a verified account session; browser links depend on it.
+    in-out property <bool> session-live: false;
+    in-out property <string> bluetooth-status: "Bluetooth not checked";
+    in-out property <bool> bluetooth-ok: true;
     in-out property <[NearbyDevice]> nearby;
     in-out property <bool> trainer-connected: false;
     in-out property <bool> hr-connected: false;
     in-out property <string> trainer-name: "";
     in-out property <string> hr-name: "";
-    in-out property <string> trainer-status: "Required for your setup";
-    in-out property <string> hr-status: "Optional";
+    in-out property <string> trainer-status: "Not connected";
+    in-out property <string> hr-status: "Not connected";
     in-out property <string> power: "—";
     in-out property <string> cadence: "—";
     in-out property <string> heart-rate: "—";
@@ -146,198 +398,434 @@ export component AppWindow inherits Window {
     callback disconnect-device(int);
     callback save-setup();
     callback close-picker();
+    callback navigate(int);
+    callback refresh-workouts();
+    callback filter-workouts(string);
+    callback open-workout(string);
+    callback create-workout();
 
     VerticalLayout {
         padding: 0px; spacing: 0px;
         Rectangle {
-            height: 86px;
-            background: Palette.background;
+            height: 68px;
             HorizontalLayout {
-                padding-left: 36px; padding-right: 36px; padding-top: 22px; padding-bottom: 22px;
-                spacing: 14px;
+                padding-left: 32px; padding-right: 32px;
+                spacing: 12px;
                 Rectangle {
-                    width: 38px; height: 38px; border-radius: 10px; background: Palette.accent;
-                    Text { text: "u"; color: #172215; font-size: 31px; font-weight: 800; horizontal-alignment: center; vertical-alignment: center; }
+                    width: 30px; height: 30px; y: (parent.height - self.height) / 2; border-radius: 8px; background: Palette.accent;
+                    Text { text: "u"; color: Palette.accent-ink; font-size: 24px; font-weight: 800; horizontal-alignment: center; vertical-alignment: center; }
                 }
-                Text { text: "undertrained"; color: Palette.ink; font-size: 23px; font-weight: 700; vertical-alignment: center; }
-                Text { text: "INDOOR"; color: Palette.accent; font-size: 10px; font-weight: 700; vertical-alignment: center; }
+                Text { text: "undertrained"; color: Palette.ink; font-size: 19px; font-weight: 700; vertical-alignment: center; }
+                Caption { text: "INDOOR"; color: Palette.accent; vertical-alignment: center; }
+                if root.demo: Rectangle {
+                    y: (parent.height - self.height) / 2;
+                    height: 24px; width: demo-tag.preferred-width + 20px;
+                    border-radius: 12px; border-width: 1px; border-color: Palette.accent;
+                    demo-tag := Caption { text: "DEMO MODE"; color: Palette.accent; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                if root.logged-in: Rectangle { width: 12px; }
+                if root.logged-in: NavTab { label: "Devices"; active: root.screen == 0; activated => { root.navigate(0); } }
+                if root.logged-in: NavTab { label: "Workouts"; active: root.screen == 1; activated => { root.navigate(1); } }
                 Rectangle { horizontal-stretch: 1; }
-                if root.logged-in: Text { text: root.demo ? "PREVIEW MODE" : root.rider-name; color: Palette.muted; vertical-alignment: center; }
-                if root.logged-in: ActionButton { label: root.demo ? "Exit preview" : "Sign out"; activated => { root.sign-out(); } }
-                if !root.logged-in: Text { text: "YOUR SPACE. YOUR PACE."; color: Palette.muted; font-size: 11px; vertical-alignment: center; }
+                if root.logged-in && !root.demo: Text { text: root.rider-name; color: Palette.muted; font-size: 13px; vertical-alignment: center; }
+                if root.logged-in: ActionButton {
+                    y: (parent.height - self.height) / 2;
+                    label: root.demo ? "Exit demo" : "Sign out"; quiet: true; compact: true;
+                    activated => { root.sign-out(); }
+                }
+                if !root.logged-in: Text { text: "Early access"; color: Palette.faint; font-size: 12px; vertical-alignment: center; }
             }
         }
         Rectangle { height: 1px; background: Palette.border; }
 
         if !root.logged-in: HorizontalLayout {
-            padding: 36px; spacing: 54px;
+            padding: 32px; spacing: 40px;
             Rectangle {
                 horizontal-stretch: 1;
-                min-width: 400px;
-                border-radius: 18px;
-                background: #222e25;
+                min-width: 380px;
+                border-radius: 16px;
+                background: #1a221c;
                 VerticalLayout {
-                    padding: 36px; spacing: 20px;
-                    Text { text: "THE INDOOR CHAPTER"; color: Palette.accent; font-size: 11px; font-weight: 700; }
-                    Text { text: "Good rides\nstart here."; color: Palette.ink; font-size: 52px; font-weight: 700; }
-                    Text { text: "A little space. A home trainer.\nTime for yourself on the bike."; color: #b9c7b8; font-size: 17px; }
-                    Rectangle { vertical-stretch: 1; min-height: 30px; }
-                    // An original interval silhouette, rendered entirely by Slint.
+                    padding: 32px; spacing: 16px;
+                    Text { text: "Ride inside."; color: Palette.ink; font-size: 44px; font-weight: 700; }
+                    HorizontalLayout {
+                        // The trailing spacer keeps the wrap width from capping the window width.
+                        Text {
+                            text: "Pair a smart trainer and a heart-rate strap over Bluetooth, then save the setup for next time.";
+                            color: #b9c7b8; font-size: 15px; wrap: word-wrap; max-width: 400px;
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                    }
+                    Rectangle { vertical-stretch: 1; min-height: 16px; }
+                    // An interval silhouette drawn with native rectangles. It grows with the window
+                    // so the card never shows a dead zone between the copy and the chart.
                     Rectangle {
-                        height: 150px;
+                        vertical-stretch: 4; min-height: 120px; max-height: 300px;
                         HorizontalLayout {
-                            spacing: 7px;
-                            for h in [25, 38, 54, 80, 105, 66, 105, 66, 105, 66, 105, 80, 54, 38]: Rectangle {
+                            spacing: 6px;
+                            for h in [22, 34, 48, 72, 96, 58, 96, 58, 96, 58, 96, 72, 48, 34]: Rectangle {
                                 horizontal-stretch: 1;
-                                min-width: 12px;
+                                min-width: 10px;
                                 Rectangle {
                                     y: parent.height - self.height;
                                     width: parent.width;
-                                    height: h * 1px;
-                                    border-radius: 5px;
-                                    background: h >= 100 ? Palette.accent : #60754d;
+                                    height: parent.height * h / 100;
+                                    border-radius: 4px;
+                                    background: h >= 90 ? Palette.accent : #56693f;
                                 }
                             }
                         }
                     }
-                    Rectangle { height: 1px; background: #536048; }
-                    HorizontalLayout {
-                        Text { text: "Less setup. More pedaling."; color: Palette.ink; font-size: 13px; }
-                        Text { text: "01 / CONNECT"; color: Palette.accent; font-size: 10px; horizontal-alignment: right; }
-                    }
+                    Rectangle { height: 1px; background: #33402f; }
+                    Caption { text: "FTMS  ·  CYCLING POWER  ·  HEART RATE"; color: #8a9a86; overflow: elide; }
                 }
             }
             VerticalLayout {
-                width: 386px; alignment: center; spacing: 20px;
-                Text { text: "WELCOME BACK"; color: Palette.accent; font-size: 11px; font-weight: 700; }
-                Text { text: "Make yourself\nat home."; color: Palette.ink; font-size: 38px; font-weight: 600; }
-                Text { text: "Sign in with your Undertrained account,\nthen connect your trainer and sensors."; color: Palette.muted; font-size: 14px; }
-                Rectangle { height: 10px; }
+                width: 360px; alignment: center; spacing: 14px;
+                Text { text: "Sign in"; color: Palette.ink; font-size: 26px; font-weight: 600; }
+                Text {
+                    text: "Use your Undertrained account. Strava sign-in opens in your browser, and this window picks up the session when you return.";
+                    color: Palette.muted; font-size: 13px; wrap: word-wrap;
+                }
+                Rectangle { height: 4px; }
+                Caption { text: "SERVER"; }
+                TextField {
+                    label: "Undertrained server address";
+                    text <=> root.server-url;
+                    enabled: !root.signing-in;
+                    placeholder: "https://your-undertrained-server";
+                    accepted => { if !root.signing-in { root.sign-in(root.server-url); } }
+                }
+                Text { text: "HTTPS, or HTTP for localhost only."; color: Palette.faint; font-size: 12px; }
+                Rectangle { height: 4px; }
                 ActionButton {
-                    label: root.signing-in ? "Waiting for browser…" : "Continue with Undertrained  →";
+                    label: root.signing-in ? "Waiting for the browser…" : "Sign in with Undertrained";
                     primary: true; enabled: !root.signing-in;
                     activated => { root.sign-in(root.server-url); }
                 }
-                Text { text: "Strava sign-in opens in your browser.\nReturn here when you're done."; color: Palette.muted; font-size: 12px; }
-                if root.signing-in: ActionButton { label: "Cancel sign-in"; activated => { root.cancel-sign-in(); } }
-                if root.auth-message != "": Text { text: root.auth-message; color: #efb59c; wrap: word-wrap; font-size: 12px; }
-                Rectangle { height: 1px; background: Palette.border; }
-                Text { text: "Undertrained server"; color: Palette.muted; font-size: 12px; }
-                LineEdit { text <=> root.server-url; enabled: !root.signing-in; placeholder-text: "https://your-undertrained-server"; }
-                Text { text: "Use the address of your Undertrained instance."; color: Palette.muted; font-size: 11px; }
+                if root.signing-in: Pulse { }
+                if root.signing-in: HorizontalLayout {
+                    spacing: 12px;
+                    Text { text: "Finish in the browser, then come back here."; color: Palette.muted; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
+                    ActionButton { label: "Cancel"; quiet: true; compact: true; activated => { root.cancel-sign-in(); } }
+                }
+                if root.auth-message != "": Notice { text: root.auth-message; }
                 Rectangle { height: 8px; }
-                ActionButton { label: "Explore with demo devices"; enabled: !root.signing-in; activated => { root.preview(); } }
-                Text { text: "Preview only. No account or hardware needed."; color: Palette.muted; font-size: 11px; }
+                Rectangle { height: 1px; background: Palette.border; }
+                Rectangle { height: 8px; }
+                ActionButton { label: "Try the demo"; enabled: !root.signing-in; activated => { root.preview(); } }
+                Text { text: "A simulated trainer and strap. No account, no hardware, nothing saved."; color: Palette.faint; font-size: 12px; wrap: word-wrap; }
             }
         }
 
-        if root.logged-in: VerticalLayout {
-            padding: 36px; spacing: 22px;
+        if root.logged-in && root.screen == 0: VerticalLayout {
+            padding: 32px; spacing: 20px;
             HorizontalLayout {
+                spacing: 24px;
                 VerticalLayout {
-                    spacing: 9px;
-                    Text { text: "01  ACCOUNT     /     02  DEVICES"; color: Palette.accent; font-size: 11px; font-weight: 600; }
-                    Text { text: "Let's get connected."; color: Palette.ink; font-size: 34px; font-weight: 600; }
-                    Text { text: "Wake your trainer with a few pedal strokes. We'll take it from there."; color: Palette.muted; font-size: 13px; }
+                    spacing: 6px;
+                    Text { text: "Device setup"; color: Palette.ink; font-size: 28px; font-weight: 600; }
+                    Text { text: "Pedal a few strokes to wake the trainer, then find it below. Saved devices are marked in the list."; color: Palette.muted; font-size: 13px; wrap: word-wrap; }
                 }
                 Rectangle { horizontal-stretch: 1; }
-                Text { text: root.demo ? "●  Simulated Bluetooth" : "●  " + root.bluetooth-status; color: Palette.green; font-size: 12px; vertical-alignment: center; }
+                HorizontalLayout {
+                    spacing: 8px; alignment: end;
+                    Rectangle {
+                        y: (parent.height - self.height) / 2;
+                        width: 8px; height: 8px; border-radius: 4px;
+                        background: root.demo ? Palette.accent : root.bluetooth-ok ? Palette.good : Palette.warn;
+                    }
+                    Text {
+                        text: root.demo ? "Simulated Bluetooth" : root.bluetooth-status;
+                        color: root.demo ? Palette.accent : root.bluetooth-ok ? Palette.good : Palette.warn;
+                        font-size: 12px; vertical-alignment: center;
+                    }
+                }
             }
             HorizontalLayout {
-                spacing: 18px;
+                spacing: 16px; vertical-stretch: 0;
                 SensorCard {
-                    horizontal-stretch: 1; title: "Smart trainer"; subtitle: "POWER + RESISTANCE"; symbol: "ϟ";
+                    horizontal-stretch: 3; title: "Smart trainer"; requirement: "Required"; symbol: "ϟ";
+                    hint: "Bluetooth FTMS trainers, or Cycling Power meters as read-only.";
                     connected: root.trainer-connected; device: root.trainer-name; status: root.trainer-status;
                     metric: root.power; unit: "WATTS";
                     select => { root.search(0); }
                     disconnect => { root.disconnect-device(0); }
+                    HorizontalLayout {
+                        spacing: 28px; alignment: start;
+                        MiniMetric { label: "CADENCE"; value: root.trainer-connected ? root.cadence + " rpm" : "—"; active: root.trainer-connected; }
+                        MiniMetric { label: "RESISTANCE CONTROL"; value: root.resistance; active: root.trainer-connected; }
+                    }
                 }
                 SensorCard {
-                    horizontal-stretch: 1; title: "Heart rate"; subtitle: "OPTIONAL SENSOR"; symbol: "♡";
+                    horizontal-stretch: 2; title: "Heart rate"; requirement: "Optional"; symbol: "♡";
+                    hint: "Any Bluetooth heart-rate strap or watch broadcast.";
                     connected: root.hr-connected; device: root.hr-name; status: root.hr-status;
                     metric: root.heart-rate; unit: "BPM";
                     select => { root.search(1); }
                     disconnect => { root.disconnect-device(1); }
                 }
             }
-            Rectangle {
-                height: 96px; background: #19201b; border-radius: 10px;
-                HorizontalLayout {
-                    padding: 22px; spacing: 26px;
-                    VerticalLayout { spacing: 8px; Text { text: "CADENCE"; color: Palette.muted; font-size: 10px; } Text { text: root.cadence + " rpm"; color: Palette.ink; font-size: 19px; } }
-                    Rectangle { width: 1px; background: Palette.border; }
-                    VerticalLayout { spacing: 8px; Text { text: "RESISTANCE CONTROL"; color: Palette.muted; font-size: 10px; } Text { text: root.resistance; color: Palette.ink; font-size: 15px; } }
-                    Rectangle { horizontal-stretch: 1; }
-                    Text { text: "One trainer, one connection.\nAvailable readings appear automatically."; color: Palette.muted; font-size: 12px; vertical-alignment: center; }
+            if root.help-open: Rectangle {
+                border-radius: 10px; background: Palette.panel; border-width: 1px; border-color: Palette.border;
+                VerticalLayout {
+                    padding: 18px; spacing: 8px;
+                    Text { text: "If a device does not show up"; color: Palette.ink; font-size: 14px; font-weight: 600; }
+                    Text {
+                        text: "Plug the trainer in and pedal to wake it. Moisten the strap contacts and wear it. Turn Bluetooth on, close other training apps that may hold the connection, then search again. Devices that omit their service in advertisements are not listed.";
+                        color: Palette.muted; font-size: 13px; wrap: word-wrap;
+                    }
                 }
             }
-            if root.message != "": Text { text: root.message; color: #efb59c; wrap: word-wrap; font-size: 12px; }
+            // The dialog shows the same message while it is open.
+            if root.message != "" && !root.picker-open: Notice { text: root.message; }
             Rectangle { vertical-stretch: 1; min-height: 0px; }
             HorizontalLayout {
-                spacing: 18px;
+                spacing: 16px;
                 VerticalLayout {
-                    spacing: 7px;
-                    Text { text: root.setup-saved ? "Your setup is saved." : root.trainer-connected ? "Your trainer is connected." : "Connect your trainer to finish setup."; color: Palette.ink; font-size: 15px; }
-                    Text { text: root.setup-saved ? "You're set for the next visit. Workout sessions are coming next." : "Heart rate is optional. Your device choices stay on this computer."; color: Palette.muted; font-size: 12px; }
+                    spacing: 4px; alignment: center;
+                    Text {
+                        text: root.setup-saved ? "Setup saved." : root.trainer-connected ? "Trainer connected." : "Connect a trainer to finish.";
+                        color: Palette.ink; font-size: 15px; font-weight: 600;
+                    }
+                    Text {
+                        text: root.setup-saved ? "These devices are remembered on this computer. Workouts arrive in a later release." : "Heart rate is optional. Choices are stored on this computer only.";
+                        color: Palette.muted; font-size: 12px; wrap: word-wrap;
+                    }
                 }
                 Rectangle { horizontal-stretch: 1; }
-                ActionButton { label: "Connection help"; activated => { root.help-open = !root.help-open; } }
-                ActionButton { label: root.setup-saved ? "Setup saved ✓" : "Save device setup  →"; primary: true; enabled: root.trainer-connected; activated => { root.save-setup(); } }
-            }
-            if root.help-open: Text {
-                text: "Plug in your trainer and pedal to wake it. Wear and moisten your heart-rate strap.\nTurn Bluetooth on, then close other apps that may already be connected. Try searching again.";
-                color: Palette.muted; font-size: 12px; wrap: word-wrap;
+                ActionButton {
+                    y: (parent.height - self.height) / 2;
+                    label: root.help-open ? "Hide help" : "Connection help"; quiet: true;
+                    activated => { root.help-open = !root.help-open; }
+                }
+                ActionButton {
+                    y: (parent.height - self.height) / 2;
+                    label: root.setup-saved ? "Setup saved" : "Save device setup"; primary: true; enabled: root.trainer-connected;
+                    activated => { root.save-setup(); }
+                }
             }
         }
-        Rectangle {
-            height: 42px;
+
+        if root.logged-in && root.screen == 1: VerticalLayout {
+            padding: 32px; spacing: 16px;
             HorizontalLayout {
-                padding-left: 36px; padding-right: 36px;
-                Text { text: "BUILT FOR THE RIDE INSIDE"; color: #77847b; font-size: 9px; }
-                Text { text: "Undertrained Indoor  /  Early access"; color: #77847b; font-size: 10px; horizontal-alignment: right; }
+                spacing: 24px;
+                VerticalLayout {
+                    spacing: 6px;
+                    Text { text: root.demo ? "Sample workouts" : "Workouts"; color: Palette.ink; font-size: 28px; font-weight: 600; }
+                    Text {
+                        text: root.demo
+                            ? "Made-up workouts to show the layout. They belong to no account."
+                            : "Your cycling workouts from Undertrained. This list is read-only; creating and editing happen on the website.";
+                        color: Palette.muted; font-size: 13px; wrap: word-wrap;
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                HorizontalLayout {
+                    spacing: 8px; alignment: end;
+                    if !root.demo: ActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: !root.workouts-loading ? "Refresh" : root.workouts-total > 0 ? "Refreshing…" : "Loading…"; quiet: true;
+                        enabled: !root.workouts-loading && root.workouts-error != 1;
+                        activated => { root.refresh-workouts(); }
+                    }
+                    if root.session-live: ActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: "New workout in browser";
+                        activated => { root.create-workout(); }
+                    }
+                }
+            }
+            if root.demo: Notice { info: true; text: "Demo mode. Nothing here was loaded from a server, and browser links are switched off."; }
+            if root.workouts-notice != "": Notice { text: root.workouts-notice; }
+            // A refresh that failed keeps the previous rows and says so.
+            if root.workouts-error != 0 && root.workouts-total > 0: HorizontalLayout {
+                spacing: 12px;
+                Notice {
+                    horizontal-stretch: 1;
+                    text: root.workouts-error == 2
+                        ? "The server stopped answering the workout API. Showing the list from the last successful load."
+                        : root.workouts-error == 4
+                        ? "The refresh reply could not be read. Showing the list from the last successful load."
+                        : "Could not reach Undertrained to refresh. Showing the list from the last successful load.";
+                }
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                TextField {
+                    width: 300px;
+                    label: "Search workouts by name";
+                    text <=> root.workout-query;
+                    placeholder: "Search by name";
+                    enabled: root.workouts-total > 0;
+                    edited => { root.filter-workouts(root.workout-query); }
+                }
+                Text {
+                    text: root.workouts-total == 0 ? ""
+                        : root.workouts.length == root.workouts-total ? root.workouts-total + (root.workouts-total == 1 ? " workout" : " workouts")
+                        : root.workouts.length + " of " + root.workouts-total;
+                    color: Palette.muted; font-size: 13px; vertical-alignment: center;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                if root.workouts-loading && root.workouts-total > 0: Pulse { width: 120px; y: (parent.height - self.height) / 2; }
+            }
+            Rectangle {
+                vertical-stretch: 1;
+                if root.workouts-loading && root.workouts-total == 0: VerticalLayout {
+                    alignment: center; spacing: 14px;
+                    HorizontalLayout { alignment: center; Pulse { width: 240px; } }
+                    Text { text: "Loading your workouts…"; color: Palette.muted; font-size: 13px; horizontal-alignment: center; }
+                }
+                if !root.workouts-loading && root.workouts-error == 1 && root.workouts-total == 0: StatePanel {
+                    title: "Your session has expired";
+                    detail: "Sign in again to load your workouts. Browser links stay off until then.";
+                    ActionButton { label: "Sign in again"; primary: true; activated => { root.sign-out(); } }
+                }
+                if !root.workouts-loading && root.workouts-error == 2 && root.workouts-total == 0: StatePanel {
+                    title: "This server has no workout API yet";
+                    detail: "Update the Undertrained backend to the release that adds desktop workouts, then try again.";
+                    ActionButton { label: "Try again"; activated => { root.refresh-workouts(); } }
+                }
+                if !root.workouts-loading && root.workouts-error == 3 && root.workouts-total == 0: StatePanel {
+                    title: "Could not reach Undertrained";
+                    detail: "Check your connection and the server address, then try again.";
+                    ActionButton { label: "Try again"; primary: true; activated => { root.refresh-workouts(); } }
+                }
+                if !root.workouts-loading && root.workouts-error == 4 && root.workouts-total == 0: StatePanel {
+                    title: "Unexpected reply from the server";
+                    detail: "The workout list could not be read. Try again, or update the server if this keeps happening.";
+                    ActionButton { label: "Try again"; activated => { root.refresh-workouts(); } }
+                }
+                if !root.workouts-loading && root.workouts-error == 0 && root.workouts-loaded && root.workouts-total == 0: StatePanel {
+                    title: "No cycling workouts yet";
+                    detail: "Workouts you create on the Undertrained website appear here.";
+                    if root.session-live: ActionButton { label: "New workout in browser"; primary: true; activated => { root.create-workout(); } }
+                }
+                if root.workouts-total > 0 && root.workouts.length == 0: StatePanel {
+                    title: "No workouts match \"" + root.workout-query + "\"";
+                    detail: "Search matches any part of the name.";
+                    ActionButton { label: "Clear search"; activated => { root.workout-query = ""; root.filter-workouts(""); } }
+                }
+                if root.workouts.length > 0: ScrollView {
+                    VerticalLayout {
+                        spacing: 8px; alignment: start;
+                        for workout in root.workouts: Rectangle {
+                            height: 72px; border-radius: 8px; background: Palette.raised; border-width: 1px; border-color: Palette.border;
+                            HorizontalLayout {
+                                padding: 14px; padding-left: 18px; padding-right: 14px; spacing: 20px;
+                                VerticalLayout {
+                                    horizontal-stretch: 1; spacing: 4px; alignment: center;
+                                    Text { text: workout.name; color: Palette.ink; font-size: 15px; font-weight: 600; overflow: elide; }
+                                    Text { text: workout.summary; color: Palette.muted; font-size: 12px; overflow: elide; }
+                                }
+                                ProfileChart { width: 150px; y: (parent.height - self.height) / 2; steps: workout.profile; }
+                                VerticalLayout {
+                                    width: 118px; spacing: 4px; alignment: center;
+                                    Text { text: workout.duration; color: Palette.ink; font-size: 14px; font-weight: 600; horizontal-alignment: right; }
+                                    Text { text: workout.tss; color: Palette.muted; font-size: 12px; horizontal-alignment: right; }
+                                }
+                                if root.session-live: ActionButton {
+                                    y: (parent.height - self.height) / 2;
+                                    label: "Open in browser"; quiet: true; compact: true;
+                                    activated => { root.open-workout(workout.id); }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
     if root.picker-open: Rectangle {
-        background: #000000b0;
+        background: #000000b8;
         TouchArea { clicked => { root.close-picker(); } }
+        dialog-keys := FocusScope {
+            init => { self.focus(); }
+            key-pressed(event) => {
+                if event.text == Key.Escape { root.close-picker(); return accept; }
+                return reject;
+            }
+        }
         Rectangle {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
-            width: 560px; height: 510px;
-            background: Palette.panel; border-radius: 16px; border-width: 1px; border-color: #52604f;
+            width: min(560px, parent.width - 48px);
+            height: min(520px, parent.height - 48px);
+            background: Palette.panel; border-radius: 14px; border-width: 1px; border-color: #46534a;
             TouchArea { }
             VerticalLayout {
-                padding: 28px; spacing: 18px;
+                padding: 24px; spacing: 12px;
                 HorizontalLayout {
-                    Text { text: root.picker-role == 0 ? "Find your trainer" : "Find your heart-rate sensor"; color: Palette.ink; font-size: 23px; font-weight: 600; }
-                    ActionButton { label: "Close"; activated => { root.close-picker(); } }
+                    spacing: 12px;
+                    Text {
+                        text: root.picker-role == 0 ? "Find your trainer" : "Find a heart-rate sensor";
+                        color: Palette.ink; font-size: 20px; font-weight: 600; vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    ActionButton { label: "Close"; quiet: true; compact: true; in-dialog: true; activated => { root.close-picker(); } }
                 }
-                Text { text: root.scanning ? "Searching nearby over Bluetooth…" : "Select a device to connect."; color: Palette.muted; font-size: 13px; }
+                Text {
+                    text: root.scanning ? "Searching nearby Bluetooth devices…" : root.nearby.length == 0 ? "Search finished." : "Choose a device to connect.";
+                    color: Palette.muted; font-size: 13px;
+                }
+                if root.scanning: Pulse { }
+                if !root.scanning: Rectangle { height: 3px; }
                 ScrollView {
                     VerticalLayout {
-                        spacing: 10px;
+                        spacing: 8px; alignment: start;
                         for device in root.nearby: Rectangle {
-                            height: 84px; border-radius: 9px; background: #283229;
+                            height: 68px; border-radius: 8px; background: Palette.raised; border-width: 1px; border-color: device.saved ? #4c6a4a : Palette.border;
                             HorizontalLayout {
-                                padding: 14px; spacing: 12px;
+                                padding: 14px; padding-left: 16px; spacing: 14px;
+                                SignalBars { y: (parent.height - self.height) / 2; level: device.signal-level; }
                                 VerticalLayout {
-                                    spacing: 7px;
-                                    Text { text: device.name; color: Palette.ink; font-size: 15px; font-weight: 600; overflow: elide; }
-                                    Text { text: device.detail + "  ·  " + device.signal; color: Palette.muted; font-size: 11px; overflow: elide; }
+                                    spacing: 4px; alignment: center;
+                                    HorizontalLayout {
+                                        spacing: 8px; alignment: start;
+                                        Text { text: device.name; color: Palette.ink; font-size: 15px; font-weight: 600; overflow: elide; vertical-alignment: center; }
+                                        if device.saved: Rectangle {
+                                            height: 20px; width: saved-tag.preferred-width + 14px; border-radius: 10px; background: #2f3d2a;
+                                            saved-tag := Text { text: "Saved"; color: Palette.accent; font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                                        }
+                                    }
+                                    Text { text: device.detail + "  ·  " + device.signal; color: Palette.muted; font-size: 12px; overflow: elide; }
                                 }
-                                ActionButton { label: "Connect"; primary: true; activated => { root.choose(device.id, root.picker-role); } }
+                                ActionButton {
+                                    y: (parent.height - self.height) / 2;
+                                    label: "Connect"; primary: true; compact: true; in-dialog: true;
+                                    activated => { root.choose(device.id, root.picker-role); }
+                                }
                             }
                         }
                         if root.nearby.length == 0: VerticalLayout {
-                            padding-top: 35px; spacing: 14px;
-                            Text { text: "No devices found yet"; color: Palette.ink; font-size: 19px; horizontal-alignment: center; }
-                            Text { text: "Wake your device and keep it nearby.\nMake sure another app isn't using it."; color: Palette.muted; font-size: 13px; horizontal-alignment: center; }
+                            padding-top: 40px; spacing: 10px;
+                            Text {
+                                text: root.scanning ? "Listening for " + (root.picker-role == 0 ? "trainers" : "heart-rate sensors") + "…" : "No " + (root.picker-role == 0 ? "trainer" : "heart-rate sensor") + " found";
+                                color: Palette.ink; font-size: 17px; font-weight: 600; horizontal-alignment: center;
+                            }
+                            Text {
+                                text: root.scanning
+                                    ? "Wake the device and keep it within a few meters."
+                                    : "Wake the device, close other training apps that may be holding it, and search again.";
+                                color: Palette.muted; font-size: 13px; horizontal-alignment: center; wrap: word-wrap;
+                            }
                         }
                     }
                 }
-                if root.message != "": Text { text: root.message; color: #efb59c; wrap: word-wrap; font-size: 12px; }
-                ActionButton { label: root.scanning ? "Searching…" : "Search again"; enabled: !root.scanning; activated => { root.search(root.picker-role); } }
+                if root.message != "": Notice { text: root.message; }
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text {
+                        text: root.picker-role == 0 ? "Read-only power meters are listed but cannot take resistance commands." : "Sensors already used by another app stay hidden.";
+                        color: Palette.faint; font-size: 12px; wrap: word-wrap; vertical-alignment: center;
+                    }
+                    ActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: root.scanning ? "Searching…" : "Search again"; enabled: !root.scanning; in-dialog: true;
+                        activated => { root.search(root.picker-role); }
+                    }
+                }
             }
         }
     }

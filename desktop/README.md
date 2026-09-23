@@ -4,6 +4,8 @@ A native desktop companion for home-trainer cycling, built with Rust and Slint. 
 
 ![Login](docs/screenshots/login.png)
 ![Device setup](docs/screenshots/devices.png)
+![Device picker](docs/screenshots/device-picker.png)
+![Workouts](docs/screenshots/workouts.png)
 
 ## This first version
 
@@ -14,9 +16,10 @@ A native desktop companion for home-trainer cycling, built with Rust and Slint. 
 - Read the FTMS feature flags to distinguish advertised ERG support from a read-only connection.
 - Show connection failures, disconnected devices, weak signal and stale measurements.
 - Save device choices locally and identify them in subsequent searches.
-- Explore the interface with clearly labeled demo devices, without signing in or saving simulated preferences.
+- List the account's cycling workouts, read-only, with duration, estimated TSS, summary and an intensity profile. Search by name, refresh on demand, and open a workout or the "new workout" page on the Undertrained website in the system browser.
+- Explore the interface with clearly labeled demo devices and sample workouts, without signing in or saving simulated preferences.
 
-This is the account and device-setup milestone. It does **not** start workouts, send resistance commands, perform calibration, or record rides. Separate cadence sensors, automatic reconnection, and automatic re-pairing of saved devices are not implemented yet. Devices that omit supported service UUIDs from advertisements may not appear. Hardware compatibility requires testing on actual trainers; the initial validation used software tests and simulated devices.
+This is the account, device-setup and workout-library milestone. It does **not** start workouts, send resistance commands, perform calibration, record rides, or create and edit workouts inside the desktop app. Separate cadence sensors, automatic reconnection, and automatic re-pairing of saved devices are not implemented yet. Devices that omit supported service UUIDs from advertisements may not appear. Hardware compatibility requires testing on actual trainers; the initial validation used software tests and simulated devices.
 
 ## Run
 
@@ -25,7 +28,7 @@ Install stable Rust with [rustup](https://rustup.rs/).
 Linux build dependencies on Ubuntu/Debian:
 
 ```sh
-sudo apt-get install build-essential pkg-config libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-dev
+sudo apt-get install build-essential pkg-config libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-0
 cargo run --locked
 ```
 
@@ -36,6 +39,7 @@ macOS requires Xcode Command Line Tools. Use `scripts/bundle-macos.sh` to create
 ```sh
 cargo run --locked -- --demo
 cargo run --locked -- --demo-connected
+cargo run --locked -- --demo-workouts
 ```
 
 The normal launch opens the login screen. Enter your Undertrained server's origin, or set it before launch:
@@ -52,6 +56,8 @@ The companion change is [Undertrained PR #90](https://github.com/flaviendelangle
 
 Deploy that change and apply its migration before using real sign-in. Existing browser login stays Strava-based. No Strava client secret is included in the desktop application. Demo mode works without the backend.
 
+The workout list needs one more backend endpoint, `GET /api/desktop/workouts`, which returns the signed-in athlete's cycling workouts. That change is [Undertrained PR #91](https://github.com/flaviendelangle/undertrained/pull/91), a separate follow-up to the merged authentication PR. Until a server has it, the Workouts screen reports "This server has no workout API yet" and everything else keeps working. The desktop app never sends the session token to the browser: workout links open plain `/workouts/{id}` and `/workouts/new` pages, and the website handles its own login.
+
 See [authentication](docs/authentication.md) for the contract and [design notes](docs/design.md) for the pairing-screen research.
 
 ## Development
@@ -63,16 +69,19 @@ cargo test --locked
 cargo run --locked -- --smoke-test
 ```
 
-The smoke test exercises the actual Slint callbacks for demo login, role-filtered discovery, pairing, replacing a device, saving setup, disconnecting, and leaving preview. On headless Linux, prefix it with `xvfb-run -a` and set `SLINT_BACKEND=winit-software`.
+The smoke test exercises the actual Slint callbacks for demo login, role-filtered discovery, pairing, replacing a device, saving setup, switching to the workout list and searching it, returning to devices with pairings intact, disconnecting, and leaving the demo. On headless Linux, prefix it with `xvfb-run -a` and set `SLINT_BACKEND=winit-software`.
 
 To capture the actual native window, without desktop decorations:
 
 ```sh
 UNDERTRAINED_SCREENSHOT=login.png cargo run --locked
 UNDERTRAINED_SCREENSHOT=devices.png cargo run --locked -- --demo-connected
+UNDERTRAINED_SCREENSHOT=devices-empty.png cargo run --locked -- --demo
+UNDERTRAINED_SCREENSHOT=device-picker.png cargo run --locked -- --demo-picker
+UNDERTRAINED_SCREENSHOT=workouts.png cargo run --locked -- --demo-workouts
 ```
 
-Capture mode skips restoring credentials, saves a PNG after rendering, and exits. Add `--demo-picker` for the device picker. No webview or web assets are used.
+Capture mode skips restoring credentials, saves a PNG after rendering, and exits. Add `UNDERTRAINED_WINDOW_SIZE=880x620` to capture at the smallest supported window; it only applies in capture mode. No webview or web assets are used.
 
 ## Structure
 
@@ -81,6 +90,7 @@ Capture mode skips restoring credentials, saves a PNG after rendering, and exits
 - `src/ble.rs`: Bluetooth ownership, discovery, connections and subscriptions.
 - `src/model.rs`: protocol data decoding and malformed-packet tests.
 - `src/auth.rs`: browser authorization, loopback callback, session exchange and keyring storage.
+- `src/workouts.rs`: read-only workout fetch, request generations and name search, independent of the UI.
 - `src/store.rs`: local device preferences.
 
 This repository is private and does not grant a redistribution license. Slint and other dependencies have their own licensing terms; review those when preparing distribution.

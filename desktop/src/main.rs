@@ -3,8 +3,11 @@ mod ble;
 mod model;
 mod smoke;
 mod store;
+mod workouts;
 
 use crate::model::{Capabilities, Device};
+use crate::workouts::{LoadError, Workout};
+use anyhow::Context as _;
 use slint::{ComponentHandle, ModelRc, Timer, TimerMode, VecModel};
 use std::{
     cell::RefCell,
@@ -23,6 +26,252 @@ struct State {
     auth_generation: u64,
     last_sample: [Option<Instant>; 2],
     selected: [Option<String>; 2],
+    library: workouts::Library,
+    workout_job: Option<tokio::task::JoinHandle<()>>,
+}
+
+type WorkoutResult = Result<Vec<Workout>, LoadError>;
+
+/// Forget every outstanding workout request. Used on sign-out, demo entry and account change.
+fn clear_library(state: &mut State) {
+    if let Some(job) = state.workout_job.take() {
+        job.abort();
+    }
+    state.library.clear();
+}
+
+/// Start one request for the signed-in account, or fill the demo samples without any network.
+fn start_workout_fetch(
+    ui: &AppWindow,
+    state: &Rc<RefCell<State>>,
+    handle: &tokio::runtime::Handle,
+    events: &mpsc::UnboundedSender<(u64, WorkoutResult)>,
+) {
+    {
+        let mut state = state.borrow_mut();
+        if ui.get_demo() {
+            let generation = state.library.begin();
+            state.library.finish(generation, Ok(demo_workouts()));
+        } else {
+            let Some(session) = state.session.clone() else {
+                return;
+            };
+            if let Some(job) = state.workout_job.take() {
+                job.abort();
+            }
+            let generation = state.library.begin();
+            let events = events.clone();
+            state.workout_job = Some(handle.spawn(async move {
+                let result = workouts::fetch(&session).await;
+                let _ = events.send((generation, result));
+            }));
+        }
+    }
+    ui.set_workouts_notice("".into());
+    workout_rows(ui, &state.borrow());
+}
+
+fn format_duration(seconds: u32) -> String {
+    let minutes = seconds.div_ceil(60).max(1);
+    match (minutes / 60, minutes % 60) {
+        (0, m) => format!("{m} min"),
+        (h, 0) => format!("{h} h"),
+        (h, m) => format!("{h} h {m:02} min"),
+    }
+}
+
+/// The chart is about 150px wide, so more bars than this would be thinner than a pixel.
+const MAX_PROFILE_BARS: usize = 64;
+
+fn profile_step(share: f64, percent: Option<f64>) -> ProfileStep {
+    ProfileStep {
+        share: share as f32,
+        // 150% of FTP fills the bar; anything above is clipped.
+        intensity: percent.map_or(0.0, |p| (p / 150.0).clamp(0.05, 1.0) as f32),
+        free: percent.is_none(),
+    }
+}
+
+/// Bars whose widths always add up to the whole workout. Short profiles keep every step;
+/// long ones are resampled into equal-time buckets holding the time-weighted mean intensity.
+fn profile_bars(profile: &[(u32, Option<f64>)]) -> Vec<ProfileStep> {
+    let total: u64 = profile.iter().map(|(d, _)| u64::from(*d)).sum();
+    if total == 0 {
+        return vec![profile_step(1.0, None)];
+    }
+    if profile.len() <= MAX_PROFILE_BARS {
+        return profile
+            .iter()
+            .filter(|(seconds, _)| *seconds > 0)
+            .map(|(seconds, percent)| profile_step(f64::from(*seconds) / total as f64, *percent))
+            .collect();
+    }
+    let bucket = total as f64 / MAX_PROFILE_BARS as f64;
+    let mut bars = Vec::with_capacity(MAX_PROFILE_BARS);
+    let mut index = 0;
+    let mut remaining = f64::from(profile[0].0);
+    let mut position = 0.0;
+    for number in 0..MAX_PROFILE_BARS {
+        let end = if number + 1 == MAX_PROFILE_BARS {
+            total as f64
+        } else {
+            (number + 1) as f64 * bucket
+        };
+        let start = position;
+        let mut weighted = 0.0;
+        let mut targeted = 0.0;
+        while position < end && index < profile.len() {
+            let take = remaining.min(end - position);
+            if let Some(percent) = profile[index].1 {
+                weighted += percent * take;
+                targeted += take;
+            }
+            position += take;
+            remaining -= take;
+            if remaining <= 0.0 {
+                index += 1;
+                remaining = profile.get(index).map_or(0.0, |(d, _)| f64::from(*d));
+            }
+        }
+        let percent = (targeted > 0.0).then(|| weighted / targeted);
+        bars.push(profile_step((position - start) / total as f64, percent));
+    }
+    bars
+}
+
+fn workout_rows(ui: &AppWindow, state: &State) {
+    let library = &state.library;
+    let query = ui.get_workout_query();
+    let rows: Vec<WorkoutRow> = library
+        .filtered(&query)
+        .into_iter()
+        .map(|w| {
+            let profile = profile_bars(&w.profile);
+            WorkoutRow {
+                id: w.id.to_string().into(),
+                name: w.name.clone().into(),
+                duration: format_duration(w.duration_seconds).into(),
+                tss: w
+                    .estimated_tss
+                    .map_or("No TSS estimate".to_string(), |t| {
+                        format!("{} TSS", t.round() as i64)
+                    })
+                    .into(),
+                summary: w.summary.clone().into(),
+                profile: ModelRc::new(VecModel::from(profile)),
+            }
+        })
+        .collect();
+    ui.set_workouts(ModelRc::new(VecModel::from(rows)));
+    ui.set_workouts_total(library.workouts.len() as i32);
+    ui.set_workouts_loading(library.loading);
+    ui.set_workouts_loaded(library.loaded);
+    ui.set_workouts_error(match library.error {
+        None => 0,
+        Some(LoadError::Unauthorized) => 1,
+        Some(LoadError::Unavailable) => 2,
+        Some(LoadError::Network) => 3,
+        Some(LoadError::InvalidResponse) => 4,
+    });
+}
+
+/// Made-up workouts for demo mode. Never used as a fallback for a failed request.
+fn demo_workouts() -> Vec<Workout> {
+    fn sample(
+        id: i64,
+        name: &str,
+        tss: Option<f64>,
+        summary: &str,
+        profile: Vec<(u32, Option<f64>)>,
+    ) -> Workout {
+        Workout {
+            id,
+            name: name.into(),
+            duration_seconds: profile.iter().map(|(d, _)| d).sum(),
+            estimated_tss: tss,
+            summary: summary.into(),
+            profile,
+        }
+    }
+    let easy = |s| (s, Some(50.0));
+    vec![
+        sample(
+            1,
+            "Sweet spot 3 × 12",
+            Some(72.0),
+            "Warm-up, then 3 × 12 min at 90% with 4 min easy between",
+            vec![
+                (600, Some(55.0)),
+                (720, Some(90.0)),
+                easy(240),
+                (720, Some(90.0)),
+                easy(240),
+                (720, Some(90.0)),
+                (360, Some(45.0)),
+            ],
+        ),
+        sample(
+            2,
+            "VO2 max 5 × 3",
+            Some(78.0),
+            "5 × 3 min at 118% with 3 min recovery",
+            vec![
+                (900, Some(55.0)),
+                (180, Some(118.0)),
+                easy(180),
+                (180, Some(118.0)),
+                easy(180),
+                (180, Some(118.0)),
+                easy(180),
+                (180, Some(118.0)),
+                easy(180),
+                (180, Some(118.0)),
+                (600, Some(45.0)),
+            ],
+        ),
+        sample(
+            3,
+            "Threshold 2 × 20",
+            Some(88.0),
+            "2 × 20 min at 100% with 5 min easy between",
+            vec![
+                (900, Some(55.0)),
+                (1200, Some(100.0)),
+                easy(300),
+                (1200, Some(100.0)),
+                (600, Some(45.0)),
+            ],
+        ),
+        sample(
+            4,
+            "Endurance 90",
+            Some(65.0),
+            "Steady 90 min at 65%",
+            vec![easy(600), (4200, Some(65.0)), easy(600)],
+        ),
+        sample(
+            5,
+            "Openers",
+            Some(35.0),
+            "Race-week activation with 3 × 1 min at 110%",
+            vec![
+                (600, Some(55.0)),
+                (60, Some(110.0)),
+                easy(120),
+                (60, Some(110.0)),
+                easy(120),
+                (60, Some(110.0)),
+                easy(600),
+            ],
+        ),
+        sample(
+            6,
+            "Free ride 45",
+            None,
+            "No targets. Ride as you like for 45 min",
+            vec![(2700, None)],
+        ),
+    ]
 }
 
 enum AuthEvent {
@@ -49,6 +298,7 @@ fn cancel_auth(state: &mut State) {
 
 fn device_rows(ui: &AppWindow, state: &State) {
     let role = ui.get_picker_role();
+    let demo = ui.get_demo();
     let rows: Vec<_> = state
         .devices
         .iter()
@@ -72,41 +322,37 @@ fn device_rows(ui: &AppWindow, state: &State) {
             } else {
                 "Power meter · read only"
             };
-            let suffix: String =
+            // The tail of the platform id tells two same-named devices apart.
+            // Demo ids are made up, so showing part of them would only confuse.
+            let suffix: String = if demo {
+                String::new()
+            } else {
                 d.id.chars()
                     .rev()
                     .take(6)
                     .collect::<Vec<_>>()
                     .into_iter()
                     .rev()
-                    .collect();
+                    .collect()
+            };
+            let (signal, signal_level) = match d.rssi {
+                Some(r) if r >= -65 => ("Strong signal", 3),
+                Some(r) if r >= -80 => ("Fair signal", 2),
+                Some(_) => ("Weak signal", 1),
+                None => ("Signal unknown", 0),
+            };
             NearbyDevice {
                 id: d.id.clone().into(),
                 name: d.name.clone().into(),
-                detail: format!(
-                    "{}{} · {}",
-                    if saved.as_ref() == Some(&d.id) {
-                        "Saved · "
-                    } else {
-                        ""
-                    },
-                    kind,
-                    suffix
-                )
+                detail: if suffix.is_empty() {
+                    kind.to_string()
+                } else {
+                    format!("{kind} · {suffix}")
+                }
                 .into(),
-                signal: d
-                    .rssi
-                    .map(|r| {
-                        if r >= -65 {
-                            "Strong signal"
-                        } else if r >= -80 {
-                            "Fair signal"
-                        } else {
-                            "Weak signal"
-                        }
-                    })
-                    .unwrap_or("Signal unknown")
-                    .into(),
+                signal: signal.into(),
+                signal_level,
+                saved: saved.as_ref() == Some(&d.id),
             }
         })
         .collect();
@@ -150,7 +396,7 @@ fn disconnected(ui: &AppWindow, role: usize) {
     } else {
         ui.set_hr_connected(false);
         ui.set_hr_name("".into());
-        ui.set_hr_status("Optional".into());
+        ui.set_hr_status("Not connected".into());
         ui.set_heart_rate("—".into());
     }
 }
@@ -199,7 +445,10 @@ fn main() -> anyhow::Result<()> {
         auth_generation: 0,
         last_sample: [None, None],
         selected: [None, None],
+        library: workouts::Library::default(),
+        workout_job: None,
     }));
+    let (workout_events, mut workout_receiver) = mpsc::unbounded_channel::<(u64, WorkoutResult)>();
     let (commands, receiver) = mpsc::unbounded_channel();
     let (events, mut event_receiver) = mpsc::unbounded_channel();
     let worker = runtime.spawn(ble::run(receiver, events));
@@ -286,6 +535,12 @@ fn main() -> anyhow::Result<()> {
             ui.set_logged_in(false); ui.set_demo(false); ui.set_picker_open(false);
             ui.set_signing_in(false); ui.set_auth_message("".into()); ui.set_message("".into());
             state.borrow_mut().selected = [None, None];
+            clear_library(&mut state.borrow_mut());
+            ui.set_session_live(false);
+            ui.set_screen(0);
+            ui.set_workout_query("".into());
+            ui.set_workouts_notice("".into());
+            workout_rows(&ui, &state.borrow());
         });
     }
     {
@@ -293,12 +548,103 @@ fn main() -> anyhow::Result<()> {
         let state = state.clone();
         ui.on_preview(move || {
             cancel_auth(&mut state.borrow_mut());
+            clear_library(&mut state.borrow_mut());
             let ui = weak.unwrap();
             ui.set_demo(true);
             ui.set_logged_in(true);
+            ui.set_session_live(false);
+            ui.set_screen(0);
             ui.set_rider_name("Demo rider".into());
+            ui.set_workout_query("".into());
+            ui.set_workouts_notice("".into());
             state.borrow_mut().devices = demo_devices();
+            workout_rows(&ui, &state.borrow());
         });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        let handle = runtime.handle().clone();
+        let events = workout_events.clone();
+        ui.on_navigate(move |screen| {
+            let ui = weak.unwrap();
+            ui.set_screen(screen);
+            // Load once when the library is first opened; refresh is explicit after that.
+            let untouched = {
+                let state = state.borrow();
+                !state.library.loaded && !state.library.loading && state.library.error.is_none()
+            };
+            if screen == 1 && untouched {
+                start_workout_fetch(&ui, &state, &handle, &events);
+            }
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        let handle = runtime.handle().clone();
+        let events = workout_events.clone();
+        ui.on_refresh_workouts(move || {
+            let ui = weak.unwrap();
+            if ui.get_demo() || state.borrow().library.loading {
+                return;
+            }
+            start_workout_fetch(&ui, &state, &handle, &events);
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_filter_workouts(move |query| {
+            let ui = weak.unwrap();
+            if ui.get_workout_query() != query {
+                ui.set_workout_query(query);
+            }
+            workout_rows(&ui, &state.borrow());
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        let open_in_browser = move |id: Option<slint::SharedString>| {
+            let ui = weak.unwrap();
+            let state = state.borrow();
+            let result = (|| {
+                if ui.get_demo() || !ui.get_session_live() {
+                    anyhow::bail!("Browser links need a signed-in account session.");
+                }
+                let session = state
+                    .session
+                    .as_ref()
+                    .context("Browser links need a signed-in account session.")?;
+                let id = match id {
+                    Some(id) => {
+                        let id: i64 = id
+                            .parse()
+                            .context("That workout could not be identified.")?;
+                        if !state.library.workouts.iter().any(|w| w.id == id) {
+                            anyhow::bail!(
+                                "That workout is no longer in your library. Refresh the list."
+                            );
+                        }
+                        Some(id)
+                    }
+                    None => None,
+                };
+                let url = workouts::web_url(&session.origin, id)?;
+                open::that(&url).context("Could not open your browser")
+            })();
+            ui.set_workouts_notice(
+                match result {
+                    Ok(()) => String::new(),
+                    Err(error) => error.to_string(),
+                }
+                .into(),
+            );
+        };
+        let open_existing = open_in_browser.clone();
+        ui.on_open_workout(move |id| open_existing(Some(id)));
+        ui.on_create_workout(move || open_in_browser(None));
     }
     {
         let weak = ui.as_weak();
@@ -405,10 +751,9 @@ fn main() -> anyhow::Result<()> {
     }
 
     let args: Vec<_> = std::env::args().collect();
-    if args
-        .iter()
-        .any(|a| a == "--demo" || a == "--demo-connected" || a == "--demo-picker")
-    {
+    if args.iter().any(|a| {
+        a == "--demo" || a == "--demo-connected" || a == "--demo-picker" || a == "--demo-workouts"
+    }) {
         ui.invoke_preview();
         if args.iter().any(|a| a == "--demo-connected") {
             ui.invoke_choose("demo-trainer".into(), 0);
@@ -416,6 +761,9 @@ fn main() -> anyhow::Result<()> {
         }
         if args.iter().any(|a| a == "--demo-picker") {
             ui.invoke_search(0);
+        }
+        if args.iter().any(|a| a == "--demo-workouts") {
+            ui.invoke_navigate(1);
         }
     } else if std::env::var_os("UNDERTRAINED_SCREENSHOT").is_none()
         && !args.iter().any(|a| a == "--smoke-test")
@@ -439,10 +787,21 @@ fn main() -> anyhow::Result<()> {
     let timer = Timer::default();
     let weak = ui.as_weak();
     let timer_state = state.clone();
+    let timer_handle = runtime.handle().clone();
     timer.start(TimerMode::Repeated, Duration::from_millis(100), move || {
         let Some(ui) = weak.upgrade() else {
             return;
         };
+        while let Ok((generation, result)) = workout_receiver.try_recv() {
+            let expired = matches!(result, Err(LoadError::Unauthorized));
+            // Only the latest request for the current account may touch the library.
+            if timer_state.borrow_mut().library.finish(generation, result) {
+                if expired {
+                    ui.set_session_live(false);
+                }
+                workout_rows(&ui, &timer_state.borrow());
+            }
+        }
         while let Ok((generation, event)) = auth_receiver.try_recv() {
             if generation != timer_state.borrow().auth_generation {
                 continue;
@@ -460,8 +819,15 @@ fn main() -> anyhow::Result<()> {
                         generation,
                     };
                     let _ = credentials.send((sender, Some(session.clone())));
+                    clear_library(&mut timer_state.borrow_mut());
                     timer_state.borrow_mut().session = Some(session);
-                    ui.set_bluetooth_status("Ready to search".into());
+                    ui.set_bluetooth_ok(true);
+                    ui.set_bluetooth_status("Bluetooth ready to search".into());
+                    ui.set_session_live(true);
+                    ui.set_screen(0);
+                    ui.set_workout_query("".into());
+                    ui.set_workouts_notice("".into());
+                    start_workout_fetch(&ui, &timer_state, &timer_handle, &workout_events);
                 }
                 AuthEvent::Failed(message) => {
                     ui.set_signing_in(false);
@@ -481,7 +847,10 @@ fn main() -> anyhow::Result<()> {
                 continue;
             }
             match event {
-                ble::Event::Status(status) => ui.set_bluetooth_status(status.into()),
+                ble::Event::Status(status) => {
+                    ui.set_bluetooth_ok(!status.contains("unavailable"));
+                    ui.set_bluetooth_status(status.into());
+                }
                 ble::Event::Devices(devices) => {
                     timer_state.borrow_mut().devices = devices;
                     device_rows(&ui, &timer_state.borrow());
@@ -566,6 +935,19 @@ fn main() -> anyhow::Result<()> {
         );
     }
     if let Ok(path) = std::env::var("UNDERTRAINED_SCREENSHOT") {
+        // Capture-only: UNDERTRAINED_WINDOW_SIZE=WIDTHxHEIGHT renders at another size,
+        // for checking the smallest supported window. Normal launches ignore it.
+        if let Some((width, height)) =
+            std::env::var("UNDERTRAINED_WINDOW_SIZE")
+                .ok()
+                .and_then(|size| {
+                    let (w, h) = size.split_once('x')?;
+                    Some((w.trim().parse::<u32>().ok()?, h.trim().parse::<u32>().ok()?))
+                })
+        {
+            ui.window()
+                .set_size(slint::PhysicalSize::new(width, height));
+        }
         let weak = ui.as_weak();
         screenshot_timer.start(TimerMode::SingleShot, Duration::from_secs(2), move || {
             let ui = weak.unwrap();
@@ -596,4 +978,44 @@ fn main() -> anyhow::Result<()> {
     });
     runtime.shutdown_timeout(Duration::from_secs(1));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn covers_whole_workout(bars: &[ProfileStep]) {
+        let total: f32 = bars.iter().map(|b| b.share).sum();
+        assert!((total - 1.0).abs() < 1e-3, "shares sum to {total}");
+    }
+
+    #[test]
+    fn short_profiles_keep_every_step() {
+        let bars = profile_bars(&[(600, Some(55.0)), (0, Some(200.0)), (1200, None)]);
+        assert_eq!(bars.len(), 2);
+        assert!((bars[0].share - 1.0 / 3.0).abs() < 1e-6);
+        assert!(bars[1].free);
+        covers_whole_workout(&bars);
+        assert_eq!(profile_bars(&[]).len(), 1);
+    }
+
+    #[test]
+    fn dense_profiles_are_resampled_into_a_bounded_bar_count() {
+        let dense: Vec<_> = (0..400)
+            .map(|i| (15, if i % 2 == 0 { Some(120.0) } else { Some(60.0) }))
+            .collect();
+        let bars = profile_bars(&dense);
+        assert_eq!(bars.len(), MAX_PROFILE_BARS);
+        covers_whole_workout(&bars);
+        // Each bucket averages an equal mix of 120% and 60%, so 90% of FTP.
+        assert!(
+            bars.iter()
+                .all(|b| (b.intensity - 0.6).abs() < 0.02 && !b.free)
+        );
+        let mut lopsided = vec![(3600, Some(100.0))];
+        lopsided.extend(std::iter::repeat_n((1, None), 100));
+        let bars = profile_bars(&lopsided);
+        covers_whole_workout(&bars);
+        assert!(bars[0].intensity > 0.6 && bars.last().unwrap().free);
+    }
 }

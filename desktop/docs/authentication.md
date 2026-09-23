@@ -14,6 +14,8 @@ The application is a public client. It contains no OAuth client secret and never
 
 The server stores only hashes of desktop bearer tokens. Code exchange has no client secret. Authorization codes cannot be used without the verifier, and the database delete prevents replay. Callback redirects are restricted to the exact `/callback` path on `127.0.0.1`, ports 1024–65535. Remote server connections require HTTPS; HTTP loopback supports development. HTTP redirects are disabled for native API requests.
 
-The desktop session currently grants profile access only. It is not accepted by existing tRPC routes. Future workout APIs must explicitly validate desktop sessions and enforce athlete ownership. There is no refresh-token flow in this milestone.
+The desktop session grants profile and read-only cycling workout access. It is not accepted by existing tRPC routes. `GET /api/desktop/workouts` validates the bearer session and derives athlete ownership from it. The response contains personal cycling workouts only. Requests time out after 15 seconds and do not follow redirects. There is no refresh-token flow in this milestone.
+
+Desktop authentication is in [backend PR #90](https://github.com/flaviendelangle/undertrained/pull/90). Workout access is in [backend PR #91](https://github.com/flaviendelangle/undertrained/pull/91). Deploy both changes to use the account library. Create and edit links open the server origin with `/workouts/new` or `/workouts/{id}`. They carry no desktop credential; the browser uses its own web session.
 
 The server deployment should periodically delete expired rows from `desktop_codes` and `desktop_sessions`. Session storage failure leaves a session active only in memory and is reported in the UI. Sign-out while offline cannot guarantee server revocation and reports that limitation.
