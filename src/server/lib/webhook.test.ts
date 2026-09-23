@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TRPCError } from "@trpc/server";
 
-import { activities, athletes } from "../db/schema";
+import type { Database } from "../db";
+import {
+  activities,
+  athletes,
+  desktopCodes,
+  desktopSessions,
+} from "../db/schema";
 
 // `webhook.ts` reaches for the singleton db and a pile of sync helpers at import
 // time; stub them so these cases exercise the dispatcher alone, with no database
@@ -73,7 +79,7 @@ const dbMock = {
   }),
 };
 
-const { processWebhookEvent, resetDeauthCheckThrottle } =
+const { deleteAllAthleteData, processWebhookEvent, resetDeauthCheckThrottle } =
   await import("./webhook");
 
 function deauthEvent() {
@@ -130,6 +136,16 @@ describe("deauthorization events", () => {
     stravaReplies(401);
     await processWebhookEvent(deauthEvent());
     expect(wiped()).toBe(true);
+    expect(ops).toContainEqual({
+      verb: "delete",
+      table: desktopCodes,
+      where: eq(desktopCodes.athlete, ATHLETE_ID),
+    });
+    expect(ops).toContainEqual({
+      verb: "delete",
+      table: desktopSessions,
+      where: eq(desktopSessions.athlete, ATHLETE_ID),
+    });
     // Tokens cleared too, so a stale grant can't be reused.
     expect(
       ops.some((op) => op.verb === "update" && op.table === athletes),
@@ -214,6 +230,25 @@ describe("deauthorization events", () => {
       updates: { authorized: "true" },
     });
     expect(ops).toHaveLength(0);
+  });
+});
+
+describe("account data deletion", () => {
+  it("revokes pending desktop codes and sessions for only this athlete", async () => {
+    await deleteAllAthleteData(dbMock as unknown as Database, ATHLETE_ID);
+    expect(ops).toContainEqual({
+      verb: "delete",
+      table: desktopCodes,
+      where: eq(desktopCodes.athlete, ATHLETE_ID),
+    });
+    expect(ops).toContainEqual({
+      verb: "delete",
+      table: desktopSessions,
+      where: eq(desktopSessions.athlete, ATHLETE_ID),
+    });
+    expect(
+      ops.some((op) => op.verb === "delete" && op.table === athletes),
+    ).toBe(false);
   });
 });
 

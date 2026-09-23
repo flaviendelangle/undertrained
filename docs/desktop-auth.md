@@ -18,7 +18,7 @@ The new endpoints are:
 
 Desktop sessions currently grant profile access only and are not accepted by the existing tRPC context. Future native APIs must authenticate these sessions and check athlete ownership explicitly.
 
-Codes and session tokens are stored only as hashes. The existing account deletion cascade removes their rows. Schedule routine cleanup of expired rows:
+Codes and session tokens are stored only as hashes. Account data deletion and confirmed Strava deauthorization explicitly revoke pending codes and desktop sessions, since those flows retain the athlete row. A physical athlete deletion also removes credentials through foreign-key cascades. Schedule routine cleanup of expired rows:
 
 ```sql
 DELETE FROM desktop_codes WHERE expires_at <= EXTRACT(EPOCH FROM NOW());

@@ -58,6 +58,13 @@ export default async function handler(
   const secret = process.env.NEXTAUTH_SECRET;
   if (!secret)
     return res.status(503).json({ error: "Desktop sign-in is not configured" });
+  // Chrome checks form-action on the POST's redirect as well as its target.
+  // Serialize the validated URL so raw input cannot add CSP directives.
+  const callback = new URL(redirect);
+  res.setHeader(
+    "Content-Security-Policy",
+    `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${callback.origin}${callback.pathname}; frame-ancestors 'none'`,
+  );
   if (req.method === "GET") {
     const expires = nowSeconds() + 300;
     const payload = JSON.stringify([
