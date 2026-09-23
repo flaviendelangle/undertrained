@@ -864,10 +864,12 @@ export component AppWindow inherits Window {
                     : @tr("Could not reach Undertrained to refresh. Showing the list from the last successful load.");
             }
             // The library toolbar: one search over both sections, with a count of what it shows.
-            if root.workouts-total > 0: Rectangle {
-                border-radius: 10px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+            // It sits on the page background, set apart from the sections by a hairline rule
+            // rather than a slab of its own.
+            if root.workouts-total > 0: VerticalLayout {
+                spacing: 14px;
                 HorizontalLayout {
-                    padding: 10px; padding-left: 12px; spacing: 12px;
+                    spacing: 12px;
                     TextField {
                         width: 320px;
                         label: @tr("Search workouts by name");
@@ -890,6 +892,7 @@ export component AppWindow inherits Window {
                         activated => { root.workout-query = ""; root.filter-workouts(""); }
                     }
                 }
+                Rectangle { height: 1px; background: Theme.border; }
             }
             Rectangle {
                 vertical-stretch: 1;
