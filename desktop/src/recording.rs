@@ -131,7 +131,7 @@ struct Metadata {
 enum DiskJob {
     Append(serde_json::Value, bool),
     Export(Box<Export>),
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     Replace(File),
     #[cfg(test)]
     Barrier(mpsc::Sender<()>),
@@ -215,7 +215,7 @@ impl Disk {
                         })();
                         let _ = exports.send(result.map_err(|e| format!("{e:#}")));
                     }
-                    #[cfg(test)]
+                    #[cfg(all(test, target_os = "linux"))]
                     DiskJob::Replace(file) => journal = Some(file),
                     #[cfg(test)]
                     DiskJob::Barrier(done) => { let _ = done.send(()); }
