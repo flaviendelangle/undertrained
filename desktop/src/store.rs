@@ -8,6 +8,10 @@ pub struct Settings {
     pub rider_name: String,
     pub trainer_id: Option<String>,
     pub heart_rate_id: Option<String>,
+    /// Which layout the workout board uses: 0 list, 1 featured, 2 split. Files from before
+    /// the choice existed have none and get the list.
+    #[serde(default)]
+    pub library_variant: u8,
 }
 
 pub fn path() -> Result<PathBuf> {

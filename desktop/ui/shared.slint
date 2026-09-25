@@ -1,0 +1,778 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme, State, Actions, Overlay, NearbyDevice, ProfileStep, WorkoutRow, PlanStep } from "state.slint";
+import { ActionButton, Notice, WorkoutChart, Pill, Pulse, Caption, TextField, SignalBars, StatCard, BuiltInBadge, LiveMetric, EmptyPanel, StepRow, ZoneDot } from "widgets.slint";
+
+// Blocks whose wording and states are the same on every screen: the dialogs, the upload
+// card, the notices, the sensor tiles and the library cards. The screens place and size
+// them; the copy and the state codes live here once.
+
+export global Copy {
+    // A step's role, as the website names it.
+    pure public function role-name(role: int) -> string {
+        return role == 1 ? @tr("Warm-up")
+            : role == 2 ? @tr("Work")
+            : role == 3 ? @tr("Recovery")
+            : role == 4 ? @tr("Rest")
+            : role == 5 ? @tr("Cool-down")
+            : "";
+    }
+    // "5:00 @ 90 %", "3:00 · free": a step as the plan states it, before the intensity.
+    pure public function step-words(duration: string, target: string) -> string {
+        return target != "" ? duration + " @ " + target : duration + " · " + @tr("free riding");
+    }
+    pure public function device-message(code: int) -> string {
+        return code == 1 ? @tr("That device is no longer available. Search again.")
+            : code == 2 ? @tr("That device is already assigned to the other sensor role.")
+            : code == 3 ? @tr("The connection failed. Wake the device, close other training apps, and retry.")
+            : code == 4 ? @tr("Bluetooth is switched off or blocked by the system. Turn it on in your system settings, then search again.")
+            : code == 5 ? @tr("Could not save your devices.")
+            : code == 8 ? @tr("Signed in for this visit. The system keyring is unavailable, so sign-in could not be remembered.")
+            : @tr("A sensor radio reported an error.");
+    }
+    pure public function auth-notice-text(code: int) -> string {
+        return code == 1 ? @tr("Sign-in cancelled.")
+            : code == 2 ? @tr("Signed in for this visit. The system keyring is unavailable, so sign-in could not be remembered.")
+            : code == 3 ? @tr("The system keyring could not be cleared. The server session will be revoked if reachable.")
+            : code == 4 ? @tr("Your saved session could not be verified. Sign in again when your server is available.")
+            : code == 5 ? @tr("Sign-in failed.")
+            : code == 6 ? @tr("This build has an invalid server address. Rebuild with a valid UNDERTRAINED_SERVER_URL.")
+            : @tr("Signed out locally. The server could not be reached to revoke this session.");
+    }
+    pure public function workouts-notice-text(code: int) -> string {
+        return code == 1 ? @tr("Browser links need a signed-in account session.")
+            : code == 2 ? @tr("That workout could not be identified.")
+            : code == 3 ? @tr("That workout is no longer in your library. Refresh the list.")
+            : code == 4 ? @tr("Could not open your browser.")
+            : @tr("The selected workout is no longer in your library.");
+    }
+    pure public function refresh-error-text(code: int) -> string {
+        return code == 2 ? @tr("The server stopped answering the workout API. Showing the list from the last successful load.")
+            : code == 4 ? @tr("The refresh reply could not be read. Showing the list from the last successful load.")
+            : @tr("Could not reach Undertrained to refresh. Showing the list from the last successful load.");
+    }
+    pure public function upload-error-text(code: int) -> string {
+        return code == 1 ? @tr("Your session has expired. The ride stays in the recordings folder; sign in again to upload it.")
+            : code == 2 ? @tr("This server cannot receive rides yet. Update the Undertrained backend to the release that adds desktop uploads; the ride stays on this computer.")
+            : code == 3 ? @tr("Undertrained cannot post to Strava for this account. Reconnect Strava on the Undertrained website, then try again.")
+            : code == 4 ? @tr("Could not reach Undertrained. Check your connection, then try again.")
+            : code == 5 ? @tr("Undertrained reported an error. Try again in a moment; the ride stays on this computer.")
+            : code == 6 ? @tr("Unexpected reply from the server. Try again, or update the server if this keeps happening.")
+            : code == 7 ? @tr("The ride files could not be read for upload. They stay in the recordings folder.")
+            : code == 8 ? @tr("This ride was submitted from another Undertrained account. Sign in with that account to check it.")
+            : @tr("Strava rejected this ride. The files stay on this computer.");
+    }
+    pure public function sensor-status(state: int) -> string {
+        return state == 1 ? @tr("Connecting…")
+            : state == 2 ? @tr("Connected · waiting for data")
+            : state == 3 ? @tr("Connected · receiving data")
+            : state == 4 ? @tr("Connected · no recent data")
+            : @tr("Not connected");
+    }
+    pure public function resistance-words(code: int) -> string {
+        return code == 1 ? @tr("ERG supported")
+            : code == 2 ? @tr("Read only · not confirmed")
+            : code == 3 ? @tr("Readings only over ANT+")
+            : @tr("Not checked");
+    }
+    // What resistance control is doing right now, in one line.
+    pure public function erg-status() -> string {
+        return State.ride-erg-state == 1 ? @tr("Sending {} W to the trainer…", State.ride-erg-watts)
+            : State.ride-erg-state == 4 ? @tr("Releasing the trainer…")
+            : State.ride-erg-state == 2 ? @tr("Trainer holding {} W", State.ride-erg-watts)
+            : State.ride-erg-state == 3 ? (State.ride-workout-complete ? @tr("ERG on · workout complete, no target")
+                : State.ride-phase == 2 ? @tr("ERG on · paused, no target")
+                : @tr("ERG on · free step, no target"))
+            : State.ride-erg-available ? @tr("ERG off · target shown, resistance is yours")
+            : State.trainer-ant ? @tr("ANT+ trainer · readings only, follow the target yourself")
+            : State.trainer-connected ? @tr("This trainer takes no commands · follow the target yourself")
+            : @tr("No trainer connected · follow the target yourself");
+    }
+    // What the ready screen says about the ride to come.
+    pure public function ready-notice() -> string {
+        return State.ride-guided && State.ride-test
+            ? @tr("Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the app does not detect when you stop. Finish the ride yourself once you cannot hold the target. Speed and distance are not measured.")
+            : State.ride-guided
+            ? @tr("The steps are timed from the plan and the target is shown at every moment. Resistance control (ERG) stays off until you switch it on during the ride, and needs a Bluetooth trainer that supports it. No FTP result is computed. Speed and distance are not measured.")
+            : State.ride-has-workout
+            ? @tr("This workout came from a server without step data, so its profile is shown for reference only: steps are not timed and nothing is sent to the trainer. Update the Undertrained backend to ride it step by step.")
+            : @tr("Readings only: nothing is sent to the trainer. Speed and distance are not measured.");
+    }
+    pure public function erg-availability() -> string {
+        return State.ride-erg-available ? @tr("ERG available on {}", State.trainer-name)
+            : State.trainer-ant ? @tr("ANT+ trainer · follow the targets yourself")
+            : State.trainer-connected ? @tr("No trainer control · follow the targets yourself")
+            : @tr("No trainer connected");
+    }
+    // The header chip that leads back to a ride from any screen.
+    pure public function ride-chip-label(narrow: bool) -> string {
+        return State.ride-active ? (narrow ? State.ride-elapsed : @tr("Recording {}", State.ride-elapsed))
+            : State.ride-uploading ? @tr("Uploading…")
+            : State.ride-saving ? @tr("Saving ride…")
+            : State.ride-phase == 3 && State.ride-save-state == 1 ? @tr("Ride summary")
+            : State.ride-phase == 3 ? @tr("Unsaved ride")
+            : @tr("Ready to ride");
+    }
+    pure public function ride-chip-color() -> color {
+        // Red while recording, yellow when paused or not safe on disk, green once the ride
+        // is saved and the theme color while something is in flight.
+        return State.ride-phase == 1 ? Theme.heart
+            : State.ride-uploading || State.ride-saving ? Theme.primary
+            : State.ride-phase == 3 && State.ride-save-state == 1 ? Theme.good
+            : State.ride-phase == 0 ? Theme.muted : Theme.pause;
+    }
+    pure public function ride-title() -> string {
+        return State.ride-has-workout ? State.ride-name : @tr("Free ride");
+    }
+    pure public function paused-words() -> string {
+        return State.ride-guided
+            ? @tr("Paused for {}. The clock and the workout step are stopped; readings keep showing what the sensors send.", State.ride-paused-for)
+            : @tr("Paused for {}. The clock is stopped; readings keep showing what the sensors send.", State.ride-paused-for);
+    }
+}
+
+// The sign-in form: the one button, the server line, the browser wait and the notices.
+export component AuthForm inherits VerticalLayout {
+    in property <bool> centered: false;
+    spacing: 12px;
+    ActionButton {
+        label: State.signing-in ? @tr("Waiting for the browser…") : @tr("Sign in with Undertrained");
+        primary: true; large: true; enabled: !State.signing-in && State.server-configured;
+        activated => { Actions.sign-in(); }
+    }
+    if State.server-configured: Text { text: @tr("Server: {}", State.server-origin); color: Theme.faint; font-size: 12px; overflow: elide; horizontal-alignment: root.centered ? center : left; }
+    if State.signing-in: Pulse { }
+    if State.signing-in: HorizontalLayout {
+        spacing: 12px;
+        Text { text: @tr("Finish in the browser, then come back here."); color: Theme.muted; font-size: 12px; wrap: word-wrap; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px; }
+        ActionButton { label: @tr("Cancel"); quiet: true; compact: true; activated => { Actions.cancel-sign-in(); } }
+    }
+    if State.auth-notice != 0: Notice { detail: State.auth-detail; text: Copy.auth-notice-text(State.auth-notice); }
+}
+
+// The device-screen message, shown on the page only while the picker is closed.
+export component DeviceMessage inherits Notice {
+    detail: State.message-detail;
+    text: Copy.device-message(State.message-code);
+}
+
+export component HelpPanel inherits Rectangle {
+    border-radius: 10px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+    VerticalLayout {
+        padding: 18px; spacing: 8px;
+        Text { text: @tr("If a device does not show up"); color: Theme.ink; font-size: 14px; font-weight: 600; }
+        Text {
+            text: @tr("Plug the trainer in and pedal to wake it. Moisten the strap contacts and wear it. Turn Bluetooth on or plug in the ANT+ stick, close other training apps that may hold the connection, then search again. Devices that omit their service in advertisements are not listed.");
+            color: Theme.muted; font-size: 13px; wrap: word-wrap;
+        }
+    }
+}
+
+// A sensor as a tile on the devices screen. role 0 is the trainer, 1 the strap. The tile
+// keeps one fixed-height slot under the device line so it never jumps when a device pairs.
+export component SensorTile inherits Rectangle {
+    in property <int> role: 0;
+    in property <bool> centered: false;
+    property <bool> trainer: root.role == 0;
+    property <int> state: trainer ? State.trainer-state : State.hr-state;
+    property <string> device: trainer ? State.trainer-name : State.hr-name;
+    property <bool> connected: state >= 2;
+    border-radius: 14px;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: connected ? Theme.primary.with-alpha(0.6) : Theme.border;
+    VerticalLayout {
+        padding: 22px;
+        spacing: 16px;
+        HorizontalLayout {
+            spacing: 12px; alignment: root.centered ? center : start;
+            Rectangle {
+                width: 42px; height: 42px; border-radius: 10px;
+                background: connected ? Theme.primary.with-alpha(0.18) : Theme.sunken;
+                Text { text: trainer ? "ϟ" : "♡"; color: connected ? Theme.primary : Theme.muted; font-size: 22px; horizontal-alignment: center; vertical-alignment: center; }
+            }
+            VerticalLayout {
+                spacing: 2px; alignment: center;
+                Text { text: trainer ? @tr("Smart trainer") : @tr("Heart rate"); color: Theme.ink; font-size: 16px; font-weight: 600; }
+                Text { text: trainer ? @tr("Required") : @tr("Optional"); color: Theme.muted; font-size: 12px; }
+            }
+        }
+        VerticalLayout {
+            spacing: 4px;
+            Text {
+                text: device == "" ? @tr("No device") : device;
+                color: connected ? Theme.ink : Theme.muted;
+                font-size: 15px; font-weight: connected ? 600 : 400; overflow: elide;
+                horizontal-alignment: root.centered ? center : left;
+            }
+            HorizontalLayout {
+                spacing: 6px; alignment: root.centered ? center : start;
+                Rectangle { y: (parent.height - self.height) / 2; width: 7px; height: 7px; border-radius: 4px; background: connected ? Theme.good : Theme.faint; }
+                Text { text: Copy.sensor-status(state); color: connected ? Theme.good : Theme.muted; font-size: 12px; overflow: elide; vertical-alignment: center; }
+            }
+        }
+        // A fixed-height slot keeps both cards the same shape whether or not a device is paired.
+        Rectangle {
+            height: 52px;
+            if connected: HorizontalLayout {
+                alignment: root.centered ? center : start; spacing: 6px;
+                Text { text: trainer ? State.power : State.heart-rate; color: Theme.ink; font-size: 40px; font-weight: 700; vertical-alignment: bottom; }
+                VerticalLayout { alignment: end; padding-bottom: 9px; Caption { text: trainer ? @tr("WATTS") : @tr("BPM"); } }
+            }
+            if state == 1: Pulse { x: 0px; width: parent.width; y: (parent.height - self.height) / 2; }
+            if state == 0: Text {
+                x: 0px; width: parent.width;
+                text: trainer ? @tr("Bluetooth FTMS trainers, ANT+ FE-C trainers, or power meters as read-only.") : @tr("Any Bluetooth or ANT+ heart-rate strap, or a watch broadcast.");
+                color: Theme.muted; font-size: 13px; wrap: word-wrap; vertical-alignment: center;
+                horizontal-alignment: root.centered ? center : left;
+            }
+        }
+        if trainer: HorizontalLayout {
+            spacing: 28px; alignment: root.centered ? center : start;
+            VerticalLayout {
+                spacing: 4px;
+                Caption { text: @tr("CADENCE"); }
+                Text { text: State.trainer-connected ? @tr("{} rpm", State.cadence) : "—"; color: State.trainer-connected ? Theme.ink : Theme.muted; font-size: 15px; font-weight: 600; }
+            }
+            VerticalLayout {
+                spacing: 4px;
+                Caption { text: @tr("RESISTANCE CONTROL"); }
+                Text { text: Copy.resistance-words(State.resistance-state); color: State.trainer-connected ? Theme.ink : Theme.muted; font-size: 15px; font-weight: 600; }
+            }
+        }
+        // Side by side, the two tiles share a height; the spacer pins both button rows to
+        // the bottom edge so they line up whatever the tiles hold above.
+        Rectangle { vertical-stretch: 1; min-height: 0px; }
+        HorizontalLayout {
+            spacing: 8px; alignment: root.centered ? center : start;
+            ActionButton { label: connected ? @tr("Change device") : @tr("Find device"); primary: !connected; activated => { Actions.search(root.role); } }
+            if connected: ActionButton { label: @tr("Disconnect"); quiet: true; activated => { Actions.disconnect-device(root.role); } }
+        }
+    }
+}
+
+// The website's library card: a tall preview on top, a compact body below. The whole card
+// selects the workout; the small button is the separate browser action.
+export component WorkoutCard inherits Rectangle {
+    in property <WorkoutRow> workout;
+    in property <bool> live;
+    in property <bool> selected: false;
+    border-radius: 10px;
+    background: card-touch.has-hover ? Theme.card.brighter(Theme.dark ? 0.06 : -0.02) : Theme.card;
+    border-width: card-focus.has-focus || root.selected ? 2px : 1px;
+    border-color: card-focus.has-focus || root.selected ? Theme.primary : Theme.border;
+    clip: true;
+    accessible-role: button;
+    accessible-label: @tr("Select {}", root.workout.name);
+    accessible-action-default => { Actions.select-workout(root.workout.id); }
+    card-focus := FocusScope {
+        enabled: !Overlay.open;
+        key-pressed(event) => {
+            if event.text == "\n" || event.text == " " { Actions.select-workout(root.workout.id); return accept; }
+            return reject;
+        }
+    }
+    card-touch := TouchArea { mouse-cursor: pointer; clicked => { card-focus.focus(); Actions.select-workout(root.workout.id); } }
+    VerticalLayout {
+        padding: 0px; spacing: 0px;
+        Rectangle {
+            height: 118px;
+            background: Theme.sunken.with-alpha(0.3);
+            WorkoutChart { x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px; steps: root.workout.profile; }
+        }
+        Rectangle { height: 1px; background: Theme.border; }
+        HorizontalLayout {
+            padding: 12px; padding-top: 10px; spacing: 8px;
+            VerticalLayout {
+                horizontal-stretch: 1; spacing: 3px; alignment: start; min-width: 0px;
+                HorizontalLayout {
+                    spacing: 6px; alignment: start;
+                    Text { text: root.workout.name; color: Theme.ink; font-size: 14px; font-weight: 600; overflow: elide; vertical-alignment: center; }
+                    if root.workout.built-in: BuiltInBadge { y: (parent.height - self.height) / 2; }
+                }
+                Text { text: root.workout.meta; color: Theme.muted; font-size: 12px; overflow: elide; }
+                Text { text: root.workout.summary; color: Theme.faint; font-size: 12px; overflow: elide; }
+            }
+            if root.live: ActionButton {
+                y: 0px;
+                label: @tr("Open"); quiet: true; compact: true;
+                accessible-label: @tr("Open {} in browser", root.workout.name);
+                activated => { Actions.open-workout(root.workout.id); }
+            }
+        }
+    }
+}
+
+// A responsive card grid without a layout model: columns from the available width, cards
+// placed by index. The height follows the row count so it scrolls as content.
+export component WorkoutGrid inherits Rectangle {
+    in property <[WorkoutRow]> cards;
+    in property <bool> live;
+    in property <length> min-card: 260px;
+    in property <length> max-card: 440px;
+    in property <int> max-columns: 4;
+    property <length> gap: 16px;
+    property <length> card-height: 206px;
+    property <int> columns: max(1, min(root.max-columns, floor((self.width + gap) / (root.min-card + gap))));
+    property <length> card-width: min(root.max-card, (self.width - (columns - 1) * gap) / columns);
+    property <float> rows: ceil(cards.length / columns);
+    height: rows * card-height + max(0, rows - 1) * gap;
+    for card[i] in root.cards: WorkoutCard {
+        x: mod(i, root.columns) * (root.card-width + root.gap);
+        y: floor(i / root.columns) * (root.card-height + root.gap);
+        width: root.card-width;
+        height: root.card-height;
+        workout: card;
+        live: root.live;
+        selected: State.screen == 2 && State.ride-phase == 0 && State.selected-workout.id == card.id;
+    }
+}
+
+// The library's load, error and empty states when there are no rows to show. Whichever
+// applies fills the space; a search that hits nothing is its own state.
+export component LibraryState inherits VerticalLayout {
+    property <bool> nothing: State.workouts-total == 0;
+    alignment: center; spacing: 8px; padding: 24px;
+    if State.workouts-loading && nothing: VerticalLayout {
+        alignment: center; spacing: 14px;
+        HorizontalLayout { alignment: center; Pulse { width: 240px; } }
+        Text { text: @tr("Loading your workouts…"); color: Theme.muted; font-size: 13px; horizontal-alignment: center; }
+    }
+    if !State.workouts-loading && nothing && State.workouts-error != 0: VerticalLayout {
+        alignment: center; spacing: 8px;
+        Text {
+            text: State.workouts-error == 1 ? @tr("Your session has expired")
+                : State.workouts-error == 2 ? @tr("This server has no workout API yet")
+                : State.workouts-error == 3 ? @tr("Could not reach Undertrained")
+                : @tr("Unexpected reply from the server");
+            color: Theme.ink; font-size: 17px; font-weight: 600; horizontal-alignment: center; wrap: word-wrap;
+        }
+        Text {
+            text: State.workouts-error == 1 ? @tr("Sign in again to load your workouts. Browser links stay off until then.")
+                : State.workouts-error == 2 ? @tr("Update the Undertrained backend to the release that adds desktop workouts, then try again.")
+                : State.workouts-error == 3 ? @tr("Check your connection and the server address, then try again.")
+                : @tr("The workout list could not be read. Try again, or update the server if this keeps happening.");
+            color: Theme.muted; font-size: 13px; horizontal-alignment: center; wrap: word-wrap;
+        }
+        HorizontalLayout {
+            alignment: center; padding-top: 8px;
+            if State.workouts-error == 1: ActionButton { label: @tr("Sign in again"); primary: true; activated => { Actions.sign-out(); } }
+            if State.workouts-error != 1: ActionButton { label: @tr("Try again"); primary: State.workouts-error == 3; activated => { Actions.refresh-workouts(); } }
+        }
+    }
+    if !State.workouts-loading && nothing && State.workouts-error == 0 && State.workouts-loaded: VerticalLayout {
+        alignment: center; spacing: 8px;
+        Text { text: @tr("No cycling workouts yet"); color: Theme.ink; font-size: 17px; font-weight: 600; horizontal-alignment: center; }
+        Text { text: @tr("Workouts you create on the Undertrained website appear here after a refresh."); color: Theme.muted; font-size: 13px; horizontal-alignment: center; wrap: word-wrap; }
+    }
+    if !nothing && State.workouts.length == 0 && State.built-ins.length == 0: VerticalLayout {
+        alignment: center; spacing: 8px;
+        Text { text: @tr("No workout matches this search"); color: Theme.ink; font-size: 17px; font-weight: 600; horizontal-alignment: center; }
+        Text { text: @tr("Neither your workouts nor the built-in tests match. Try a shorter name."); color: Theme.muted; font-size: 13px; horizontal-alignment: center; wrap: word-wrap; }
+        HorizontalLayout { alignment: center; padding-top: 8px; ActionButton { label: @tr("Clear search"); activated => { State.workout-query = ""; Actions.filter-workouts(""); } } }
+    }
+}
+
+// The notices a library page shows above its rows.
+export component LibraryNotices inherits VerticalLayout {
+    spacing: 12px;
+    if State.workouts-notice != 0: Notice { detail: State.workouts-notice-detail; text: Copy.workouts-notice-text(State.workouts-notice); }
+    if State.workouts-error != 0 && State.workouts-total > 0: Notice { text: Copy.refresh-error-text(State.workouts-error); }
+}
+
+// The step list of the current plan: every step with its number, the current one lit.
+export component StepList inherits VerticalLayout {
+    in property <bool> compact: false;
+    spacing: 2px; alignment: start;
+    for step[i] in State.ride-steps: StepRow {
+        step: step; number: i + 1; compact: root.compact;
+        current: State.ride-step-number == i + 1 && State.ride-active;
+        done: State.ride-workout-complete || (State.ride-step-number > i + 1);
+        role-label: Copy.role-name(step.role);
+    }
+}
+
+// The live readings on a ready screen, and whether a ride can start at all.
+export component SensorCheck inherits Rectangle {
+    // stacked spreads the three readings across the width; rows lists them one under the
+    // other, for a column too narrow to hold three captions side by side.
+    in property <bool> stacked: false;
+    in property <bool> rows: false;
+    border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+    VerticalLayout {
+        padding: 16px; spacing: 12px;
+        if !root.rows: HorizontalLayout {
+            spacing: root.stacked ? 16px : 32px; alignment: root.stacked ? space-between : start;
+            LiveMetric { label: @tr("POWER"); value: State.ride-power; unit: @tr("W"); live: State.ride-power-live; size: 28px; }
+            LiveMetric { label: @tr("HEART RATE"); value: State.ride-hr; unit: @tr("BPM"); live: State.ride-hr-live; size: 28px; tone: Theme.heart; }
+            LiveMetric { label: @tr("CADENCE"); value: State.ride-cadence; unit: @tr("RPM"); live: State.ride-cadence-live; size: 28px; }
+        }
+        if root.rows: VerticalLayout {
+            spacing: 6px;
+            for reading in [
+                { label: @tr("POWER"), value: State.ride-power, unit: @tr("W"), live: State.ride-power-live, tone: Theme.ink },
+                { label: @tr("HEART RATE"), value: State.ride-hr, unit: @tr("BPM"), live: State.ride-hr-live, tone: Theme.heart },
+                { label: @tr("CADENCE"), value: State.ride-cadence, unit: @tr("RPM"), live: State.ride-cadence-live, tone: Theme.ink },
+            ]: HorizontalLayout {
+                spacing: 10px;
+                Caption { text: reading.label; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; min-width: 0px; }
+                Text { text: reading.live ? reading.value : "—"; color: reading.live ? reading.tone : Theme.faint; font-size: 22px; font-weight: 700; vertical-alignment: center; }
+                Caption { text: reading.unit; vertical-alignment: center; min-width: 36px; }
+            }
+        }
+        Text {
+            text: State.any-sensor ? @tr("Sensors ready. Readings are recorded once per second.") : @tr("Connect a trainer or a heart-rate sensor on the Devices screen first.");
+            color: State.any-sensor ? Theme.muted : Theme.warn; font-size: 12px; wrap: word-wrap;
+        }
+    }
+}
+
+// The notices a ride shows while recording or paused.
+export component RideNotices inherits VerticalLayout {
+    spacing: 10px;
+    if State.ride-phase == 2: Notice { info: true; text: Copy.paused-words(); }
+    if State.ride-notice == 1: Notice { text: @tr("Writing the recording failed, so the ride paused itself. Free some disk space or fix the folder, then resume."); detail: State.ride-notice-detail; }
+    if State.ride-notice == 5: Notice { text: @tr("The trainer did not accept the command, so ERG control stopped. The ride keeps recording; reconnect the trainer if it stays unresponsive, then enable ERG again."); detail: State.ride-notice-detail; }
+    if State.ride-notice == 6: Notice { text: @tr("The trainer disconnected, so ERG is off. The ride keeps recording; reconnect the trainer from the Devices screen, then enable ERG again."); }
+    if State.ride-notice == 7: Notice { text: @tr("No power reading from the trainer for five seconds, so ERG control stopped. The ride keeps recording; check the trainer's link, then enable ERG again once readings are back."); }
+    if State.ride-active && !State.any-sensor: Notice { text: @tr("No sensor is connected. The ride keeps running and missing readings stay empty; reconnect from the Devices screen."); }
+    if State.ride-active && State.ride-has-workout && !State.ride-guided: Text { text: @tr("Reference only: this workout came without step data, so steps are not timed and nothing is sent to the trainer."); color: Theme.faint; font-size: 12px; wrap: word-wrap; }
+    if State.ride-active && State.ride-guided && State.ride-test: Text { text: @tr("Built-in test: no FTP result is computed and the app does not detect when you stop. Finish the ride once you cannot hold the target."); color: Theme.faint; font-size: 12px; wrap: word-wrap; }
+}
+
+// Resistance control: the rider's switch, only offered for a trainer that takes targets,
+// and the one line saying what the trainer is doing.
+export component ErgToggle inherits ActionButton {
+    label: State.ride-erg-enabled ? @tr("Turn ERG off") : @tr("Enable ERG");
+    primary: !State.ride-erg-enabled; compact: true;
+    accessible-label: State.ride-erg-enabled ? @tr("Switch resistance control off") : @tr("Switch resistance control on for this trainer");
+    activated => { Actions.set-erg(!State.ride-erg-enabled); }
+}
+
+export component ErgStatus inherits Text {
+    text: Copy.erg-status();
+    color: State.ride-erg-state == 2 ? Theme.good : Theme.muted; font-size: 12px; vertical-alignment: center; overflow: elide; min-width: 0px;
+}
+
+// Intensity in five-percent steps, and the skip. Tests keep their protocol: neither shows.
+export component IntensityControl inherits HorizontalLayout {
+    spacing: 6px;
+    Caption { text: @tr("INTENSITY"); vertical-alignment: center; }
+    ActionButton { label: "−"; quiet: true; compact: true; enabled: State.ride-bias-can-down; accessible-label: @tr("Lower the intensity by 5 percent"); activated => { Actions.adjust-bias(-1); } }
+    Text { text: State.ride-bias; color: Theme.ink; font-size: 13px; font-weight: 600; min-width: 46px; horizontal-alignment: center; vertical-alignment: center; }
+    ActionButton { label: "+"; quiet: true; compact: true; enabled: State.ride-bias-can-up; accessible-label: @tr("Raise the intensity by 5 percent"); activated => { Actions.adjust-bias(1); } }
+}
+
+export component SkipButton inherits ActionButton {
+    label: @tr("Skip step"); compact: true; activated => { Actions.skip-step(); }
+}
+
+export component CadenceCue inherits Pill {
+    text: @tr("Cadence {} rpm", State.ride-step-cadence); tone: Theme.warn; strong: State.ride-cadence-off;
+    accessible-role: text;
+    accessible-label: State.ride-cadence-off ? @tr("Cadence off the cue of {} rpm", State.ride-step-cadence) : @tr("Cadence cue {} rpm", State.ride-step-cadence);
+}
+
+// Pause or resume, and finish, as buttons or as the website's square glyphs.
+export component RideButtons inherits HorizontalLayout {
+    spacing: 10px;
+    if State.ride-phase == 1: ActionButton { label: @tr("Pause"); activated => { Actions.pause-ride(); } }
+    if State.ride-phase == 2: ActionButton { label: @tr("Resume"); primary: true; activated => { Actions.resume-ride(); } }
+    ActionButton { label: @tr("Finish ride"); quiet: true; activated => { Actions.finish-ride(); } }
+}
+
+// The summary's figures. Columns follow the available width.
+export component SummaryStats inherits Rectangle {
+    property <length> gap: 12px;
+    property <int> columns: root.width < 520px ? 2 : root.width < 760px ? 3 : 5;
+    property <length> card-width: (root.width - (columns - 1) * gap) / columns;
+    property <length> card-height: 74px;
+    property <float> rows: ceil(5 / columns);
+    height: rows * card-height + (rows - 1) * gap;
+    for stat[i] in [
+        { label: @tr("AVG POWER"), value: State.ride-avg-power },
+        { label: @tr("MAX POWER"), value: State.ride-max-power },
+        { label: @tr("AVG HEART RATE"), value: State.ride-avg-hr },
+        { label: @tr("MAX HEART RATE"), value: State.ride-max-hr },
+        { label: @tr("AVG CADENCE"), value: State.ride-avg-cadence },
+    ]: StatCard {
+        x: mod(i, root.columns) * (root.card-width + root.gap);
+        y: floor(i / root.columns) * (root.card-height + root.gap);
+        width: root.card-width; height: root.card-height;
+        label: stat.label; value: stat.value;
+    }
+}
+
+// The save, as it runs and as it ends: the ride is only in memory until it answers.
+export component SaveStatus inherits VerticalLayout {
+    spacing: 10px;
+    if State.ride-guided && State.ride-phase == 3: Text {
+        text: State.ride-workout-complete ? @tr("Workout completed.") : @tr("Workout stopped during step {} of {}.", State.ride-step-number, State.ride-plan-steps);
+        color: Theme.muted; font-size: 13px;
+    }
+    if State.ride-phase == 3 && State.ride-erg-state == 4: Text { text: @tr("Releasing the trainer…"); color: Theme.muted; font-size: 13px; }
+    if State.ride-saving: VerticalLayout {
+        spacing: 8px;
+        Pulse { }
+        Text { text: @tr("Saving the ride on this computer…"); color: Theme.muted; font-size: 13px; }
+    }
+    if State.ride-phase == 3 && State.ride-save-state == 2: Notice {
+        text: @tr("The ride could not be saved. The data is still in memory; fix the folder or free disk space, then retry.");
+        detail: State.ride-save-detail;
+    }
+    if State.ride-phase == 3 && State.ride-save-state == 2: HorizontalLayout {
+        spacing: 12px; alignment: end;
+        ActionButton { label: @tr("Retry save"); primary: true; activated => { Actions.retry-save(); } }
+    }
+}
+
+// The one action the upload card offers at each state.
+component UploadAction inherits VerticalLayout {
+    alignment: end; horizontal-stretch: 0;
+    property <bool> name-ok: Actions.name-valid(State.ride-activity-name);
+    property <bool> expired: State.ride-upload-state == 5 && State.ride-upload-error == 1;
+    if State.ride-upload-state == 0 || (State.ride-upload-state == 5 && State.ride-upload-retry): ActionButton {
+        label: State.ride-upload-state == 0 ? @tr("Upload to Strava") : @tr("Try again"); primary: true;
+        enabled: name-ok; activated => { Actions.upload-ride(); }
+    }
+    if State.ride-upload-state == 1: ActionButton { label: @tr("Uploading…"); primary: true; enabled: false; }
+    if State.ride-upload-state == 2: ActionButton { label: @tr("Open in Strava"); primary: true; activated => { Actions.open-strava(); } }
+    if State.ride-upload-state == 3: ActionButton { label: @tr("Check upload"); primary: true; activated => { Actions.upload-ride(); } }
+    if State.ride-upload-state == 4: ActionButton { label: @tr("Check Strava"); activated => { Actions.open-strava(); } }
+    if expired: ActionButton {
+        label: State.signing-in ? @tr("Waiting for the browser…") : @tr("Sign in again"); primary: true;
+        enabled: !State.signing-in && State.server-configured;
+        activated => { Actions.sign-in(); }
+    }
+}
+
+// The upload, as on the website: through the Undertrained account, and only on request.
+export component UploadCard inherits Rectangle {
+    border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+    property <bool> editable: !State.ride-upload-submitted && State.ride-upload-state != 1;
+    property <bool> name-ok: Actions.name-valid(State.ride-activity-name);
+    // An expired session is the one failure the rider fixes right here: signing in
+    // again as the same account brings the upload action back with the ride intact.
+    property <bool> expired: State.ride-upload-state == 5 && State.ride-upload-error == 1;
+    // Set by the design from the window width: an element cannot size itself from its own
+    // width inside a scroll view without a binding loop.
+    in property <bool> stacked: false;
+    VerticalLayout {
+        padding: 20px; spacing: 12px;
+        Caption { text: @tr("ACTIVITY NAME"); }
+        if !stacked: HorizontalLayout {
+            spacing: 12px;
+            TextField { text <=> State.ride-activity-name; label: @tr("Activity name"); placeholder: @tr("Name this ride"); enabled: editable; horizontal-stretch: 1; }
+            if State.ride-upload-state != 5 || State.ride-upload-retry || expired: UploadAction { }
+        }
+        if stacked: TextField { text <=> State.ride-activity-name; label: @tr("Activity name"); placeholder: @tr("Name this ride"); enabled: editable; }
+        if stacked && (State.ride-upload-state != 5 || State.ride-upload-retry || expired): HorizontalLayout { alignment: end; UploadAction { } }
+        if editable && !name-ok: Text { text: @tr("Give the ride a name of 1 to 200 characters."); color: Theme.warn; font-size: 12px; wrap: word-wrap; }
+        if State.ride-upload-state == 0 && name-ok: Text { text: @tr("Goes to Strava through your Undertrained account, and only when you choose to."); color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+        if State.ride-upload-state == 1: Pulse { }
+        if State.ride-upload-state == 1: Text { text: @tr("Sending the ride to Strava…"); color: Theme.muted; font-size: 12px; }
+        if State.ride-upload-state == 2: Notice { info: true; text: @tr("Uploaded to Strava."); }
+        if State.ride-upload-state == 3: Notice { info: true; text: @tr("Strava is still processing this ride. Check again in a moment."); }
+        if State.ride-upload-state == 4: Notice {
+            text: @tr("The ride may have reached Strava, but Undertrained did not confirm it. Check your Strava activities before uploading it again; the files stay on this computer.");
+            detail: State.ride-upload-detail;
+        }
+        if State.ride-upload-state == 5: Notice { text: Copy.upload-error-text(State.ride-upload-error); detail: State.ride-upload-detail; }
+        // The sign-in started from this card reports back here, not on the login
+        // screen the rider never sees while a ride is on screen.
+        if expired && State.signing-in: Pulse { }
+        if expired && State.signing-in: HorizontalLayout {
+            spacing: 12px;
+            Text { text: @tr("Finish in the browser, then come back here."); color: Theme.muted; font-size: 12px; wrap: word-wrap; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px; }
+            ActionButton { label: @tr("Cancel"); quiet: true; compact: true; activated => { Actions.cancel-sign-in(); } }
+        }
+        if expired && !State.signing-in && (State.auth-notice == 1 || State.auth-notice == 5): Notice {
+            text: State.auth-notice == 1 ? @tr("Sign-in cancelled. The ride is still here; sign in again when you are ready.")
+                : @tr("Sign-in failed. The ride is still here; check the browser, then sign in again.");
+            detail: State.auth-detail;
+        }
+    }
+}
+
+// Where the files went: secondary, but always reachable.
+export component FolderRow inherits VerticalLayout {
+    spacing: 10px;
+    HorizontalLayout {
+        spacing: 12px;
+        VerticalLayout {
+            spacing: 2px; alignment: center; horizontal-stretch: 1; min-width: 0px;
+            Text { text: @tr("Saved on this computer as a journal and a FIT file."); color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+            Text { text: State.ride-folder; color: Theme.faint; font-size: 11px; overflow: elide; }
+        }
+        ActionButton { label: @tr("Open recordings folder"); quiet: true; compact: true; y: (parent.height - self.height) / 2; activated => { Actions.open-ride-folder(); } }
+    }
+    if State.ride-notice == 3: Notice { text: @tr("Could not open the recordings folder."); detail: State.ride-notice-detail; }
+    if State.ride-notice == 4: Notice { text: @tr("Could not open the browser."); detail: State.ride-notice-detail; }
+}
+
+// The leave guard: a ride is being recorded and something would take the rider away.
+export component LeaveGuard inherits Rectangle {
+    background: Theme.scrim;
+    TouchArea { }
+    guard-keys := FocusScope {
+        init => { self.focus(); }
+        key-pressed(event) => {
+            if event.text == Key.Escape { Actions.keep-riding(); return accept; }
+            return reject;
+        }
+    }
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: min(480px, parent.width - 32px);
+        height: guard-layout.preferred-height;
+        background: Theme.card; border-radius: 14px; border-width: 1px; border-color: Theme.border;
+        TouchArea { }
+        guard-layout := VerticalLayout {
+            padding: 24px; spacing: 14px;
+            Text {
+                text: State.ride-active ? @tr("A ride is being recorded")
+                    : State.ride-uploading ? @tr("The ride is being uploaded")
+                    : State.ride-saving ? @tr("The ride is being saved")
+                    : @tr("This ride is not saved yet");
+                color: Theme.ink; font-size: 20px; font-weight: 600; wrap: word-wrap;
+            }
+            Text {
+                text: State.ride-active
+                    ? (State.leave-guard == 3
+                        ? @tr("Closing now would lose it. Finish the ride first, or keep recording.")
+                        : @tr("Leaving now would lose it. Finish the ride to keep it, or stay and keep recording."))
+                    : State.ride-uploading ? @tr("Wait for Strava's answer before leaving, so the result is not lost.")
+                    : State.ride-saving ? @tr("Wait for the save to finish before leaving, so the ride is not lost.")
+                    : @tr("Retry the save before leaving so the ride is not lost.");
+                color: Theme.muted; font-size: 13px; wrap: word-wrap;
+            }
+            HorizontalLayout {
+                spacing: 10px; alignment: end;
+                ActionButton { label: State.ride-active ? @tr("Keep recording") : @tr("Back to the ride"); primary: true; in-dialog: true; activated => { Actions.keep-riding(); } }
+                if State.ride-active: ActionButton { label: @tr("Finish ride"); quiet: true; in-dialog: true; activated => { Actions.finish-and-stay(); } }
+            }
+        }
+    }
+}
+
+// The device picker: one dialog for both roles, searching over both radios.
+export component DevicePicker inherits Rectangle {
+    background: Theme.scrim;
+    TouchArea { clicked => { Actions.close-picker(); } }
+    dialog-keys := FocusScope {
+        init => { self.focus(); }
+        key-pressed(event) => {
+            if event.text == Key.Escape { Actions.close-picker(); return accept; }
+            return reject;
+        }
+    }
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: min(560px, parent.width - 24px);
+        height: min(600px, parent.height - 24px);
+        background: Theme.card; border-radius: 14px; border-width: 1px; border-color: Theme.border;
+        TouchArea { }
+        VerticalLayout {
+            padding: 20px; spacing: 12px;
+            HorizontalLayout {
+                spacing: 12px;
+                Text {
+                    text: State.picker-role == 0 ? @tr("Find your trainer") : @tr("Find a heart-rate sensor");
+                    color: Theme.ink; font-size: 20px; font-weight: 600; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; min-width: 0px;
+                }
+                ActionButton { label: @tr("Close"); quiet: true; compact: true; in-dialog: true; activated => { Actions.close-picker(); } }
+            }
+            Text {
+                text: State.scanning ? @tr("Searching over Bluetooth and ANT+…")
+                    : !State.any-radio ? @tr("No radio is available.")
+                    : State.nearby.length == 0 ? @tr("Search finished.") : @tr("Choose a device to connect.");
+                color: State.scanning || State.any-radio ? Theme.muted : Theme.warn; font-size: 13px;
+            }
+            if State.scanning: Pulse { }
+            if !State.scanning: Rectangle { height: 3px; }
+            ScrollView {
+                VerticalLayout {
+                    spacing: 8px; alignment: start;
+                    for device in State.nearby: Rectangle {
+                        height: 68px; border-radius: 8px; background: Theme.dark ? Theme.raised : Theme.sunken; border-width: 1px; border-color: device.saved ? Theme.primary.with-alpha(0.6) : Theme.border;
+                        HorizontalLayout {
+                            padding: 14px; padding-left: 16px; spacing: 14px;
+                            if device.transport == 0: SignalBars { y: (parent.height - self.height) / 2; level: device.signal-level; }
+                            if device.transport == 1: Rectangle {
+                                y: (parent.height - self.height) / 2; width: 18px; height: 18px; border-radius: 4px; background: Theme.primary.with-alpha(0.18);
+                                Text { text: "A"; color: Theme.primary; font-size: 11px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            VerticalLayout {
+                                spacing: 4px; alignment: center; horizontal-stretch: 1; min-width: 0px;
+                                HorizontalLayout {
+                                    spacing: 8px; alignment: start;
+                                    Text { text: device.name; color: Theme.ink; font-size: 15px; font-weight: 600; overflow: elide; vertical-alignment: center; }
+                                    if device.saved: Rectangle {
+                                        height: 20px; width: saved-tag.preferred-width + 14px; border-radius: 10px; background: Theme.primary.with-alpha(0.18);
+                                        saved-tag := Text { text: @tr("Saved"); color: Theme.dark ? Theme.primary : Theme.primary.darker(0.1); font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                                    }
+                                }
+                                Text {
+                                    text: (device.kind == 0 ? @tr("Smart trainer") : device.kind == 1 ? @tr("Heart-rate sensor") : @tr("Power meter · read only"))
+                                        + "  ·  " + (device.transport == 1 ? @tr("ANT+ {}", device.suffix)
+                                            : device.signal-level >= 3 ? @tr("Bluetooth · strong signal · {}", device.suffix)
+                                            : device.signal-level == 2 ? @tr("Bluetooth · fair signal · {}", device.suffix)
+                                            : device.signal-level == 1 ? @tr("Bluetooth · weak signal · {}", device.suffix)
+                                            : @tr("Bluetooth · {}", device.suffix));
+                                    color: Theme.muted; font-size: 12px; overflow: elide;
+                                }
+                            }
+                            ActionButton {
+                                y: (parent.height - self.height) / 2;
+                                label: @tr("Connect"); primary: true; compact: true; in-dialog: true;
+                                activated => { Actions.choose(device.id, State.picker-role); }
+                            }
+                        }
+                    }
+                    if State.nearby.length == 0: VerticalLayout {
+                        padding-top: 40px; spacing: 10px;
+                        Text {
+                            text: State.scanning ? (State.picker-role == 0 ? @tr("Listening for trainers…") : @tr("Listening for heart-rate sensors…"))
+                                : !State.any-radio ? @tr("Bluetooth and ANT+ are unavailable")
+                                : (State.picker-role == 0 ? @tr("No trainer found") : @tr("No heart-rate sensor found"));
+                            color: Theme.ink; font-size: 17px; font-weight: 600; horizontal-alignment: center; wrap: word-wrap;
+                        }
+                        Text {
+                            text: State.scanning
+                                ? @tr("Wake the device and keep it within a few meters.")
+                                : !State.any-radio
+                                ? @tr("Turn Bluetooth on in your system settings or plug in an ANT+ stick, then search again. The app never switches a radio itself.")
+                                : @tr("Wake the device, close other training apps that may be holding it, and search again.");
+                            color: Theme.muted; font-size: 13px; horizontal-alignment: center; wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+            // Known radio conditions are worded here; unexpected ones keep their raw text, small.
+            if State.bluetooth-state == 2 && State.bluetooth-issue != 0: Text {
+                text: State.bluetooth-issue == 1 ? @tr("Bluetooth is switched off or blocked by the system.") : @tr("No Bluetooth adapter was found.");
+                color: Theme.muted; font-size: 12px; wrap: word-wrap;
+            }
+            if State.bluetooth-state == 2 && State.bluetooth-issue == 0 && State.bluetooth-detail != "": Text { text: "Bluetooth: " + State.bluetooth-detail; color: Theme.faint; font-size: 11px; wrap: word-wrap; }
+            if State.ant-state == 2 && State.ant-issue != 0: Text {
+                text: State.ant-issue == 1 ? @tr("No ANT+ USB stick was found. Plug in an ANTUSB2 or ANTUSB-m stick.") : @tr("The ANT+ USB stick is busy or its permission is denied. Close other training apps or check USB permissions.");
+                color: Theme.muted; font-size: 12px; wrap: word-wrap;
+            }
+            if State.ant-state == 2 && State.ant-issue == 0 && State.ant-detail != "": Text { text: "ANT+: " + State.ant-detail; color: Theme.faint; font-size: 11px; wrap: word-wrap; }
+            if State.message-code != 0: Notice { detail: State.message-detail; text: Copy.device-message(State.message-code); }
+            HorizontalLayout {
+                spacing: 12px;
+                Text {
+                    text: State.picker-role == 0 ? @tr("Read-only power meters are listed but cannot take resistance commands. ANT+ trainers deliver readings only.") : @tr("A Bluetooth sensor connected to another app may stay hidden. ANT+ sensors broadcast to every receiver.");
+                    color: Theme.faint; font-size: 12px; wrap: word-wrap; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px;
+                }
+                ActionButton {
+                    y: (parent.height - self.height) / 2;
+                    label: State.scanning ? @tr("Searching…") : @tr("Search again"); enabled: !State.scanning; in-dialog: true;
+                    activated => { Actions.search(State.picker-role); }
+                }
+            }
+        }
+    }
+}

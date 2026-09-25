@@ -26,6 +26,7 @@ The colors follow the Undertrained website and switch with the operating system'
 - Discover sensors over Bluetooth and ANT+ (USB stick) at the same time, each radio reporting on its own, so a switched-off Bluetooth never hides an ANT+ strap. ANT+ trainers deliver readings only; ERG control over ANT+ is not implemented.
 - Speak English and French, following the website's en-GB and fr-FR wording. The language follows the account when the server sends one, otherwise the operating system, otherwise English; it applies as soon as sign-in completes, and there is no switch in the app. Built-in workout names come from the server in that language; personal workout and device names are never translated.
 - Follow the operating system's light or dark preference with the website's own colors, and show the Undertrained icon in the window and the desktop launcher.
+- Walk one guided path, Devices › Workout › Ride, with three numbered steps in the header and one primary action per screen. The workout board comes in three layouts (list, featured, split) switchable on the page and remembered on this computer; the ride drops the chrome for a full-window HUD around a power gauge. Every window from 500 px wide up to an ultrawide monitor reflows.
 
 This is the account, device-setup, workout-library, local-recording, upload and guided-workout milestone. It does **not** compute FTP-test results or detect when a rider gives up on a ramp, control ANT+ trainers, record targets or compliance in the FIT file, perform calibration, upload anything without a click, browse earlier recordings, or create and edit workouts inside the desktop app. BLE ERG control has not been validated against a physical trainer yet. Separate cadence sensors, automatic reconnection, and automatic re-pairing of saved devices are not implemented yet. Bluetooth devices that omit supported service UUIDs from advertisements may not appear. Heart-rate reception has been verified on this computer over BLE and ANT+, including ANT+ discovery with Bluetooth disabled. Trainer hardware and USB access on macOS/Windows still need testing. See [ANT+ implementation and hardware checks](docs/ant-bridge.md) for supported sticks, profiles and limitations.
 
@@ -98,17 +99,21 @@ UNDERTRAINED_SCREENSHOT=login.png UNDERTRAINED_COLOR_SCHEME=dark cargo run --loc
 UNDERTRAINED_SCREENSHOT=login-light.png UNDERTRAINED_COLOR_SCHEME=light cargo run --locked
 ```
 
-Capture mode skips restoring credentials, saves a PNG after rendering, and exits. Three options apply only in capture mode: `UNDERTRAINED_WINDOW_SIZE=880x620` renders at the smallest supported window, `UNDERTRAINED_COLOR_SCHEME=light|dark` forces a palette instead of asking the operating system, and `UNDERTRAINED_LANGUAGE=en|fr` forces the interface language. No webview or web assets are used.
+Capture mode skips restoring credentials, saves a PNG after rendering, and exits. Four options apply only in capture mode: `UNDERTRAINED_WINDOW_SIZE=500x600` renders at the smallest supported window, `UNDERTRAINED_COLOR_SCHEME=light|dark` forces a palette instead of asking the operating system, `UNDERTRAINED_LANGUAGE=en|fr` forces the interface language, `UNDERTRAINED_VARIANT=0|1|2` renders one workout-board layout (list, featured, split) without touching the saved choice, and `UNDERTRAINED_SCREENSHOT_SCENE=login|devices|devices-empty|picker|workouts|workouts-tests|ready|ready-test|riding|paused|free|finished` fills the interface with the fixtures from `src/scenes.rs` so a screen that normally needs a session and paired hardware can be reviewed. Scenes write straight into the interface and hold the sensor mirror for the one captured frame; they are unreachable without the capture variable. `scripts/render-scenes.sh <out-dir> [WxH] [scene...]` renders a set of them under `xvfb-run`. No webview or web assets are used.
 
 ### Translations
 
 [Undertrained PR #93](https://github.com/flaviendelangle/undertrained/pull/93) exposes the account language and lets the desktop request built-in workouts in its selected locale. Until that backend change is deployed, the interface still switches languages, but built-in names follow the server account preference.
 
-Interface text is written in English inside `ui/app.slint` as `@tr("...")` and translated by gettext catalogs that Slint bundles into the binary at build time: `ui/lang/<lang>/LC_MESSAGES/undertrained-indoor.po`, keyed by the English string without a per-component context. To add or change a string, edit the Slint file, then add the `msgid` and its `msgstr` to the French catalog; plurals use `msgid_plural` with the catalog's `Plural-Forms`. Rust only formats language-dependent values (durations, meta lines, ANT+ device names) in `src/i18n.rs`, which also resolves which language applies. Raw transport and server diagnostics stay untranslated and appear as a detail line under the translated summary.
+Interface text is written in English inside the `ui/*.slint` files as `@tr("...")` and translated by gettext catalogs that Slint bundles into the binary at build time: `ui/lang/<lang>/LC_MESSAGES/undertrained-indoor.po`, keyed by the English string without a per-component context. To add or change a string, edit the Slint file, then add the `msgid` and its `msgstr` to the French catalog; plurals use `msgid_plural` with the catalog's `Plural-Forms`. Rust only formats language-dependent values (durations, meta lines, ANT+ device names) in `src/i18n.rs`, which also resolves which language applies. Raw transport and server diagnostics stay untranslated and appear as a detail line under the translated summary.
 
 ## Structure
 
-- `ui/app.slint`: native interface and reusable controls.
+- `ui/app.slint`: the window and one native accessor per state property.
+- `ui/state.slint`: the data structs, the website's palette, the `State` global Rust feeds and the `Actions` global it answers.
+- `ui/widgets.slint`, `ui/shared.slint`: reusable controls, and the blocks whose wording and states are the same on every screen (dialogs, upload, sensors, library cards, ride controls).
+- `ui/design_flow.slint`: the screens: login, devices, the workout board in its three layouts, the ride briefing, the HUD, the summary.
+- `src/scenes.rs`: capture-only fixture scenes for design review.
 - `src/main.rs`: application state, UI commands and event delivery.
 - `src/i18n.rs`: language resolution and the few language-dependent strings Rust formats.
 - `src/sensors.rs`, `src/ant.rs`: the merged Bluetooth and ANT+ discovery, and the ANT+ USB driver.

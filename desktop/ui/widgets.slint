@@ -1,0 +1,530 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme, State, Actions, Overlay, ProfileStep, ChartBin, PlanStep, WorkoutRow } from "state.slint";
+
+// Primitives the screens build from. They carry the website's palette and no state of
+// their own beyond hover and focus.
+
+export component Caption inherits Text {
+    color: Theme.muted;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+}
+
+// One button, three looks: primary (teal), secondary (raised), quiet (outline).
+export component ActionButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> primary: false;
+    in property <bool> quiet: false;
+    in property <bool> compact: false;
+    in property <bool> large: false;
+    in property <bool> enabled: true;
+    in property <bool> in-dialog: false;
+    in property <color> tone: Theme.primary;
+    callback activated();
+    height: root.compact ? 34px : root.large ? 56px : 44px;
+    min-width: max(root.compact ? 64px : 110px, button-label.preferred-width + (root.compact ? 24px : 40px));
+    border-radius: root.large ? 12px : 8px;
+    background: root.primary
+        ? (!root.enabled ? root.tone.with-alpha(0.35) : touch.has-hover ? (Theme.dark ? root.tone.brighter(0.12) : root.tone.darker(0.12)) : root.tone)
+        : root.quiet ? (touch.has-hover && root.enabled ? Theme.raised : transparent)
+        : (touch.has-hover && root.enabled ? Theme.raised : Theme.sunken);
+    border-width: root.primary ? 0px : 1px;
+    border-color: Theme.border;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.activated(); } }
+    button-label := Text {
+        text: root.label;
+        color: root.primary ? (root.enabled ? Theme.primary-ink : Theme.primary-ink.with-alpha(0.7)) : (root.enabled ? Theme.ink : Theme.faint);
+        font-size: root.compact ? 13px : root.large ? 16px : 14px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    focus := FocusScope {
+        enabled: root.enabled && (root.in-dialog || !Overlay.open);
+        key-pressed(event) => {
+            if event.text == "\n" || event.text == " " { root.activated(); return accept; }
+            return reject;
+        }
+    }
+    Rectangle {
+        border-width: focus.has-focus ? 2px : 0px;
+        border-color: root.primary ? Theme.ink : Theme.primary;
+        border-radius: root.border-radius;
+        background: transparent;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { focus.focus(); root.activated(); }
+    }
+}
+
+// A square icon button for the ride controls, like the website's HUD: pause, play, stop,
+// drawn with shapes so they read the same in every font.
+export component GlyphButton inherits Rectangle {
+    // "pause", "play" or "stop".
+    in property <string> glyph;
+    in property <string> label;
+    in property <color> tone: Theme.ink;
+    in property <bool> enabled: true;
+    in property <length> size: 48px;
+    in property <bool> filled: false;
+    callback activated();
+    property <color> ink: root.filled ? Theme.primary-ink : root.enabled ? root.tone : Theme.faint;
+    width: root.size; height: root.size; border-radius: 12px;
+    background: root.filled ? (touch.has-hover ? Theme.primary-hover : Theme.primary) : touch.has-hover && root.enabled ? Theme.raised : Theme.card;
+    border-width: root.filled ? 0px : 1px; border-color: Theme.border;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.activated(); } }
+    if root.glyph == "pause": HorizontalLayout {
+        padding: root.size * 0.32; spacing: root.size * 0.1;
+        Rectangle { border-radius: 2px; background: root.ink; }
+        Rectangle { border-radius: 2px; background: root.ink; }
+    }
+    if root.glyph == "stop": Rectangle { x: root.size * 0.32; y: root.size * 0.32; width: root.size * 0.36; height: root.size * 0.36; border-radius: 3px; background: root.ink; }
+    if root.glyph == "play": Path {
+        x: root.size * 0.34; y: root.size * 0.3; width: root.size * 0.36; height: root.size * 0.4;
+        viewbox-width: 10; viewbox-height: 10; fill: root.ink;
+        MoveTo { x: 0; y: 0; } LineTo { x: 10; y: 5; } LineTo { x: 0; y: 10; } Close { }
+    }
+    focus := FocusScope {
+        enabled: root.enabled && !Overlay.open;
+        key-pressed(event) => {
+            if event.text == "\n" || event.text == " " { root.activated(); return accept; }
+            return reject;
+        }
+    }
+    Rectangle { border-width: focus.has-focus ? 2px : 0px; border-color: Theme.primary; border-radius: root.border-radius; background: transparent; }
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
+}
+
+// A text link-style tab. The underline marks the current screen.
+export component NavTab inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    callback activated();
+    width: tab-label.preferred-width + 8px;
+    accessible-role: tab;
+    accessible-label: root.label;
+    accessible-checked: root.active;
+    accessible-action-default => { root.activated(); }
+    tab-label := Text {
+        text: root.label;
+        color: root.active || touch.has-hover ? Theme.ink : Theme.muted;
+        font-size: 14px; font-weight: 600;
+        horizontal-alignment: center; vertical-alignment: center;
+    }
+    Rectangle { y: parent.height - self.height; height: 3px; border-radius: 1px; background: root.active ? Theme.primary : transparent; }
+    focus := FocusScope {
+        enabled: !Overlay.open;
+        key-pressed(event) => {
+            if event.text == "\n" || event.text == " " { root.activated(); return accept; }
+            return reject;
+        }
+    }
+    Rectangle { y: 14px; height: parent.height - 28px; x: -6px; width: parent.width + 12px; border-width: focus.has-focus ? 2px : 0px; border-color: Theme.primary; border-radius: 6px; background: transparent; }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
+}
+
+// Errors and notices share one amber style; plain information uses the primary tone.
+// Color never carries the meaning alone. The detail line carries raw diagnostics.
+export component Notice inherits Rectangle {
+    in property <string> text;
+    in property <string> detail: "";
+    in property <bool> info: false;
+    property <color> tone: root.info ? Theme.primary : Theme.warn;
+    border-radius: 8px;
+    background: tone.with-alpha(0.12);
+    border-width: 1px;
+    border-color: tone.with-alpha(0.45);
+    HorizontalLayout {
+        padding: 12px; padding-left: 14px; spacing: 10px;
+        Rectangle { width: 3px; border-radius: 2px; background: tone; }
+        VerticalLayout {
+            spacing: 4px;
+            Text { text: root.text; color: root.info ? Theme.ink : tone; font-size: 13px; wrap: word-wrap; vertical-alignment: center; }
+            if root.detail != "": Text { text: root.detail; color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+        }
+    }
+}
+
+// A workout profile drawn the way the website's card preview draws it: one rectangle per
+// run, placed by time share and sized by percent of FTP, colored by the zone ramp. Every
+// run keeps at least a hairline so short efforts never vanish, whatever the card width.
+export component WorkoutChart inherits Rectangle {
+    in property <[ProfileStep]> steps;
+    in property <float> opacity-done: 1;
+    clip: true;
+    for step in root.steps: Rectangle {
+        x: root.width * step.start;
+        width: max(1px, root.width * step.share);
+        y: root.height - self.height;
+        height: max(1px, root.height * step.height);
+        background: Theme.zone-color(step.zone);
+    }
+}
+
+// The plan with a playhead, like the website's workout bar: what is ridden dims, the
+// current step is outlined, and the line marks the workout clock (which a skip moves and a
+// pause holds, unlike the recording's own clock). Optional levels draw the live power and
+// the target as horizontal lines across the plan, on the plan's own scale.
+export component PlanBar inherits Rectangle {
+    in property <[ProfileStep]> steps;
+    in property <float> progress;
+    in property <float> step-start;
+    in property <float> step-share;
+    in property <float> power-level: -1;
+    in property <float> target-level: -1;
+    in property <float> band-level: 0;
+    in property <bool> show-levels: false;
+    clip: true;
+    WorkoutChart { x: 0px; y: 0px; width: parent.width; height: parent.height; steps: root.steps; }
+    Rectangle { x: 0px; y: 0px; width: parent.width * min(1, max(0, root.progress)); height: parent.height; background: Theme.card.with-alpha(0.6); }
+    if root.step-share > 0: Rectangle {
+        x: parent.width * root.step-start; y: 0px;
+        width: max(2px, parent.width * root.step-share); height: parent.height;
+        border-width: 1px; border-color: Theme.ink.with-alpha(0.55); background: transparent;
+    }
+    if root.show-levels && root.target-level >= 0 && root.band-level > 0: Rectangle {
+        x: 0px; width: parent.width;
+        y: parent.height * (1 - min(1, root.target-level + root.band-level));
+        height: max(2px, parent.height * min(1, root.band-level * 2));
+        background: Theme.primary.with-alpha(0.18);
+    }
+    if root.show-levels && root.target-level >= 0: Rectangle {
+        x: 0px; width: parent.width; y: parent.height * (1 - min(1, root.target-level)) - 1px; height: 2px;
+        background: Theme.primary;
+    }
+    if root.show-levels && root.power-level >= 0: Rectangle {
+        x: 0px; width: parent.width; y: parent.height * (1 - min(1, root.power-level)) - 1.5px; height: 3px;
+        background: Theme.ink;
+    }
+    Rectangle { x: parent.width * min(1, max(0, root.progress)) - 1px; y: 0px; width: 2px; height: parent.height; background: Theme.primary; }
+}
+
+// A small tinted pill for a cue: the cadence to hold, the step's role.
+export component Pill inherits Rectangle {
+    in property <string> text;
+    in property <color> tone: Theme.muted;
+    in property <bool> strong: false;
+    height: 24px; width: pill-label.preferred-width + 18px; border-radius: 12px;
+    background: root.strong ? root.tone.with-alpha(0.16) : Theme.sunken;
+    pill-label := Text { text: root.text; color: root.strong ? root.tone : Theme.muted; font-size: 12px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+}
+
+// The ride history: power as zone-colored bars per bin, heart rate as a dotted trace.
+// Bins are laid out by index over a fixed count, so the strip scrolls as time passes and
+// stays bounded whatever the ride length. Gaps stay empty.
+export component LiveChart inherits Rectangle {
+    in property <[ChartBin]> bins;
+    in property <int> count: 300;
+    property <length> slot: root.width / max(1, root.count);
+    clip: true;
+    for bin[i] in root.bins: Rectangle {
+        x: root.slot * i;
+        y: 0px;
+        width: max(1px, root.slot);
+        height: root.height;
+        if bin.has-power: Rectangle {
+            x: 0px;
+            width: parent.width;
+            y: parent.height - self.height;
+            height: max(1px, parent.height * bin.power);
+            // Zone 0 means the account's FTP is unknown: one neutral color, no zone claim.
+            background: bin.zone == 0 ? Theme.primary.with-alpha(0.7) : Theme.zone-color(bin.zone);
+        }
+        if bin.has-hr: Rectangle {
+            x: parent.width / 2 - 1.5px;
+            y: parent.height * (1 - bin.hr) - 1.5px;
+            width: 3px; height: 3px; border-radius: 1.5px;
+            background: Theme.heart;
+        }
+    }
+}
+
+// The chart with its axis captions, as every design shows it.
+export component ChartPanel inherits Rectangle {
+    in property <string> title;
+    in property <bool> framed: true;
+    border-radius: 12px; background: root.framed ? Theme.card : transparent; border-width: root.framed ? 1px : 0px; border-color: Theme.border;
+    VerticalLayout {
+        padding: root.framed ? 14px : 0px; spacing: 6px;
+        HorizontalLayout {
+            spacing: 12px;
+            Caption { text: root.title; }
+            Rectangle { horizontal-stretch: 1; }
+            if State.ride-chart-top != "": Caption { text: State.ride-chart-top; }
+            if State.ride-chart-hr-range != "": Caption { text: State.ride-chart-hr-range; color: Theme.heart; }
+        }
+        LiveChart { vertical-stretch: 1; bins: State.ride-chart; count: State.ride-chart-bins; }
+    }
+}
+
+export component BuiltInBadge inherits Rectangle {
+    height: 18px; width: badge.preferred-width + 12px; border-radius: 4px;
+    background: Theme.primary.with-alpha(0.12);
+    badge := Text { text: @tr("Built-in"); color: Theme.dark ? Theme.primary : Theme.primary.darker(0.1); font-size: 10px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+}
+
+// An indeterminate progress bar for waiting states.
+export component Pulse inherits Rectangle {
+    height: 3px;
+    border-radius: 2px;
+    background: Theme.border;
+    clip: true;
+    Rectangle {
+        width: parent.width * 0.35;
+        x: (mod(animation-tick() / 1ms, 1400) / 1400) * (parent.width + self.width) - self.width;
+        border-radius: 2px;
+        background: Theme.primary;
+    }
+}
+
+// A live reading: a large number with its unit, dimmed to a dash while no sensor delivers.
+export component LiveMetric inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <string> unit;
+    in property <bool> live;
+    in property <length> size: 40px;
+    in property <color> tone: Theme.ink;
+    in property <length> unit-size: 11px;
+    in property <bool> centered: false;
+    in property <string> family: "";
+    spacing: 2px;
+    Caption { text: root.label; horizontal-alignment: root.centered ? center : left; }
+    HorizontalLayout {
+        spacing: 8px; alignment: root.centered ? center : start;
+        Text { text: root.live ? root.value : "—"; color: root.live ? root.tone : Theme.faint; font-size: root.size; font-weight: 700; vertical-alignment: bottom; font-family: root.family; }
+        VerticalLayout { alignment: end; padding-bottom: root.size * 0.18; Caption { text: root.unit; font-size: root.unit-size; } }
+    }
+}
+
+// The website's HUD tile: a caption, a colored figure, its unit.
+export component MetricTile inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <string> unit;
+    in property <bool> live;
+    in property <color> tone: Theme.ink;
+    in property <length> size: 30px;
+    border-radius: 12px; background: Theme.card.with-alpha(0.8); border-width: 1px; border-color: Theme.border;
+    VerticalLayout {
+        padding: 12px; spacing: 2px;
+        Caption { text: root.label; overflow: elide; }
+        Text { text: root.live ? root.value : "—"; color: root.live ? root.tone : Theme.faint; font-size: root.size; font-weight: 700; font-family: "DejaVu Sans Mono"; }
+        Text { text: root.unit; color: Theme.muted; font-size: 12px; }
+    }
+}
+
+export component StatCard inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    border-radius: 10px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+    VerticalLayout {
+        padding: 14px; spacing: 4px;
+        Caption { text: root.label; }
+        Text { text: root.value; color: root.value == "—" ? Theme.faint : Theme.ink; font-size: 22px; font-weight: 700; }
+    }
+}
+
+// A centered content column capped like the website's max-w-5xl, with side gutters that
+// shrink on narrow windows. Type and card sizes never scale; a wider monitor only gets
+// wider margins.
+export component Page inherits Rectangle {
+    in property <length> max: 1024px;
+    in property <length> gutter: root.width < 640px ? 16px : 32px;
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        width: min(parent.width - 2 * root.gutter, root.max);
+        height: parent.height;
+        @children
+    }
+}
+
+// A quiet grouped placeholder for a section with nothing to show.
+export component EmptyPanel inherits Rectangle {
+    in property <string> text;
+    height: 84px;
+    border-radius: 10px;
+    background: Theme.card.with-alpha(0.6);
+    border-width: 1px;
+    border-color: Theme.border;
+    Text { x: 24px; width: parent.width - 48px; text: root.text; color: Theme.muted; font-size: 13px; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center; }
+}
+
+export component SignalBars inherits Rectangle {
+    in property <int> level;
+    width: 18px;
+    height: 14px;
+    HorizontalLayout {
+        spacing: 2px; alignment: end;
+        for h[i] in [6px, 10px, 14px]: Rectangle {
+            width: 4px;
+            Rectangle { y: parent.height - self.height; width: 4px; height: h; border-radius: 1px; background: root.level > i ? Theme.good : Theme.border; }
+        }
+    }
+}
+
+// A radio's state: 0 not checked, 1 ready, 2 unavailable.
+export component RadioPill inherits HorizontalLayout {
+    in property <string> name;
+    in property <int> state;
+    spacing: 6px; alignment: start;
+    Rectangle {
+        y: (parent.height - self.height) / 2;
+        width: 8px; height: 8px; border-radius: 4px;
+        background: root.state == 1 ? Theme.good : root.state == 2 ? Theme.warn : Theme.faint;
+    }
+    Text {
+        text: root.state == 1 ? @tr("{} ready", root.name) : root.state == 2 ? @tr("{} unavailable", root.name) : @tr("{} not checked", root.name);
+        color: root.state == 1 ? Theme.good : root.state == 2 ? Theme.warn : Theme.muted;
+        font-size: 12px; vertical-alignment: center;
+    }
+}
+
+export component TextField inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <bool> enabled: true;
+    in property <string> label;
+    callback accepted();
+    callback edited();
+    height: 42px;
+    border-radius: 8px;
+    background: Theme.dark ? Theme.sunken : Theme.card;
+    border-width: input.has-focus ? 2px : 1px;
+    border-color: input.has-focus ? Theme.primary : Theme.border;
+    accessible-role: text-input;
+    accessible-label: root.label;
+    accessible-value: root.text;
+    // Sits under the input so clicks on the padding focus it without stealing drags from the text.
+    TouchArea { mouse-cursor: MouseCursor.text; clicked => { input.focus(); } }
+    HorizontalLayout {
+        padding-left: 12px; padding-right: 12px;
+        input := TextInput {
+            text <=> root.text;
+            enabled: root.enabled && !Overlay.open;
+            color: root.enabled ? Theme.ink : Theme.faint;
+            selection-background-color: Theme.primary.with-alpha(0.35);
+            font-size: 14px;
+            single-line: true;
+            vertical-alignment: center;
+            accepted => { root.accepted(); }
+            edited => { root.edited(); }
+        }
+    }
+    if root.text == "": Text {
+        x: 12px; width: parent.width - 24px;
+        text: root.placeholder; color: Theme.faint; font-size: 14px; overflow: elide; vertical-alignment: center;
+    }
+}
+
+export component ZoneDot inherits Rectangle {
+    in property <int> zone;
+    width: 8px; height: 8px; border-radius: 4px;
+    background: root.zone == 0 ? Theme.chart-grid : Theme.zone-color(root.zone);
+}
+
+// A 270-degree arc gauge drawn with a path: a track, the live power as a filled arc in the
+// zone's color, the target as a tick with its tolerance band. Levels are fractions of the
+// ride's power scale; negatives draw nothing. Children sit in the middle.
+export component Gauge inherits Rectangle {
+    in property <float> level: -1;
+    in property <float> target: -1;
+    in property <float> band: 0;
+    in property <color> tone: Theme.primary;
+    in property <length> thickness: 14px;
+    property <float> r: 42;
+    property <angle> start: 135deg;
+    property <angle> sweep: 270deg;
+    property <float> shown: min(1, max(0, root.level));
+    property <float> t-low: min(1, max(0, root.target - root.band));
+    property <float> t-high: min(1, max(0, root.target + root.band));
+    width: 240px; height: 240px;
+    Path {
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        viewbox-width: 100; viewbox-height: 100;
+        stroke: Theme.border; stroke-width: root.thickness; fill: transparent; stroke-line-cap: round;
+        MoveTo { x: 50 + root.r * cos(root.start); y: 50 + root.r * sin(root.start); }
+        ArcTo { x: 50 + root.r * cos(root.start + root.sweep); y: 50 + root.r * sin(root.start + root.sweep); radius-x: root.r; radius-y: root.r; large-arc: true; sweep: true; }
+    }
+    if root.target >= 0 && root.band > 0 && root.t-high > root.t-low: Path {
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        viewbox-width: 100; viewbox-height: 100;
+        stroke: Theme.primary.with-alpha(0.35); stroke-width: root.thickness; fill: transparent; stroke-line-cap: butt;
+        MoveTo { x: 50 + root.r * cos(root.start + root.sweep * root.t-low); y: 50 + root.r * sin(root.start + root.sweep * root.t-low); }
+        ArcTo { x: 50 + root.r * cos(root.start + root.sweep * root.t-high); y: 50 + root.r * sin(root.start + root.sweep * root.t-high); radius-x: root.r; radius-y: root.r; large-arc: root.sweep * (root.t-high - root.t-low) > 180deg; sweep: true; }
+    }
+    if root.shown > 0.005: Path {
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        viewbox-width: 100; viewbox-height: 100;
+        stroke: root.tone; stroke-width: root.thickness; fill: transparent; stroke-line-cap: round;
+        MoveTo { x: 50 + root.r * cos(root.start); y: 50 + root.r * sin(root.start); }
+        ArcTo { x: 50 + root.r * cos(root.start + root.sweep * root.shown); y: 50 + root.r * sin(root.start + root.sweep * root.shown); radius-x: root.r; radius-y: root.r; large-arc: root.sweep * root.shown > 180deg; sweep: true; }
+    }
+    if root.target >= 0: Path {
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        viewbox-width: 100; viewbox-height: 100;
+        stroke: Theme.ink; stroke-width: 3px; fill: transparent; stroke-line-cap: round;
+        MoveTo { x: 50 + (root.r - 6) * cos(root.start + root.sweep * min(1, max(0, root.target))); y: 50 + (root.r - 6) * sin(root.start + root.sweep * min(1, max(0, root.target))); }
+        LineTo { x: 50 + (root.r + 6) * cos(root.start + root.sweep * min(1, max(0, root.target))); y: 50 + (root.r + 6) * sin(root.start + root.sweep * min(1, max(0, root.target))); }
+    }
+    @children
+}
+
+// The brand mark: the website's favicon square and wordmark.
+export component Brand inherits HorizontalLayout {
+    in property <bool> mark-only: false;
+    in property <string> suffix: "INDOOR";
+    spacing: 10px; alignment: start;
+    Rectangle {
+        y: (parent.height - self.height) / 2; width: 30px; height: 30px; border-radius: 8px; background: Theme.primary;
+        Text { text: "u"; color: Theme.primary-ink; font-size: 24px; font-weight: 800; horizontal-alignment: center; vertical-alignment: center; }
+    }
+    if !root.mark-only: Text { text: "undertrained"; color: Theme.ink; font-size: 19px; font-weight: 700; vertical-alignment: center; }
+    if !root.mark-only && root.suffix != "": Caption { text: root.suffix; color: Theme.primary; vertical-alignment: center; }
+}
+
+// One row of a step list: its number, a zone dot, the plan's wording, its duration. The
+// current step is highlighted and shows its drain bar; ridden steps dim.
+export component StepRow inherits Rectangle {
+    in property <PlanStep> step;
+    in property <int> number;
+    in property <bool> current;
+    in property <bool> done;
+    in property <bool> compact: false;
+    in property <string> role-label;
+    height: root.compact ? 40px : 52px;
+    border-radius: 8px;
+    background: root.current ? Theme.zone-color(root.step.zone).with-alpha(0.14) : transparent;
+    border-width: root.current ? 1px : 0px; border-color: Theme.zone-color(root.step.zone).with-alpha(0.5);
+    opacity: root.done ? 0.45 : 1;
+    HorizontalLayout {
+        padding-left: 10px; padding-right: 12px; spacing: 10px;
+        Text { text: root.number; color: Theme.faint; font-size: 11px; font-weight: 600; width: 18px; vertical-alignment: center; horizontal-alignment: right; }
+        ZoneDot { y: (parent.height - self.height) / 2; zone: root.step.target == "" ? 0 : root.step.zone; }
+        VerticalLayout {
+            alignment: center; spacing: 2px; horizontal-stretch: 1; min-width: 0px;
+            Text {
+                text: root.step.target != "" ? root.step.target : @tr("free riding");
+                color: root.current ? Theme.ink : Theme.ink.with-alpha(0.85); font-size: root.compact ? 13px : 14px; font-weight: root.current ? 700 : 500; overflow: elide;
+            }
+            if !root.compact && (root.role-label != "" || root.step.cadence != ""): Text {
+                text: root.role-label + (root.step.cadence != "" ? (root.role-label != "" ? " · " : "") + @tr("{} rpm", root.step.cadence) : "");
+                color: Theme.muted; font-size: 11px; overflow: elide;
+            }
+        }
+        Text { text: root.step.duration; color: root.current ? Theme.ink : Theme.muted; font-size: 13px; font-weight: 600; vertical-alignment: center; font-family: "DejaVu Sans Mono"; }
+    }
+    if root.current: Rectangle {
+        x: 10px; width: parent.width - 20px; y: parent.height - 4px; height: 3px; border-radius: 1.5px; background: Theme.sunken;
+        Rectangle { x: 0px; width: parent.width * min(1, max(0, State.ride-step-progress)); height: parent.height; border-radius: 1.5px; background: Theme.zone-color(root.step.zone); }
+    }
+}

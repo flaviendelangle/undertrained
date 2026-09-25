@@ -1,0 +1,968 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme, State, Actions, Overlay, WorkoutRow } from "state.slint";
+import { ActionButton, GlyphButton, Notice, WorkoutChart, PlanBar, Pill, Pulse, Caption, LiveMetric, MetricTile, Page, EmptyPanel, RadioPill, Gauge, Brand, ChartPanel, ZoneDot, StepRow, BuiltInBadge, TextField } from "widgets.slint";
+import { Copy, AuthForm, DeviceMessage, HelpPanel, SensorTile, WorkoutGrid, LibraryState, LibraryNotices, StepList, SensorCheck, RideNotices, ErgToggle, ErgStatus, IntensityControl, SkipButton, CadenceCue, SummaryStats, SaveStatus, UploadCard, FolderRow } from "shared.slint";
+
+// One guided path, the way Zwift and ROUVY walk a rider in. Devices, workout, ride: three
+// numbered steps in the header, one primary action per screen, and a ride screen that
+// drops the chrome for a full-window HUD around a power gauge.
+
+// One numbered step of the header. The current step is filled, ridden steps carry a check.
+component StepTab inherits Rectangle {
+    in property <int> number;
+    in property <string> label;
+    in property <bool> active;
+    in property <bool> done;
+    in property <bool> enabled: true;
+    in property <bool> compact: false;
+    callback activated();
+    width: layout.preferred-width;
+    accessible-role: tab;
+    accessible-label: root.label;
+    accessible-checked: root.active;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.activated(); } }
+    layout := HorizontalLayout {
+        spacing: 8px; padding-left: 6px; padding-right: 6px;
+        Rectangle {
+            y: (parent.height - self.height) / 2; width: 24px; height: 24px; border-radius: 12px;
+            background: root.active ? Theme.primary : root.done ? Theme.primary.with-alpha(0.18) : Theme.sunken;
+            border-width: root.active || root.done ? 0px : 1px; border-color: Theme.border;
+            Text {
+                text: root.done && !root.active ? "✓" : root.number;
+                color: root.active ? Theme.primary-ink : root.done ? Theme.primary : root.enabled ? Theme.muted : Theme.faint;
+                font-size: 12px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center;
+            }
+        }
+        if !root.compact || root.active: Text {
+            text: root.label; color: root.active ? Theme.ink : root.enabled ? Theme.muted : Theme.faint;
+            font-size: 14px; font-weight: 600; vertical-alignment: center;
+        }
+    }
+    focus := FocusScope {
+        enabled: root.enabled && !Overlay.open;
+        key-pressed(event) => {
+            if event.text == "\n" || event.text == " " { root.activated(); return accept; }
+            return reject;
+        }
+    }
+    Rectangle { y: 12px; height: parent.height - 24px; border-width: focus.has-focus ? 2px : 0px; border-color: Theme.primary; border-radius: 8px; background: transparent; }
+    TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
+}
+
+component FlowHeader inherits Rectangle {
+    in property <bool> narrow;
+    // The chrome compacts (mark alone, current step's label alone, no rider name) well
+    // before the pages reflow, so the stepper never crowds Sign out.
+    in property <bool> compact;
+    height: 64px;
+    background: Theme.background;
+    HorizontalLayout {
+        padding-left: root.narrow ? 16px : 28px; padding-right: root.narrow ? 16px : 28px; spacing: root.narrow ? 10px : 20px;
+        Brand { mark-only: root.compact; }
+        if State.logged-in: HorizontalLayout {
+            spacing: root.compact ? 0px : 4px; alignment: start;
+            StepTab { number: 1; label: @tr("Devices"); compact: root.compact; active: State.screen == 0; done: State.trainer-connected; activated => { Actions.navigate(0); } }
+            if !root.compact: Text { text: "›"; color: Theme.faint; font-size: 16px; vertical-alignment: center; }
+            StepTab { number: 2; label: @tr("Workout"); compact: root.compact; active: State.screen == 1; done: State.ride-present; activated => { Actions.navigate(1); } }
+            if !root.compact: Text { text: "›"; color: Theme.faint; font-size: 16px; vertical-alignment: center; }
+            StepTab { number: 3; label: @tr("Ride"); compact: root.compact; active: State.screen == 2; done: State.ride-saved; enabled: State.ride-present || State.ride-busy; activated => { Actions.navigate(2); } }
+        }
+        Rectangle { horizontal-stretch: 1; min-width: 0px; }
+        if State.ride-chip: HorizontalLayout {
+            spacing: 6px;
+            Rectangle { y: (parent.height - self.height) / 2; width: 8px; height: 8px; border-radius: 4px; background: Copy.ride-chip-color(); }
+            ActionButton { y: (parent.height - self.height) / 2; label: Copy.ride-chip-label(root.compact); compact: true; activated => { Actions.navigate(2); } }
+        }
+        if State.logged-in && !root.compact && !State.ride-chip: Text { text: State.rider-name; color: Theme.muted; font-size: 13px; vertical-alignment: center; overflow: elide; max-width: 160px; }
+        if State.logged-in: ActionButton { y: (parent.height - self.height) / 2; label: @tr("Sign out"); quiet: true; compact: true; activated => { Actions.sign-out(); } }
+    }
+    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
+}
+
+component FlowLogin inherits Rectangle {
+    in property <bool> narrow;
+    ScrollView {
+        VerticalLayout {
+            alignment: center; padding: root.narrow ? 20px : 40px; spacing: 0px;
+            HorizontalLayout {
+                alignment: center;
+                VerticalLayout {
+                    width: min(root.width - (root.narrow ? 40px : 80px), 520px); spacing: 18px;
+                    Text { text: @tr("Ride inside."); color: Theme.ink; font-size: root.narrow ? 40px : 56px; font-weight: 700; horizontal-alignment: center; wrap: word-wrap; }
+                    Text {
+                        text: @tr("Pair a smart trainer and a heart-rate strap over Bluetooth or ANT+, pick a workout from your Undertrained library, and ride it step by step.");
+                        color: Theme.muted; font-size: 15px; wrap: word-wrap; horizontal-alignment: center;
+                    }
+                    // The interval silhouette, drawn with native rectangles.
+                    Rectangle {
+                        height: 120px;
+                        HorizontalLayout {
+                            spacing: 5px;
+                            for h in [22, 34, 48, 72, 96, 58, 96, 58, 96, 58, 96, 72, 48, 34]: Rectangle {
+                                horizontal-stretch: 1; min-width: 6px;
+                                Rectangle { y: parent.height - self.height; width: parent.width; height: parent.height * h / 100; border-radius: 3px; background: h >= 90 ? Theme.primary : Theme.raised; }
+                            }
+                        }
+                    }
+                    Rectangle { height: 8px; }
+                    AuthForm { centered: true; }
+                    Text { text: @tr("Use your Undertrained account. Strava sign-in opens in your browser, and this window picks up the session when you return."); color: Theme.faint; font-size: 12px; wrap: word-wrap; horizontal-alignment: center; }
+                    Rectangle { height: 8px; }
+                    Caption { text: "FTMS  ·  CYCLING POWER  ·  HEART RATE  ·  ANT+"; horizontal-alignment: center; overflow: elide; }
+                }
+            }
+        }
+    }
+}
+
+component FlowPair inherits Rectangle {
+    in property <bool> narrow;
+    Page { max: 1100px; VerticalLayout {
+        padding-top: root.narrow ? 16px : 28px; padding-bottom: 16px; spacing: 16px;
+        HorizontalLayout {
+            spacing: 16px;
+            VerticalLayout {
+                spacing: 6px; horizontal-stretch: 1; min-width: 0px;
+                Text { text: @tr("Pair your devices"); color: Theme.ink; font-size: root.narrow ? 24px : 30px; font-weight: 700; wrap: word-wrap; }
+                Text { text: @tr("Pedal a few strokes to wake the trainer, then find it below. Saved devices are marked in the list."); color: Theme.muted; font-size: 13px; wrap: word-wrap; }
+            }
+            if !root.narrow: VerticalLayout {
+                spacing: 4px; alignment: center;
+                RadioPill { name: "Bluetooth"; state: State.bluetooth-state; }
+                RadioPill { name: "ANT+"; state: State.ant-state; }
+            }
+        }
+        if root.narrow: HorizontalLayout {
+            spacing: 16px; alignment: start;
+            RadioPill { name: "Bluetooth"; state: State.bluetooth-state; }
+            RadioPill { name: "ANT+"; state: State.ant-state; }
+        }
+        ScrollView {
+            vertical-stretch: 1;
+            VerticalLayout {
+                spacing: 16px; alignment: start; padding-right: 4px;
+                if !root.narrow: HorizontalLayout {
+                    spacing: 16px;
+                    SensorTile { role: 0; horizontal-stretch: 3; }
+                    SensorTile { role: 1; horizontal-stretch: 2; }
+                }
+                if root.narrow: SensorTile { role: 0; }
+                if root.narrow: SensorTile { role: 1; }
+                if State.help-open: HelpPanel { }
+                if State.message-code != 0 && !State.picker-open: DeviceMessage { }
+            }
+        }
+        Rectangle { height: 1px; background: Theme.border; }
+        // The step's one primary action stays pinned at the bottom: save the setup and go on.
+        HorizontalLayout {
+            spacing: 12px;
+            if !root.narrow: VerticalLayout {
+                spacing: 3px; alignment: center; horizontal-stretch: 1; min-width: 0px;
+                Text {
+                    text: State.setup-saved ? @tr("Setup saved.") : State.trainer-connected ? @tr("Trainer connected.") : @tr("Connect a trainer to finish.");
+                    color: Theme.ink; font-size: 15px; font-weight: 600; overflow: elide;
+                }
+                Text {
+                    text: State.setup-saved ? @tr("These devices are remembered on this computer.") : @tr("Heart rate is optional. Choices are stored on this computer only.");
+                    color: Theme.muted; font-size: 12px; overflow: elide;
+                }
+            }
+            if root.narrow: Rectangle { horizontal-stretch: 1; min-width: 0px; }
+            ActionButton { y: (parent.height - self.height) / 2; label: State.help-open ? @tr("Hide help") : @tr("Help"); quiet: true; activated => { State.help-open = !State.help-open; } }
+            if !State.trainer-connected: ActionButton { y: (parent.height - self.height) / 2; label: @tr("Skip for now"); quiet: true; activated => { Actions.navigate(1); } }
+            if State.trainer-connected: ActionButton {
+                y: (parent.height - self.height) / 2;
+                label: State.setup-saved ? @tr("Continue") : @tr("Save & continue"); primary: true;
+                activated => { if !State.setup-saved { Actions.save-setup(); } if State.setup-saved { Actions.navigate(1); } }
+            }
+        }
+    } }
+}
+
+// A filter of the library, as a chip in the toolbar.
+component FilterChip inherits Rectangle {
+    in property <string> label;
+    in property <int> count;
+    in property <bool> active;
+    callback activated();
+    height: 32px; border-radius: 16px;
+    preferred-width: layout.preferred-width; min-width: layout.preferred-width;
+    background: root.active ? Theme.primary.with-alpha(0.16) : touch.has-hover ? Theme.raised : Theme.sunken;
+    border-width: 1px; border-color: root.active ? Theme.primary.with-alpha(0.5) : Theme.border;
+    accessible-role: tab;
+    accessible-label: root.label;
+    accessible-checked: root.active;
+    accessible-action-default => { root.activated(); }
+    layout := HorizontalLayout {
+        padding-left: 12px; padding-right: 12px; spacing: 6px;
+        Text { text: root.label; color: root.active ? (Theme.dark ? Theme.primary : Theme.primary.darker(0.1)) : Theme.ink; font-size: 13px; font-weight: 600; vertical-alignment: center; }
+        Text { text: root.count; color: root.active ? (Theme.dark ? Theme.primary : Theme.primary.darker(0.1)) : Theme.muted; font-size: 12px; vertical-alignment: center; }
+    }
+    focus := FocusScope {
+        enabled: !Overlay.open;
+        key-pressed(event) => {
+            if event.text == "\n" || event.text == " " { root.activated(); return accept; }
+            return reject;
+        }
+    }
+    Rectangle { border-width: focus.has-focus ? 2px : 0px; border-color: Theme.primary; border-radius: root.border-radius; background: transparent; }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
+}
+
+// The board's layout switch: three small segments, remembered like the design.
+component VariantSwitch inherits Rectangle {
+    pure function name(variant: int) -> string {
+        return variant == 0 ? @tr("List") : variant == 1 ? @tr("Featured") : @tr("Split");
+    }
+    height: 32px; width: 3 * 78px + 8px;
+    border-radius: 8px; background: Theme.sunken; border-width: 1px; border-color: Theme.border;
+    HorizontalLayout {
+        padding: 3px; spacing: 2px;
+        for variant in [0, 1, 2]: Rectangle {
+            width: 78px; border-radius: 6px;
+            background: State.library-variant == variant ? Theme.card : seg-touch.has-hover ? Theme.raised : transparent;
+            border-width: State.library-variant == variant ? 1px : 0px; border-color: Theme.border;
+            accessible-role: tab;
+            accessible-label: root.name(variant);
+            accessible-checked: State.library-variant == variant;
+            accessible-action-default => { Actions.set-library-variant(variant); }
+            Text { text: root.name(variant); color: State.library-variant == variant ? Theme.ink : Theme.muted; font-size: 12px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+            seg-focus := FocusScope {
+                enabled: !Overlay.open;
+                key-pressed(event) => {
+                    if event.text == "\n" || event.text == " " { Actions.set-library-variant(variant); return accept; }
+                    return reject;
+                }
+            }
+            Rectangle { border-width: seg-focus.has-focus ? 2px : 0px; border-color: Theme.primary; border-radius: 6px; background: transparent; }
+            seg-touch := TouchArea { mouse-cursor: pointer; clicked => { seg-focus.focus(); Actions.set-library-variant(variant); } }
+        }
+    }
+}
+
+// A section's label: small caps with the count, a hairline, an optional note.
+component SectionLabel inherits HorizontalLayout {
+    in property <string> text;
+    in property <int> count;
+    in property <string> note: "";
+    spacing: 10px; padding-top: 6px;
+    Caption { text: root.text + " · " + root.count; vertical-alignment: center; }
+    Rectangle { height: 1px; y: (parent.height - self.height) / 2; horizontal-stretch: 1; background: Theme.border; }
+    if root.note != "": Text { text: root.note; color: Theme.faint; font-size: 12px; vertical-alignment: center; overflow: elide; max-width: 320px; }
+}
+
+// The one thing every row shares: clicking it selects the workout. `chosen` lets a layout
+// keep the click for itself (the split layout previews first).
+component RowSurface inherits Rectangle {
+    in property <string> name;
+    in property <bool> active: false;
+    in property <bool> enabled: true;
+    callback chosen();
+    border-radius: 10px;
+    background: root.active ? Theme.primary.with-alpha(0.12) : touch.has-hover && root.enabled ? Theme.raised.with-alpha(Theme.dark ? 0.6 : 1) : Theme.card;
+    border-width: focus.has-focus || root.active ? 2px : 1px;
+    border-color: focus.has-focus || root.active ? Theme.primary : Theme.border;
+    accessible-role: button;
+    accessible-label: root.name;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.chosen(); } }
+    focus := FocusScope {
+        enabled: root.enabled && !Overlay.open;
+        key-pressed(event) => {
+            if event.text == "\n" || event.text == " " { root.chosen(); return accept; }
+            return reject;
+        }
+    }
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.focus(); root.chosen(); } }
+    @children
+}
+
+// Layout "List": one wide row per workout. The name leads at 16px with the summary under
+// it, the profile is a thumbnail on the left, the duration sits in its own column, and the
+// browser link shrinks to a glyph so the row reads as one action: ride this.
+component LibraryRow inherits RowSurface {
+    in property <WorkoutRow> workout;
+    in property <bool> live;
+    in property <bool> narrow;
+    name: @tr("Select {}", root.workout.name);
+    height: root.narrow ? 64px : 76px;
+    chosen => { Actions.select-workout(root.workout.id); }
+    HorizontalLayout {
+        padding: root.narrow ? 8px : 12px; padding-left: root.narrow ? 10px : 12px; padding-right: 12px; spacing: root.narrow ? 12px : 16px;
+        Rectangle {
+            width: root.narrow ? 84px : 132px; border-radius: 6px; background: Theme.sunken.with-alpha(0.5);
+            WorkoutChart { x: 6px; y: 6px; width: parent.width - 12px; height: parent.height - 12px; steps: root.workout.profile; }
+        }
+        VerticalLayout {
+            alignment: center; spacing: 3px; horizontal-stretch: 1; min-width: 0px;
+            HorizontalLayout {
+                spacing: 8px; alignment: start;
+                Text { text: root.workout.name; color: Theme.ink; font-size: root.narrow ? 15px : 16px; font-weight: 600; overflow: elide; vertical-alignment: center; }
+                if root.workout.built-in: BuiltInBadge { y: (parent.height - self.height) / 2; }
+            }
+            Text { text: root.narrow ? root.workout.meta : root.workout.summary; color: Theme.muted; font-size: 13px; overflow: elide; }
+        }
+        if !root.narrow: Text { text: root.workout.meta; color: Theme.ink; font-size: 14px; font-weight: 600; vertical-alignment: center; horizontal-alignment: right; min-width: 120px; }
+        if root.live && !root.narrow: ActionButton {
+            y: (parent.height - self.height) / 2;
+            label: "↗"; quiet: true; compact: true; min-width: 36px;
+            accessible-label: @tr("Open {} in browser", root.workout.name);
+            activated => { Actions.open-workout(root.workout.id); }
+        }
+        Text { text: "›"; color: Theme.faint; font-size: 22px; vertical-alignment: center; }
+    }
+}
+
+// The free ride as a row of the list: a session like the others, without a plan.
+component FreeRideRow inherits RowSurface {
+    in property <bool> narrow;
+    name: @tr("Start a free ride with the connected sensors");
+    enabled: State.can-open-ride;
+    height: root.narrow ? 56px : 64px;
+    background: Theme.sunken.with-alpha(0.5);
+    chosen => { Actions.start-free-ride(); }
+    HorizontalLayout {
+        padding-left: 16px; padding-right: 12px; spacing: 14px;
+        Text { text: "∞"; color: State.can-open-ride ? Theme.primary : Theme.faint; font-size: 24px; vertical-alignment: center; }
+        VerticalLayout {
+            alignment: center; spacing: 2px; horizontal-stretch: 1; min-width: 0px;
+            Text { text: @tr("Free ride"); color: State.can-open-ride ? Theme.ink : Theme.faint; font-size: 15px; font-weight: 600; }
+            Text { text: State.any-sensor ? @tr("No targets. Power, heart rate and cadence from the paired sensors.") : @tr("Needs a paired sensor."); color: Theme.muted; font-size: 12px; overflow: elide; }
+        }
+        Text { text: "›"; color: Theme.faint; font-size: 22px; vertical-alignment: center; }
+    }
+}
+
+// Layout "Featured": a card with room for a two-line name and no competing button.
+component GridCard inherits RowSurface {
+    in property <WorkoutRow> workout;
+    name: @tr("Select {}", root.workout.name);
+    clip: true;
+    chosen => { Actions.select-workout(root.workout.id); }
+    VerticalLayout {
+        padding: 0px; spacing: 0px;
+        Rectangle {
+            height: 84px; background: Theme.sunken.with-alpha(0.3);
+            WorkoutChart { x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px; steps: root.workout.profile; }
+        }
+        Rectangle { height: 1px; background: Theme.border; }
+        VerticalLayout {
+            padding: 12px; spacing: 4px; alignment: start;
+            Text { text: root.workout.name; color: Theme.ink; font-size: 14px; font-weight: 600; wrap: word-wrap; overflow: elide; height: 36px; vertical-alignment: top; }
+            HorizontalLayout {
+                spacing: 6px; alignment: start;
+                Text { text: root.workout.meta; color: Theme.muted; font-size: 12px; overflow: elide; vertical-alignment: center; min-width: 0px; }
+                if root.workout.built-in: BuiltInBadge { y: (parent.height - self.height) / 2; }
+            }
+        }
+    }
+}
+
+// A card grid that can leave out its first card, once that card is featured above.
+component CardGrid inherits Rectangle {
+    in property <[WorkoutRow]> cards;
+    in property <int> skip: 0;
+    property <length> gap: 14px;
+    property <length> card-height: 166px;
+    property <int> columns: max(1, min(4, floor((self.width + gap) / (220px + gap))));
+    property <length> card-width: (self.width - (columns - 1) * gap) / columns;
+    property <int> shown: max(0, cards.length - skip);
+    property <float> rows: ceil(shown / columns);
+    height: rows * card-height + max(0, rows - 1) * gap;
+    for card[i] in root.cards: GridCard {
+        visible: i >= root.skip;
+        x: mod(max(0, i - root.skip), root.columns) * (root.card-width + root.gap);
+        y: floor(max(0, i - root.skip) / root.columns) * (root.card-height + root.gap);
+        width: i >= root.skip ? root.card-width : 0px;
+        height: root.card-height;
+        workout: card;
+    }
+}
+
+component FeaturedCard inherits Rectangle {
+    in property <WorkoutRow> workout;
+    in property <bool> live;
+    in property <bool> narrow;
+    border-radius: 14px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+    height: layout.preferred-height;
+    layout := VerticalLayout {
+        padding: root.narrow ? 16px : 22px; spacing: 10px;
+        Caption { text: root.workout.built-in ? @tr("NEXT UP · BUILT-IN TEST") : @tr("NEXT UP · PERSONAL WORKOUT"); color: Theme.primary; }
+        Text { text: root.workout.name; color: Theme.ink; font-size: root.narrow ? 22px : 26px; font-weight: 700; wrap: word-wrap; }
+        Text { text: root.workout.meta + (root.workout.summary != "" ? "  ·  " + root.workout.summary : ""); color: Theme.muted; font-size: 14px; wrap: word-wrap; }
+        Rectangle {
+            height: root.narrow ? 110px : 150px; border-radius: 8px; background: Theme.sunken.with-alpha(0.4);
+            WorkoutChart { x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px; steps: root.workout.profile; }
+        }
+        HorizontalLayout {
+            spacing: 10px; alignment: start;
+            ActionButton { label: @tr("Ride this workout"); primary: true; activated => { Actions.select-workout(root.workout.id); } }
+            if root.live: ActionButton { label: @tr("Open in browser"); quiet: true; activated => { Actions.open-workout(root.workout.id); } }
+        }
+    }
+}
+
+component FreeRideTile inherits Rectangle {
+    border-radius: 14px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+    height: tile.preferred-height;
+    tile := VerticalLayout {
+        padding: 18px; spacing: 8px;
+        Caption { text: @tr("OR"); }
+        Text { text: @tr("Free ride"); color: Theme.ink; font-size: 18px; font-weight: 700; }
+        Text { text: @tr("No targets. Power, heart rate and cadence from the paired sensors."); color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+        ActionButton { label: @tr("Ride free"); enabled: State.can-open-ride; accessible-label: @tr("Start a free ride with the connected sensors"); activated => { Actions.start-free-ride(); } }
+        if !State.any-sensor: Text { text: @tr("Needs a paired sensor."); color: Theme.faint; font-size: 11px; }
+    }
+}
+
+// Layout "Split": a compact row that previews rather than selects.
+component SplitRow inherits RowSurface {
+    in property <WorkoutRow> workout;
+    name: @tr("Preview {}", root.workout.name);
+    height: 54px;
+    HorizontalLayout {
+        padding-left: 14px; padding-right: 12px; spacing: 10px;
+        Rectangle {
+            width: 56px; y: 9px; height: parent.height - 18px; border-radius: 4px; background: Theme.sunken.with-alpha(0.5);
+            WorkoutChart { x: 3px; y: 3px; width: parent.width - 6px; height: parent.height - 6px; steps: root.workout.profile; }
+        }
+        VerticalLayout {
+            alignment: center; spacing: 2px; horizontal-stretch: 1; min-width: 0px;
+            HorizontalLayout {
+                spacing: 6px; alignment: start;
+                Text { text: root.workout.name; color: Theme.ink; font-size: 14px; font-weight: root.active ? 700 : 600; overflow: elide; vertical-alignment: center; }
+                if root.workout.built-in: BuiltInBadge { y: (parent.height - self.height) / 2; }
+            }
+            Text { text: root.workout.meta; color: Theme.muted; font-size: 12px; overflow: elide; }
+        }
+        Text { text: "›"; color: root.active ? Theme.primary : Theme.faint; font-size: 20px; vertical-alignment: center; }
+    }
+}
+
+// The preview beside the split list: the workout in full, and the one action.
+component PreviewPane inherits Rectangle {
+    in property <WorkoutRow> workout;
+    in property <bool> free: false;
+    in property <bool> previewing: false;
+    in property <bool> live;
+    in property <bool> narrow;
+    callback back();
+    border-radius: 14px; background: Theme.card; border-width: 1px; border-color: previewing ? Theme.primary.with-alpha(0.5) : Theme.border;
+    if !State.previewing: VerticalLayout {
+        alignment: center; padding: 28px; spacing: 10px;
+        Text { text: "◎"; color: Theme.faint; font-size: 36px; horizontal-alignment: center; }
+        Text { text: @tr("Select a workout to preview it here, then ride it."); color: Theme.muted; font-size: 13px; wrap: word-wrap; horizontal-alignment: center; }
+    }
+    if State.previewing: ScrollView {
+        VerticalLayout {
+            padding: root.narrow ? 16px : 22px; spacing: 10px; alignment: start;
+            if root.narrow: HorizontalLayout { alignment: start; ActionButton { label: @tr("‹ Back to the list"); quiet: true; compact: true; activated => { root.back(); } } }
+            Caption { text: root.free ? @tr("FREE RIDE") : root.workout.built-in ? @tr("BUILT-IN TEST") : @tr("PERSONAL WORKOUT"); color: Theme.primary; }
+            Text { text: root.free ? @tr("Free ride") : root.workout.name; color: Theme.ink; font-size: 24px; font-weight: 700; wrap: word-wrap; }
+            if !root.free: Text { text: root.workout.meta; color: Theme.ink; font-size: 15px; font-weight: 600; }
+            Text { text: root.free ? @tr("No targets. Power, heart rate and cadence from the paired sensors.") : root.workout.summary; color: Theme.muted; font-size: 13px; wrap: word-wrap; }
+            if !root.free: Rectangle {
+                height: 170px; border-radius: 8px; background: Theme.sunken.with-alpha(0.4);
+                WorkoutChart { x: 10px; y: 10px; width: parent.width - 20px; height: parent.height - 20px; steps: root.workout.profile; }
+            }
+            Rectangle { height: 4px; }
+            if !root.free: ActionButton { label: @tr("Ride this workout"); primary: true; large: true; activated => { Actions.select-workout(root.workout.id); } }
+            if root.free: ActionButton { label: @tr("Ride free"); primary: true; large: true; enabled: State.can-open-ride; accessible-label: @tr("Start a free ride with the connected sensors"); activated => { Actions.start-free-ride(); } }
+            if root.free && !State.any-sensor: Text { text: @tr("Needs a paired sensor."); color: Theme.warn; font-size: 12px; }
+            if !root.free && root.live: HorizontalLayout { alignment: start; ActionButton { label: @tr("Open in browser"); quiet: true; compact: true; activated => { Actions.open-workout(root.workout.id); } } }
+            if !root.free: Text { text: @tr("Next: check your sensors and start."); color: Theme.faint; font-size: 12px; }
+        }
+    }
+}
+
+component FlowChoose inherits Rectangle {
+    in property <bool> narrow;
+    // 0 everything, 1 personal, 2 built-in.
+    property <int> category: 0;
+    property <bool> has-built-ins: State.workouts-total > State.workouts-personal;
+    property <bool> show-personal: root.category != 2;
+    property <bool> show-built-ins: root.category != 1 && has-built-ins;
+    property <bool> nothing: State.workouts-total == 0 || (State.workouts.length == 0 && State.built-ins.length == 0);
+    // Layout "Featured": the first personal workout leads, else the first built-in test.
+    property <bool> feature-personal: State.workouts.length > 0 && show-personal;
+    property <bool> feature-built-in: !feature-personal && State.built-ins.length > 0 && show-built-ins;
+    property <int> variant: State.library-variant;
+    Page { max: root.variant == 1 ? 1240px : 1120px; VerticalLayout {
+        padding-top: root.narrow ? 16px : 28px; padding-bottom: 16px; spacing: 14px;
+        HorizontalLayout {
+            spacing: 12px;
+            VerticalLayout {
+                spacing: 4px; horizontal-stretch: 1; min-width: 0px;
+                Text { text: @tr("Workouts"); color: Theme.ink; font-size: root.narrow ? 24px : 30px; font-weight: 700; }
+                if !root.narrow: Text { text: @tr("Pick one to ride it step by step. Create and edit on the website."); color: Theme.muted; font-size: 13px; wrap: word-wrap; }
+            }
+            ActionButton {
+                y: (parent.height - self.height) / 2;
+                label: !State.workouts-loading ? @tr("Refresh") : State.workouts-total > 0 ? @tr("Refreshing…") : @tr("Loading…"); quiet: true; compact: true;
+                enabled: !State.workouts-loading && State.workouts-error != 1;
+                activated => { Actions.refresh-workouts(); }
+            }
+            if State.session-live: ActionButton { y: (parent.height - self.height) / 2; label: root.narrow ? @tr("New") : @tr("New workout in browser"); quiet: true; compact: true; activated => { Actions.create-workout(); } }
+        }
+        LibraryNotices { }
+        // The toolbar: search, the filters as chips, the match count while filtering, the layout.
+        if State.workouts-total > 0: HorizontalLayout {
+            spacing: 10px;
+            TextField {
+                width: root.narrow ? 160px : 300px; height: 36px;
+                label: @tr("Search workouts by name");
+                text <=> State.workout-query;
+                placeholder: @tr("Search");
+                edited => { Actions.filter-workouts(State.workout-query); }
+            }
+            FilterChip { y: (parent.height - self.height) / 2; label: @tr("All"); count: State.workouts-total; active: root.category == 0; activated => { root.category = 0; } }
+            if !root.narrow || State.workouts-personal > 0: FilterChip { y: (parent.height - self.height) / 2; label: @tr("Personal"); count: State.workouts-personal; active: root.category == 1; activated => { root.category = 1; } }
+            if has-built-ins: FilterChip { y: (parent.height - self.height) / 2; label: @tr("Built-in"); count: State.workouts-total - State.workouts-personal; active: root.category == 2; activated => { root.category = 2; } }
+            if State.workouts-filtering && !root.narrow: Text { text: @tr("{} of {} match", State.workouts.length + State.built-ins.length, State.workouts-total); color: Theme.muted; font-size: 12px; vertical-alignment: center; }
+            if State.workouts-filtering: ActionButton { y: (parent.height - self.height) / 2; label: @tr("Clear"); quiet: true; compact: true; accessible-label: @tr("Clear search"); activated => { State.workout-query = ""; Actions.filter-workouts(""); } }
+            Rectangle { horizontal-stretch: 1; min-width: 0px; }
+            if !root.narrow: VariantSwitch { y: (parent.height - self.height) / 2; }
+        }
+        if root.narrow: HorizontalLayout { alignment: end; VariantSwitch { } }
+        Rectangle {
+            vertical-stretch: 1;
+            if nothing: LibraryState { }
+
+            // Layout "List".
+            if !nothing && root.variant == 0: ScrollView {
+                VerticalLayout {
+                    spacing: 8px; alignment: start; padding-right: 4px;
+                    if root.category == 0: FreeRideRow { narrow: root.narrow; }
+                    if show-personal: SectionLabel { text: @tr("PERSONAL"); count: State.workouts-personal; }
+                    if show-personal: VerticalLayout { spacing: 8px; for workout in State.workouts: LibraryRow { workout: workout; live: State.session-live; narrow: root.narrow; } }
+                    if show-personal && State.workouts.length == 0: Text {
+                        text: State.workouts-filtering ? @tr("No personal workout matches this search.") : @tr("No personal workouts yet. Create one on the website; it appears here after a refresh.");
+                        color: Theme.faint; font-size: 13px; wrap: word-wrap;
+                    }
+                    if show-built-ins: SectionLabel { text: @tr("BUILT-IN"); count: State.workouts-total - State.workouts-personal; note: root.narrow ? "" : @tr("FTP assessments, ready to ride."); }
+                    if show-built-ins: VerticalLayout { spacing: 8px; for workout in State.built-ins: LibraryRow { workout: workout; live: State.session-live; narrow: root.narrow; } }
+                    if show-built-ins && State.built-ins.length == 0: Text { text: @tr("No built-in workout matches this search."); color: Theme.faint; font-size: 13px; wrap: word-wrap; }
+                }
+            }
+
+            // Layout "Featured".
+            if !nothing && root.variant == 1: ScrollView {
+                VerticalLayout {
+                    spacing: 14px; alignment: start; padding-right: 4px;
+                    if !root.narrow && (feature-personal || feature-built-in): HorizontalLayout {
+                        spacing: 14px;
+                        FeaturedCard { horizontal-stretch: 1; min-width: 0px; workout: feature-personal ? State.workouts[0] : State.built-ins[0]; live: State.session-live; narrow: root.narrow; }
+                        if root.category == 0: VerticalLayout { width: 240px; alignment: start; FreeRideTile { } }
+                    }
+                    if root.narrow && (feature-personal || feature-built-in): FeaturedCard { workout: feature-personal ? State.workouts[0] : State.built-ins[0]; live: State.session-live; narrow: root.narrow; }
+                    if root.narrow && root.category == 0: FreeRideTile { }
+                    if show-personal && State.workouts.length > (feature-personal ? 1 : 0): SectionLabel { text: feature-personal ? @tr("MORE PERSONAL WORKOUTS") : @tr("PERSONAL"); count: State.workouts.length - (feature-personal ? 1 : 0); }
+                    if show-personal && State.workouts.length > (feature-personal ? 1 : 0): CardGrid { cards: State.workouts; skip: feature-personal ? 1 : 0; }
+                    if show-personal && State.workouts.length == 0: SectionLabel { text: @tr("PERSONAL"); count: 0; }
+                    if show-personal && State.workouts.length == 0: Text {
+                        text: State.workouts-filtering ? @tr("No personal workout matches this search.") : @tr("No personal workouts yet. Create one on the website; it appears here after a refresh.");
+                        color: Theme.faint; font-size: 13px; wrap: word-wrap;
+                    }
+                    if show-built-ins && State.built-ins.length > (feature-built-in ? 1 : 0): SectionLabel { text: @tr("BUILT-IN"); count: State.built-ins.length - (feature-built-in ? 1 : 0); note: root.narrow ? "" : @tr("FTP assessments, ready to ride."); }
+                    if show-built-ins && State.built-ins.length > (feature-built-in ? 1 : 0): CardGrid { cards: State.built-ins; skip: feature-built-in ? 1 : 0; }
+                    if show-built-ins && State.built-ins.length == 0: Text { text: @tr("No built-in workout matches this search."); color: Theme.faint; font-size: 13px; wrap: word-wrap; }
+                }
+            }
+
+            // Layout "Split": the list on the left previews on the right; the ride starts there.
+            if !nothing && root.variant == 2: HorizontalLayout {
+                spacing: 14px;
+                if !root.narrow || !State.previewing: ScrollView {
+                    horizontal-stretch: 1; min-width: 0px;
+                    VerticalLayout {
+                        spacing: 6px; alignment: start; padding-right: 4px;
+                        if root.category == 0: RowSurface {
+                            height: 54px; name: @tr("Preview the free ride"); active: State.previewing && State.preview-free;
+                            background: Theme.sunken.with-alpha(0.5);
+                            chosen => { State.preview-free = true; State.previewing = true; }
+                            HorizontalLayout {
+                                padding-left: 14px; padding-right: 12px; spacing: 10px;
+                                Text { text: "∞"; color: Theme.primary; font-size: 22px; vertical-alignment: center; min-width: 56px; horizontal-alignment: center; }
+                                VerticalLayout {
+                                    alignment: center; spacing: 2px; horizontal-stretch: 1; min-width: 0px;
+                                    Text { text: @tr("Free ride"); color: Theme.ink; font-size: 14px; font-weight: 600; }
+                                    Text { text: @tr("No targets · readings only"); color: Theme.muted; font-size: 12px; overflow: elide; }
+                                }
+                                Text { text: "›"; color: State.previewing && State.preview-free ? Theme.primary : Theme.faint; font-size: 20px; vertical-alignment: center; }
+                            }
+                        }
+                        if show-personal: SectionLabel { text: @tr("PERSONAL"); count: State.workouts-personal; }
+                        if show-personal: VerticalLayout { spacing: 6px; for workout in State.workouts: SplitRow {
+                            workout: workout; active: State.previewing && !State.preview-free && State.preview-workout.id == workout.id;
+                            chosen => { State.preview-workout = workout; State.preview-free = false; State.previewing = true; }
+                        } }
+                        if show-personal && State.workouts.length == 0: Text {
+                            text: State.workouts-filtering ? @tr("No personal workout matches this search.") : @tr("No personal workouts yet. Create one on the website; it appears here after a refresh.");
+                            color: Theme.faint; font-size: 13px; wrap: word-wrap;
+                        }
+                        if show-built-ins: SectionLabel { text: @tr("BUILT-IN"); count: State.workouts-total - State.workouts-personal; }
+                        if show-built-ins: VerticalLayout { spacing: 6px; for workout in State.built-ins: SplitRow {
+                            workout: workout; active: State.previewing && !State.preview-free && State.preview-workout.id == workout.id;
+                            chosen => { State.preview-workout = workout; State.preview-free = false; State.previewing = true; }
+                        } }
+                        if show-built-ins && State.built-ins.length == 0: Text { text: @tr("No built-in workout matches this search."); color: Theme.faint; font-size: 13px; wrap: word-wrap; }
+                    }
+                }
+                if !root.narrow || State.previewing: PreviewPane {
+                    width: root.narrow ? parent.width : max(360px, min(460px, root.width * 0.38));
+                    workout: State.preview-workout; free: State.preview-free; previewing: State.previewing; live: State.session-live; narrow: root.narrow;
+                    back => { State.previewing = false; }
+                }
+            }
+        }
+    } }
+}
+
+// The ride cannot start without a sensor: the reason is the first thing on the page, and
+// the action stays in view at the bottom whatever the length of the step list.
+component NoSensorNotice inherits Rectangle {
+    in property <bool> narrow;
+    border-radius: 8px; background: Theme.warn.with-alpha(0.12); border-width: 1px; border-color: Theme.warn.with-alpha(0.45);
+    height: layout.preferred-height;
+    layout := HorizontalLayout {
+        padding: 12px; padding-left: 14px; spacing: 12px;
+        Rectangle { width: 3px; border-radius: 2px; background: Theme.warn; }
+        VerticalLayout {
+            spacing: 3px; horizontal-stretch: 1; min-width: 0px; alignment: center;
+            Text { text: @tr("No trainer or heart-rate sensor is connected, so the ride cannot start."); color: Theme.warn; font-size: 14px; font-weight: 600; wrap: word-wrap; }
+            Text { text: @tr("Pedal a few strokes to wake the trainer, then pair it on the Devices step. A strap alone is enough to record."); color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+        }
+        VerticalLayout { alignment: center; ActionButton { label: root.narrow ? @tr("Devices") : @tr("Go to Devices"); compact: true; activated => { Actions.navigate(0); } } }
+    }
+}
+
+component FlowReady inherits Rectangle {
+    in property <bool> narrow;
+    // Two columns (the steps beside the sensor check) need a wide window; anything less
+    // stacks, and a column too narrow for three captions lists the readings as rows.
+    property <bool> two-columns: root.width >= 1000px;
+    Page { max: 1000px; VerticalLayout {
+        padding: 0px; spacing: 0px;
+        ScrollView { vertical-stretch: 1; VerticalLayout {
+            padding-top: 20px; padding-bottom: 20px; padding-right: 4px; spacing: 16px; alignment: start;
+            HorizontalLayout {
+                spacing: 12px;
+                ActionButton { label: @tr("‹ Workouts"); quiet: true; compact: true; activated => { Actions.close-training(); } }
+                Rectangle { horizontal-stretch: 1; }
+                if State.ride-has-workout && State.session-live: ActionButton { label: @tr("Open in browser"); quiet: true; compact: true; activated => { Actions.open-workout(State.selected-workout.id); } }
+            }
+            HorizontalLayout {
+                spacing: 10px; alignment: start;
+                Text { text: Copy.ride-title(); color: Theme.ink; font-size: root.narrow ? 26px : 34px; font-weight: 700; wrap: word-wrap; horizontal-stretch: 1; min-width: 0px; }
+                if State.ride-built-in: Rectangle { y: 10px; width: 60px; height: 20px; border-radius: 4px; background: Theme.primary.with-alpha(0.12); Text { text: @tr("Built-in"); color: Theme.primary; font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; } }
+            }
+            if State.ride-meta != "" || State.ride-summary != "": Text { text: State.ride-meta + (State.ride-meta != "" && State.ride-summary != "" ? "  ·  " : "") + State.ride-summary; color: Theme.muted; font-size: 14px; wrap: word-wrap; }
+            if !State.any-sensor: NoSensorNotice { narrow: root.narrow; }
+            if State.ride-notice == 2: Notice { text: @tr("The recording could not be started."); detail: State.ride-notice-detail; }
+            if State.ride-has-workout: Rectangle {
+                height: root.narrow ? 170px : 220px; border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                VerticalLayout {
+                    padding: 16px; spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Caption { text: State.ride-guided ? @tr("{n} timed step" | "{n} timed steps" % State.ride-plan-steps) + " · " + State.ride-plan-total : @tr("REFERENCE ONLY"); vertical-alignment: center; }
+                        Rectangle { horizontal-stretch: 1; min-width: 0px; }
+                        if State.ride-guided && !root.narrow: Caption { text: Copy.erg-availability(); color: State.ride-erg-available ? Theme.good : Theme.muted; overflow: elide; vertical-alignment: center; }
+                    }
+                    WorkoutChart { vertical-stretch: 1; steps: State.ride-guided ? State.ride-plan : State.ride-profile; }
+                }
+            }
+            if two-columns: HorizontalLayout {
+                spacing: 16px; alignment: start;
+                // The step list stops at a fixed height and scrolls inside, so a long test
+                // never pushes the sensor check and the notice down the page.
+                if State.ride-guided: Rectangle {
+                    width: 340px; border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                    height: min(360px, 52px + State.ride-steps.length * 42px);
+                    clip: true;
+                    VerticalLayout {
+                        padding: 10px; spacing: 6px;
+                        Caption { text: @tr("STEPS"); x: 10px; }
+                        ScrollView { vertical-stretch: 1; VerticalLayout { alignment: start; padding-right: 4px; StepList { compact: true; } } }
+                    }
+                }
+                VerticalLayout {
+                    horizontal-stretch: 1; min-width: 0px; spacing: 16px; alignment: start;
+                    SensorCheck { rows: true; }
+                    Notice { info: true; text: Copy.ready-notice(); }
+                }
+            }
+            if !two-columns: SensorCheck { stacked: true; rows: root.width < 640px; }
+            if !two-columns && State.ride-guided: Rectangle {
+                border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
+                VerticalLayout { padding: 10px; spacing: 6px; alignment: start; Caption { text: @tr("STEPS"); x: 10px; } StepList { compact: true; } }
+            }
+            if !two-columns: Notice { info: true; text: Copy.ready-notice(); }
+            if State.ride-guided && root.narrow: Text { text: Copy.erg-availability(); color: State.ride-erg-available ? Theme.good : Theme.muted; font-size: 12px; wrap: word-wrap; }
+        } }
+        Rectangle { height: 1px; background: Theme.border; }
+        // Pinned: what stands between the rider and the ride, and the one action. Each
+        // control sits in a column that centers it, so buttons of different heights align.
+        HorizontalLayout {
+            padding-top: 16px; padding-bottom: 16px; spacing: 12px;
+            VerticalLayout {
+                spacing: 3px; alignment: center; horizontal-stretch: 1; min-width: 0px;
+                Text {
+                    text: !State.any-sensor ? @tr("No sensor connected.") : State.signing-in ? @tr("Waiting for the browser…") : @tr("Sensors ready.");
+                    color: !State.any-sensor ? Theme.warn : Theme.ink; font-size: 15px; font-weight: 600; overflow: elide;
+                }
+                if !root.narrow: Text {
+                    text: !State.any-sensor ? @tr("Pair a trainer or a heart-rate strap on the Devices step; Start unlocks as soon as one delivers.") : State.any-sensor && State.trainer-connected ? @tr("{} paired. Readings are recorded once per second.", State.trainer-name) : @tr("Heart rate only: power and cadence stay empty.");
+                    color: Theme.muted; font-size: 12px; overflow: elide;
+                }
+            }
+            if !State.any-sensor: VerticalLayout { alignment: center; ActionButton { label: @tr("Devices"); quiet: true; activated => { Actions.navigate(0); } } }
+            VerticalLayout {
+                alignment: center;
+                ActionButton {
+                    label: @tr("Start the ride"); primary: true; large: !root.narrow; enabled: State.can-start; min-width: root.narrow ? 120px : 220px;
+                    accessible-label: State.can-start ? @tr("Start the ride") : @tr("Start the ride (pair a sensor first)");
+                    activated => { Actions.start-ride(); }
+                }
+            }
+        }
+    } }
+}
+
+// "What am I doing right now": the target, how far off, how long is left, what comes next.
+component TargetPanel inherits Rectangle {
+    property <bool> over: State.ride-workout-complete;
+    property <color> tone: State.ride-target != "" ? Theme.zone-color(State.ride-target-zone) : Theme.faint;
+    border-radius: 16px; background: Theme.card.with-alpha(0.85); border-width: 1px; border-color: Theme.border;
+    height: content.preferred-height;
+    content := VerticalLayout {
+        padding: 18px; spacing: 8px; alignment: start;
+        HorizontalLayout {
+            spacing: 8px;
+            Caption { text: @tr("TARGET"); }
+            Rectangle { horizontal-stretch: 1; }
+            if State.ride-step-number > 0 && !over: Caption { text: @tr("STEP {} OF {}", State.ride-step-number, State.ride-plan-steps); horizontal-alignment: right; }
+        }
+        if over: Text { text: @tr("Workout complete"); color: Theme.primary; font-size: 24px; font-weight: 700; wrap: word-wrap; }
+        if over: Text { text: @tr("Keep riding freely, or finish the ride."); color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+        if !over: HorizontalLayout {
+            spacing: 6px; alignment: start;
+            Text { text: State.ride-target != "" ? State.ride-target : "—"; color: tone; font-size: 56px; font-weight: 700; vertical-alignment: bottom; font-family: "DejaVu Sans Mono"; }
+            VerticalLayout { alignment: end; padding-bottom: 10px; Caption { text: State.ride-target != "" ? @tr("W") : @tr("FREE"); font-size: 13px; } }
+        }
+        if !over: Text {
+            text: Copy.step-words(State.ride-step-duration, State.ride-step-target) + (State.ride-step-role != 0 ? " · " + Copy.role-name(State.ride-step-role) : "");
+            color: Theme.muted; font-size: 13px; overflow: elide;
+        }
+        if !over: HorizontalLayout {
+            spacing: 6px; alignment: start;
+            Text {
+                text: State.ride-step-remaining;
+                color: State.ride-step-remaining-seconds > 0 && State.ride-step-remaining-seconds <= 5 ? Theme.primary : Theme.ink;
+                font-size: 32px; font-weight: 700; vertical-alignment: bottom; font-family: "DejaVu Sans Mono";
+            }
+            VerticalLayout { alignment: end; padding-bottom: 7px; Caption { text: @tr("LEFT"); } }
+        }
+        if !over: Rectangle {
+            height: 6px; border-radius: 3px; background: Theme.sunken;
+            Rectangle { x: 0px; width: parent.width * min(1, max(0, State.ride-step-progress)); height: parent.height; border-radius: 3px; background: State.ride-target != "" ? tone : Theme.muted; }
+        }
+        if !over: HorizontalLayout {
+            spacing: 6px; alignment: start; padding-top: 4px;
+            Caption { text: State.ride-next-duration != "" ? @tr("NEXT") : @tr("LAST STEP"); vertical-alignment: center; }
+            if State.ride-next-duration != "": ZoneDot { y: (parent.height - self.height) / 2; zone: State.ride-next-target != "" ? State.ride-next-zone : 0; }
+            if State.ride-next-duration != "": Text { text: Copy.step-words(State.ride-next-duration, State.ride-next-target); color: Theme.ink; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
+        }
+        if !over && (State.ride-step-cadence != "" || State.ride-step-note != ""): HorizontalLayout {
+            spacing: 8px; alignment: start;
+            if State.ride-step-cadence != "": CadenceCue { y: (parent.height - self.height) / 2; }
+            if State.ride-step-note != "": Text { text: State.ride-step-note; color: Theme.ink; font-size: 13px; overflow: elide; vertical-alignment: center; min-width: 0px; }
+        }
+    }
+}
+
+// The gauge with the live power in it: the zone's color fills the arc, the target sits as
+// a tick with its band, so holding the number becomes a matter of keeping the arc in the band.
+component PowerGauge inherits Gauge {
+    in property <length> size: 300px;
+    width: root.size; height: root.size;
+    level: State.ride-power-level;
+    target: State.ride-target-level;
+    band: State.ride-band-level;
+    tone: State.ride-power-zone == 0 ? Theme.primary : Theme.zone-color(State.ride-power-zone);
+    thickness: root.size * 0.06;
+    VerticalLayout {
+        alignment: center; spacing: 0px;
+        Text { text: State.ride-power-live ? State.ride-power : "—"; color: State.ride-power-live ? Theme.ink : Theme.faint; font-size: root.size * 0.26; font-weight: 700; horizontal-alignment: center; font-family: "DejaVu Sans Mono"; }
+        Caption { text: @tr("WATTS"); horizontal-alignment: center; font-size: root.size * 0.045; }
+        if State.ride-delta != "": Text { text: State.ride-delta; color: State.ride-delta-state == 1 ? Theme.good : State.ride-delta-state == 2 ? Theme.warn : Theme.heart; font-size: root.size * 0.07; font-weight: 600; horizontal-alignment: center; font-family: "DejaVu Sans Mono"; }
+    }
+}
+
+// The guided ride's controls: resistance, intensity, skip. Tests keep their protocol.
+component HudControls inherits VerticalLayout {
+    in property <bool> wrap;
+    spacing: 8px;
+    if !root.wrap: HorizontalLayout {
+        spacing: 12px;
+        if State.erg-toggle-shown: ErgToggle { y: (parent.height - self.height) / 2; }
+        ErgStatus { horizontal-stretch: 1; }
+        if State.step-controls-shown && !State.ride-test: IntensityControl { }
+        if State.step-controls-shown && !State.ride-test: SkipButton { y: (parent.height - self.height) / 2; }
+    }
+    if root.wrap: HorizontalLayout {
+        spacing: 12px;
+        if State.erg-toggle-shown: ErgToggle { y: (parent.height - self.height) / 2; }
+        ErgStatus { horizontal-stretch: 1; }
+    }
+    if root.wrap && State.step-controls-shown && !State.ride-test: HorizontalLayout {
+        spacing: 12px;
+        IntensityControl { }
+        Rectangle { horizontal-stretch: 1; }
+        SkipButton { y: (parent.height - self.height) / 2; }
+    }
+}
+
+component FlowHud inherits Rectangle {
+    in property <bool> narrow;
+    // The window height, from the design root: the stage sizes the gauge from it rather
+    // than from its own height, which the layout derives from the gauge.
+    in property <length> stage: 800px;
+    property <bool> short: root.stage < 720px;
+    property <bool> guided: State.ride-guided;
+    property <bool> soon: State.ride-active && guided && !State.ride-workout-complete && State.ride-step-remaining-seconds > 0 && State.ride-step-remaining-seconds <= 5;
+    VerticalLayout {
+        // The slim bar: the clock, the ride, the two ride controls. No app chrome while riding.
+        Rectangle {
+            height: 60px; background: Theme.card.with-alpha(0.6);
+            HorizontalLayout {
+                padding-left: 20px; padding-right: 16px; spacing: 12px;
+                Rectangle { y: (parent.height - self.height) / 2; width: 10px; height: 10px; border-radius: 5px; background: State.ride-phase == 1 ? Theme.heart : Theme.pause; }
+                Text { text: State.ride-elapsed; color: Theme.ink; font-size: 26px; font-weight: 700; vertical-alignment: center; font-family: "DejaVu Sans Mono"; }
+                if !root.narrow: Text { text: State.ride-phase == 2 ? @tr("Paused") : @tr("Recording"); color: Theme.muted; font-size: 13px; vertical-alignment: center; }
+                Rectangle { width: 1px; height: 24px; y: (parent.height - self.height) / 2; background: Theme.border; }
+                Text { text: Copy.ride-title(); color: Theme.ink; font-size: 15px; font-weight: 600; overflow: elide; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px; }
+                if guided && !root.narrow: Caption { text: State.ride-workout-complete ? @tr("DONE") : @tr("{} LEFT", State.ride-workout-remaining); vertical-alignment: center; }
+                if State.ride-phase == 1: GlyphButton { y: (parent.height - self.height) / 2; size: 42px; glyph: "pause"; label: @tr("Pause"); tone: Theme.pause; activated => { Actions.pause-ride(); } }
+                if State.ride-phase == 2: GlyphButton { y: (parent.height - self.height) / 2; size: 42px; glyph: "play"; label: @tr("Resume"); filled: true; activated => { Actions.resume-ride(); } }
+                GlyphButton { y: (parent.height - self.height) / 2; size: 42px; glyph: "stop"; label: @tr("Finish ride"); tone: Theme.heart; activated => { Actions.finish-ride(); } }
+            }
+            Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
+        }
+        // The stage: the target beside the gauge beside the heart and the legs.
+        if !root.narrow: HorizontalLayout {
+            vertical-stretch: 1; padding: 20px; spacing: 20px; alignment: center;
+            // A row is only as tall as its shortest column allows, so every column here
+            // carries an unbounded spacer: the stage then takes the whole window height.
+            if guided: VerticalLayout {
+                width: min(300px, root.width * 0.28); alignment: center;
+                Rectangle { vertical-stretch: 1; }
+                TargetPanel { }
+                Rectangle { vertical-stretch: 1; }
+            }
+            VerticalLayout {
+                alignment: center; spacing: 12px;
+                Rectangle { vertical-stretch: 1; }
+                PowerGauge { size: max(220px, min(360px, root.stage - (root.short ? 330px : 380px))); }
+                if root.soon: Rectangle {
+                    height: 30px; border-radius: 15px; background: Theme.primary.with-alpha(0.16);
+                    Text { text: @tr("Next: {}", Copy.step-words(State.ride-next-duration, State.ride-next-target)); color: Theme.primary; font-size: 13px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                Rectangle { vertical-stretch: 1; }
+            }
+            VerticalLayout {
+                width: 190px; alignment: center; spacing: 12px;
+                Rectangle { vertical-stretch: 1; }
+                MetricTile { label: @tr("HEART RATE"); value: State.ride-hr; unit: @tr("bpm"); live: State.ride-hr-live; tone: Theme.heart; }
+                MetricTile { label: @tr("CADENCE"); value: State.ride-cadence; unit: @tr("rpm"); live: State.ride-cadence-live; tone: Theme.cadence; }
+                Rectangle { vertical-stretch: 1; }
+            }
+        }
+        if root.narrow: ScrollView {
+            vertical-stretch: 1;
+            VerticalLayout {
+                padding: 16px; spacing: 12px; alignment: start;
+                HorizontalLayout { alignment: center; PowerGauge { size: 200px; } }
+                if root.soon: Rectangle {
+                    height: 30px; border-radius: 15px; background: Theme.primary.with-alpha(0.16);
+                    Text { text: @tr("Next: {}", Copy.step-words(State.ride-next-duration, State.ride-next-target)); color: Theme.primary; font-size: 13px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                HorizontalLayout {
+                    spacing: 12px;
+                    MetricTile { label: @tr("HEART RATE"); value: State.ride-hr; unit: @tr("bpm"); live: State.ride-hr-live; tone: Theme.heart; size: 26px; }
+                    MetricTile { label: @tr("CADENCE"); value: State.ride-cadence; unit: @tr("rpm"); live: State.ride-cadence-live; tone: Theme.cadence; size: 26px; }
+                }
+                if guided: TargetPanel { }
+                if guided: HudControls { wrap: true; }
+                RideNotices { }
+                if guided: Rectangle { height: 44px; border-radius: 8px; background: Theme.card; border-width: 1px; border-color: Theme.border; PlanBar { x: 8px; y: 6px; width: parent.width - 16px; height: parent.height - 12px; steps: State.ride-plan; progress: State.ride-workout-progress; step-start: State.ride-step-start; step-share: State.ride-step-share; } }
+                ChartPanel { height: 150px; title: @tr("LAST 10 MINUTES"); }
+            }
+        }
+        if !root.narrow && (guided || State.ride-notice != 0 || State.ride-phase == 2 || !State.any-sensor): VerticalLayout {
+            padding-left: 20px; padding-right: 20px; padding-bottom: 12px; spacing: 10px;
+            if guided: HudControls { wrap: false; }
+            RideNotices { }
+        }
+        // The plan across the bottom, then the last ten minutes. Short windows keep the plan.
+        if !root.narrow && guided: Rectangle {
+            height: 58px; background: Theme.card.with-alpha(0.6);
+            Rectangle { y: 0px; height: 1px; background: Theme.border; }
+            HorizontalLayout {
+                padding: 8px; padding-left: 20px; padding-right: 20px; spacing: 14px;
+                Caption { text: @tr("PLAN"); vertical-alignment: center; }
+                PlanBar { horizontal-stretch: 1; steps: State.ride-plan; progress: State.ride-workout-progress; step-start: State.ride-step-start; step-share: State.ride-step-share; }
+                Caption { text: State.ride-plan-total; vertical-alignment: center; }
+            }
+        }
+        if !root.narrow && (!root.short || !guided): Rectangle {
+            height: guided ? 130px : 180px; background: Theme.card.with-alpha(0.4);
+            Rectangle { y: 0px; height: 1px; background: Theme.border; }
+            ChartPanel { x: 20px; y: 8px; width: parent.width - 40px; height: parent.height - 16px; framed: false; title: @tr("LAST 10 MINUTES"); }
+        }
+    }
+}
+
+component FlowSummary inherits Rectangle {
+    in property <bool> narrow;
+    Page { max: 960px; ScrollView { VerticalLayout {
+        padding-top: 24px; padding-bottom: 24px; padding-right: 4px; spacing: 16px; alignment: start;
+        HorizontalLayout {
+            spacing: 12px;
+            VerticalLayout {
+                spacing: 4px; horizontal-stretch: 1; min-width: 0px;
+                Caption { text: @tr("RIDE COMPLETE"); color: Theme.primary; }
+                HorizontalLayout {
+                    spacing: 10px; alignment: start;
+                    Text { text: Copy.ride-title(); color: Theme.ink; font-size: root.narrow ? 24px : 30px; font-weight: 700; overflow: elide; min-width: 0px; }
+                }
+            }
+            Text { text: State.ride-elapsed; color: Theme.ink; font-size: root.narrow ? 28px : 36px; font-weight: 700; vertical-alignment: center; font-family: "DejaVu Sans Mono"; }
+        }
+        SaveStatus { }
+        SummaryStats { }
+        ChartPanel { height: 200px; title: @tr("WHOLE RIDE"); }
+        if State.ride-saved: UploadCard { stacked: root.narrow; }
+        if State.ride-saved: FolderRow { }
+        if State.ride-saved: HorizontalLayout {
+            spacing: 12px; alignment: end;
+            ActionButton { label: @tr("Done"); primary: true; enabled: !State.ride-uploading; activated => { Actions.close-training(); } }
+        }
+    } } }
+}
+
+export component DesignFlow inherits Rectangle {
+    property <bool> narrow: root.width < 760px;
+    property <bool> immersive: State.logged-in && State.screen == 2 && State.ride-active;
+    VerticalLayout {
+        padding: 0px; spacing: 0px;
+        if !immersive: FlowHeader { narrow: root.narrow; compact: root.width < 940px; }
+        if !State.logged-in: FlowLogin { narrow: root.narrow; vertical-stretch: 1; }
+        if State.logged-in && State.screen == 0: FlowPair { narrow: root.narrow; vertical-stretch: 1; }
+        if State.logged-in && State.screen == 1: FlowChoose { narrow: root.narrow; vertical-stretch: 1; }
+        if State.logged-in && State.screen == 2 && State.ride-phase == 0: FlowReady { narrow: root.narrow; vertical-stretch: 1; }
+        if immersive: FlowHud { narrow: root.narrow; stage: root.height; vertical-stretch: 1; }
+        if State.logged-in && State.screen == 2 && State.ride-phase == 3: FlowSummary { narrow: root.narrow; vertical-stretch: 1; }
+    }
+}
