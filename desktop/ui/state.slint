@@ -1,0 +1,368 @@
+import { Palette as SystemPalette } from "std-widgets.slint";
+
+// The data the interface draws, the colors it draws with, the state Rust feeds and the
+// actions it answers. The screens read `State` and call `Actions`; nothing else crosses.
+
+// kind: 0 smart trainer, 1 heart-rate sensor, 2 read-only power meter.
+// transport: 0 Bluetooth, 1 ANT+. signal-level: -1 unknown (ANT+), 0..3 for Bluetooth.
+export struct NearbyDevice {
+    id: string,
+    name: string,
+    kind: int,
+    transport: int,
+    suffix: string,
+    signal-level: int,
+    saved: bool,
+}
+
+// One bar of a workout profile: where it starts and how much of the total time it covers
+// (both 0..1), its height as a fraction of the chart, and the training zone (1..7) that
+// colors it. Zone 0 is a free-ride block.
+export struct ProfileStep {
+    start: float,
+    share: float,
+    height: float,
+    zone: int,
+}
+
+export struct WorkoutRow {
+    id: string,
+    built-in: bool,
+    name: string,
+    meta: string,
+    summary: string,
+    profile: [ProfileStep],
+}
+
+// One time bin of the ride chart. Values are fractions of their axis; a bin without a
+// reading is a gap, never a zero. zone colors the power bar like the workout charts.
+export struct ChartBin {
+    has-power: bool,
+    power: float,
+    zone: int,
+    has-hr: bool,
+    hr: float,
+}
+
+// One step of a guided plan, as the step lists print it: the plan's own duration and
+// target wording, its role (see ride-step-role), the zone of its target, its share of the
+// whole workout, and the cues it carries.
+export struct PlanStep {
+    duration: string,
+    target: string,
+    role: int,
+    zone: int,
+    share: float,
+    cadence: string,
+    note: string,
+}
+
+// While a dialog is open, controls behind it must not take keyboard focus.
+export global Overlay {
+    in-out property <bool> open: false;
+}
+
+// Colors come from the Undertrained website (src/styles/globals.css, `:root` for light
+// and `.dark` for dark), converted from OKLCH to sRGB. The set in use follows the
+// operating system preference that Slint reports through the std-widgets palette.
+export global Theme {
+    // Capture-only override for documentation renders: 0 follows the system, 1 light, 2 dark.
+    in-out property <int> forced-scheme: 0;
+    out property <bool> dark: forced-scheme == 2 || (forced-scheme == 0 && SystemPalette.color-scheme == ColorScheme.dark);
+    out property <color> background: dark ? #25292e : #f9fafb;   // --background
+    out property <color> card: dark ? #3c4148 : #ffffff;         // --card
+    out property <color> sunken: dark ? #16181e : #eef0f4;       // --secondary, --muted
+    out property <color> raised: dark ? #4a5058 : #e8ebf0;       // --accent (dark: card lifted one step)
+    out property <color> border: dark ? #50545c : #d6d9de;       // --border, --input
+    out property <color> ink: dark ? #fafafa : #070a10;          // --foreground
+    out property <color> muted: dark ? #90a1b9 : #6e747c;        // --muted-foreground
+    out property <color> faint: muted.with-alpha(0.75);
+    out property <color> primary: dark ? #00ab81 : #006d48;      // --primary, --ring
+    out property <color> primary-hover: dark ? primary.brighter(0.12) : primary.darker(0.12);
+    out property <color> primary-ink: #fafafa;                   // --primary-foreground
+    out property <color> good: dark ? #5ec165 : #34893c;         // --chart-5
+    out property <color> warn: dark ? #ecab00 : #8a6200;         // --chart-8 (light: darkened for contrast on text)
+    out property <color> zone-1: dark ? #9b9fa5 : #83868c;
+    out property <color> zone-2: dark ? #569fff : #3680dd;
+    out property <color> zone-3: dark ? #53be70 : #25984d;
+    out property <color> zone-4: dark ? #f0bb3b : #cf9b00;
+    out property <color> zone-5: dark ? #ff7f3b : #e86518;
+    out property <color> zone-6: dark ? #ff5f5b : #de3b3d;
+    out property <color> zone-7: dark ? #ea3d38 : #c2181d;
+    out property <color> chart-grid: dark ? #656572 : #e2e3e8;   // chartTokens grid: free-ride blocks
+    out property <color> heart: dark ? #f87171 : #dc2626;        // the HUD's heart-rate red
+    out property <color> cadence: dark ? #f472b6 : #be185d;      // the HUD's cadence pink
+    out property <color> pause: dark ? #facc15 : #a16207;        // the HUD's pause yellow
+    out property <color> scrim: dark ? #000000b8 : #0f172a99;
+    // The zone ramp by index; 0 (free riding, no FTP) is the neutral grid color.
+    pure public function zone-color(zone: int) -> color {
+        return zone == 1 ? zone-1
+            : zone == 2 ? zone-2
+            : zone == 3 ? zone-3
+            : zone == 4 ? zone-4
+            : zone == 5 ? zone-5
+            : zone == 6 ? zone-6
+            : zone == 7 ? zone-7
+            : chart-grid;
+    }
+}
+
+// Everything Rust tells the interface. The window aliases every property so native code
+// keeps its `set_` and `get_` accessors; the design reads the global directly.
+export global State {
+    // Which layout the workout board uses: 0 list, 1 featured, 2 split. Remembered on
+    // this computer.
+    in-out property <int> library-variant: 0;
+    // The split layout's preview: the row the rider looked at, or the free ride. Interface
+    // state only; it lives here so a capture scene can show the pane filled.
+    in-out property <WorkoutRow> preview-workout;
+    in-out property <bool> preview-free: false;
+    in-out property <bool> previewing: false;
+    // "en" or "fr": the language in effect, decided by the account or the system. Rust
+    // selects the bundled translation; the interface offers no switch of its own.
+    in-out property <string> language: "en";
+    in-out property <bool> logged-in: false;
+    in-out property <string> rider-name: "";
+    // The server is fixed at build time. The origin is shown so a rider can tell which build this is;
+    // server-configured turns false when the compiled address failed validation.
+    in-out property <string> server-origin: "";
+    in-out property <bool> server-configured: true;
+    in-out property <bool> signing-in: false;
+    // Login notices: 0 none, 1 sign-in cancelled, 2 keyring unavailable (signed in for this visit),
+    // 3 keyring not cleared, 4 saved session not verified, 5 sign-in failed, 6 invalid build server,
+    // 7 signed out locally (server unreachable). The detail carries the raw reason when there is one.
+    in-out property <int> auth-notice: 0;
+    in-out property <string> auth-detail: "";
+    // Device-screen messages: 0 none, 1 device no longer available, 2 device already assigned,
+    // 3 connection failed, 4 Bluetooth switched off, 5 could not save devices, 6 radio error,
+    // 8 keyring unavailable.
+    in-out property <int> message-code: 0;
+    in-out property <string> message-detail: "";
+    in-out property <bool> scanning: false;
+    in-out property <bool> picker-open <=> Overlay.open;
+    in-out property <int> picker-role: 0;
+    // 0 = devices, 1 = workouts, 2 = the ride (ready, recording, paused, finished).
+    in-out property <int> screen: 0;
+    // Personal workouts matching the search, and the built-in tests matching it.
+    in-out property <[WorkoutRow]> workouts;
+    in-out property <[WorkoutRow]> built-ins;
+    in-out property <int> workouts-total: 0;
+    // Personal workouts within the total; the rest are tests built into Undertrained.
+    in-out property <int> workouts-personal: 0;
+    in-out property <string> workout-query: "";
+    // True while a non-blank search narrows both sections; set by Rust, which owns the filter.
+    in-out property <bool> workouts-filtering: false;
+    in-out property <bool> workouts-loading: false;
+    in-out property <bool> workouts-loaded: false;
+    // 0 none, 1 session expired, 2 server has no workout API, 3 network, 4 unreadable reply.
+    in-out property <int> workouts-error: 0;
+    // 0 none, 1 needs a live session, 2 not identified, 3 no longer in the library,
+    // 4 browser failed, 5 the selected workout vanished after a refresh.
+    in-out property <int> workouts-notice: 0;
+    in-out property <string> workouts-notice-detail: "";
+    in-out property <WorkoutRow> selected-workout;
+    // The ride screen. phase: 0 ready, 1 running, 2 paused, 3 finished. The workout, when
+    // any, is a cloned reference copy for the whole ride: refreshes never touch it.
+    in-out property <int> ride-phase: 0;
+    // True while a ride exists to return to, whatever its phase: opened, recording, paused,
+    // being saved, saved and waiting on Strava. Cleared only when the ride is let go.
+    in-out property <bool> ride-present: false;
+    in-out property <bool> ride-has-workout: false;
+    in-out property <string> ride-name: "";
+    in-out property <string> ride-meta: "";
+    in-out property <string> ride-summary: "";
+    in-out property <bool> ride-built-in: false;
+    in-out property <[ProfileStep]> ride-profile;
+    in-out property <string> ride-elapsed: "0:00";
+    in-out property <string> ride-paused-for: "0:00";
+    // Live readings and whether a sensor delivered them within the last seconds.
+    in-out property <string> ride-power: "—";
+    in-out property <string> ride-hr: "—";
+    in-out property <string> ride-cadence: "—";
+    in-out property <bool> ride-power-live: false;
+    in-out property <bool> ride-hr-live: false;
+    in-out property <bool> ride-cadence-live: false;
+    // The live power and the target as fractions of the ride's power scale (the plan's
+    // ceiling on a guided ride, the chart axis otherwise), for gauges and meters. Negative
+    // when there is nothing to place. The band is the target's tolerance on the same scale.
+    in-out property <float> ride-power-level: -1;
+    in-out property <float> ride-target-level: -1;
+    in-out property <float> ride-band-level: 0;
+    // The zone of the live power against the account's FTP; 0 when no FTP is known.
+    in-out property <int> ride-power-zone: 0;
+    in-out property <[ChartBin]> ride-chart;
+    in-out property <int> ride-chart-bins: 300;
+    in-out property <string> ride-chart-top: "";
+    in-out property <string> ride-chart-hr-range: "";
+    in-out property <bool> ride-chart-whole: false;
+    // The guided workout: the step plan the server sent with the workout, copied into the
+    // ride when it started and played on the recording's active clock. A workout without
+    // one (an older server) keeps its profile for reference only.
+    in-out property <bool> ride-guided: false;
+    // A built-in test: timed steps and targets, but no FTP result and no failure detection.
+    in-out property <bool> ride-test: false;
+    in-out property <[ProfileStep]> ride-plan;
+    in-out property <[PlanStep]> ride-steps;
+    in-out property <int> ride-plan-steps: 0;
+    in-out property <string> ride-plan-total: "";
+    in-out property <float> ride-workout-progress: 0;
+    in-out property <bool> ride-workout-complete: false;
+    in-out property <string> ride-workout-remaining: "";
+    // The current step: its 1-based number (0 when none), its place on the plan bar, and
+    // the plan's own wording for it. The role: 0 none, 1 warm-up, 2 work, 3 recovery,
+    // 4 rest, 5 cool-down.
+    in-out property <int> ride-step-number: 0;
+    in-out property <float> ride-step-start: 0;
+    in-out property <float> ride-step-share: 0;
+    in-out property <string> ride-step-duration: "";
+    in-out property <string> ride-step-target: "";
+    in-out property <int> ride-step-role: 0;
+    in-out property <string> ride-step-note: "";
+    in-out property <string> ride-step-remaining: "";
+    in-out property <int> ride-step-remaining-seconds: 0;
+    in-out property <float> ride-step-progress: 0;
+    in-out property <string> ride-step-cadence: "";
+    in-out property <bool> ride-cadence-off: false;
+    // The live target with the intensity applied: the one figure shown, sent and compared.
+    // Empty during a free step and once the workout is over.
+    in-out property <string> ride-target: "";
+    in-out property <int> ride-target-zone: 0;
+    in-out property <string> ride-delta: "";
+    // 0 nothing to compare, 1 on target, 2 over, 3 under.
+    in-out property <int> ride-delta-state: 0;
+    in-out property <string> ride-next-duration: "";
+    in-out property <string> ride-next-target: "";
+    in-out property <int> ride-next-zone: 0;
+    in-out property <int> ride-next-role: 0;
+    in-out property <string> ride-bias: "100 %";
+    in-out property <bool> ride-bias-can-down: true;
+    in-out property <bool> ride-bias-can-up: true;
+    // Resistance control. enabled is the rider's own switch, off on every ride until they
+    // turn it on. state: 0 off, 1 a target sent and not yet answered, 2 holding a target
+    // the trainer confirmed, 3 on with nothing in the trainer's hands (free step, pause,
+    // workout over), 4 a release sent and not yet answered. watts is the figure the state
+    // refers to, which is the same value the trainer was sent.
+    in-out property <bool> ride-erg-enabled: false;
+    in-out property <int> ride-erg-state: 0;
+    in-out property <string> ride-erg-watts: "";
+    // Only a connected Bluetooth trainer that advertised control can take targets.
+    out property <bool> ride-erg-available: resistance-state == 1;
+    // Completion.
+    in-out property <string> ride-avg-power: "—";
+    in-out property <string> ride-max-power: "—";
+    in-out property <string> ride-avg-hr: "—";
+    in-out property <string> ride-max-hr: "—";
+    in-out property <string> ride-avg-cadence: "—";
+    // 0 not saved yet, 1 saved, 2 save failed (detail holds the reason), 3 saving.
+    in-out property <int> ride-save-state: 0;
+    in-out property <string> ride-save-detail: "";
+    in-out property <string> ride-folder: "";
+    // 0 none, 1 writing samples failed so the ride paused itself (detail), 2 could not start (detail),
+    // 3 could not open the folder (detail), 4 could not open the browser (detail),
+    // 5 the trainer refused a target so control is off (detail), 6 the trainer disconnected
+    // while controlling, so control is off, 7 no power reading for five seconds, control off.
+    in-out property <int> ride-notice: 0;
+    in-out property <string> ride-notice-detail: "";
+    // The upload to Strava through the Undertrained account. Only the Upload button starts it.
+    // state: 0 not sent, 1 sending, 2 on Strava, 3 Strava still processing, 4 sent but not
+    // confirmed (never resent), 5 failed (error tells why; retry says whether trying again helps).
+    in-out property <string> ride-activity-name: "";
+    in-out property <int> ride-upload-state: 0;
+    // Error: 1 session expired, 2 server has no upload API, 3 Strava not connected on the
+    // website, 4 network, 5 server error, 6 unexpected reply, 7 local files (detail),
+    // 8 submitted from another account, 9 Strava rejected it (detail).
+    in-out property <int> ride-upload-error: 0;
+    in-out property <bool> ride-upload-retry: false;
+    in-out property <string> ride-upload-detail: "";
+    // The name goes with the first submission and cannot change afterwards.
+    in-out property <bool> ride-upload-submitted: false;
+    // The leave guard: 0 closed, 1 asked by navigation, 2 by sign-out, 3 by closing the window.
+    in-out property <int> leave-guard: 0;
+    out property <bool> ride-active: ride-phase == 1 || ride-phase == 2;
+    out property <bool> ride-unsaved: ride-phase == 3 && ride-save-state != 1;
+    out property <bool> ride-uploading: ride-phase == 3 && ride-upload-state == 1;
+    out property <bool> ride-saving: ride-phase == 3 && ride-save-state == 3;
+    // A ride at stake, or a finished ride whose upload is still to come, keeps every other
+    // screen from starting another one.
+    out property <bool> ride-busy: ride-active || ride-unsaved || ride-uploading;
+    // Any ride stays one click away from every other screen: one at stake, and one finished
+    // and saved whose upload is still to start, to check or to confirm.
+    out property <bool> ride-chip: logged-in && (ride-present || ride-busy) && screen != 2;
+    out property <bool> any-sensor: trainer-connected || hr-connected;
+    // True only with a verified account session; browser links depend on it.
+    in-out property <bool> session-live: false;
+    // Radios: 0 not checked, 1 ready, 2 unavailable. Known conditions arrive as an issue code
+    // worded here (Bluetooth: 1 switched off or blocked, 2 no adapter; ANT+: 1 no USB stick,
+    // 2 stick busy or permission denied); anything else keeps its raw reason as detail.
+    in-out property <int> bluetooth-state: 0;
+    in-out property <int> bluetooth-issue: 0;
+    in-out property <string> bluetooth-detail: "";
+    in-out property <int> ant-state: 0;
+    in-out property <int> ant-issue: 0;
+    in-out property <string> ant-detail: "";
+    in-out property <[NearbyDevice]> nearby;
+    in-out property <string> trainer-name: "";
+    in-out property <string> hr-name: "";
+    // Sensor state: 0 not connected, 1 connecting, 2 connected and waiting for data,
+    // 3 receiving data, 4 connected but nothing recent.
+    in-out property <int> trainer-state: 0;
+    in-out property <int> hr-state: 0;
+    in-out property <bool> trainer-ant: false;
+    in-out property <bool> hr-ant: false;
+    in-out property <string> power: "—";
+    in-out property <string> cadence: "—";
+    in-out property <string> heart-rate: "—";
+    // 0 not checked, 1 ERG supported, 2 read-only or unconfirmed, 3 readings only over ANT+.
+    in-out property <int> resistance-state: 0;
+    in-out property <bool> setup-saved: false;
+    in-out property <bool> help-open: false;
+    out property <bool> trainer-connected: trainer-state >= 2;
+    out property <bool> hr-connected: hr-state >= 2;
+    out property <bool> any-radio: bluetooth-state == 1 || ant-state == 1;
+    out property <bool> can-start: any-sensor && !signing-in;
+    out property <bool> ride-saved: ride-phase == 3 && ride-save-state == 1;
+    out property <bool> ride-ready: screen == 2 && ride-phase == 0;
+    out property <bool> erg-toggle-shown: ride-erg-available && (!ride-workout-complete || ride-erg-enabled);
+    // The step controls row has something to show: a cue, a note, or the intensity and skip.
+    out property <bool> step-controls-shown: ride-active && ride-guided && !ride-workout-complete && (ride-step-cadence != "" || ride-step-note != "" || !ride-test);
+    out property <bool> can-open-ride: any-sensor && !ride-busy;
+}
+
+// Everything the interface asks of Rust. Every design calls these; none has logic of its own.
+export global Actions {
+    callback sign-in();
+    callback cancel-sign-in();
+    callback sign-out();
+    callback search(int);
+    callback choose(string, int);
+    callback disconnect-device(int);
+    callback save-setup();
+    callback close-picker();
+    callback navigate(int);
+    callback refresh-workouts();
+    callback filter-workouts(string);
+    callback open-workout(string);
+    callback create-workout();
+    callback select-workout(string);
+    callback close-training();
+    callback start-free-ride();
+    callback start-ride();
+    callback pause-ride();
+    callback resume-ride();
+    callback finish-ride();
+    callback retry-save();
+    callback open-ride-folder();
+    callback upload-ride();
+    callback open-strava();
+    // Answers to the leave guard: keep recording, or finish the ride and stay on its summary.
+    callback keep-riding();
+    callback finish-and-stay();
+    // The guided workout: skip the current step (the workout clock alone moves), change the
+    // intensity by five percent in the given direction, switch resistance control on or off.
+    callback skip-step();
+    callback adjust-bias(int);
+    callback set-erg(bool);
+    pure callback name-valid(string) -> bool;
+    // The rider picked another layout for the workout board; Rust remembers it.
+    callback set-library-variant(int);
+}
