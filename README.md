@@ -4,6 +4,8 @@ A self-hosted web app for analyzing your Strava training data. Syncs activities 
 
 Built with Next.js, tRPC, Drizzle ORM, and PostgreSQL.
 
+The repository also holds **Undertrained Indoor**, a native desktop app for indoor cycling built with Rust and Slint, in [`desktop/`](desktop/README.md). It signs in to this web app and uses its `/api/desktop/*` endpoints. Everything else in this README is about the web app.
+
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 22+

@@ -3,6 +3,9 @@ pnpm-lock.yaml
 .next/
 src/server/db/migrations/
 
+# The desktop app is a Rust project, checked by its own workflow (rustfmt)
+desktop/
+
 # Build & tooling artefacts
 coverage/
 playwright/test-results/
