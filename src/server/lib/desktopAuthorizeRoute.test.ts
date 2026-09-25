@@ -1,9 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import handler from "~/pages/api/desktop/authorize";
 import { hash, nowSeconds, signApproval } from "~/server/lib/desktopAuth";
-
-import handler from "./authorize";
 
 const { getServerSession, insert } = vi.hoisted(() => ({
   getServerSession: vi.fn(),
@@ -12,7 +11,7 @@ const { getServerSession, insert } = vi.hoisted(() => ({
 
 vi.mock("next-auth/next", () => ({ getServerSession }));
 vi.mock("~/server/db", () => ({ db: { insert } }));
-vi.mock("../auth/[...nextauth]", () => ({ authOptions: {} }));
+vi.mock("~/pages/api/auth/[...nextauth]", () => ({ authOptions: {} }));
 
 const secret = "desktop-authorization-test-secret";
 const request = {

@@ -3,14 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TRPCError } from "@trpc/server";
 
+import handler from "~/pages/api/desktop/uploads";
 import {
   fitBytes,
   receiptUploadId,
   uploadReceipt,
 } from "~/server/lib/desktopUpload";
 import { resetRateLimits } from "~/server/lib/rateLimit";
-
-import handler from "./uploads";
 
 const mocks = vi.hoisted(() => ({ athlete: vi.fn(), token: vi.fn() }));
 vi.mock("~/server/lib/desktopSession", () => ({

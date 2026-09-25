@@ -3,9 +3,8 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import handler from "~/pages/api/desktop/workouts";
 import { makeStep, makeWorkout } from "~/utils/structuredWorkout/fixtures";
-
-import handler from "./workouts";
 
 const mocks = vi.hoisted(() => ({
   athlete: vi.fn(),
