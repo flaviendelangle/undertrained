@@ -24,8 +24,8 @@
   },
   "dependencies": {
     "@base-ui/plus": "https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@8688a28",
-    "@base-ui/react": "https://pkg.pr.new/mui/base-ui/@base-ui/react@78446e4",
-    "@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@78446e4",
+    "@base-ui/react": "https://pkg.pr.new/mui/base-ui/@base-ui/react@f57e15bc108fc18e4c9e965c6b482460e9709133",
+    "@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@f57e15bc108fc18e4c9e965c6b482460e9709133",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@markw65/fit-file-writer": "^0.1.9",
@@ -105,7 +105,9 @@
   },
   "pnpm": {
     "overrides": {
-      "@base-ui/react>@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@78446e4"
+      "@base-ui/react>@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@f57e15bc108fc18e4c9e965c6b482460e9709133",
+      "@base-ui/plus>@base-ui/react": "https://pkg.pr.new/mui/base-ui/@base-ui/react@f57e15bc108fc18e4c9e965c6b482460e9709133",
+      "@base-ui/plus>@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@f57e15bc108fc18e4c9e965c6b482460e9709133"
     }
   }
 }

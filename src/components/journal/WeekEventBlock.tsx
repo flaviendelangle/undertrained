@@ -17,12 +17,11 @@ import { useMapPrefetch } from "./ActivityPreviewCard";
 import { JournalRecordsContext, RACE_WORKOUT_TYPES } from "./JournalDayCell";
 import {
   getJournalDragPreviewTime,
-  journalKeyboardMovement,
   plannedTrainingDragKind,
 } from "./journalDnd";
 import {
   useJournalDragPreviewDrop,
-  useJournalDragPreviewModifiers,
+  useJournalDragPreviewSettings,
 } from "./journalDragPreview";
 import { useJournalPlanner } from "./journalPlanner";
 import { useJournalPreviewHandles } from "./journalPreview";
@@ -232,15 +231,13 @@ export function WeekPlannedBlock({
   const planner = useJournalPlanner();
   const config = getSportConfig(training.sportType);
   const label = t("journal.plannedLabel", { title: training.title });
-  const previewModifiers = useJournalDragPreviewModifiers();
+  const previewSettings = useJournalDragPreviewSettings();
 
   return (
     <Draggable.Root
       kind={plannedTrainingDragKind}
       payload={training}
-      label={label}
       disabled={continued}
-      keyboardMovement={journalKeyboardMovement}
       render={
         <button
           type="button"
@@ -268,7 +265,7 @@ export function WeekPlannedBlock({
       />
       <Draggable.Preview
         kind={plannedTrainingDragKind}
-        modifiers={previewModifiers}
+        {...previewSettings}
         className="pointer-events-none"
       >
         {({ source }) => {

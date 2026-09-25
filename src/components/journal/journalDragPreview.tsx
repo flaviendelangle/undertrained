@@ -1,11 +1,11 @@
 import * as React from "react";
 
-import type { DragModifiers } from "@base-ui/react/draggable";
+import type { DragPreviewSettings } from "@base-ui/react/draggable";
 
 import type { JournalDrop } from "./journalDnd";
 
-const JournalDragPreviewModifiersContext = React.createContext<
-  DragModifiers | undefined
+const JournalDragPreviewSettingsContext = React.createContext<
+  DragPreviewSettings | undefined
 >(undefined);
 const JournalDragPreviewDropContext = React.createContext<
   JournalDrop | null | undefined
@@ -13,31 +13,31 @@ const JournalDragPreviewDropContext = React.createContext<
 
 /** Shared visual configuration and live destination for Journal drag previews. */
 export function JournalDragPreviewProvider({
-  modifiers,
+  settings,
   drop,
   children,
 }: {
-  modifiers: DragModifiers;
+  settings: DragPreviewSettings;
   drop: JournalDrop | null;
   children: React.ReactNode;
 }) {
   return (
-    <JournalDragPreviewModifiersContext.Provider value={modifiers}>
+    <JournalDragPreviewSettingsContext.Provider value={settings}>
       <JournalDragPreviewDropContext.Provider value={drop}>
         {children}
       </JournalDragPreviewDropContext.Provider>
-    </JournalDragPreviewModifiersContext.Provider>
+    </JournalDragPreviewSettingsContext.Provider>
   );
 }
 
-export function useJournalDragPreviewModifiers(): DragModifiers {
-  const modifiers = React.useContext(JournalDragPreviewModifiersContext);
-  if (modifiers === undefined) {
+export function useJournalDragPreviewSettings(): DragPreviewSettings {
+  const settings = React.useContext(JournalDragPreviewSettingsContext);
+  if (settings === undefined) {
     throw new Error(
-      "useJournalDragPreviewModifiers must be used within a JournalDragPreviewProvider",
+      "useJournalDragPreviewSettings must be used within a JournalDragPreviewProvider",
     );
   }
-  return modifiers;
+  return settings;
 }
 
 export function useJournalDragPreviewDrop(): JournalDrop | null {

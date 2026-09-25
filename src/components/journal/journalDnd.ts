@@ -1,7 +1,9 @@
 import {
-  type DragKeyboardMovement,
   type DragLocationHistory,
   Draggable,
+  type DraggableViewportDragScrollEvent,
+  type DraggableViewportDragScrollEventDetails,
+  type MoveEndEvent,
 } from "@base-ui/react/draggable";
 import type { PlannedTraining } from "@server/db/types";
 
@@ -37,7 +39,27 @@ export interface JournalDrop {
   minutes: number;
 }
 
-export const JOURNAL_DRAG_AUTO_SCROLL_AXIS = "vertical" as const;
+/** Prevent edge scrolling across several virtualized weeks at once. */
+export function handleJournalDragScroll(
+  { direction }: Pick<DraggableViewportDragScrollEvent, "direction">,
+  details: Pick<DraggableViewportDragScrollEventDetails, "cancel">,
+) {
+  if (direction === "horizontal") {
+    details.cancel();
+  }
+}
+
+/** An end event also fires for Escape, pointer cancellation, and off-target release. */
+export function resolveJournalMoveEnd({
+  canceled,
+  dropTarget,
+  location,
+}: Pick<
+  MoveEndEvent,
+  "canceled" | "dropTarget" | "location"
+>): JournalDrop | null {
+  return !canceled && dropTarget != null ? resolveJournalDrop(location) : null;
+}
 
 /** Prospective time displayed by the drag preview, or nothing off-target. */
 export function getJournalDragPreviewTime(
@@ -80,23 +102,3 @@ export function resolveJournalDrop(
     ),
   };
 }
-
-/** Arrow keys move by one time slot vertically and one day horizontally. */
-export const journalKeyboardMovement: DragKeyboardMovement<PlannedTraining> = ({
-  position,
-  direction,
-  findTarget,
-}) => {
-  if (direction.y !== 0) {
-    return {
-      x: position.x,
-      y: position.y + direction.y * JOURNAL_SLOT_HEIGHT,
-    };
-  }
-  const nextDay = findTarget();
-  if (!nextDay) {
-    return false;
-  }
-  const rect = nextDay.getBoundingClientRect();
-  return { x: rect.left + rect.width / 2, y: position.y };
-};

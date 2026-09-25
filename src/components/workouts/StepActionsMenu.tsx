@@ -1,4 +1,6 @@
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   CopyIcon,
   EllipsisVerticalIcon,
   RepeatIcon,
@@ -17,6 +19,8 @@ import { useT } from "~/i18n/useT";
 
 interface StepActionsMenuProps {
   isRepeat: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onDuplicate: () => void;
   onWrap: () => void;
   canWrap: boolean;
@@ -24,15 +28,11 @@ interface StepActionsMenuProps {
   onDelete: () => void;
 }
 
-/**
- * Per-row actions.
- *
- * Deliberately short: reordering is dragging, and nesting is "+ Repeat" plus a
- * drag into the group. Menu entries duplicating a direct manipulation only make
- * the list of real actions harder to find.
- */
+/** Row actions, including a keyboard and tap alternative to dragging. */
 export function StepActionsMenu({
   isRepeat,
+  onMoveUp,
+  onMoveDown,
   onDuplicate,
   onWrap,
   canWrap,
@@ -50,6 +50,12 @@ export function StepActionsMenu({
         <EllipsisVerticalIcon className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onMoveUp}>
+          <ArrowUpIcon /> {t("workouts.step.moveUp")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onMoveDown}>
+          <ArrowDownIcon /> {t("workouts.step.moveDown")}
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={onDuplicate}>
           <CopyIcon /> {t("workouts.step.duplicate")}
         </DropdownMenuItem>

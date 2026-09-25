@@ -3,6 +3,7 @@ import * as React from "react";
 import { Redo2Icon, Undo2Icon } from "lucide-react";
 import { useRouter } from "next/router";
 
+import { Draggable } from "@base-ui/react/draggable";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 
 import { Button } from "~/components/ui/button";
@@ -265,7 +266,9 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
               {t("workouts.validation.empty")}
             </p>
           ) : (
-            <StepList nodes={editor.nodes} editor={editor} ftp={ftp} />
+            <Draggable.Provider>
+              <StepList nodes={editor.nodes} editor={editor} ftp={ftp} />
+            </Draggable.Provider>
           )}
         </div>
 

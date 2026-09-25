@@ -233,11 +233,17 @@ export function useBleTrainer() {
       const control = ftmsControlRef.current;
       ftmsControlRef.current = null;
       void (async () => {
-        if (control) {
-          await control.reset();
-          await control.dispose();
+        try {
+          if (control) await control.reset();
+        } catch (error) {
+          console.error("[BLE] Failed to release trainer control:", error);
+        } finally {
+          try {
+            if (control) await control.dispose();
+          } finally {
+            await connection.disconnect();
+          }
         }
-        await connection.disconnect();
       })();
     };
   }, []);

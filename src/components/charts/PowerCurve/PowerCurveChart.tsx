@@ -1,0 +1,540 @@
+import * as React from "react";
+
+import { bisector } from "d3-array";
+import { scaleLinear, scaleLog } from "d3-scale";
+
+import {
+  filterVisibleLabels,
+  measureTickLabels,
+} from "~/lib/chartTicks/visibleLabels";
+import { CHART_FONT, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
+
+import { CrosshairDot, CrosshairLine } from "../shared/Crosshair";
+import { PowerCurveTooltip } from "./PowerCurveTooltip";
+import { formatDuration } from "./formatDuration";
+import type { ActivityInfo, PowerCurveSeriesData } from "./types";
+
+// --- Constants ---
+
+// This chart's y-axis labels are short — at most 4 digits of watts ("9999 W")
+// or a small W/kg value ("12 W/kg") — drawn right-aligned 8px before the plot
+// area, so they need far less room than the standard MUI y-axis width. Keep the
+// right margin in step with the standard charts; tighten the left so the plot
+// starts closer to the card edge instead of leaving dead space before the
+// labels.
+const MARGIN = {
+  top: 16,
+  right: CHART_MARGINS.standard.right,
+  bottom: 36,
+  left: 46,
+};
+const LINE_WIDTH = 1.5;
+const X_AXIS_LABEL_STYLE = { fontSize: 11 };
+
+/** Well-known reference durations for X-axis tick marks. */
+const X_AXIS_TICKS = [
+  1,
+  5,
+  10,
+  30,
+  60,
+  2 * 60,
+  5 * 60,
+  10 * 60,
+  20 * 60,
+  30 * 60,
+  60 * 60,
+  2 * 3600,
+  3 * 3600,
+  5 * 3600,
+];
+
+const d3BisectorObj = bisector<number, number>((d: number) => d);
+
+// --- Props ---
+
+export type PowerCurveMode = "watts" | "wattsPerKg";
+
+export interface PowerCurveChartProps {
+  xData: number[];
+  series: PowerCurveSeriesData[];
+  activityMetadata: Record<string, (ActivityInfo | null)[]>;
+  mode: PowerCurveMode;
+}
+
+// --- Component ---
+
+export function PowerCurveChart({
+  xData,
+  series,
+  activityMetadata,
+  mode,
+}: PowerCurveChartProps) {
+  const tokens = useChartTokens();
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const svgRef = React.useRef<SVGSVGElement>(null);
+  const gridCtxRef = React.useRef<CanvasRenderingContext2D | null>(null);
+  const gridCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const [width, setWidth] = React.useState(0);
+  const [height, setHeight] = React.useState(0);
+  const [hoverIndex, setHoverIndex] = React.useState<number | null>(null);
+  const [hoverClientX, setHoverClientX] = React.useState<number | null>(null);
+  const [frozen, setFrozen] = React.useState(false);
+  const rafRef = React.useRef<number>(0);
+  const clipId = React.useId();
+
+  // Track container size — the chart fills the available space (like the MUI
+  // charts on the page) rather than using a fixed height, so the bottom margin
+  // reserves a consistent gap below the x-axis labels.
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setWidth(entry.contentRect.width);
+        setHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Initialize 2D grid canvas
+  const initGridCanvas = React.useCallback(
+    (canvas: HTMLCanvasElement | null) => {
+      if (!canvas) return;
+      gridCanvasRef.current = canvas;
+      gridCtxRef.current = canvas.getContext("2d", { alpha: true });
+    },
+    [],
+  );
+
+  // Dimensions — fill the container; derive the plot height so the top/bottom
+  // margins (axis labels + padding) sit inside the card the same way the MUI
+  // charts do.
+  const drawingWidth = Math.max(0, width - MARGIN.left - MARGIN.right);
+  const totalHeight = height;
+  const drawingHeight = Math.max(0, totalHeight - MARGIN.top - MARGIN.bottom);
+
+  // Compute Y values based on mode
+  const seriesValues = React.useMemo(() => {
+    return series.map((s) => {
+      if (mode === "watts") return s.yData;
+      return s.yData.map((v, i) => {
+        if (v == null) return null;
+        const weight = s.weights?.[i];
+        if (!weight || weight <= 0) return null;
+        return v / weight;
+      });
+    });
+  }, [series, mode]);
+
+  // Compute max Y value
+  const yMax = React.useMemo(() => {
+    let max = 0;
+    for (const values of seriesValues) {
+      for (const v of values) {
+        if (v != null && v > max) max = v;
+      }
+    }
+    if (mode === "watts") {
+      return Math.ceil(max / 100) * 100 || 400;
+    }
+    return Math.ceil(max) || 8;
+  }, [seriesValues, mode]);
+
+  // Scales
+  const xScale = React.useMemo(() => {
+    if (xData.length < 2)
+      return scaleLog().base(10).domain([1, 18000]).range([0, drawingWidth]);
+    return scaleLog()
+      .base(10)
+      .domain([xData[0], xData[xData.length - 1]])
+      .range([0, drawingWidth]);
+  }, [xData, drawingWidth]);
+
+  const yScale = React.useMemo(
+    () => scaleLinear().domain([0, yMax]).range([drawingHeight, 0]),
+    [yMax, drawingHeight],
+  );
+
+  // Y ticks
+  const yTicks = React.useMemo(() => {
+    const step = mode === "watts" ? 100 : 1;
+    const ticks: number[] = [];
+    for (let v = step; v < yMax; v += step) {
+      ticks.push(v);
+    }
+    return ticks;
+  }, [yMax, mode]);
+
+  // X ticks (filtered to domain). Tick marks + gridlines render for every entry
+  // here; label visibility is filtered separately below to avoid overlap at
+  // narrow widths.
+  const xTicks = React.useMemo(() => {
+    if (xData.length < 2) return [];
+    const [dMin, dMax] = xScale.domain();
+    return X_AXIS_TICKS.filter((t) => t >= dMin && t <= dMax);
+  }, [xData, xScale]);
+
+  const xTickLabels = React.useMemo(
+    () =>
+      xTicks.map((t) => ({
+        value: t,
+        label: formatDuration(t),
+        position: xScale(t),
+      })),
+    [xTicks, xScale],
+  );
+
+  const visibleXLabels = React.useMemo(() => {
+    const sizes = measureTickLabels(
+      xTickLabels.map((t) => t.label),
+      X_AXIS_LABEL_STYLE,
+    );
+    return filterVisibleLabels(xTickLabels, {
+      getPosition: (t) => t.position,
+      getLabel: (t) => t.label,
+      sizes,
+    });
+  }, [xTickLabels]);
+
+  // Resize the grid canvas.
+  const [gridCanvasSize, setGridCanvasSize] = React.useState<[number, number]>([
+    0, 0,
+  ]);
+  React.useEffect(() => {
+    const canvas = gridCanvasRef.current;
+    if (!canvas || width <= 0 || totalHeight <= 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.round(width * dpr);
+    const h = Math.round(totalHeight * dpr);
+    canvas.width = w;
+    canvas.height = h;
+    setGridCanvasSize([w, h]);
+  }, [width, totalHeight]);
+
+  // Draw 2D grid
+  React.useEffect(() => {
+    const ctx = gridCtxRef.current;
+    const canvas = gridCanvasRef.current;
+    if (!ctx || !canvas || drawingWidth <= 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.translate(MARGIN.left, MARGIN.top);
+    ctx.strokeStyle = tokens.grid.hex;
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 1;
+
+    // Horizontal grid
+    for (const tick of yTicks) {
+      const y = Math.round(yScale(tick)) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(drawingWidth, y);
+      ctx.stroke();
+    }
+
+    // Vertical grid
+    for (const tick of xTicks) {
+      const x = Math.round(xScale(tick)) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, drawingHeight);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }, [
+    xScale,
+    yScale,
+    xTicks,
+    yTicks,
+    drawingWidth,
+    drawingHeight,
+    tokens,
+    gridCanvasSize,
+  ]);
+
+  // Keep the curves in SVG alongside the axes and crosshair. Memoize paths so
+  // pointer movement does not rebuild the geometry.
+  const linePaths = React.useMemo(
+    () =>
+      seriesValues.map((values) => {
+        let path = "";
+        let connected = false;
+        for (let i = 0; i < xData.length; i++) {
+          const value = values[i];
+          if (value == null) {
+            connected = false;
+            continue;
+          }
+          path += `${connected ? "L" : "M"}${xScale(xData[i])},${yScale(value)}`;
+          connected = true;
+        }
+        return path;
+      }),
+    [seriesValues, xData, xScale, yScale],
+  );
+
+  // Mouse handling
+  const handleMouseMove = React.useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (frozen) return;
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        const svg = svgRef.current;
+        if (!svg) return;
+        const rect = svg.getBoundingClientRect();
+        const svgX = e.clientX - rect.left - MARGIN.left;
+
+        if (svgX < 0 || svgX > drawingWidth) {
+          setHoverIndex(null);
+          setHoverClientX(null);
+          return;
+        }
+
+        const durationValue = xScale.invert(svgX);
+        let dataIndex = d3BisectorObj.left(xData, durationValue);
+        dataIndex = Math.max(0, Math.min(dataIndex, xData.length - 1));
+
+        // Snap to closest point
+        if (dataIndex > 0 && dataIndex < xData.length) {
+          const dLeft = Math.abs(xData[dataIndex - 1] - durationValue);
+          const dRight = Math.abs(xData[dataIndex] - durationValue);
+          if (dLeft < dRight) dataIndex--;
+        }
+
+        setHoverIndex(dataIndex);
+        setHoverClientX(e.clientX);
+      });
+    },
+    [frozen, drawingWidth, xScale, xData],
+  );
+
+  const handleMouseLeave = React.useCallback(() => {
+    if (frozen) return;
+    cancelAnimationFrame(rafRef.current);
+    setHoverIndex(null);
+    setHoverClientX(null);
+  }, [frozen]);
+
+  const handleClick = React.useCallback(() => {
+    if (frozen) {
+      setFrozen(false);
+      setHoverIndex(null);
+      setHoverClientX(null);
+    } else if (hoverIndex !== null) {
+      setFrozen(true);
+    }
+  }, [frozen, hoverIndex]);
+
+  // Clean up rAF on unmount
+  React.useEffect(() => {
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  if (width === 0 || drawingHeight <= 0 || xData.length < 2) {
+    return (
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        style={{ minHeight: 200 }}
+      />
+    );
+  }
+
+  // Compute crosshair x position
+  const crosshairX = hoverIndex !== null ? xScale(xData[hoverIndex]) : null;
+
+  // Build tooltip entries
+  const tooltipEntries =
+    hoverIndex !== null
+      ? series.map((s, sIdx) => {
+          const rawValue = seriesValues[sIdx][hoverIndex];
+          const activity = activityMetadata[s.id]?.[hoverIndex] ?? null;
+          return {
+            id: s.id,
+            label: s.label,
+            color: s.color,
+            value: rawValue ?? null,
+            unit: mode === "watts" ? "W" : "W/kg",
+            activity,
+          };
+        })
+      : [];
+
+  return (
+    <div ref={containerRef} className="relative h-full w-full">
+      {/* Layer 1: 2D canvas for grid */}
+      <canvas
+        ref={initGridCanvas}
+        className="absolute inset-0"
+        style={{ width: `${width}px`, height: `${totalHeight}px` }}
+      />
+
+      {/* Layer 2: curves, axes, and interaction overlay */}
+      <svg
+        ref={svgRef}
+        width={width}
+        height={totalHeight}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
+        className="relative select-none"
+        style={{
+          background: "transparent",
+          cursor: frozen ? "pointer" : "crosshair",
+        }}
+      >
+        <defs>
+          <clipPath id={clipId}>
+            <rect width={drawingWidth} height={drawingHeight} />
+          </clipPath>
+        </defs>
+        <g
+          transform={`translate(${MARGIN.left}, ${MARGIN.top})`}
+          clipPath={`url(#${clipId})`}
+          fill="none"
+          strokeWidth={LINE_WIDTH}
+          pointerEvents="none"
+        >
+          {series.map((item, index) => (
+            <path key={item.id} d={linePaths[index]} stroke={item.color} />
+          ))}
+        </g>
+        {/* Static axes — memoized so hover re-renders don't rebuild them. */}
+        <PowerCurveAxes
+          yTicks={yTicks}
+          yScale={yScale}
+          mode={mode}
+          drawingWidth={drawingWidth}
+          drawingHeight={drawingHeight}
+          xTickLabels={xTickLabels}
+          visibleXLabels={visibleXLabels}
+          tokens={tokens}
+        />
+
+        {/* Crosshair */}
+        {crosshairX !== null && hoverIndex !== null && (
+          <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
+            <CrosshairLine
+              x={crosshairX}
+              height={drawingHeight}
+              color={tokens.crosshair}
+            />
+            {series.map((s, sIdx) => {
+              const value = seriesValues[sIdx][hoverIndex];
+              if (value == null) return null;
+              const cy = yScale(value);
+              return (
+                <CrosshairDot
+                  key={s.id}
+                  cx={crosshairX}
+                  cy={cy}
+                  color={s.color}
+                  ringColor={tokens.cardBg}
+                />
+              );
+            })}
+          </g>
+        )}
+      </svg>
+
+      {/* Layer 4: HTML Tooltip */}
+      {hoverIndex !== null && hoverClientX !== null && (
+        <PowerCurveTooltip
+          clientX={hoverClientX}
+          containerRef={containerRef}
+          duration={xData[hoverIndex]}
+          entries={tooltipEntries}
+          frozen={frozen}
+        />
+      )}
+    </div>
+  );
+}
+
+// --- Static axes ---
+
+type XTickLabel = { value: number; label: string; position: number };
+
+interface PowerCurveAxesProps {
+  yTicks: number[];
+  yScale: (value: number) => number;
+  mode: PowerCurveMode;
+  drawingWidth: number;
+  drawingHeight: number;
+  xTickLabels: XTickLabel[];
+  visibleXLabels: Set<XTickLabel>;
+  tokens: ReturnType<typeof useChartTokens>;
+}
+
+/**
+ * Static axes (y-labels + x-axis ticks), split into a memoized component so a
+ * hover/mousemove — which updates `hoverIndex` on the parent every frame — does
+ * not re-create the whole axis SVG tree. None of these props depend on the
+ * hover state, so React.memo skips the re-render.
+ */
+const PowerCurveAxes = React.memo(function PowerCurveAxes({
+  yTicks,
+  yScale,
+  mode,
+  drawingWidth,
+  drawingHeight,
+  xTickLabels,
+  visibleXLabels,
+  tokens,
+}: PowerCurveAxesProps) {
+  return (
+    <>
+      {/* Y-axis labels */}
+      <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
+        {yTicks.map((tick) => (
+          <text
+            key={tick}
+            x={-8}
+            y={yScale(tick)}
+            textAnchor="end"
+            dominantBaseline="middle"
+            fill={tokens.axisLabel}
+            fontSize={CHART_FONT.tick}
+          >
+            {mode === "watts" ? `${tick} W` : `${tick} W/kg`}
+          </text>
+        ))}
+      </g>
+
+      {/* X-axis */}
+      <g transform={`translate(${MARGIN.left}, ${MARGIN.top + drawingHeight})`}>
+        <line
+          x1={0}
+          y1={0}
+          x2={drawingWidth}
+          y2={0}
+          stroke={tokens.gridStrong.hex}
+          strokeWidth={1}
+        />
+        {xTickLabels.map((item) => (
+          <g key={item.value} transform={`translate(${item.position}, 0)`}>
+            <line y1={0} y2={5} stroke={tokens.gridStrong.hex} />
+            {visibleXLabels.has(item) && (
+              <text
+                y={18}
+                textAnchor="middle"
+                fill={tokens.axisLabel}
+                fontSize={CHART_FONT.tick}
+              >
+                {item.label}
+              </text>
+            )}
+          </g>
+        ))}
+      </g>
+    </>
+  );
+});

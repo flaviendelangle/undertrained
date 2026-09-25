@@ -3,7 +3,6 @@ import * as React from "react";
 import { GripVerticalIcon } from "lucide-react";
 
 import { Draggable } from "@base-ui/react/draggable";
-import { DropTarget } from "@base-ui/react/drop-target";
 
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
@@ -64,30 +63,30 @@ export function StepDropZone({
   const [position, setPosition] = React.useState<DropPosition | null>(null);
 
   return (
-    <DropTarget.Root
+    <Draggable.Target
       accept={STEP_DRAG_KIND}
-      label={label}
+      aria-label={label}
       // A row can't be dropped on itself, and the tree guards the rest
       // (dropping a repeat into its own subtree) inside `moveNodeTo`.
       canDrop={({ source }) => source.payload?.id !== id}
-      onDrag={({ location, self }) =>
+      onDraggableMove={({ location, target }) =>
         setPosition(
           resolvePosition(
-            self.element,
+            target.element,
             location.current.input.clientY,
             acceptsInside,
           ),
         )
       }
-      onDragLeave={() => setPosition(null)}
-      onDrop={({ source, location, self }) => {
+      onDraggableLeave={() => setPosition(null)}
+      onDraggableDrop={({ source, location, target }) => {
         setPosition(null);
         const dragId = source.payload?.id;
         if (dragId == null) return;
         onDrop(
           dragId,
           resolvePosition(
-            self.element,
+            target.element,
             location.current.input.clientY,
             acceptsInside,
           ),
@@ -106,7 +105,7 @@ export function StepDropZone({
         />
       )}
       {children}
-    </DropTarget.Root>
+    </Draggable.Target>
   );
 }
 
@@ -153,7 +152,7 @@ export function StepDraggable({
     <Draggable.Root
       kind={STEP_DRAG_KIND}
       payload={{ id }}
-      label={label}
+      aria-label={label}
       className={cn("data-dragging:opacity-40", className)}
     >
       {children}

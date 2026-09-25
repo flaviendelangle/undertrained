@@ -98,17 +98,6 @@ export function useTrainingSession() {
     return () => clearInterval(interval);
   }, [pausedAt]);
 
-  // Warn before leaving during an active session
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (state === "running" || state === "paused") {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [state]);
-
   // Cleanup on unmount
   useEffect(() => {
     return () => stopTimer();

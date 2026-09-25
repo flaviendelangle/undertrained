@@ -938,6 +938,16 @@ const en = {
     },
   },
   liveTraining: {
+    leaveTitle: "Leave this ride?",
+    leaveDescription:
+      "Save the recording as a FIT file before leaving, discard it, or cancel to keep riding.",
+    saveAndLeave: "Save and leave",
+    discardAndLeave: "Discard and leave",
+    trainerDisconnected:
+      "Trainer disconnected. Reconnect to keep recording power.",
+    reconnect: "Reconnect",
+    reconnecting: "Connecting…",
+
     equipmentCallout:
       "Set your weight, bike weight, and aerodynamics (CdA, Crr) in Settings for accurate watts/kg and virtual speed.",
     compat: {
@@ -1141,6 +1151,8 @@ const en = {
       cadenceLow: "Min cadence",
       cadenceHigh: "Max cadence",
       note: "Note",
+      moveUp: "Move up",
+      moveDown: "Move down",
       reorder: "Drag to reorder",
       duplicate: "Duplicate",
       delete: "Delete",

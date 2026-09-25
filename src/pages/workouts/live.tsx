@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { BrowserCompatibilityBanner } from "~/components/liveTraining/BrowserCompatibilityBanner";
 import { FtpTestResult } from "~/components/liveTraining/FtpTestResult";
+import { RideNavigationDialog } from "~/components/liveTraining/RideNavigationDialog";
 import { HudConnectionWizard } from "~/components/liveTraining/hud/HudConnectionWizard";
 import { HudMainView } from "~/components/liveTraining/hud/HudMainView";
 import { HudPauseOverlay } from "~/components/liveTraining/hud/HudPauseOverlay";
@@ -18,6 +19,7 @@ import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import type { TrainingPageControllerOptions } from "~/hooks/useTrainingPageController";
 import { useTrainingPageController } from "~/hooks/useTrainingPageController";
 import { useT } from "~/i18n/useT";
+import { downloadFitFile, generateFitFile } from "~/utils/fitFileGenerator";
 import {
   type BuiltInWorkoutId,
   builtInWorkout,
@@ -141,8 +143,41 @@ function LiveWorkout({
 
   return (
     <div className="relative h-full overflow-hidden">
+      <RideNavigationDialog
+        enabled={
+          ctrl.session.state === "running" ||
+          ctrl.session.state === "paused" ||
+          ctrl.recorder.getDataPoints().length > 0
+        }
+        onSave={() => {
+          const summary = ctrl.recorder.computeSummary();
+          if (summary)
+            downloadFitFile(
+              generateFitFile(ctrl.recorder.getDataPoints(), summary),
+            );
+        }}
+      />
       <div className="absolute top-0 right-0 left-0 z-[60] flex flex-col gap-2 p-2">
         <BrowserCompatibilityBanner />
+        {(phase === "main" || phase === "paused") &&
+          ctrl.trainer.state !== "connected" && (
+            <div
+              role="status"
+              className="bg-card flex items-center justify-between gap-3 rounded p-3 text-sm"
+            >
+              <span>{t("liveTraining.trainerDisconnected")}</span>
+              <Button
+                disabled={ctrl.trainer.state === "connecting"}
+                onClick={() => void ctrl.trainer.connect()}
+              >
+                {t(
+                  ctrl.trainer.state === "connecting"
+                    ? "liveTraining.reconnecting"
+                    : "liveTraining.reconnect",
+                )}
+              </Button>
+            </div>
+          )}
         {startBlocked && (
           <p className="bg-card rounded p-3 text-sm">
             {t("workouts.ftpRequired")}

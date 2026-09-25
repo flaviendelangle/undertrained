@@ -14,6 +14,7 @@ import { ErrorBoundary } from "~/components/ErrorBoundary";
 import { PostHogProvider } from "~/components/PostHogProvider";
 import { LoggedInLayout } from "~/components/layouts/LoggedInLayout";
 import { TooltipProvider } from "~/components/ui/tooltip";
+import { useNavigationHistory } from "~/hooks/useRideNavigationGuard";
 import "~/styles/globals.css";
 import { trpc } from "~/utils/trpc";
 
@@ -36,6 +37,7 @@ const App = (({
   pageProps: { session, ...pageProps },
   nonce,
 }: AppPropsWithLayout) => {
+  useNavigationHistory();
   const getLayout =
     Component.getLayout ?? ((page) => <LoggedInLayout>{page}</LoggedInLayout>);
 

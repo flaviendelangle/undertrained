@@ -65,7 +65,12 @@ export function useAntTrainer() {
   useEffect(() => {
     const connection = connectionRef.current;
     return () => {
-      void connection.disconnect();
+      void connection
+        .releaseControl()
+        .catch((error: unknown) => {
+          console.error("[ANT+] Failed to release trainer control:", error);
+        })
+        .finally(() => connection.disconnect());
     };
   }, []);
 

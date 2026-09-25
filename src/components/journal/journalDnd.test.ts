@@ -2,19 +2,16 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type {
-  DragKeyboardMoveDetails,
   DragLocationHistory,
   DropTargetRecord,
 } from "@base-ui/react/draggable";
-import type { PlannedTraining } from "@server/db/types";
 
 import {
-  JOURNAL_DRAG_AUTO_SCROLL_AXIS,
-  JOURNAL_SLOT_HEIGHT,
   getJournalDragPreviewTime,
+  handleJournalDragScroll,
   journalDayDropKind,
-  journalKeyboardMovement,
   resolveJournalDrop,
+  resolveJournalMoveEnd,
 } from "./journalDnd";
 
 function makeDayTarget(snappedY: number): DropTargetRecord<string> {
@@ -24,7 +21,9 @@ function makeDayTarget(snappedY: number): DropTargetRecord<string> {
   );
   return {
     element,
-    label: "2026-08-11",
+    updatePayload: vi.fn(),
+    dragData: undefined,
+    updateDragData: vi.fn(),
     kind: journalDayDropKind.id,
     payload: "2026-08-11",
     getLocalPoint: () => ({ x: 0.5, y: snappedY }),
@@ -82,36 +81,46 @@ describe("Journal drag preview", () => {
   });
 
   it("keeps horizontal edge scrolling disabled", () => {
-    expect(JOURNAL_DRAG_AUTO_SCROLL_AXIS).toBe("vertical");
+    const cancel = vi.fn();
+    handleJournalDragScroll({ direction: "horizontal" }, { cancel });
+    expect(cancel).toHaveBeenCalledOnce();
+    cancel.mockClear();
+    handleJournalDragScroll({ direction: "vertical" }, { cancel });
+    expect(cancel).not.toHaveBeenCalled();
   });
 });
 
-describe("journalKeyboardMovement", () => {
-  const baseDetails = {
-    position: { x: 300, y: 480 },
-  } as DragKeyboardMoveDetails<PlannedTraining>;
-
-  it("moves vertically by one 15-minute slot", () => {
+describe("resolveJournalMoveEnd", () => {
+  it("commits a released drag over a day", () => {
+    const day = makeDayTarget(10 / 24);
     expect(
-      journalKeyboardMovement({
-        ...baseDetails,
-        direction: { x: 0, y: 1 },
+      resolveJournalMoveEnd({
+        canceled: false,
+        dropTarget: day,
+        location: makeLocation(day, 150, 680),
       }),
-    ).toEqual({ x: 300, y: 480 + JOURNAL_SLOT_HEIGHT });
+    ).toEqual({ dayKey: "2026-08-11", minutes: 600 });
   });
 
-  it("moves horizontally to the adjacent day", () => {
-    const nextDay = document.createElement("div");
-    vi.spyOn(nextDay, "getBoundingClientRect").mockReturnValue(
-      new DOMRect(700, 200, 100, 1152),
-    );
-
+  it("does not commit a canceled drag even with a day in the location", () => {
+    const day = makeDayTarget(10 / 24);
     expect(
-      journalKeyboardMovement({
-        ...baseDetails,
-        direction: { x: 1, y: 0 },
-        findTarget: () => nextDay,
+      resolveJournalMoveEnd({
+        canceled: true,
+        dropTarget: day,
+        location: makeLocation(day, 150, 680),
       }),
-    ).toEqual({ x: 750, y: 480 });
+    ).toBeNull();
+  });
+
+  it("does not commit an off-target release with a stale location", () => {
+    const day = makeDayTarget(10 / 24);
+    expect(
+      resolveJournalMoveEnd({
+        canceled: false,
+        dropTarget: null,
+        location: makeLocation(day, 150, 680),
+      }),
+    ).toBeNull();
   });
 });

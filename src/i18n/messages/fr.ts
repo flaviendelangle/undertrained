@@ -961,6 +961,16 @@ const fr: Messages = {
     },
   },
   liveTraining: {
+    leaveTitle: "Quitter cette sortie ?",
+    leaveDescription:
+      "Enregistrez la sortie au format FIT avant de quitter, abandonnez-la ou annulez pour continuer.",
+    saveAndLeave: "Enregistrer et quitter",
+    discardAndLeave: "Abandonner et quitter",
+    trainerDisconnected:
+      "Home trainer déconnecté. Reconnectez-le pour continuer à enregistrer la puissance.",
+    reconnect: "Reconnecter",
+    reconnecting: "Connexion…",
+
     equipmentCallout:
       "Renseignez votre poids, le poids du vélo et l'aérodynamique (CdA, Crr) dans les Réglages pour des watts/kg et une vitesse virtuelle précis.",
     compat: {
@@ -1167,6 +1177,8 @@ const fr: Messages = {
       cadenceLow: "Cadence min",
       cadenceHigh: "Cadence max",
       note: "Note",
+      moveUp: "Monter",
+      moveDown: "Descendre",
       reorder: "Glisser pour réordonner",
       duplicate: "Dupliquer",
       delete: "Supprimer",

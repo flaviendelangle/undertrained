@@ -50,6 +50,7 @@ export function useBleHeartRate() {
         },
         onDisconnect: () => {
           setState("disconnected");
+          setData(null);
           setDeviceName(null);
         },
       });

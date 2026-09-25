@@ -13,6 +13,9 @@ import { useTrainingPageController } from "./useTrainingPageController";
 
 const mocks = vi.hoisted(() => ({
   data: null as TrainerData | null,
+  hrState: "disconnected",
+  hrData: null as { heartRate: number } | null,
+  trainerState: "connected",
   setTargetPower: vi.fn(() => Promise.resolve()),
   releaseControl: vi.fn(() => Promise.resolve()),
 }));
@@ -27,16 +30,16 @@ vi.mock("~/hooks/useBleHeartRate", () => ({
   useBleHeartRate: () => ({ state: "disconnected", data: null }),
 }));
 vi.mock("~/hooks/useAntHeartRate", () => ({
-  useAntHeartRate: () => ({ state: "disconnected", data: null }),
+  useAntHeartRate: () => ({ state: mocks.hrState, data: mocks.hrData }),
 }));
 vi.mock("~/hooks/useBleTrainer", () => ({
   useBleTrainer: () => ({ state: "disconnected", data: null }),
 }));
 vi.mock("~/hooks/useAntTrainer", () => ({
   useAntTrainer: () => ({
-    state: "connected",
+    state: mocks.trainerState,
     data: mocks.data,
-    supportsControl: true,
+    supportsControl: mocks.trainerState === "connected",
     setTargetPower: mocks.setTargetPower,
     releaseControl: mocks.releaseControl,
   }),
@@ -66,6 +69,9 @@ vi.mock("~/hooks/useErgMode", async () => {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  mocks.hrState = "disconnected";
+  mocks.hrData = null;
+  mocks.trainerState = "connected";
   mocks.data = { power: 300, cadence: 85 };
 });
 afterEach(() => {
@@ -126,3 +132,68 @@ it.each([false, true])(
   },
   20000,
 );
+
+const steadyWorkout = builtInWorkout("ramp-test", 200, (key) => key);
+it.each(["disconnected", "stale"])(
+  "does not record %s heart-rate data",
+  async (mode) => {
+    mocks.hrState = "connected";
+    mocks.hrData = { heartRate: 170 };
+    const { result, rerender } = renderHook(() =>
+      useTrainingPageController({ workout: steadyWorkout }),
+    );
+    act(() => result.current.startSession());
+    if (mode === "disconnected") mocks.hrState = "disconnected";
+    rerender();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+    expect(
+      result.current.recorder.getDataPoints().at(-1)?.heartRate,
+    ).toBeNull();
+    expect(result.current.currentHr).toBeNull();
+    mocks.data = { power: 200, heartRate: 145 };
+    rerender();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(result.current.recorder.getDataPoints().at(-1)?.heartRate).toBe(145);
+  },
+);
+it("returns an empty stopped ride to idle", async () => {
+  const { result } = renderHook(() =>
+    useTrainingPageController({ workout: steadyWorkout }),
+  );
+  act(() => result.current.startSession());
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(500);
+  });
+  act(() => result.current.handleStop());
+  expect(result.current.session.state).toBe("idle");
+  expect(result.current.recorder.getDataPoints()).toEqual([]);
+});
+it("keeps the recording and resumes ERG after reconnecting", async () => {
+  const { result, rerender } = renderHook(() =>
+    useTrainingPageController({ workout: steadyWorkout }),
+  );
+  act(() => result.current.startSession());
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  mocks.trainerState = "disconnected";
+  rerender();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(result.current.recorder.getDataPoints().at(-1)?.power).toBeNull();
+  const points = result.current.recorder.getDataPoints();
+  mocks.trainerState = "connected";
+  mocks.data = { power: 200, cadence: 85 };
+  rerender();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(result.current.recorder.getDataPoints()).toBe(points);
+  expect(points.at(-1)?.power).toBe(200);
+  expect(result.current.session.state).toBe("running");
+});

@@ -4,15 +4,13 @@ import { addDays, format, isSameMonth } from "date-fns";
 import { ChevronDownIcon } from "lucide-react";
 import { flushSync } from "react-dom";
 
-import { DragAutoScroll } from "@base-ui/react/drag-auto-scroll";
 import {
   type DragLocationHistory,
   type DragModifier,
-  type DragModifiers,
+  type DragPreviewSettings,
   Draggable,
 } from "@base-ui/react/draggable";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
-import { useDragMonitor } from "@base-ui/react/use-drag-monitor";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 import type { PlannedTraining } from "@server/db/types";
 
@@ -29,11 +27,12 @@ import { cn } from "~/lib/utils";
 import { WeekBlock, earliestMinutesOfWeek } from "./WeekBlock";
 import {
   JOURNAL_DAY_COLUMN_SELECTOR,
-  JOURNAL_DRAG_AUTO_SCROLL_AXIS,
   JOURNAL_SLOT_HEIGHT,
   type JournalDrop,
+  handleJournalDragScroll,
   plannedTrainingDragKind,
   resolveJournalDrop,
+  resolveJournalMoveEnd,
 } from "./journalDnd";
 import { JournalDragPreviewProvider } from "./journalDragPreview";
 import { buildWeekGroups } from "./journalView";
@@ -338,8 +337,11 @@ function JournalWeekViewImpl({
     [topOffset],
   );
 
-  const trainingPreviewModifiers = React.useMemo<DragModifiers>(
-    () => [snapTrainingToGrid, restrictTrainingToGrid],
+  const trainingPreviewSettings = React.useMemo<DragPreviewSettings>(
+    () => ({
+      modifiers: [snapTrainingToGrid, restrictTrainingToGrid],
+      container: scrollRef,
+    }),
     [restrictTrainingToGrid, snapTrainingToGrid],
   );
 
@@ -378,19 +380,19 @@ function JournalWeekViewImpl({
 
   // One monitor replaces per-source lifecycle props. It also keeps the custom
   // preview's content synchronized with the same snapped target used on drop.
-  useDragMonitor({
+  Draggable.useDragMonitor({
     accept: plannedTrainingDragKind,
-    onDragStart: ({ source, location }) =>
+    onMoveStart: ({ source, location }) =>
       handleTrainingDragStart(source.payload, location),
-    onDrag: ({ location }) => updateDragPreview(location),
-    onDropTargetChange: ({ location }) => updateDragPreview(location),
-    onDrop: ({ source, location }) => {
-      const drop = resolveJournalDrop(location);
+    onMove: ({ location }) => updateDragPreview(location),
+    onTargetChange: ({ location }) => updateDragPreview(location),
+    onMoveEnd: (event) => {
+      const drop = resolveJournalMoveEnd(event);
       if (drop != null) {
-        handleTrainingDrop(source.payload, drop);
+        handleTrainingDrop(event.source.payload, drop);
       }
+      handleTrainingDragEnd();
     },
-    onDragEnd: handleTrainingDragEnd,
   });
 
   // A pending drop has already been locally moved, so only an active drag still
@@ -663,13 +665,13 @@ function JournalWeekViewImpl({
 
   const journalGrid = (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <DragAutoScroll.Root
+      <Draggable.Viewport
         ref={scrollRef}
         accept={plannedTrainingDragKind}
         // Horizontal edge scrolling is intentionally disabled: each virtualized
         // item is a full week, so the auto-scroller advances several weeks per
         // second and makes precise cross-week drops unusable.
-        allowedAxis={JOURNAL_DRAG_AUTO_SCROLL_AXIS}
+        onDragScroll={handleJournalDragScroll}
         className={cn(
           "relative min-h-0 flex-1 overflow-auto",
           // Programmatic scrollToIndex glides; users who prefer reduced motion
@@ -808,18 +810,16 @@ function JournalWeekViewImpl({
             })}
           </div>
         </div>
-      </DragAutoScroll.Root>
+      </Draggable.Viewport>
     </div>
   );
 
   return (
     <JournalDragPreviewProvider
-      modifiers={trainingPreviewModifiers}
+      settings={trainingPreviewSettings}
       drop={dragPreviewDrop}
     >
-      <Draggable.PreviewProvider container={scrollRef}>
-        {journalGrid}
-      </Draggable.PreviewProvider>
+      <Draggable.Provider>{journalGrid}</Draggable.Provider>
     </JournalDragPreviewProvider>
   );
 }

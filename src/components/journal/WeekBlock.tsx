@@ -3,7 +3,7 @@ import * as React from "react";
 import { format } from "date-fns";
 import type { Locale } from "date-fns";
 
-import { DropTarget } from "@base-ui/react/drop-target";
+import { Draggable } from "@base-ui/react/draggable";
 
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
@@ -74,11 +74,10 @@ function DayColumn({
   };
 
   return (
-    <DropTarget.Root
+    <Draggable.Target
       accept={plannedTrainingDragKind}
       kind={journalDayDropKind}
       payload={dayKey}
-      label={dayKey}
       snap={{ y: JOURNAL_DAY_SNAP_STEPS }}
       data-journal-day-column=""
       onDoubleClick={handleDoubleClick}
@@ -140,7 +139,7 @@ function DayColumn({
           ) : null}
         </div>
       ))}
-    </DropTarget.Root>
+    </Draggable.Target>
   );
 }
 

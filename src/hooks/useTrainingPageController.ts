@@ -50,6 +50,21 @@ export interface TrainingPageControllerOptions {
   startSuspended?: boolean;
 }
 
+/** Expire HUD values even while the session clock is idle or paused. */
+function useFreshSensorData<T>(
+  data: T | null,
+  connected: boolean,
+  maxAge: number,
+) {
+  const [expiredData, setExpiredData] = useState<T | null>(null);
+  useEffect(() => {
+    if (!connected || data == null) return;
+    const timeout = setTimeout(() => setExpiredData(data), maxAge);
+    return () => clearTimeout(timeout);
+  }, [data, connected, maxAge]);
+  return connected && data !== expiredData ? data : null;
+}
+
 export function useTrainingPageController(
   options: TrainingPageControllerOptions,
 ) {
@@ -68,6 +83,17 @@ export function useTrainingPageController(
   // Pick active sensor based on selected source
   const hr = hrSource === "ble" ? bleHr : antHr;
   const trainer = trainerSource === "ble" ? bleTrainer : antTrainer;
+
+  const liveHrData = useFreshSensorData(
+    hr.data,
+    hr.state === "connected",
+    5000,
+  );
+  const liveTrainerData = useFreshSensorData(
+    trainer.data,
+    trainer.state === "connected",
+    2500,
+  );
 
   // ERG mode
   const ergMode = useErgMode();
@@ -92,6 +118,11 @@ export function useTrainingPageController(
   const hrDataRef = useValueAsRef(hr.data);
   const trainerDataRef = useValueAsRef(trainer.data);
   const trainerConnectedRef = useValueAsRef(trainer.state === "connected");
+  const hrConnectedRef = useValueAsRef(hr.state === "connected");
+  const hrSampleAtRef = useRef(0);
+  useEffect(() => {
+    hrSampleAtRef.current = performance.now();
+  }, [hr.data]);
   const trainerSampleAtRef = useRef(0);
   useEffect(() => {
     trainerSampleAtRef.current = performance.now();
@@ -171,7 +202,11 @@ export function useTrainingPageController(
         performance.now() - trainerSampleAtRef.current <= 2500
           ? trainerDataRef.current
           : null;
-      const hrData = hrDataRef.current;
+      const hrData =
+        hrConnectedRef.current &&
+        performance.now() - hrSampleAtRef.current <= 5000
+          ? hrDataRef.current
+          : null;
       const settings = riderSettingsRef.current;
 
       // Real elapsed time, not the nominal interval: browsers throttle timers
@@ -227,6 +262,7 @@ export function useTrainingPageController(
     sessionRef,
     ergEnabledRef,
     hrDataRef,
+    hrConnectedRef,
     riderSettingsRef,
     segmentIndexRef,
     workoutTargetRef,
@@ -429,6 +465,7 @@ export function useTrainingPageController(
     const power = trainer.data?.power ?? null;
     if (
       startSuspended ||
+      trainer.state !== "connected" ||
       session.state !== "idle" ||
       power == null ||
       power <= 0
@@ -446,6 +483,7 @@ export function useTrainingPageController(
     }
   }, [
     trainer.data?.power,
+    trainer.state,
     session.state,
     startSession,
     sessionRef,
@@ -454,19 +492,24 @@ export function useTrainingPageController(
   ]);
 
   // Current live values
-  const currentPower = trainer.data?.power ?? null;
-  const currentHr = hr.data?.heartRate ?? trainer.data?.heartRate ?? null;
-  const currentCadence = trainer.data?.cadence ?? null;
+  const currentPower = liveTrainerData?.power ?? null;
+  const currentHr = liveHrData?.heartRate ?? liveTrainerData?.heartRate ?? null;
+  const currentCadence = liveTrainerData?.cadence ?? null;
   const currentSpeedKmh = currentSpeedMs > 0.1 ? msToKmh(currentSpeedMs) : null;
 
   const distanceKm = distanceMeters / 1000;
 
   const handleStop = useCallback(() => {
+    if (recorder.getDataPoints().length === 0) {
+      session.reset();
+      clearRideState();
+      return;
+    }
     session.stop();
     setErgEnabled(false);
     recorder.computeSummary();
     setChartData([...recorder.getDataPoints()]);
-  }, [session, recorder, setErgEnabled]);
+  }, [session, recorder, setErgEnabled, clearRideState]);
 
   const { setBiasPct, reset: resetWorkout } = player;
   const handleReset = useCallback(() => {

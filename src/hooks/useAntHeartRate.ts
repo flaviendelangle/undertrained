@@ -17,7 +17,10 @@ export function useAntHeartRate() {
     try {
       await connectionRef.current.connect({
         onData: (hrData) => setData(hrData),
-        onDisconnect: () => setState("disconnected"),
+        onDisconnect: () => {
+          setState("disconnected");
+          setData(null);
+        },
       });
       setState("connected");
     } catch (err) {
