@@ -2,7 +2,7 @@
 """Rasterize resources/icon.svg into the PNG sizes the desktop needs.
 
 The mark is simple enough (rounded square, two stroked curves, one pill) to draw
-directly with Pillow, so no SVG toolchain is required. Run from the repository root:
+directly with Pillow, so no SVG toolchain is required. Run from the desktop/ directory:
 
     python3 scripts/render-icon.py
 

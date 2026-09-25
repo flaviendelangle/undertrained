@@ -9,4 +9,4 @@ The owner requests that UI design and implementation be delegated to **Claude Fa
 - Keep fixture data confined to developer tests. Do not add demo mode or represent unimplemented workout functionality as available.
 - If the requested model cannot be used, explain the blocker before doing UI implementation with another model.
 
-Read `README.md` for build commands and the current scope. Authentication changes in the web backend belong in its separate repository.
+Read `README.md` for build commands and the current scope. The web backend is the Next.js app at the repository root; the endpoints this app calls are in `src/pages/api/desktop/` there.

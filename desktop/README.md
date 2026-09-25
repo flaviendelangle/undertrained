@@ -31,6 +31,8 @@ This is the account, device-setup, workout-library, local-recording, upload and 
 
 ## Run
 
+The app lives in the `desktop/` directory of the Undertrained repository, next to the web app it signs in to. Run every command below from `desktop/`.
+
 Install stable Rust with [rustup](https://rustup.rs/).
 
 Linux build dependencies on Ubuntu/Debian:
@@ -124,4 +126,4 @@ Interface text is written in English inside `ui/app.slint` as `@tr("...")` and t
 - `resources/`: icon sources and the macOS bundle manifest.
 - `scripts/`: icon rendering, the Linux launcher installer and the macOS bundler.
 
-This repository is private and does not grant a redistribution license. Slint and other dependencies have their own licensing terms; review those when preparing distribution.
+The source is public but does not grant a redistribution license. Slint and other dependencies have their own licensing terms; review those when preparing distribution.

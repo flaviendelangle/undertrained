@@ -1,7 +1,18 @@
-name: Native app
-on: [push, pull_request]
+name: Desktop app
+on:
+  push:
+    branches: [main]
+    paths: ["desktop/**", ".github/workflows/desktop.yml"]
+  pull_request:
+    paths: ["desktop/**", ".github/workflows/desktop.yml"]
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+defaults:
+  run:
+    working-directory: desktop
 jobs:
   check:
     strategy:
@@ -15,6 +26,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-0 xvfb
       - run: cargo fmt --check
@@ -29,6 +42,6 @@ jobs:
         with:
           name: undertrained-indoor-${{ runner.os }}
           path: |
-            target/debug/undertrained-indoor
-            target/debug/undertrained-indoor.exe
+            desktop/target/debug/undertrained-indoor
+            desktop/target/debug/undertrained-indoor.exe
           if-no-files-found: error

@@ -1,9 +1,13 @@
 name: CI
 
+# The desktop app has its own workflow (desktop.yml); a change confined to it
+# doesn't need the web app rebuilt and tested.
 on:
   push:
     branches: [main]
+    paths-ignore: ["desktop/**", ".github/workflows/desktop.yml"]
   pull_request:
+    paths-ignore: ["desktop/**", ".github/workflows/desktop.yml"]
 
 # Nothing here touches the API — checkout, install, lint, build, test. Pinning
 # the token to read means a future step (or a compromised action further down

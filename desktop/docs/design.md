@@ -84,7 +84,7 @@ Every screen puts its content in one centered column capped at 1024px, the websi
 
 ## Visual system
 
-Colors are the Undertrained website's, taken from `src/styles/globals.css` in the web repository (`:root` for light, `.dark` for dark) and converted from OKLCH to sRGB hex, since Slint takes no OKLCH. The `Theme` global in `ui/app.slint` holds both sets and picks one from the color scheme Slint reports for the operating system, so the app follows the system preference with no toggle of its own. Mapping:
+Colors are the Undertrained website's, taken from the web app's `src/styles/globals.css` at the repository root (`:root` for light, `.dark` for dark) and converted from OKLCH to sRGB hex, since Slint takes no OKLCH. The `Theme` global in `ui/app.slint` holds both sets and picks one from the color scheme Slint reports for the operating system, so the app follows the system preference with no toggle of its own. Mapping:
 
 | Native token | Website token | Light | Dark |
 | --- | --- | --- | --- |
