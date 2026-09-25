@@ -1,0 +1,1112 @@
+[
+  {
+    "id": "ramp-test",
+    "plan": {
+      "referenceFtp": 260,
+      "ftpTest": "ramp-test",
+      "segments": [
+        {
+          "durationSeconds": 300,
+          "startWatts": null,
+          "endWatts": null,
+          "cadence": null,
+          "note": "Pedal easily and prepare for the ramp.",
+          "intensity": "warmup"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 100,
+          "endWatts": 100,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 120,
+          "endWatts": 120,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 140,
+          "endWatts": 140,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 160,
+          "endWatts": 160,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 180,
+          "endWatts": 180,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 200,
+          "endWatts": 200,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 220,
+          "endWatts": 220,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 240,
+          "endWatts": 240,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 260,
+          "endWatts": 260,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 280,
+          "endWatts": 280,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 300,
+          "endWatts": 300,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 320,
+          "endWatts": 320,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 340,
+          "endWatts": 340,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 360,
+          "endWatts": 360,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 380,
+          "endWatts": 380,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 400,
+          "endWatts": 400,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 420,
+          "endWatts": 420,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 440,
+          "endWatts": 440,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 460,
+          "endWatts": 460,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 480,
+          "endWatts": 480,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 500,
+          "endWatts": 500,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 520,
+          "endWatts": 520,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 540,
+          "endWatts": 540,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 560,
+          "endWatts": 560,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 580,
+          "endWatts": 580,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 600,
+          "endWatts": 600,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 620,
+          "endWatts": 620,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 60,
+          "startWatts": 640,
+          "endWatts": 640,
+          "cadence": 85,
+          "note": "Stay seated. Stop pedaling at exhaustion; recovery starts after 10 seconds.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 600,
+          "startWatts": 75,
+          "endWatts": 70,
+          "cadence": null,
+          "note": "Pedal easily to cool down.",
+          "intensity": "cooldown"
+        }
+      ]
+    },
+    "cases": [
+      {
+        "bias": 0.5,
+        "elapsed": 0,
+        "index": 0,
+        "remaining": 300,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 30,
+        "index": 0,
+        "remaining": 270,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 60,
+        "index": 0,
+        "remaining": 240,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 299.9,
+        "index": 0,
+        "remaining": 0.10000000000002274,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 300,
+        "index": 1,
+        "remaining": 60,
+        "targetWatts": 50,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 330,
+        "index": 1,
+        "remaining": 30,
+        "targetWatts": 50,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 359.9,
+        "index": 1,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 50,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 360,
+        "index": 2,
+        "remaining": 60,
+        "targetWatts": 60,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 540,
+        "index": 5,
+        "remaining": 60,
+        "targetWatts": 90,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 1000,
+        "index": 12,
+        "remaining": 20,
+        "targetWatts": 160,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 2579.5,
+        "index": 29,
+        "remaining": 0.5,
+        "targetWatts": 35,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 2580,
+        "index": null,
+        "remaining": 0,
+        "targetWatts": null,
+        "complete": true
+      },
+      {
+        "bias": 1,
+        "elapsed": 0,
+        "index": 0,
+        "remaining": 300,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 30,
+        "index": 0,
+        "remaining": 270,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 60,
+        "index": 0,
+        "remaining": 240,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 299.9,
+        "index": 0,
+        "remaining": 0.10000000000002274,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 300,
+        "index": 1,
+        "remaining": 60,
+        "targetWatts": 100,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 330,
+        "index": 1,
+        "remaining": 30,
+        "targetWatts": 100,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 359.9,
+        "index": 1,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 100,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 360,
+        "index": 2,
+        "remaining": 60,
+        "targetWatts": 120,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 540,
+        "index": 5,
+        "remaining": 60,
+        "targetWatts": 180,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 1000,
+        "index": 12,
+        "remaining": 20,
+        "targetWatts": 320,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 2579.5,
+        "index": 29,
+        "remaining": 0.5,
+        "targetWatts": 70,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 2580,
+        "index": null,
+        "remaining": 0,
+        "targetWatts": null,
+        "complete": true
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 0,
+        "index": 0,
+        "remaining": 300,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 30,
+        "index": 0,
+        "remaining": 270,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 60,
+        "index": 0,
+        "remaining": 240,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 299.9,
+        "index": 0,
+        "remaining": 0.10000000000002274,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 300,
+        "index": 1,
+        "remaining": 60,
+        "targetWatts": 105,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 330,
+        "index": 1,
+        "remaining": 30,
+        "targetWatts": 105,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 359.9,
+        "index": 1,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 105,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 360,
+        "index": 2,
+        "remaining": 60,
+        "targetWatts": 125,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 540,
+        "index": 5,
+        "remaining": 60,
+        "targetWatts": 190,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 1000,
+        "index": 12,
+        "remaining": 20,
+        "targetWatts": 335,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 2579.5,
+        "index": 29,
+        "remaining": 0.5,
+        "targetWatts": 75,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 2580,
+        "index": null,
+        "remaining": 0,
+        "targetWatts": null,
+        "complete": true
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 0,
+        "index": 0,
+        "remaining": 300,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 30,
+        "index": 0,
+        "remaining": 270,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 60,
+        "index": 0,
+        "remaining": 240,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 299.9,
+        "index": 0,
+        "remaining": 0.10000000000002274,
+        "targetWatts": null,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 300,
+        "index": 1,
+        "remaining": 60,
+        "targetWatts": 150,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 330,
+        "index": 1,
+        "remaining": 30,
+        "targetWatts": 150,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 359.9,
+        "index": 1,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 150,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 360,
+        "index": 2,
+        "remaining": 60,
+        "targetWatts": 180,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 540,
+        "index": 5,
+        "remaining": 60,
+        "targetWatts": 270,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 1000,
+        "index": 12,
+        "remaining": 20,
+        "targetWatts": 480,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 2579.5,
+        "index": 29,
+        "remaining": 0.5,
+        "targetWatts": 105,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 2580,
+        "index": null,
+        "remaining": 0,
+        "targetWatts": null,
+        "complete": true
+      }
+    ]
+  },
+  {
+    "id": "ftp-test-20",
+    "plan": {
+      "referenceFtp": 260,
+      "ftpTest": "ftp-test-20",
+      "segments": [
+        {
+          "durationSeconds": 300,
+          "startWatts": 78,
+          "endWatts": 182,
+          "cadence": null,
+          "note": null,
+          "intensity": "warmup"
+        },
+        {
+          "durationSeconds": 20,
+          "startWatts": 208,
+          "endWatts": 208,
+          "cadence": null,
+          "note": null,
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 20,
+          "startWatts": 260,
+          "endWatts": 260,
+          "cadence": null,
+          "note": null,
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 20,
+          "startWatts": 312,
+          "endWatts": 312,
+          "cadence": null,
+          "note": null,
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 180,
+          "startWatts": 130,
+          "endWatts": 130,
+          "cadence": null,
+          "note": null,
+          "intensity": "recovery"
+        },
+        {
+          "durationSeconds": 180,
+          "startWatts": 286,
+          "endWatts": 286,
+          "cadence": null,
+          "note": null,
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 120,
+          "startWatts": 312,
+          "endWatts": 312,
+          "cadence": null,
+          "note": null,
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 360,
+          "startWatts": 130,
+          "endWatts": 130,
+          "cadence": null,
+          "note": null,
+          "intensity": "recovery"
+        },
+        {
+          "durationSeconds": 1200,
+          "startWatts": null,
+          "endWatts": null,
+          "cadence": null,
+          "note": "Ride your strongest steady 20-minute effort. ERG is released; use your gears to pace yourself.",
+          "intensity": "work"
+        },
+        {
+          "durationSeconds": 300,
+          "startWatts": 130,
+          "endWatts": 78,
+          "cadence": null,
+          "note": "Pedal easily to cool down.",
+          "intensity": "cooldown"
+        }
+      ]
+    },
+    "cases": [
+      {
+        "bias": 0.5,
+        "elapsed": 0,
+        "index": 0,
+        "remaining": 300,
+        "targetWatts": 40,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 30,
+        "index": 0,
+        "remaining": 270,
+        "targetWatts": 45,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 60,
+        "index": 0,
+        "remaining": 240,
+        "targetWatts": 50,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 299.9,
+        "index": 0,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 90,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 300,
+        "index": 1,
+        "remaining": 20,
+        "targetWatts": 105,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 330,
+        "index": 2,
+        "remaining": 10,
+        "targetWatts": 130,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 359.9,
+        "index": 3,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 155,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 360,
+        "index": 4,
+        "remaining": 180,
+        "targetWatts": 65,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 540,
+        "index": 5,
+        "remaining": 180,
+        "targetWatts": 145,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 1000,
+        "index": 7,
+        "remaining": 200,
+        "targetWatts": 65,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 2699.5,
+        "index": 9,
+        "remaining": 0.5,
+        "targetWatts": 40,
+        "complete": false
+      },
+      {
+        "bias": 0.5,
+        "elapsed": 2700,
+        "index": null,
+        "remaining": 0,
+        "targetWatts": null,
+        "complete": true
+      },
+      {
+        "bias": 1,
+        "elapsed": 0,
+        "index": 0,
+        "remaining": 300,
+        "targetWatts": 80,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 30,
+        "index": 0,
+        "remaining": 270,
+        "targetWatts": 90,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 60,
+        "index": 0,
+        "remaining": 240,
+        "targetWatts": 100,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 299.9,
+        "index": 0,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 180,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 300,
+        "index": 1,
+        "remaining": 20,
+        "targetWatts": 210,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 330,
+        "index": 2,
+        "remaining": 10,
+        "targetWatts": 260,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 359.9,
+        "index": 3,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 310,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 360,
+        "index": 4,
+        "remaining": 180,
+        "targetWatts": 130,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 540,
+        "index": 5,
+        "remaining": 180,
+        "targetWatts": 285,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 1000,
+        "index": 7,
+        "remaining": 200,
+        "targetWatts": 130,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 2699.5,
+        "index": 9,
+        "remaining": 0.5,
+        "targetWatts": 80,
+        "complete": false
+      },
+      {
+        "bias": 1,
+        "elapsed": 2700,
+        "index": null,
+        "remaining": 0,
+        "targetWatts": null,
+        "complete": true
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 0,
+        "index": 0,
+        "remaining": 300,
+        "targetWatts": 80,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 30,
+        "index": 0,
+        "remaining": 270,
+        "targetWatts": 95,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 60,
+        "index": 0,
+        "remaining": 240,
+        "targetWatts": 105,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 299.9,
+        "index": 0,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 190,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 300,
+        "index": 1,
+        "remaining": 20,
+        "targetWatts": 220,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 330,
+        "index": 2,
+        "remaining": 10,
+        "targetWatts": 275,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 359.9,
+        "index": 3,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 330,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 360,
+        "index": 4,
+        "remaining": 180,
+        "targetWatts": 135,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 540,
+        "index": 5,
+        "remaining": 180,
+        "targetWatts": 300,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 1000,
+        "index": 7,
+        "remaining": 200,
+        "targetWatts": 135,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 2699.5,
+        "index": 9,
+        "remaining": 0.5,
+        "targetWatts": 80,
+        "complete": false
+      },
+      {
+        "bias": 1.05,
+        "elapsed": 2700,
+        "index": null,
+        "remaining": 0,
+        "targetWatts": null,
+        "complete": true
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 0,
+        "index": 0,
+        "remaining": 300,
+        "targetWatts": 115,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 30,
+        "index": 0,
+        "remaining": 270,
+        "targetWatts": 135,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 60,
+        "index": 0,
+        "remaining": 240,
+        "targetWatts": 150,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 299.9,
+        "index": 0,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 275,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 300,
+        "index": 1,
+        "remaining": 20,
+        "targetWatts": 310,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 330,
+        "index": 2,
+        "remaining": 10,
+        "targetWatts": 390,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 359.9,
+        "index": 3,
+        "remaining": 0.10000000000002274,
+        "targetWatts": 470,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 360,
+        "index": 4,
+        "remaining": 180,
+        "targetWatts": 195,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 540,
+        "index": 5,
+        "remaining": 180,
+        "targetWatts": 430,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 1000,
+        "index": 7,
+        "remaining": 200,
+        "targetWatts": 195,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 2699.5,
+        "index": 9,
+        "remaining": 0.5,
+        "targetWatts": 115,
+        "complete": false
+      },
+      {
+        "bias": 1.5,
+        "elapsed": 2700,
+        "index": null,
+        "remaining": 0,
+        "targetWatts": null,
+        "complete": true
+      }
+    ]
+  }
+]

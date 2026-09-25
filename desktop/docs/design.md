@@ -1,0 +1,118 @@
+# Account and device setup
+
+Research checked on 2026-09-23. Screenshots from competitors are reference material and are not bundled in the app.
+
+## Patterns used
+
+- [Zwift's paired-devices screen](https://forums.zwift.com/t/show-type-of-connection-on-the-main-pairing-screen/648962) separates power, resistance, cadence and heart rate, shows actual measurements, and provides a clear completion action.
+- [ROUVY's sensor setup](https://support.rouvy.com/hc/en-us/articles/360018673938-Connecting-Smart-Trainer-and-Smart-Bike) makes the trainer primary and gives heart rate and cadence separate roles. Its instructions distinguish trainer data from controllable resistance.
+- [TrainerRoad's pairing guide](https://support.trainerroad.com/hc/en-us/articles/360023678392-How-to-Pair-Your-Devices) uses device tiles, visible pairing progress, remembered equipment and device-specific advice.
+
+## Decisions
+
+The scope is indoor cycling on a home trainer. The interface therefore has no running toggle, ANT+ selector, classic-trainer speed estimation or virtual-shifting controller slot.
+
+One primary trainer card combines power and the advertised resistance capability. Cadence and the resistance-control check sit inside that card as two small readings, because they come from the same connection. The trainer card is wider than the heart-rate card (a 3:2 split) to say which one matters. Heart rate stays optional and separate.
+
+Each card has one fixed-height slot under the device line. Connected, it holds the large reading. Idle, it holds a one-line note on which Bluetooth profiles the slot accepts. Mid-connection, it holds a moving bar. The cards keep the same shape in every state, so nothing jumps when a device pairs.
+
+Discovery rows show three signal bars beside the text strength, the device kind, the last six characters of the platform id (real hardware only, so two same-named trainers can be told apart), and a lime "Saved" tag when the row matches the stored preference. The app never calls a connection "receiving data" until a notification arrives. After five seconds without measurements, it clears displayed values and reports missing data.
+
+The picker uses different copy while a scan is running ("Listening for trainers…", with a moving bar) and after it finishes with nothing ("No trainer found", with the wake-and-retry advice). Escape closes it, as does clicking the dimmed backdrop. The dialog shrinks to fit windows down to the 880 by 620 minimum. Errors show inside the dialog while it is open and on the page once it closes, never in both places at once.
+
+The completion action is "Save device setup", because workout execution is not part of this milestone. ERG support is a feature-bit check, not a claim that trainer control has been acquired or exercised. The bottom bar stays pinned so the primary action is in the same place on every window size.
+
+Login uses the existing Undertrained account through the system browser. There is no invented password flow and no server field: the origin is compiled in, and a faint line under the button names it so a development build is easy to tell apart. A build with an invalid address disables the button and shows the reason. While waiting for the browser, the button disables, a progress bar runs, and a compact Cancel appears. There is no demo or simulation mode; every screen past login reflects a real session and real hardware.
+
+The Bluetooth status in the setup header carries its own color: green when the adapter answered, amber when it did not.
+
+## Workout library
+
+Two header tabs, Devices and Workouts, switch screens without touching Bluetooth. Connections, live readings and the open picker are all window state, so a rider can browse workouts while the trainer stays paired. The tab is a native element with a lime underline, an accessible tab role and keyboard activation.
+
+The list is read-only on purpose. Creating and editing stay on the Undertrained website, and the two browser actions say so in their labels ("New workout in browser", "Open in browser"). They only render when a verified account session exists, and the callback refuses with a notice otherwise. Links carry the workout id and nothing else; the token stays in the app.
+
+The library page is laid out as a hierarchy rather than a stack: the page header (title, Refresh, the single "New workout in browser" action), then one library-wide toolbar on the page background, separated from the sections by a thin divider, with the search field, a count ("2 workouts in the library", or "1 of 6 match" while a search is active) and a Clear button, then two sections that are always headed, "Personal workouts" and "Built-in workouts". The search filters both sections at once. A section with nothing to show gets a quiet grouped panel in place of its grid: "No personal workouts yet…" when the account has none, or "No personal workout matches this search." while filtering, and likewise for built-ins. When neither section matches, one library-level panel replaces both with a Clear search action, so an empty search result never reads as an account with nothing saved. The empty personal state has no second create button; the header action is the one place to create.
+
+The library is the website's card grid, rebuilt natively. Each card is 206px tall: a 118px chart on a faintly tinted strip, then the name, a duration line ("1 h · 72 TSS", or the server's own label for a test whose length is a maximum), and the summary, all elided on one line. A compact "Open" button at the top right is the only action and only renders with a live session. The grid uses the available content width with a 300px minimum per card, a 440px maximum and a 16px gap. The minimum window shows two columns; the capped content column shows up to three, including on wider monitors.
+
+The chart follows the website's `WorkoutMiniPreview` rules exactly, drawn with plain Slint rectangles because the software renderer has no path support and rectangles stay crisp at any card width: one bar per run, placed by time share; heights as percent of FTP against a ceiling of max(peak, 120%) plus 10% headroom, so an easy ride is never drawn as all-out; free-ride steps as low grey blocks in the chart grid color; adjacent steps that would draw identically merged so a flat block has no seams; and a one-pixel minimum width so a ten-second sprint keeps its own bar. Nothing is resampled or averaged. Colors come from the seven-zone ramp with the website's boundaries (55, 75, 90, 105, 120 and 150 percent).
+
+Personal workouts and built-in tests are separate sections, as on the website: "Personal workouts" first, with "No workouts yet." and the create link when the account has none, then a rule and "Built-in workouts" with the website's own description. Built-ins carry a primary-tinted "Built-in" badge next to the name. One search covers both sections; each says when nothing in it matches, and the page-level "no match" panel appears only when neither has a hit. Their identity is a slug the server chooses; row keys are prefixed (`p:42`, `b:ramp-test`) so the two kinds never collide, and the client validates slug shape without knowing the catalogue. Their browser link goes to the website's built-in section, never to a per-slug page.
+
+When Bluetooth is off or blocked, the picker says so in place of "No trainer found" and points to system settings; the app never toggles the radio.
+
+## Recording a ride
+
+Clicking a card, or pressing Enter on a focused one, opens the ready screen: the name with its built-in badge, the duration line, the summary, the profile at full width as a reference, a strip of live readings so the rider can see the sensors deliver, one concise notice (nothing is sent to the trainer, steps are not timed, no FTP result, no speed or distance), and Start. The device screen offers the same for a free ride. Start needs at least one connected sensor; a strap alone is enough. The layout follows the website's HUD: elapsed clock and state at the top, a dominant power figure with heart rate and cadence beside it, pause and finish controls, and a bottom strip charting the last ten minutes with power as zone-colored bars and heart rate as a dotted trace. The chart is 300 two-second bins over that window, averaged per bin, so it costs the same whatever the ride length; a bin without a reading is a gap, never a zero. Paused shows the clock frozen and how long the pause has lasted, and the readings keep showing what the sensors send. Finished shows elapsed, average and maximum power and heart rate, and average cadence as stat cards, the whole ride binned into the same chart, and the save state: saved (journal and FIT file, with the folder and a button to open it) or failed (samples kept in memory, retry offered). Bars take the website's zone colors only from an FTP the server reported for the account, snapshotted when the ride starts; with no known FTP they stay one neutral color rather than guessing a rider.
+
+## Uploading to Strava
+
+The upload follows the website's flow: through the Undertrained account, and only on an explicit click. A saved ride gets one card with an activity-name field, prefilled with the recording's name, and an "Upload to Strava" button. The name is the upload title only; the files on disk keep their own metadata. It must have between one and two hundred characters once trimmed, checked by the same Rust function the button's enabled state calls, and it is locked after the first submission because it went with it. The button is the only way anything is sent: no auto-upload after finishing, no resend after an error unless the rider asks, and no upload at all while the save has not succeeded. A ride remembers the account (server origin and athlete id) signed in when it started, never a token; the upload goes only through that account, and another account signing in lets go of a saved ride on screen while its files stay. Sign-in is refused while a ride is at stake, and a ride cannot start while a sign-in is pending, so the account cannot change under a recording. The name limit counts UTF-16 code units, as the server does.
+
+Sending runs as a tokio job numbered by the application; the answer is applied only if the ride on screen still waits for that number, so a result from an earlier ride or another account never reaches a new screen. Meanwhile the button reads "Uploading…", a pulse shows under the field, the Back button is disabled, and the leave guard holds sign-out, navigation to another ride and window close, since leaving would abandon the answer. The states afterwards are distinct: done, with "Open in Strava" linking the activity id the server confirmed (positive ids only); still processing, with "Check upload" polling the same receipt; sent but unconfirmed, with "Check Strava" opening the athlete's dashboard and a warning to look before sending again, because the module refuses to resubmit a ride whose outcome it never learned; and failures that say what to do: sign in again (a "Sign in again" button sits in the card, the browser wait, cancel and failure report there, and the same account's return puts "Upload to Strava" back with the title kept, while another account's sign-in lets the saved ride go), update the server, reconnect Strava on the website, check the connection, or try again later. Raw diagnostics stay small and under the translated line. Files are never removed by any outcome, and the folder stays one click away in a quiet row under the card.
+
+The module keeps its own state next to the ride as separate small files, written before sending (intent), after the server answers (signed receipt) and after Strava confirms (activity), so an interruption on any platform cannot remove the last known step and a later click resumes instead of resubmitting. None of them holds the account token; the session lives only in the keyring.
+
+The recorder reads sensors, never the screen: every real sample updates a per-field sensor model with a five-second freshness, ANT+ snapshots clear missing fields at once, and a disconnect clears the role. The recording engine ticks at most once per second from that model. The ride owns a copy of the workout taken at start, so library refreshes, an expired session or a sign-out attempt cannot change what the ride shows. Navigation stays open while recording (reconnecting a sensor is the reason to leave), and a header chip with the running clock returns to the ride; sign-out and closing the window show a guard that offers to keep recording or to finish and stay on the summary, and an unsaved finished ride is guarded the same way until the save succeeds. There is no discard.
+
+## Language
+
+Two languages, English and French, with wording taken from the website's en-GB and fr-FR messages ("séance", "séances intégrées", "home trainer", "capteur cardiaque"). All screen text is `@tr(...)` in the Slint file; Slint bundles the gettext catalogs under `ui/lang` into the binary and `select_bundled_translation` switches them live, so the language resolved at sign-in redraws every string without a restart. Rust sends state codes rather than sentences (sensor states, resistance states, radio states, notice codes), which keeps every wording, including plurals such as "{n} workout", in one catalog; the only strings Rust formats are durations, the card meta line and the display names of ANT+ devices, whose driver names are generic English. Raw diagnostics from a radio or the server are shown as a small detail line under the translated summary and are never translated.
+
+The language is resolved in this order: the account's language if the server sends one, the operating system's preference (read through the `sys-locale` crate, which uses the native preferred-language APIs on macOS and Windows and the locale variables on Linux), then English. There is no switch in the app: the website's account setting and the system are the sources of truth, so a rider changes the language where the website already lets them. Before sign-in the system decides; sign-in re-resolves with the account, and sign-out falls back to the system. Each workout request carries `?locale=` for the language in effect, so built-in tests arrive in that language while personal workout text stays as the rider wrote it. Older settings files that still contain a `language` entry load fine; the entry is ignored and dropped on the next save.
+
+## Two radios
+
+Bluetooth and ANT+ discovery run side by side and report separately. The device screen shows one pill per radio (ready, unavailable, not checked), and the picker keeps searching as long as either radio can, so a switched-off Bluetooth adapter never hides an ANT+ strap. Only when both are unavailable does the picker say so and point to system settings or the USB stick. Conditions the app itself recognises (Bluetooth switched off or blocked, no Bluetooth adapter, no ANT+ stick, a stick that is busy or denied) are worded in the catalog; anything else from a driver or the OS stays as a small raw line under the translated state. Search stays available in that state so a rider can plug in a stick and retry. The picker's footer distinguishes the transports: a Bluetooth sensor held by another app may stay hidden, while ANT+ sensors broadcast to every receiver, so another app claiming the USB stick is reported as a stick problem, not a hidden sensor.
+
+ANT+ rows carry an "A" mark and the device number instead of Bluetooth's signal bars and id tail; no signal strength is invented for them. An ANT+ trainer shows "Readings only over ANT+" as its resistance state, since the app receives its broadcasts and never commands it, which is different from a Bluetooth trainer whose control capability could not be confirmed. ANT+ samples are whole snapshots, so a missing power or cadence value clears the reading to a dash at once; Bluetooth notifications may carry one field at a time, so the others are kept until the five-second staleness rule clears them.
+
+## Desktop identity
+
+The window icon is the website's favicon mark (`resources/icon.svg`), rasterized with a small Pillow script since the app has no SVG decoder. The binary sets the XDG app id `undertrained-indoor` before the window is shown, and the Linux launcher written by `scripts/install-linux-launcher.sh` declares the same `StartupWMClass`, so the shell groups the running window under the icon. The macOS bundle script builds an `.icns` from the 1024 px render when `iconutil` is available.
+
+Load states are separate panels rather than one generic error. First load shows a moving bar. A failed first load names the cause: expired session (with a "Sign in again" action and browser links switched off), a server without the workout API (an upgrade note), no connection, or an unreadable reply. A failed refresh keeps the previous rows and adds an amber banner saying the list is from the last successful load. An empty library and a search with no matches are distinct, with a "Clear search" action on the latter. The count next to the search field reads "6 workouts" or "2 of 6".
+
+The list loads once after sign-in, or on first opening the tab, and then only when the rider presses Refresh. Every request captures a cloned session and a generation number; responses for an older request or a previous account are dropped, and sign-out and a fresh sign-in both clear the library and abort the outstanding request. A failed request never falls back to made-up data.
+
+While the device picker is open, the global overlay flag disables keyboard focus on every control behind it, so Tab stays inside the dialog.
+
+## Page width
+
+Every screen puts its content in one centered column capped at 1024px, the website's `max-w-5xl`, with 32px gutters that hold down to the 880px minimum window. The header bar spans the window but its contents sit in the same column, as the website's toolbar does, so the navigation, the page actions and the cards share one left edge on any monitor. Type and card sizes never scale with the window; a wider monitor only gets wider margins, which keeps charts and paragraphs at readable proportions on an ultrawide display. The login block and the device screen are bounded in height as well (620px and 860px), so a very tall window centers the welcome card and keeps the device action bar near the cards instead of at the bottom edge.
+
+## Visual system
+
+Colors are the Undertrained website's, taken from `src/styles/globals.css` in the web repository (`:root` for light, `.dark` for dark) and converted from OKLCH to sRGB hex, since Slint takes no OKLCH. The `Theme` global in `ui/app.slint` holds both sets and picks one from the color scheme Slint reports for the operating system, so the app follows the system preference with no toggle of its own. Mapping:
+
+| Native token | Website token | Light | Dark |
+| --- | --- | --- | --- |
+| background | `--background` | `#f9fafb` | `#25292e` |
+| card | `--card` | `#ffffff` | `#3c4148` |
+| sunken | `--secondary`, `--muted` | `#eef0f4` | `#16181e` |
+| raised | `--accent` (dark: card lifted one step) | `#e8ebf0` | `#4a5058` |
+| border | `--border`, `--input` | `#d6d9de` | `#50545c` |
+| ink | `--foreground` | `#070a10` | `#fafafa` |
+| muted | `--muted-foreground` | `#6e747c` | `#90a1b9` |
+| primary | `--primary`, `--ring` | `#006d48` | `#00ab81` |
+| primary-ink | `--primary-foreground` | `#fafafa` | `#fafafa` |
+| good | `--chart-5` | `#34893c` | `#5ec165` |
+| warn | `--chart-8` (light darkened for text contrast) | `#8a6200` | `#ecab00` |
+| zone-1 to zone-7 | `--zone-1` to `--zone-7` | website light ramp | website dark ramp |
+
+Hover states derive from primary (12% brighter in dark, 12% darker in light), notices tint their tone at 12% over the surface, and the picker scrim is black at 72% in dark and slate at 60% in light.
+
+How the scheme reaches the app: Slint's winit backend sets the window color scheme from the platform. On Windows and macOS it comes from the system theme and updates live on theme-change events. On Linux it comes from the XDG desktop portal (`org.freedesktop.appearance color-scheme`) with live updates through the portal's change signal; this is compiled in for all non-Windows, non-Apple targets. Where no portal answers, for example bare X11 without a portal service, the scheme is unknown and the app shows the light palette, which is the website's default. Documentation renders force a scheme with a capture-only environment variable, since a virtual framebuffer has no preference.
+
+Three button looks: primary teal for the single primary action on a screen, raised for secondary actions, outline for actions that undo or dismiss (Disconnect, Cancel, Close, Sign out). Header and list-row buttons use a compact height. Errors and notices share one amber box with a left rule, so color is never the only signal. Focus rings use the primary color, or the foreground color on a primary button.
+
+Type scale, in pixels: 44 login headline, 28 page title, 38 live readings, 20 dialog title, 16 card title, 15 device names, 14 body and buttons, 13 secondary text, 12 helper text, 11 letter-spaced captions for units and small labels.
+
+The interval silhouette on the login card is drawn with Slint rectangles in primary and raised tones and scales with the window height between 120 and 300 pixels, so the card never shows a dead zone. Marketing lines were removed in favor of two facts: what the app pairs, and which profiles it speaks.
+
+All buttons have a keyboard focus ring, an accessible name and Enter/Space activation. The workout search field is a native text input with the same focus ring. Controls behind the open dialog do not take focus.
+
+## Next hardware validation
+
+Use the owner's exact trainer and strap. Check discovery, initial pairing, data validity at rest and while pedaling, trainer power cycling, Bluetooth disabled mid-connection, competing apps, and two sensors connected together. Repeat on each supported OS before claiming compatibility. Add notification fixtures from real hardware without recording account tokens or unrelated advertisements.
