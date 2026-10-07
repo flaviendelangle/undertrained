@@ -65,15 +65,12 @@ function JournalMonthViewImpl({
   dayLoadScale,
   isError,
   anchorWeekStart,
-  scrollNonce,
   onVisibleWeekChange,
 }: {
   weeks: JournalWeek[];
   dayLoadScale: number;
   isError: boolean;
   anchorWeekStart: Date | null;
-  /** Bumped by the Journal to request a (re)scroll to {@link anchorWeekStart}. */
-  scrollNonce: number;
   onVisibleWeekChange: (weekStart: Date) => void;
 }) {
   const t = useT();
@@ -115,23 +112,6 @@ function JournalMonthViewImpl({
     );
     return () => cancelAnimationFrame(raf);
   }, [weeks, anchorWeekStart, rowVirtualizer]);
-
-  // Scroll to the anchor week on an explicit request (e.g. "Today"); the initial
-  // nonce is skipped so this never double-fires with the mount scroll above.
-  const initialNonce = React.useRef(scrollNonce);
-  React.useEffect(() => {
-    if (scrollNonce === initialNonce.current || weeks.length === 0) {
-      return;
-    }
-    const target = anchorWeekStart?.getTime();
-    const index =
-      target != null
-        ? weeks.findIndex((week) => week.weekStart.getTime() === target)
-        : -1;
-    if (index >= 0) {
-      rowVirtualizer.scrollToIndex(index, { align: "start" });
-    }
-  }, [scrollNonce, weeks, anchorWeekStart, rowVirtualizer]);
 
   // Month and year of the topmost visible week, shown in the (otherwise static)
   // header cell — they update as you scroll, à la Strava — and reported upward.

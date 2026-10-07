@@ -18,7 +18,6 @@ const en = {
     editValue: "Edit {name}",
     noActivities: "No activities yet. Sync with Strava to get started.",
     noResults: "No activities match your filters.",
-    today: "Today",
 
     cancel: "Cancel",
     save: "Save",
@@ -65,7 +64,6 @@ const en = {
     jumpToWeek: "Jump to week",
     jumpToMonth: "Jump to month",
     options: "Journal options",
-    navigateToToday: "Navigate to today",
     planTraining: "Plan a training",
     subscribe: "Subscribe",
     summary: "Summary",

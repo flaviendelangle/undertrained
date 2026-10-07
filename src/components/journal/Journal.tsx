@@ -23,6 +23,7 @@ import {
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useBusyEvents } from "~/hooks/useBusyEvents";
+import { useIsMobile } from "~/hooks/useIsMobile";
 import { usePersonalRecords } from "~/hooks/usePersonalRecords";
 import { usePlannedTrainings } from "~/hooks/usePlannedTrainings";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
@@ -70,6 +71,8 @@ export function Journal() {
   const { data: busyEvents, showAllDayRow } = useBusyEvents();
   const { timeline } = useRiderSettingsTimeline();
   const records = usePersonalRecords();
+  // Phones get an icon-only "Plan" button so the header fits one line.
+  const isMobile = useIsMobile();
 
   const loadPreferences = React.useMemo(
     () => getLoadPreferences(timeline),
@@ -103,8 +106,6 @@ export function Journal() {
   const [subscribeOpen, setSubscribeOpen] = React.useState(false);
   // External-calendar overlay manager, opened from the overflow menu.
   const [calendarsOpen, setCalendarsOpen] = React.useState(false);
-  // Bumped to ask the month view to (re)scroll to the anchor week — e.g. "Today".
-  const [scrollNonce, setScrollNonce] = React.useState(0);
 
   // The anchor week: the URL's `?week=` if present, else the latest non-future
   // week with an activity or plan. It's the week the week view renders and the
@@ -204,16 +205,6 @@ export function Journal() {
       : -1;
   const weekIndex = anchorIndex >= 0 ? anchorIndex : 0;
   const activeWeek = weeks[weekIndex] ?? null;
-  // Jump both views to the current week (the week view re-renders it; the month
-  // view scrolls to it via the bumped nonce).
-  const goToToday = () => {
-    const todayWeek = startOf(new Date(), "week").getTime();
-    const match = weeks.find((week) => week.weekStart.getTime() === todayWeek);
-    if (match != null) {
-      navigate(view, match.weekStart);
-      setScrollNonce((nonce) => nonce + 1);
-    }
-  };
 
   return (
     <JournalPreviewProvider value={previewHandles}>
@@ -221,21 +212,22 @@ export function Journal() {
         <JournalRecordsContext.Provider value={records}>
           <JournalViewContext.Provider value={view}>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="text-muted-foreground border-border flex flex-wrap items-center justify-between gap-3 border-b px-3 py-1.5 text-[11px]">
+              <div className="text-muted-foreground border-border flex items-center justify-between gap-2 border-b py-1.5 pr-2 pl-3 text-[11px] md:flex-wrap md:gap-3 md:pr-3">
                 <div className="flex min-w-0 items-center gap-3">
                   {formZone != null && currentForm != null ? (
                     <span
-                      className="flex items-center gap-1.5 font-medium"
+                      className="flex min-w-0 items-center gap-1.5 font-medium"
                       title={t("journal.form.tooltip", {
                         value: `${currentForm.tsb > 0 ? "+" : ""}${Math.round(currentForm.tsb)}`,
                         zone: formZoneLabel(formZone.key, t),
                       })}
                     >
-                      <span className="uppercase">
+                      {/* The label gives way on phones; the tooltip keeps it. */}
+                      <span className="uppercase max-md:hidden">
                         {t("journal.form.label")}
                       </span>
                       <span
-                        className="inline-flex items-center gap-1 rounded px-1.5 py-px tabular-nums"
+                        className="inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-px tabular-nums"
                         style={{
                           color: formZone.color,
                           backgroundColor: `${formZone.color}22`,
@@ -243,7 +235,7 @@ export function Journal() {
                       >
                         {currentForm.tsb > 0 ? "+" : ""}
                         {Math.round(currentForm.tsb)}
-                        <span className="not-italic">
+                        <span className="truncate not-italic">
                           · {formZoneLabel(formZone.key, t)}
                         </span>
                       </span>
@@ -251,7 +243,7 @@ export function Journal() {
                   ) : null}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 max-md:shrink-0 md:flex-wrap md:gap-2">
                   <SegmentedToggle
                     ariaLabel={t("journal.view.label")}
                     value={view}
@@ -265,13 +257,24 @@ export function Journal() {
                       ),
                     }))}
                   />
-                  <Button size="sm" variant="outline" onClick={goToToday}>
-                    {t("common.today")}
-                  </Button>
-                  <Button size="sm" onClick={() => onCreatePlanned(new Date())}>
-                    <PlusIcon />
-                    {t("journal.planTraining")}
-                  </Button>
+                  {isMobile ? (
+                    <Button
+                      size="icon-sm"
+                      onClick={() => onCreatePlanned(new Date())}
+                      aria-label={t("journal.planTraining")}
+                      title={t("journal.planTraining")}
+                    >
+                      <PlusIcon />
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => onCreatePlanned(new Date())}
+                    >
+                      <PlusIcon />
+                      {t("journal.planTraining")}
+                    </Button>
+                  )}
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       render={
@@ -304,7 +307,6 @@ export function Journal() {
                   weeks={weeks}
                   dayLoadScale={dayLoadScale}
                   reserveAllDayRow={showAllDayRow}
-                  scrollNonce={scrollNonce}
                   onSelectWeek={onSelectWeek}
                 />
               ) : (
@@ -313,7 +315,6 @@ export function Journal() {
                   dayLoadScale={dayLoadScale}
                   isError={isError}
                   anchorWeekStart={effectiveAnchor}
-                  scrollNonce={scrollNonce}
                   onVisibleWeekChange={onVisibleWeekChange}
                 />
               )}

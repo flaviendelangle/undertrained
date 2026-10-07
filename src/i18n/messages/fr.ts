@@ -16,7 +16,6 @@ const fr: Messages = {
     editValue: "Modifier {name}",
     noActivities: "Aucune activité. Synchronisez avec Strava pour commencer.",
     noResults: "Aucune activité ne correspond à vos filtres.",
-    today: "Aujourd’hui",
 
     cancel: "Annuler",
     save: "Enregistrer",
@@ -64,7 +63,6 @@ const fr: Messages = {
     jumpToWeek: "Aller à la semaine",
     jumpToMonth: "Aller au mois",
     options: "Options du journal",
-    navigateToToday: "Aller à aujourd'hui",
     planTraining: "Planifier une séance",
     subscribe: "S'abonner",
     summary: "Bilan",

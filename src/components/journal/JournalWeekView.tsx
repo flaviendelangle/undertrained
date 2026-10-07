@@ -151,7 +151,6 @@ function JournalWeekViewImpl({
   weeks,
   dayLoadScale,
   reserveAllDayRow,
-  scrollNonce,
   onSelectWeek,
 }: {
   /** The anchor week (URL `?week=`); horizontal scroll mounts onto it. */
@@ -165,8 +164,6 @@ function JournalWeekViewImpl({
    * down when the external feeds finish loading.
    */
   reserveAllDayRow: boolean;
-  /** Bumped by the parent to request a (re)scroll to the anchor week. */
-  scrollNonce: number;
   /** Navigate the URL to the given week's Monday (debounced via the parent). */
   onSelectWeek: (weekStart: Date) => void;
 }) {
@@ -560,25 +557,6 @@ function JournalWeekViewImpl({
     }
     jumpToWeek(index);
   }, [renderedWeeks, anchorWeekTime, weekWidth, jumpToWeek]);
-
-  // Re-scroll on explicit request (e.g. the "Today" menu item bumps the nonce);
-  // the initial nonce is skipped so this never double-fires with the mount.
-  const initialNonce = React.useRef(scrollNonce);
-  React.useEffect(() => {
-    if (scrollNonce === initialNonce.current || renderedWeeks.length === 0) {
-      return;
-    }
-    const index = renderedWeeks.findIndex(
-      (w) => w.weekStart.getTime() === anchorWeekTime,
-    );
-    if (index >= 0) {
-      // Intentional: the nonce bump *is* the "scroll now" request, so reacting
-      // to it from an effect is the point. The guard above skips the initial
-      // nonce, so this never double-fires with the mount scroll.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      jumpToWeek(index);
-    }
-  }, [scrollNonce, renderedWeeks, anchorWeekTime, jumpToWeek]);
 
   // ---- Vertical scroll: only once on mount, not on every cross-week snap ----
 
