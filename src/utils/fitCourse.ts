@@ -128,8 +128,5 @@ export function buildFitCourse({
   });
 
   const view = writer.finish();
-  return view.buffer.slice(
-    view.byteOffset,
-    view.byteOffset + view.byteLength,
-  ) as ArrayBuffer;
+  return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
 }

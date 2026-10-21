@@ -115,7 +115,7 @@ export function generateFitFile(
   return dataView.buffer.slice(
     dataView.byteOffset,
     dataView.byteOffset + dataView.byteLength,
-  ) as ArrayBuffer;
+  );
 }
 
 export function downloadFitFile(buffer: ArrayBuffer, name?: string): void {
