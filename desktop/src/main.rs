@@ -22,6 +22,7 @@ use crate::workouts::{LoadError, Workout, WorkoutId};
 use slint::{ComponentHandle, Model, ModelRc, Timer, TimerMode, VecModel};
 use std::{
     cell::RefCell,
+    path::PathBuf,
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -63,6 +64,9 @@ struct AppState {
     /// Numbers every resistance command ever sent. It lives outside the ride so an answer
     /// to an earlier ride's command can never be taken for the next ride's.
     erg_requests: u64,
+    /// The smoke test's throwaway folder, which takes its rides and settings instead of the
+    /// rider's own. None on every normal launch.
+    smoke_root: Option<PathBuf>,
 }
 
 struct Ride {
@@ -82,6 +86,11 @@ struct Ride {
     /// go only through that account; another account signing in lets go of the ride.
     owner: Option<(String, i64)>,
     paused_at: Option<Instant>,
+    /// The last reading above zero watts while running, None until the connected trainer
+    /// sent one. Auto-pause counts from it.
+    pedaled_at: Option<Instant>,
+    /// The ride paused itself when the pedals stopped; the next pedal stroke resumes it.
+    auto_paused: bool,
     /// The upload job whose answer is still expected, if any.
     upload_job: Option<u64>,
     /// The Strava activity once Undertrained confirmed it.
@@ -656,6 +665,65 @@ fn apply_erg_state(ui: &AppWindow, ride: &Ride) {
     ui.set_ride_erg_watts(watts.map(|w| w.to_string()).unwrap_or_default().into());
 }
 
+/// The rider's resistance switch. During a ride control goes on only with a plan, a
+/// trainer that takes commands and a fresh power reading; switching off always goes through.
+fn switch_erg(
+    ui: &AppWindow,
+    state: &mut AppState,
+    commands: &mpsc::UnboundedSender<ble::Command>,
+    enable: bool,
+    now: Instant,
+) {
+    let fresh_power = state.sensors.live(now).power.is_some();
+    let Some(ride) = state.ride.as_mut() else {
+        remember_erg(ui, state, enable);
+        return;
+    };
+    let allowed = ride.player.is_some()
+        && ride.recording.phase() != Phase::Finished
+        && ui.get_resistance_state() == 1;
+    if enable && allowed && !fresh_power {
+        // Enabling on a trainer that is not reporting would hand a target to a link
+        // that cannot be trusted; the rider is told what is missing.
+        ride.erg.enabled = false;
+        ui.set_ride_notice(7);
+        ui.set_ride_notice_detail("".into());
+    } else if enable && allowed {
+        ride.erg.enable();
+        ui.set_ride_notice(0);
+        ui.set_ride_notice_detail("".into());
+    } else {
+        ride.erg.enabled = false;
+    }
+    sync_erg(ui, state, commands, now);
+}
+
+/// Whether the ready screen can offer ERG: a guided workout on a trainer that takes control.
+fn ready_erg_offered(ui: &AppWindow) -> bool {
+    ui.get_ride_guided() && ui.get_resistance_state() == 1
+}
+
+/// Before a ride the switch is the rider's remembered choice, offered for a guided workout
+/// on a trainer that takes control; the ride applies it when the recording starts. Only
+/// the rider's own switching here changes it, never anything the app does.
+fn remember_erg(ui: &AppWindow, state: &mut AppState, enable: bool) {
+    if ready_erg_offered(ui) && state.settings.start_with_erg != enable {
+        state.settings.start_with_erg = enable;
+        if let Err(error) = store::save(&state.settings, state.smoke_root.as_deref()) {
+            tracing::warn!(%error, "Could not remember the ERG choice");
+        }
+    }
+    ready_erg_choice(ui, state);
+}
+
+/// Before a ride, the switch shows the rider's remembered choice wherever it can apply.
+/// A ride's own control is never touched from here.
+fn ready_erg_choice(ui: &AppWindow, state: &AppState) {
+    if state.ride.is_none() {
+        ui.set_ride_erg_enabled(state.settings.start_with_erg && ready_erg_offered(ui));
+    }
+}
+
 /// The trainer's answer to a resistance command. A failure switches control off, says so and
 /// lets one release go out; the recording is untouched either way.
 fn erg_event(
@@ -808,16 +876,245 @@ fn apply_upload_result(ui: &AppWindow, ride: &mut Ride, result: &UploadResult) {
     }
 }
 
+/// More than this long without a reading above zero watts pauses a running ride.
+const AUTO_PAUSE_AFTER: Duration = Duration::from_secs(5);
+
+/// Stop the clock. `auto` says the ride paused itself because the pedals stopped, so the
+/// next reading above zero watts resumes it; a pause the rider asked for waits for Resume.
+fn pause_ride(
+    ui: &AppWindow,
+    state: &mut AppState,
+    commands: &mpsc::UnboundedSender<ble::Command>,
+    now: Instant,
+    auto: bool,
+) {
+    if state.ride.is_none() {
+        return;
+    }
+    // A paused ride holds no target: the release is queued before the journal
+    // write, and the rider's choice stays on for Resume to send the target again.
+    release_erg(ui, state, commands);
+    let ride = state.ride.as_mut().expect("the ride is still here");
+    // The clock stops even when the journal write fails; the failure is shown.
+    match ride.recording.pause(now) {
+        Ok(()) => {
+            ui.set_ride_notice(0);
+            ui.set_ride_notice_detail("".into());
+        }
+        Err(error) => {
+            ui.set_ride_notice(1);
+            ui.set_ride_notice_detail(format!("{error:#}").into());
+        }
+    }
+    ride.paused_at = Some(now);
+    ride.auto_paused = auto;
+    ui.set_ride_auto_paused(auto);
+    ui.set_ride_paused_for("0:00".into());
+    ui.set_ride_phase(2);
+}
+
+fn resume_ride(
+    ui: &AppWindow,
+    state: &mut AppState,
+    commands: &mpsc::UnboundedSender<ble::Command>,
+    now: Instant,
+) {
+    let Some(ride) = state.ride.as_mut() else {
+        return;
+    };
+    // A resume that fails waits for the rider, even after a pause of its own.
+    ride.auto_paused = false;
+    ui.set_ride_auto_paused(false);
+    match ride.recording.resume(now) {
+        Ok(()) => {
+            ride.paused_at = None;
+            // The pedals get the same grace as after the start.
+            ride.pedaled_at = ride.pedaled_at.map(|_| now);
+            ui.set_ride_notice(0);
+            ui.set_ride_notice_detail("".into());
+            ui.set_ride_phase(1);
+            // The step resumes where it stopped; the target goes back out only now.
+            sync_erg(ui, state, commands, now);
+        }
+        Err(error) => {
+            ui.set_ride_notice(1);
+            ui.set_ride_notice_detail(format!("{error:#}").into());
+        }
+    }
+}
+
+/// While the trainer reports power, the pedals drive the clock: more than five seconds
+/// without a reading above zero watts pauses the ride, and the next one resumes it. Until
+/// the ride has seen watts from the connected trainer nothing pauses, so a heart-rate-only
+/// ride, or one started without waiting for power, runs as before.
+fn auto_pause(
+    ui: &AppWindow,
+    state: &mut AppState,
+    commands: &mpsc::UnboundedSender<ble::Command>,
+    now: Instant,
+) {
+    let pedaling = state
+        .sensors
+        .live(now)
+        .power
+        .is_some_and(|watts| watts > 0.0);
+    let Some(ride) = state.ride.as_mut() else {
+        return;
+    };
+    match ride.recording.phase() {
+        Phase::Running if pedaling => ride.pedaled_at = Some(now),
+        Phase::Running => {
+            if ride
+                .pedaled_at
+                .is_some_and(|at| now.saturating_duration_since(at) > AUTO_PAUSE_AFTER)
+            {
+                pause_ride(ui, state, commands, now, true);
+            }
+        }
+        Phase::Paused if pedaling && ride.auto_paused => resume_ride(ui, state, commands, now),
+        _ => {}
+    }
+}
+
+/// What keeps Start disabled: a ride already at stake, no sensor, or a pending sign-in,
+/// since the account could change under the ride. A stray activation changes nothing.
+fn start_allowed(ui: &AppWindow) -> bool {
+    !ride_guarded(ui) && ui.get_any_sensor() && !ui.get_signing_in()
+}
+
+/// Start the ride Start armed at the first reading above zero watts: a measured zero is a
+/// trainer at rest, not a pedal stroke. Leaving the ride screen, losing the trainer or
+/// anything that disables Start stands it down instead, so no ride ever begins behind the
+/// rider's back.
+fn start_on_power(
+    ui: &AppWindow,
+    state: &mut AppState,
+    commands: &mpsc::UnboundedSender<ble::Command>,
+    now: Instant,
+) {
+    if !ui.get_ride_waiting() {
+        return;
+    }
+    if ui.get_screen() != 2 || !ui.get_trainer_connected() || !start_allowed(ui) {
+        ui.set_ride_waiting(false);
+        return;
+    }
+    if state
+        .sensors
+        .live(now)
+        .power
+        .is_some_and(|watts| watts > 0.0)
+    {
+        begin_ride(ui, state, commands, now);
+    }
+}
+
+/// Start recording the ride on the ready screen now. ERG chosen there goes on with the
+/// clock, under the same checks as the switch during the ride.
+fn begin_ride(
+    ui: &AppWindow,
+    state: &mut AppState,
+    commands: &mpsc::UnboundedSender<ble::Command>,
+    now: Instant,
+) {
+    ui.set_ride_waiting(false);
+    let erg = ui.get_ride_erg_enabled();
+    let owner = state.session.as_ref().map(session_owner);
+    let workout = ui.get_ride_has_workout().then(|| ui.get_selected_workout());
+    let (name, key) = match &workout {
+        Some(w) => (w.name.to_string(), Some(w.id.to_string())),
+        None => (i18n::free_ride_name(state.lang).to_owned(), None),
+    };
+    // The account's FTP, as the server reported it with the built-in tests, is
+    // snapshotted now so a refresh cannot recolor a ride in progress.
+    let library = &state.library.workouts;
+    let selected = state
+        .selected_workout
+        .as_ref()
+        .and_then(|id| library.iter().find(|w| &w.id == id));
+    // The exact plan is authoritative when there is one; the built-in tests'
+    // reference is the fallback for rides without it.
+    let ftp = selected
+        .and_then(|w| w.execution.as_ref().map(|p| p.reference_ftp))
+        .or_else(|| selected.and_then(|w| w.reference_ftp))
+        .or_else(|| library.iter().find_map(|w| w.reference_ftp))
+        .filter(|f| *f > 0.0);
+    // The plan is copied into the ride now: the library can change under it later.
+    let player = workout
+        .as_ref()
+        .and(selected)
+        .and_then(|w| w.execution.clone())
+        .map(player::Player::new);
+    // The smoke test records under a throwaway folder; every other launch uses the
+    // real recordings folder.
+    let started = match &state.smoke_root {
+        Some(root) => recording::Recording::start_in(root, name, key, now),
+        None => recording::Recording::start(name, key, now),
+    };
+    match started {
+        Ok(recording) => {
+            apply_ride_workout(ui, workout.as_ref());
+            apply_ride_plan(ui, player.as_ref().map(player::Player::plan));
+            let ride = Ride {
+                recording,
+                workout,
+                player,
+                // Off until the ride is in place; the ready screen's choice follows.
+                erg: ErgControl::default(),
+                ftp,
+                owner,
+                paused_at: None,
+                pedaled_at: state
+                    .sensors
+                    .live(now)
+                    .power
+                    .is_some_and(|watts| watts > 0.0)
+                    .then_some(now),
+                auto_paused: false,
+                upload_job: None,
+                strava_activity: None,
+                chart_top: None,
+            };
+            let live = state.sensors.live(now);
+            refresh_player(ui, &ride, &live, 0.0);
+            apply_erg_state(ui, &ride);
+            state.ride = Some(ride);
+            ui.set_ride_present(true);
+            ui.set_ride_phase(1);
+            ui.set_ride_auto_paused(false);
+            ui.set_ride_elapsed("0:00".into());
+            ui.set_ride_notice(0);
+            ui.set_ride_notice_detail("".into());
+            ui.set_ride_save_state(0);
+            reset_upload_ui(ui);
+            ui.set_screen(2);
+            if erg {
+                switch_erg(ui, state, commands, true, now);
+            }
+        }
+        Err(error) => {
+            ui.set_ride_notice(2);
+            ui.set_ride_notice_detail(format!("{error:#}").into());
+        }
+    }
+}
+
 /// Show the ready-to-record screen for a workout, or a free ride when there is none. The
 /// plan, when the server sent one, says what the ride will guide.
-fn show_ready(ui: &AppWindow, workout: Option<&WorkoutRow>, plan: Option<&player::Plan>) {
+fn show_ready(
+    ui: &AppWindow,
+    state: &AppState,
+    workout: Option<&WorkoutRow>,
+    plan: Option<&player::Plan>,
+) {
     ui.set_ride_phase(0);
+    ui.set_ride_waiting(false);
     ui.set_ride_notice(0);
     ui.set_ride_notice_detail("".into());
     ui.set_ride_save_state(0);
     apply_ride_workout(ui, workout);
     apply_ride_plan(ui, plan);
-    ui.set_ride_erg_enabled(false);
+    ready_erg_choice(ui, state);
     ui.set_ride_erg_state(0);
     ui.set_ride_erg_watts("".into());
     ui.set_ride_chart(ModelRc::new(VecModel::from(Vec::<ChartBin>::new())));
@@ -1357,12 +1654,15 @@ fn disconnected(ui: &AppWindow, state: &mut AppState, role: usize) {
         // Whatever the trainer was asked no longer applies. Control stays off after a
         // reconnection until the rider enables it again; the recording goes on.
         if let Some(ride) = state.ride.as_mut() {
+            // Auto-pause waits for the next trainer's first watts.
+            ride.pedaled_at = None;
             if ride.erg.invalidate() {
                 ui.set_ride_notice(6);
                 ui.set_ride_notice_detail("".into());
             }
             apply_erg_state(ui, ride);
         }
+        ready_erg_choice(ui, state);
     } else {
         ui.set_hr_state(0);
         ui.set_hr_ant(false);
@@ -1392,6 +1692,7 @@ fn connected(ui: &AppWindow, state: &mut AppState, device: &Device, role: usize,
         } else {
             2
         });
+        ready_erg_choice(ui, state);
     } else {
         ui.set_hr_state(2);
         ui.set_hr_ant(ant);
@@ -1473,7 +1774,7 @@ fn main() -> anyhow::Result<()> {
     if let Err(error) = slint::set_xdg_app_id("undertrained-indoor") {
         tracing::warn!(%error, "Could not set the desktop app id");
     }
-    let settings = store::load().unwrap_or_else(|error| {
+    let settings = store::load(smoke_root.as_deref()).unwrap_or_else(|error| {
         tracing::warn!(%error, "Could not load preferences");
         store::Settings::default()
     });
@@ -1512,6 +1813,7 @@ fn main() -> anyhow::Result<()> {
         ride: None,
         upload_jobs: 0,
         erg_requests: 0,
+        smoke_root: smoke_root.clone(),
     }));
     {
         let lang = state.borrow().lang;
@@ -1706,7 +2008,7 @@ fn main() -> anyhow::Result<()> {
                 .iter()
                 .find(|w| w.id == id)
                 .and_then(|w| w.execution.as_ref());
-            show_ready(&ui, Some(&row), plan);
+            show_ready(&ui, &state, Some(&row), plan);
         });
     }
     {
@@ -1733,94 +2035,49 @@ fn main() -> anyhow::Result<()> {
                 ui.set_screen(2);
                 return;
             }
-            drop_ride(&ui, &mut state.borrow_mut());
-            state.borrow_mut().selected_workout = None;
-            show_ready(&ui, None, None);
+            let mut state = state.borrow_mut();
+            drop_ride(&ui, &mut state);
+            state.selected_workout = None;
+            show_ready(&ui, &state, None, None);
         });
     }
     {
         let weak = ui.as_weak();
         let state = state.clone();
-        let smoke_root = smoke_root.clone();
+        let commands = commands.clone();
         ui.global::<Actions>().on_start_ride(move || {
             let ui = weak.unwrap();
             if ride_guarded(&ui) {
                 ui.set_screen(2);
                 return;
             }
-            // The button is disabled without a sensor or while a sign-in is pending, since
-            // the account could change under the ride; a stray activation changes nothing.
-            if !ui.get_any_sensor() || ui.get_signing_in() {
+            if !start_allowed(&ui) {
                 return;
             }
             let mut state = state.borrow_mut();
-            let owner = state.session.as_ref().map(session_owner);
-            let workout = ui.get_ride_has_workout().then(|| ui.get_selected_workout());
-            let (name, key) = match &workout {
-                Some(w) => (w.name.to_string(), Some(w.id.to_string())),
-                None => (i18n::free_ride_name(state.lang).to_owned(), None),
-            };
-            // The account's FTP, as the server reported it with the built-in tests, is
-            // snapshotted now so a refresh cannot recolor a ride in progress.
-            let library = &state.library.workouts;
-            let selected = state
-                .selected_workout
-                .as_ref()
-                .and_then(|id| library.iter().find(|w| &w.id == id));
-            // The exact plan is authoritative when there is one; the built-in tests'
-            // reference is the fallback for rides without it.
-            let ftp = selected
-                .and_then(|w| w.execution.as_ref().map(|p| p.reference_ftp))
-                .or_else(|| selected.and_then(|w| w.reference_ftp))
-                .or_else(|| library.iter().find_map(|w| w.reference_ftp))
-                .filter(|f| *f > 0.0);
-            // The plan is copied into the ride now: the library can change under it later.
-            let player = workout
-                .as_ref()
-                .and(selected)
-                .and_then(|w| w.execution.clone())
-                .map(player::Player::new);
-            // The smoke test records under a throwaway folder; every other launch uses the
-            // real recordings folder.
-            let started = match &smoke_root {
-                Some(root) => recording::Recording::start_in(root, name, key, Instant::now()),
-                None => recording::Recording::start(name, key, Instant::now()),
-            };
-            match started {
-                Ok(recording) => {
-                    apply_ride_workout(&ui, workout.as_ref());
-                    apply_ride_plan(&ui, player.as_ref().map(player::Player::plan));
-                    let ride = Ride {
-                        recording,
-                        workout,
-                        player,
-                        // Off until the rider says otherwise, on every ride.
-                        erg: ErgControl::default(),
-                        ftp,
-                        owner,
-                        paused_at: None,
-                        upload_job: None,
-                        strava_activity: None,
-                        chart_top: None,
-                    };
-                    let live = state.sensors.live(Instant::now());
-                    refresh_player(&ui, &ride, &live, 0.0);
-                    apply_erg_state(&ui, &ride);
-                    state.ride = Some(ride);
-                    ui.set_ride_present(true);
-                    ui.set_ride_phase(1);
-                    ui.set_ride_elapsed("0:00".into());
-                    ui.set_ride_notice(0);
-                    ui.set_ride_notice_detail("".into());
-                    ui.set_ride_save_state(0);
-                    reset_upload_ui(&ui);
-                    ui.set_screen(2);
-                }
-                Err(error) => {
-                    ui.set_ride_notice(2);
-                    ui.set_ride_notice_detail(format!("{error:#}").into());
-                }
+            let now = Instant::now();
+            // With a trainer the clock starts at the first pedal stroke rather than at the
+            // click; a heart-rate-only ride has nothing to wait for.
+            if ui.get_trainer_connected() {
+                ui.set_ride_waiting(true);
+                start_on_power(&ui, &mut state, &commands, now);
+            } else {
+                begin_ride(&ui, &mut state, &commands, now);
             }
+        });
+    }
+    {
+        // While waiting, the rider can start at once: a trainer that never reports watts
+        // must not hold the ride back.
+        let weak = ui.as_weak();
+        let state = state.clone();
+        let commands = commands.clone();
+        ui.global::<Actions>().on_start_ride_now(move || {
+            let ui = weak.unwrap();
+            if !ui.get_ride_waiting() || !start_allowed(&ui) {
+                return;
+            }
+            begin_ride(&ui, &mut state.borrow_mut(), &commands, Instant::now());
         });
     }
     {
@@ -1829,29 +2086,13 @@ fn main() -> anyhow::Result<()> {
         let commands = commands.clone();
         ui.global::<Actions>().on_pause_ride(move || {
             let ui = weak.unwrap();
-            let mut state = state.borrow_mut();
-            if state.ride.is_none() {
-                return;
-            }
-            let now = Instant::now();
-            // A paused ride holds no target: the release is queued before the journal
-            // write, and the rider's choice stays on for Resume to send the target again.
-            release_erg(&ui, &mut state, &commands);
-            let ride = state.ride.as_mut().expect("the ride is still here");
-            // The clock stops even when the journal write fails; the failure is shown.
-            match ride.recording.pause(now) {
-                Ok(()) => {
-                    ui.set_ride_notice(0);
-                    ui.set_ride_notice_detail("".into());
-                }
-                Err(error) => {
-                    ui.set_ride_notice(1);
-                    ui.set_ride_notice_detail(format!("{error:#}").into());
-                }
-            }
-            ride.paused_at = Some(now);
-            ui.set_ride_paused_for("0:00".into());
-            ui.set_ride_phase(2);
+            pause_ride(
+                &ui,
+                &mut state.borrow_mut(),
+                &commands,
+                Instant::now(),
+                false,
+            );
         });
     }
     {
@@ -1860,25 +2101,7 @@ fn main() -> anyhow::Result<()> {
         let commands = commands.clone();
         ui.global::<Actions>().on_resume_ride(move || {
             let ui = weak.unwrap();
-            let mut state = state.borrow_mut();
-            let Some(ride) = state.ride.as_mut() else {
-                return;
-            };
-            let now = Instant::now();
-            match ride.recording.resume(now) {
-                Ok(()) => {
-                    ride.paused_at = None;
-                    ui.set_ride_notice(0);
-                    ui.set_ride_notice_detail("".into());
-                    ui.set_ride_phase(1);
-                    // The step resumes where it stopped; the target goes back out only now.
-                    sync_erg(&ui, &mut state, &commands, now);
-                }
-                Err(error) => {
-                    ui.set_ride_notice(1);
-                    ui.set_ride_notice_detail(format!("{error:#}").into());
-                }
-            }
+            resume_ride(&ui, &mut state.borrow_mut(), &commands, Instant::now());
         });
     }
     {
@@ -1948,37 +2171,21 @@ fn main() -> anyhow::Result<()> {
         });
     }
     {
-        // The one place control is switched on, and only for a connected Bluetooth trainer
-        // that advertised it and is delivering power right now. Switching off requests a
-        // release; the trainer's answer says when it took effect.
+        // The rider's switch, on the ready screen and during the ride. Control goes on only
+        // for a connected Bluetooth trainer that advertised it and is delivering power right
+        // now. Switching off requests a release; the trainer's answer says when it took effect.
         let weak = ui.as_weak();
         let state = state.clone();
         let commands = commands.clone();
         ui.global::<Actions>().on_set_erg(move |enable| {
             let ui = weak.unwrap();
-            let mut state = state.borrow_mut();
-            let now = Instant::now();
-            let fresh_power = state.sensors.live(now).power.is_some();
-            let Some(ride) = state.ride.as_mut() else {
-                return;
-            };
-            let allowed = ride.player.is_some()
-                && ride.recording.phase() != Phase::Finished
-                && ui.get_resistance_state() == 1;
-            if enable && allowed && !fresh_power {
-                // Enabling on a trainer that is not reporting would hand a target to a link
-                // that cannot be trusted; the rider is told what is missing.
-                ride.erg.enabled = false;
-                ui.set_ride_notice(7);
-                ui.set_ride_notice_detail("".into());
-            } else if enable && allowed {
-                ride.erg.enable();
-                ui.set_ride_notice(0);
-                ui.set_ride_notice_detail("".into());
-            } else {
-                ride.erg.enabled = false;
-            }
-            sync_erg(&ui, &mut state, &commands, now);
+            switch_erg(
+                &ui,
+                &mut state.borrow_mut(),
+                &commands,
+                enable,
+                Instant::now(),
+            );
         });
     }
     {
@@ -2230,7 +2437,7 @@ fn main() -> anyhow::Result<()> {
             state.settings.rider_name = ui.get_rider_name().to_string();
             state.settings.trainer_id = state.selected[0].clone();
             state.settings.heart_rate_id = state.selected[1].clone();
-            if let Err(error) = store::save(&state.settings) {
+            if let Err(error) = store::save(&state.settings, state.smoke_root.as_deref()) {
                 ui.set_message_code(5);
                 ui.set_message_detail(error.to_string().into());
                 return;
@@ -2463,6 +2670,7 @@ fn main() -> anyhow::Result<()> {
             let now = Instant::now();
             let mut state = timer_state.borrow_mut();
             poll_ride_save(&ui, &mut state);
+            start_on_power(&ui, &mut state, &timer_commands, now);
             refresh_device_readings(&ui, &state, now);
             let AppState { ride, sensors, .. } = &mut *state;
             let live = sensors.live(now);
@@ -2506,6 +2714,7 @@ fn main() -> anyhow::Result<()> {
                     Phase::Finished => {}
                 }
             }
+            auto_pause(&ui, &mut state, &timer_commands, now);
             // A target that changed with the step, a step that ended, a pause the journal
             // forced: whatever moved, the trainer hears about it once. A trainer that went
             // quiet on power loses control first.

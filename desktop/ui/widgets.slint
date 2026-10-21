@@ -104,6 +104,67 @@ export component GlyphButton inherits Rectangle {
     touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
 }
 
+// An accessible switch: a rail with a knob, the label beside it. Controlled from outside
+// through `checked` and `toggled`, so the state it shows is always the state Rust holds.
+export component Toggle inherits Rectangle {
+    in property <string> label;
+    in property <bool> checked: false;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+    height: 36px;
+    width: layout.preferred-width;
+    horizontal-stretch: 0;
+    accessible-role: switch;
+    accessible-label: root.label;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.toggled(!root.checked); } }
+    layout := HorizontalLayout {
+        spacing: 10px;
+        rail := Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 40px; height: 22px; border-radius: 11px;
+            background: root.checked
+                ? (!root.enabled ? Theme.primary.with-alpha(0.35) : touch.has-hover ? Theme.primary-hover : Theme.primary)
+                : (touch.has-hover && root.enabled ? Theme.raised : Theme.sunken);
+            border-width: root.checked ? 0px : 1px;
+            border-color: Theme.border;
+            Rectangle {
+                x: root.checked ? parent.width - self.width - 3px : 3px;
+                y: (parent.height - self.height) / 2;
+                width: 16px; height: 16px; border-radius: 8px;
+                background: root.checked ? Theme.primary-ink : root.enabled ? Theme.muted : Theme.faint;
+                animate x { duration: 120ms; easing: ease-out; }
+            }
+        }
+        Text {
+            text: root.label;
+            color: root.enabled ? Theme.ink : Theme.faint;
+            font-size: 14px; font-weight: 600; vertical-alignment: center;
+        }
+    }
+    focus := FocusScope {
+        enabled: root.enabled && !Overlay.open;
+        key-pressed(event) => {
+            if event.text == "\n" || event.text == " " { root.toggled(!root.checked); return accept; }
+            return reject;
+        }
+    }
+    Rectangle {
+        x: rail.x - 3px; y: rail.y - 3px; width: rail.width + 6px; height: rail.height + 6px;
+        border-width: focus.has-focus ? 2px : 0px;
+        border-color: Theme.primary;
+        border-radius: 14px;
+        background: transparent;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { focus.focus(); root.toggled(!root.checked); }
+    }
+}
+
 // A text link-style tab. The underline marks the current screen.
 export component NavTab inherits Rectangle {
     in property <string> label;
@@ -284,6 +345,14 @@ export component Pulse inherits Rectangle {
         border-radius: 2px;
         background: Theme.primary;
     }
+}
+
+// A dot that breathes slowly, so a wait reads as live rather than stuck.
+export component BreathingDot inherits Rectangle {
+    in property <color> tone: Theme.primary;
+    property <float> phase: mod(animation-tick() / 1ms, 1600) / 1600;
+    width: 10px; height: 10px; border-radius: 5px;
+    background: root.tone.with-alpha(0.35 + 0.65 * (phase < 0.5 ? phase * 2 : 2 - phase * 2));
 }
 
 // A live reading: a large number with its unit, dimmed to a dash while no sensor delivers.

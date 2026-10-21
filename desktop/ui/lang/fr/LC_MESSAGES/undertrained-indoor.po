@@ -622,12 +622,6 @@ msgstr "Home trainer ANT+ · suivez les cibles vous-même"
 msgid "ANT+ trainer · readings only, follow the target yourself"
 msgstr "Home trainer ANT+ · mesures uniquement, suivez la cible vous-même"
 
-msgid "Built-in test: no FTP result is computed and the app does not detect when you stop. Finish the ride once you cannot hold the target."
-msgstr "Test intégré : aucun résultat FTP n'est calculé et l'application ne détecte pas votre arrêt. Terminez la sortie dès que vous ne tenez plus la cible."
-
-msgid "Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the app does not detect when you stop. Finish the ride yourself once you cannot hold the target. Speed and distance are not measured."
-msgstr "Test intégré : les étapes sont chronométrées et la cible affichée, mais aucun résultat FTP n'est calculé et l'application ne détecte pas votre arrêt. Terminez la sortie vous-même dès que vous ne tenez plus la cible. La vitesse et la distance ne sont pas mesurées."
-
 msgid "Cadence cue {} rpm"
 msgstr "Consigne de cadence {} tr/min"
 
@@ -643,9 +637,6 @@ msgstr "Retour au calme"
 msgid "DONE"
 msgstr "TERMINÉE"
 
-msgid "ERG available on {}"
-msgstr "Mode ERG disponible sur {}"
-
 msgid "ERG off · target shown, resistance is yours"
 msgstr "ERG désactivé · cible affichée, résistance libre"
 
@@ -657,9 +648,6 @@ msgstr "ERG activé · en pause, aucune cible"
 
 msgid "ERG on · workout complete, no target"
 msgstr "ERG activé · séance terminée, aucune cible"
-
-msgid "Enable ERG"
-msgstr "Activer l'ERG"
 
 msgid "FREE"
 msgstr "LIBRE"
@@ -724,17 +712,8 @@ msgstr "Envoi de {} W au home trainer…"
 msgid "Skip step"
 msgstr "Passer l'étape"
 
-msgid "Switch resistance control off"
-msgstr "Désactiver le pilotage de la résistance"
-
-msgid "Switch resistance control on for this trainer"
-msgstr "Activer le pilotage de la résistance sur ce home trainer"
-
 msgid "TARGET"
 msgstr "CIBLE"
-
-msgid "The steps are timed from the plan and the target is shown at every moment. Resistance control (ERG) stays off until you switch it on during the ride, and needs a Bluetooth trainer that supports it. No FTP result is computed. Speed and distance are not measured."
-msgstr "Les étapes sont chronométrées d'après le plan et la cible est affichée à chaque instant. Le pilotage de la résistance (ERG) reste désactivé tant que vous ne l'activez pas pendant la sortie, et nécessite un home trainer Bluetooth compatible. Aucun résultat FTP n'est calculé. La vitesse et la distance ne sont pas mesurées."
 
 msgid "The trainer did not accept the command, so ERG control stopped. The ride keeps recording; reconnect the trainer if it stays unresponsive, then enable ERG again."
 msgstr "Le home trainer n'a pas accepté la commande, le pilotage ERG s'est donc arrêté. L'enregistrement continue ; reconnectez le home trainer s'il ne répond plus, puis réactivez l'ERG."
@@ -753,9 +732,6 @@ msgstr "Cette séance vient d'un serveur sans le détail des étapes : son profi
 
 msgid "Trainer holding {} W"
 msgstr "Home trainer maintenu à {} W"
-
-msgid "Turn ERG off"
-msgstr "Désactiver l'ERG"
 
 msgid "Warm-up"
 msgstr "Échauffement"
@@ -881,11 +857,62 @@ msgstr "Capteurs prêts."
 msgid "Pair a trainer or a heart-rate strap on the Devices step; Start unlocks as soon as one delivers."
 msgstr "Appairez un home trainer ou une ceinture cardiaque à l'étape Appareils ; Démarrer se débloque dès qu'un capteur envoie des données."
 
-msgid "{} paired. Readings are recorded once per second."
-msgstr "{} appairé. Les mesures sont enregistrées une fois par seconde."
-
 msgid "Heart rate only: power and cadence stay empty."
 msgstr "Fréquence cardiaque seule : puissance et cadence resteront vides."
 
 msgid "Start the ride (pair a sensor first)"
 msgstr "Démarrer la sortie (appairez d'abord un capteur)"
+
+msgid "ERG"
+msgstr "ERG"
+
+msgid "Resistance control (ERG)"
+msgstr "Pilotage de la résistance (ERG)"
+
+msgid "ERG on · {} holds each target from the start"
+msgstr "ERG activé · {} maintient chaque cible dès le départ"
+
+msgid "{} paired. Recording starts at your first pedal stroke."
+msgstr "{} appairé. L'enregistrement démarre à votre premier coup de pédale."
+
+msgid "Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds without power."
+msgstr "Capteurs prêts. L'enregistrement démarre à votre premier coup de pédale et se met en pause de lui-même après 5 secondes sans puissance."
+
+msgid "Waiting for your first pedal stroke"
+msgstr "En attente du premier coup de pédale"
+
+msgid "{} reports {} W"
+msgstr "{} envoie {} W"
+
+msgid "No reading from {} yet"
+msgstr "Aucune mesure de {} pour l'instant"
+
+msgid "Start now"
+msgstr "Démarrer maintenant"
+
+msgid "Start recording now, without waiting for power"
+msgstr "Démarrer l'enregistrement maintenant, sans attendre la puissance"
+
+msgid "Cancel the start"
+msgstr "Annuler le départ"
+
+msgid "Auto-paused"
+msgstr "Pause automatique"
+
+msgid "Auto-paused · pedal to resume"
+msgstr "Pause automatique · pédalez pour reprendre"
+
+msgid "Paused for {}. The ride paused itself after 5 seconds without power from the trainer; the clock and the workout step are stopped. Pedal to resume, or press Resume."
+msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 secondes sans puissance du home trainer ; le chrono et l'étape de la séance sont arrêtés. Pédalez pour reprendre, ou appuyez sur Reprendre."
+
+msgid "Paused for {}. The ride paused itself after 5 seconds without power from the trainer; the clock is stopped. Pedal to resume, or press Resume."
+msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 secondes sans puissance du home trainer ; le chrono est arrêté. Pédalez pour reprendre, ou appuyez sur Reprendre."
+
+msgid "The steps are timed from the plan and the target is shown at every moment. With ERG on, a Bluetooth trainer that supports it sets the resistance to the target; off, you follow the target yourself. No FTP result is computed. Speed and distance are not measured."
+msgstr "Les étapes sont chronométrées d'après le plan et la cible est affichée à chaque instant. Avec l'ERG activé, un home trainer Bluetooth compatible règle la résistance sur la cible ; désactivé, vous suivez la cible vous-même. Aucun résultat FTP n'est calculé. La vitesse et la distance ne sont pas mesurées."
+
+msgid "Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the test does not end on its own. Finish the ride yourself once you cannot hold the target. Speed and distance are not measured."
+msgstr "Test intégré : les étapes sont chronométrées et la cible affichée, mais aucun résultat FTP n'est calculé et le test ne s'arrête pas de lui-même. Terminez la sortie vous-même dès que vous ne tenez plus la cible. La vitesse et la distance ne sont pas mesurées."
+
+msgid "Built-in test: no FTP result is computed and the test does not end on its own. Finish the ride once you cannot hold the target."
+msgstr "Test intégré : aucun résultat FTP n'est calculé et le test ne s'arrête pas de lui-même. Terminez la sortie dès que vous ne tenez plus la cible."

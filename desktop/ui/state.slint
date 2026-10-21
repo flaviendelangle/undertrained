@@ -229,16 +229,25 @@ export global State {
     in-out property <string> ride-bias: "100 %";
     in-out property <bool> ride-bias-can-down: true;
     in-out property <bool> ride-bias-can-up: true;
-    // Resistance control. enabled is the rider's own switch, off on every ride until they
-    // turn it on. state: 0 off, 1 a target sent and not yet answered, 2 holding a target
-    // the trainer confirmed, 3 on with nothing in the trainer's hands (free step, pause,
-    // workout over), 4 a release sent and not yet answered. watts is the figure the state
-    // refers to, which is the same value the trainer was sent.
+    // Resistance control. enabled is the rider's own switch: on the ready screen it is the
+    // choice the ride starts with, remembered from the rider's last one there (off until
+    // then); during the ride it is switched for that ride alone. state: 0 off, 1 a target
+    // sent and not yet answered, 2 holding a target the trainer confirmed, 3 on with nothing
+    // in the trainer's hands (free step, pause, workout over), 4 a release sent and not yet
+    // answered. watts is the figure the state refers to, which is the same value the
+    // trainer was sent.
     in-out property <bool> ride-erg-enabled: false;
     in-out property <int> ride-erg-state: 0;
     in-out property <string> ride-erg-watts: "";
     // Only a connected Bluetooth trainer that advertised control can take targets.
     out property <bool> ride-erg-available: resistance-state == 1;
+    // With a trainer connected, Start arms the ride: waiting is true until the first reading
+    // above zero watts starts the recording. Leaving the ride screen or losing the trainer
+    // stands it down; Actions.start-ride-now starts at once instead.
+    in-out property <bool> ride-waiting: false;
+    // The ride paused itself after five seconds without a reading above zero watts; the next
+    // one resumes it. False for a pause the rider asked for.
+    in-out property <bool> ride-auto-paused: false;
     // Completion.
     in-out property <string> ride-avg-power: "—";
     in-out property <string> ride-max-power: "—";
@@ -339,6 +348,7 @@ export global Actions {
     callback close-training();
     callback start-free-ride();
     callback start-ride();
+    callback start-ride-now();
     callback pause-ride();
     callback resume-ride();
     callback finish-ride();

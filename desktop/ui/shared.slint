@@ -1,6 +1,6 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme, State, Actions, Overlay, NearbyDevice, ProfileStep, WorkoutRow, PlanStep } from "state.slint";
-import { ActionButton, Notice, WorkoutChart, Pill, Pulse, Caption, TextField, SignalBars, StatCard, BuiltInBadge, LiveMetric, EmptyPanel, StepRow, ZoneDot } from "widgets.slint";
+import { ActionButton, Toggle, Notice, WorkoutChart, Pill, Pulse, Caption, TextField, SignalBars, StatCard, BuiltInBadge, LiveMetric, EmptyPanel, StepRow, ZoneDot } from "widgets.slint";
 
 // Blocks whose wording and states are the same on every screen: the dialogs, the upload
 // card, the notices, the sensor tiles and the library cards. The screens place and size
@@ -90,15 +90,17 @@ export global Copy {
     // What the ready screen says about the ride to come.
     pure public function ready-notice() -> string {
         return State.ride-guided && State.ride-test
-            ? @tr("Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the app does not detect when you stop. Finish the ride yourself once you cannot hold the target. Speed and distance are not measured.")
+            ? @tr("Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the test does not end on its own. Finish the ride yourself once you cannot hold the target. Speed and distance are not measured.")
             : State.ride-guided
-            ? @tr("The steps are timed from the plan and the target is shown at every moment. Resistance control (ERG) stays off until you switch it on during the ride, and needs a Bluetooth trainer that supports it. No FTP result is computed. Speed and distance are not measured.")
+            ? @tr("The steps are timed from the plan and the target is shown at every moment. With ERG on, a Bluetooth trainer that supports it sets the resistance to the target; off, you follow the target yourself. No FTP result is computed. Speed and distance are not measured.")
             : State.ride-has-workout
             ? @tr("This workout came from a server without step data, so its profile is shown for reference only: steps are not timed and nothing is sent to the trainer. Update the Undertrained backend to ride it step by step.")
             : @tr("Readings only: nothing is sent to the trainer. Speed and distance are not measured.");
     }
-    pure public function erg-availability() -> string {
-        return State.ride-erg-available ? @tr("ERG available on {}", State.trainer-name)
+    // What the ERG choice means for the ride to come, beside the switch on the ready screen.
+    pure public function erg-choice() -> string {
+        return State.ride-erg-enabled ? @tr("ERG on · {} holds each target from the start", State.trainer-name)
+            : State.ride-erg-available ? @tr("ERG off · target shown, resistance is yours")
             : State.trainer-ant ? @tr("ANT+ trainer · follow the targets yourself")
             : State.trainer-connected ? @tr("No trainer control · follow the targets yourself")
             : @tr("No trainer connected");
@@ -123,8 +125,13 @@ export global Copy {
     pure public function ride-title() -> string {
         return State.ride-has-workout ? State.ride-name : @tr("Free ride");
     }
+    // A pause of the ride's own says why and how it ends; the rider's pause waits for Resume.
     pure public function paused-words() -> string {
-        return State.ride-guided
+        return State.ride-auto-paused && State.ride-guided
+            ? @tr("Paused for {}. The ride paused itself after 5 seconds without power from the trainer; the clock and the workout step are stopped. Pedal to resume, or press Resume.", State.ride-paused-for)
+            : State.ride-auto-paused
+            ? @tr("Paused for {}. The ride paused itself after 5 seconds without power from the trainer; the clock is stopped. Pedal to resume, or press Resume.", State.ride-paused-for)
+            : State.ride-guided
             ? @tr("Paused for {}. The clock and the workout step are stopped; readings keep showing what the sensors send.", State.ride-paused-for)
             : @tr("Paused for {}. The clock is stopped; readings keep showing what the sensors send.", State.ride-paused-for);
     }
@@ -419,8 +426,11 @@ export component SensorCheck inherits Rectangle {
                 Caption { text: reading.unit; vertical-alignment: center; min-width: 36px; }
             }
         }
+        // With a trainer the pedals drive the clock; a strap alone records at once.
         Text {
-            text: State.any-sensor ? @tr("Sensors ready. Readings are recorded once per second.") : @tr("Connect a trainer or a heart-rate sensor on the Devices screen first.");
+            text: State.trainer-connected ? @tr("Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds without power.")
+                : State.any-sensor ? @tr("Sensors ready. Readings are recorded once per second.")
+                : @tr("Connect a trainer or a heart-rate sensor on the Devices screen first.");
             color: State.any-sensor ? Theme.muted : Theme.warn; font-size: 12px; wrap: word-wrap;
         }
     }
@@ -436,16 +446,21 @@ export component RideNotices inherits VerticalLayout {
     if State.ride-notice == 7: Notice { text: @tr("No power reading from the trainer for five seconds, so ERG control stopped. The ride keeps recording; check the trainer's link, then enable ERG again once readings are back."); }
     if State.ride-active && !State.any-sensor: Notice { text: @tr("No sensor is connected. The ride keeps running and missing readings stay empty; reconnect from the Devices screen."); }
     if State.ride-active && State.ride-has-workout && !State.ride-guided: Text { text: @tr("Reference only: this workout came without step data, so steps are not timed and nothing is sent to the trainer."); color: Theme.faint; font-size: 12px; wrap: word-wrap; }
-    if State.ride-active && State.ride-guided && State.ride-test: Text { text: @tr("Built-in test: no FTP result is computed and the app does not detect when you stop. Finish the ride once you cannot hold the target."); color: Theme.faint; font-size: 12px; wrap: word-wrap; }
+    if State.ride-active && State.ride-guided && State.ride-test: Text { text: @tr("Built-in test: no FTP result is computed and the test does not end on its own. Finish the ride once you cannot hold the target."); color: Theme.faint; font-size: 12px; wrap: word-wrap; }
 }
 
-// Resistance control: the rider's switch, only offered for a trainer that takes targets,
-// and the one line saying what the trainer is doing.
-export component ErgToggle inherits ActionButton {
-    label: State.ride-erg-enabled ? @tr("Turn ERG off") : @tr("Enable ERG");
-    primary: !State.ride-erg-enabled; compact: true;
-    accessible-label: State.ride-erg-enabled ? @tr("Switch resistance control off") : @tr("Switch resistance control on for this trainer");
-    activated => { Actions.set-erg(!State.ride-erg-enabled); }
+// Resistance control: the rider's switch, the same one on the ready screen (the choice the
+// ride starts with) and in the ride (for that ride alone), live only for a trainer that
+// takes targets; and the one line saying what the choice means or what the trainer is doing.
+export component ErgToggle inherits Toggle {
+    label: @tr("ERG"); checked: State.ride-erg-enabled; enabled: State.ride-erg-available;
+    accessible-label: @tr("Resistance control (ERG)");
+    toggled(on) => { Actions.set-erg(on); }
+}
+
+export component ErgChoice inherits Text {
+    text: Copy.erg-choice();
+    color: State.ride-erg-enabled ? Theme.good : Theme.muted; font-size: 12px; vertical-alignment: center; overflow: elide; min-width: 0px;
 }
 
 export component ErgStatus inherits Text {

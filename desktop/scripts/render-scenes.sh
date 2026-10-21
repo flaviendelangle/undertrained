@@ -3,7 +3,7 @@
 # Usage: scripts/render-scenes.sh <out-dir> [WxH] [scene...]
 set -euo pipefail
 out=$1; size=${2:-1180x800}; shift 2 || shift $#
-scenes=("$@"); [ ${#scenes[@]} -eq 0 ] && scenes=(login devices workouts ready riding paused finished free picker)
+scenes=("$@"); [ ${#scenes[@]} -eq 0 ] && scenes=(login devices workouts ready waiting riding paused auto-paused finished free picker)
 mkdir -p "$out"
 bin="$(dirname "$0")/../target/debug/undertrained-indoor"
 w=${size%x*}; h=${size#*x}

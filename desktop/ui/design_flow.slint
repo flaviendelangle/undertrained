@@ -1,7 +1,7 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme, State, Actions, Overlay, WorkoutRow } from "state.slint";
-import { ActionButton, GlyphButton, Notice, WorkoutChart, PlanBar, Pill, Pulse, Caption, LiveMetric, MetricTile, Page, EmptyPanel, RadioPill, Gauge, Brand, ChartPanel, ZoneDot, StepRow, BuiltInBadge, TextField } from "widgets.slint";
-import { Copy, AuthForm, DeviceMessage, HelpPanel, SensorTile, WorkoutGrid, LibraryState, LibraryNotices, StepList, SensorCheck, RideNotices, ErgToggle, ErgStatus, IntensityControl, SkipButton, CadenceCue, SummaryStats, SaveStatus, UploadCard, FolderRow } from "shared.slint";
+import { ActionButton, GlyphButton, Notice, WorkoutChart, PlanBar, Pill, Pulse, Caption, LiveMetric, MetricTile, Page, EmptyPanel, RadioPill, Gauge, Brand, ChartPanel, ZoneDot, StepRow, BuiltInBadge, TextField, BreathingDot } from "widgets.slint";
+import { Copy, AuthForm, DeviceMessage, HelpPanel, SensorTile, WorkoutGrid, LibraryState, LibraryNotices, StepList, SensorCheck, RideNotices, ErgToggle, ErgChoice, ErgStatus, IntensityControl, SkipButton, CadenceCue, SummaryStats, SaveStatus, UploadCard, FolderRow } from "shared.slint";
 
 // One guided path, the way Zwift and ROUVY walk a rider in. Devices, workout, ride: three
 // numbered steps in the header, one primary action per screen, and a ride screen that
@@ -413,12 +413,7 @@ component FlowReady inherits Rectangle {
                 height: root.narrow ? 170px : 220px; border-radius: 12px; background: Theme.card; border-width: 1px; border-color: Theme.border;
                 VerticalLayout {
                     padding: 16px; spacing: 10px;
-                    HorizontalLayout {
-                        spacing: 12px;
-                        Caption { text: State.ride-guided ? @tr("{n} timed step" | "{n} timed steps" % State.ride-plan-steps) + " · " + State.ride-plan-total : @tr("REFERENCE ONLY"); vertical-alignment: center; }
-                        Rectangle { horizontal-stretch: 1; min-width: 0px; }
-                        if State.ride-guided && !root.narrow: Caption { text: Copy.erg-availability(); color: State.ride-erg-available ? Theme.good : Theme.muted; overflow: elide; vertical-alignment: center; }
-                    }
+                    Caption { text: State.ride-guided ? @tr("{n} timed step" | "{n} timed steps" % State.ride-plan-steps) + " · " + State.ride-plan-total : @tr("REFERENCE ONLY"); }
                     WorkoutChart { vertical-stretch: 1; steps: State.ride-guided ? State.ride-plan : State.ride-profile; }
                 }
             }
@@ -448,32 +443,77 @@ component FlowReady inherits Rectangle {
                 VerticalLayout { padding: 10px; spacing: 6px; alignment: start; Caption { text: @tr("STEPS"); x: 10px; } StepList { compact: true; } }
             }
             if !two-columns: Notice { info: true; text: Copy.ready-notice(); }
-            if State.ride-guided && root.narrow: Text { text: Copy.erg-availability(); color: State.ride-erg-available ? Theme.good : Theme.muted; font-size: 12px; wrap: word-wrap; }
         } }
         Rectangle { height: 1px; background: Theme.border; }
-        // Pinned: what stands between the rider and the ride, and the one action. Each
-        // control sits in a column that centers it, so buttons of different heights align.
-        HorizontalLayout {
-            padding-top: 16px; padding-bottom: 16px; spacing: 12px;
-            VerticalLayout {
-                spacing: 3px; alignment: center; horizontal-stretch: 1; min-width: 0px;
-                Text {
-                    text: !State.any-sensor ? @tr("No sensor connected.") : State.signing-in ? @tr("Waiting for the browser…") : @tr("Sensors ready.");
-                    color: !State.any-sensor ? Theme.warn : Theme.ink; font-size: 15px; font-weight: 600; overflow: elide;
+        // Pinned: what stands between the rider and the ride, the ERG choice the ride starts
+        // with, and the one action. Each control sits in a column that centers it, so
+        // buttons of different heights align. Start pressed with a trainer gives way, in the
+        // same place, to the wait for the first pedal stroke: the trainer's watts show as
+        // they arrive, Start now skips the wait for a trainer that never reports, Cancel
+        // stands it down, and the switch stays. No primary button while waiting.
+        VerticalLayout {
+            padding-top: 16px; padding-bottom: 16px; spacing: 10px;
+            // Under the two-column width the bar has no room for the switch beside the
+            // readings and the buttons: the switch and its line get a row of their own.
+            if State.ride-guided && !root.two-columns: HorizontalLayout {
+                spacing: 12px;
+                ErgToggle { y: (parent.height - self.height) / 2; }
+                ErgChoice { horizontal-stretch: 1; }
+            }
+            HorizontalLayout {
+                spacing: 12px;
+                // The column's minimum is the title's: on a wide bar the title keeps its
+                // full width and the ERG line yields first; the lines under it elide.
+                VerticalLayout {
+                    spacing: 3px; alignment: center; horizontal-stretch: 1;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        if State.ride-waiting: BreathingDot { y: (parent.height - self.height) / 2; }
+                        Text {
+                            text: State.ride-waiting ? @tr("Waiting for your first pedal stroke") : !State.any-sensor ? @tr("No sensor connected.") : State.signing-in ? @tr("Waiting for the browser…") : @tr("Sensors ready.");
+                            color: !State.any-sensor ? Theme.warn : Theme.ink; font-size: 15px; font-weight: 600; overflow: elide; horizontal-stretch: 1;
+                            min-width: root.narrow ? 0px : self.preferred-width;
+                        }
+                    }
+                    // The watts as they arrive, or their absence: whether Start now is the way.
+                    if State.ride-waiting: Text {
+                        text: State.ride-power-live ? @tr("{} reports {} W", State.trainer-name, State.ride-power) : @tr("No reading from {} yet", State.trainer-name);
+                        color: Theme.muted; font-size: 12px; overflow: elide; min-width: 0px;
+                    }
+                    if !State.ride-waiting && !root.narrow: Text {
+                        text: !State.any-sensor ? @tr("Pair a trainer or a heart-rate strap on the Devices step; Start unlocks as soon as one delivers.") : State.trainer-connected ? @tr("{} paired. Recording starts at your first pedal stroke.", State.trainer-name) : @tr("Heart rate only: power and cadence stay empty.");
+                        color: Theme.muted; font-size: 12px; overflow: elide; min-width: 0px;
+                    }
                 }
-                if !root.narrow: Text {
-                    text: !State.any-sensor ? @tr("Pair a trainer or a heart-rate strap on the Devices step; Start unlocks as soon as one delivers.") : State.any-sensor && State.trainer-connected ? @tr("{} paired. Readings are recorded once per second.", State.trainer-name) : @tr("Heart rate only: power and cadence stay empty.");
-                    color: Theme.muted; font-size: 12px; overflow: elide;
+                if State.ride-guided && root.two-columns: VerticalLayout {
+                    spacing: 3px; alignment: center; horizontal-stretch: 0;
+                    // The switch keeps its own width; the block takes the line's.
+                    HorizontalLayout { alignment: start; ErgToggle { } }
+                    ErgChoice { max-width: 360px; }
+                }
+                if !State.any-sensor: VerticalLayout { alignment: center; ActionButton { label: @tr("Devices"); quiet: true; activated => { Actions.navigate(0); } } }
+                if State.ride-waiting && !root.narrow: VerticalLayout {
+                    alignment: center;
+                    ActionButton { label: @tr("Cancel"); quiet: true; accessible-label: @tr("Cancel the start"); activated => { State.ride-waiting = false; } }
+                }
+                if State.ride-waiting && !root.narrow: VerticalLayout {
+                    alignment: center;
+                    ActionButton { label: @tr("Start now"); accessible-label: @tr("Start recording now, without waiting for power"); activated => { Actions.start-ride-now(); } }
+                }
+                if !State.ride-waiting: VerticalLayout {
+                    alignment: center;
+                    ActionButton {
+                        label: @tr("Start the ride"); primary: true; large: !root.narrow; enabled: State.can-start; min-width: root.narrow ? 120px : 220px;
+                        accessible-label: State.can-start ? @tr("Start the ride") : @tr("Start the ride (pair a sensor first)");
+                        activated => { Actions.start-ride(); }
+                    }
                 }
             }
-            if !State.any-sensor: VerticalLayout { alignment: center; ActionButton { label: @tr("Devices"); quiet: true; activated => { Actions.navigate(0); } } }
-            VerticalLayout {
-                alignment: center;
-                ActionButton {
-                    label: @tr("Start the ride"); primary: true; large: !root.narrow; enabled: State.can-start; min-width: root.narrow ? 120px : 220px;
-                    accessible-label: State.can-start ? @tr("Start the ride") : @tr("Start the ride (pair a sensor first)");
-                    activated => { Actions.start-ride(); }
-                }
+            // Narrow, the wait keeps the whole line and its two buttons sit under it.
+            if State.ride-waiting && root.narrow: HorizontalLayout {
+                spacing: 12px; alignment: end;
+                ActionButton { label: @tr("Cancel"); quiet: true; compact: true; accessible-label: @tr("Cancel the start"); activated => { State.ride-waiting = false; } }
+                ActionButton { label: @tr("Start now"); compact: true; accessible-label: @tr("Start recording now, without waiting for power"); activated => { Actions.start-ride-now(); } }
             }
         }
     } }
@@ -531,6 +571,14 @@ component TargetPanel inherits Rectangle {
     }
 }
 
+// A callout under the gauge: one line in a tinted pill, for what matters this second.
+component GaugeCallout inherits Rectangle {
+    in property <string> text;
+    in property <color> tone: Theme.primary;
+    height: 30px; border-radius: 15px; background: root.tone.with-alpha(0.16);
+    Text { text: root.text; color: root.tone; font-size: 13px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+}
+
 // The gauge with the live power in it: the zone's color fills the arc, the target sits as
 // a tick with its band, so holding the number becomes a matter of keeping the arc in the band.
 component PowerGauge inherits Gauge {
@@ -581,6 +629,8 @@ component FlowHud inherits Rectangle {
     property <bool> short: root.stage < 720px;
     property <bool> guided: State.ride-guided;
     property <bool> soon: State.ride-active && guided && !State.ride-workout-complete && State.ride-step-remaining-seconds > 0 && State.ride-step-remaining-seconds <= 5;
+    // The ride's own pause, after five seconds without watts: the next pedal stroke ends it.
+    property <bool> auto-paused: State.ride-phase == 2 && State.ride-auto-paused;
     VerticalLayout {
         // The slim bar: the clock, the ride, the two ride controls. No app chrome while riding.
         Rectangle {
@@ -589,7 +639,7 @@ component FlowHud inherits Rectangle {
                 padding-left: 20px; padding-right: 16px; spacing: 12px;
                 Rectangle { y: (parent.height - self.height) / 2; width: 10px; height: 10px; border-radius: 5px; background: State.ride-phase == 1 ? Theme.heart : Theme.pause; }
                 Text { text: State.ride-elapsed; color: Theme.ink; font-size: 26px; font-weight: 700; vertical-alignment: center; font-family: "DejaVu Sans Mono"; }
-                if !root.narrow: Text { text: State.ride-phase == 2 ? @tr("Paused") : @tr("Recording"); color: Theme.muted; font-size: 13px; vertical-alignment: center; }
+                if !root.narrow: Text { text: State.ride-phase == 2 ? (State.ride-auto-paused ? @tr("Auto-paused") : @tr("Paused")) : @tr("Recording"); color: Theme.muted; font-size: 13px; vertical-alignment: center; }
                 Rectangle { width: 1px; height: 24px; y: (parent.height - self.height) / 2; background: Theme.border; }
                 Text { text: Copy.ride-title(); color: Theme.ink; font-size: 15px; font-weight: 600; overflow: elide; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px; }
                 if guided && !root.narrow: Caption { text: State.ride-workout-complete ? @tr("DONE") : @tr("{} LEFT", State.ride-workout-remaining); vertical-alignment: center; }
@@ -614,10 +664,8 @@ component FlowHud inherits Rectangle {
                 alignment: center; spacing: 12px;
                 Rectangle { vertical-stretch: 1; }
                 PowerGauge { size: max(220px, min(360px, root.stage - (root.short ? 330px : 380px))); }
-                if root.soon: Rectangle {
-                    height: 30px; border-radius: 15px; background: Theme.primary.with-alpha(0.16);
-                    Text { text: @tr("Next: {}", Copy.step-words(State.ride-next-duration, State.ride-next-target)); color: Theme.primary; font-size: 13px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
-                }
+                if root.soon && !root.auto-paused: GaugeCallout { text: @tr("Next: {}", Copy.step-words(State.ride-next-duration, State.ride-next-target)); }
+                if root.auto-paused: GaugeCallout { text: @tr("Auto-paused · pedal to resume"); tone: Theme.pause; }
                 Rectangle { vertical-stretch: 1; }
             }
             VerticalLayout {
@@ -633,10 +681,8 @@ component FlowHud inherits Rectangle {
             VerticalLayout {
                 padding: 16px; spacing: 12px; alignment: start;
                 HorizontalLayout { alignment: center; PowerGauge { size: 200px; } }
-                if root.soon: Rectangle {
-                    height: 30px; border-radius: 15px; background: Theme.primary.with-alpha(0.16);
-                    Text { text: @tr("Next: {}", Copy.step-words(State.ride-next-duration, State.ride-next-target)); color: Theme.primary; font-size: 13px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
-                }
+                if root.soon && !root.auto-paused: GaugeCallout { text: @tr("Next: {}", Copy.step-words(State.ride-next-duration, State.ride-next-target)); }
+                if root.auto-paused: GaugeCallout { text: @tr("Auto-paused · pedal to resume"); tone: Theme.pause; }
                 HorizontalLayout {
                     spacing: 12px;
                     MetricTile { label: @tr("HEART RATE"); value: State.ride-hr; unit: @tr("bpm"); live: State.ride-hr-live; tone: Theme.heart; size: 26px; }

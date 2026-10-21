@@ -47,6 +47,15 @@ pub fn apply(ui: &AppWindow, state: &Rc<RefCell<AppState>>, scene: &str) {
             workout_rows(ui, &mut state);
         }
         "ready" => ui.global::<Actions>().invoke_select_workout("p:2".into()),
+        // Start pressed with the trainer paired and ERG chosen: waiting for the first watts.
+        "waiting" => {
+            ui.global::<Actions>().invoke_select_workout("p:2".into());
+            ui.set_ride_erg_enabled(true);
+            ui.set_ride_waiting(true);
+            // The trainer reports, but at rest: any watts would have started the ride.
+            ui.set_ride_power("0".into());
+            ui.set_ride_cadence("0".into());
+        }
         // A long built-in test, as the ramp test is: twenty timed steps to lay out.
         "ready-test" => {
             ui.global::<Actions>()
@@ -56,6 +65,17 @@ pub fn apply(ui: &AppWindow, state: &Rc<RefCell<AppState>>, scene: &str) {
         "riding" | "paused" => {
             ui.global::<Actions>().invoke_select_workout("p:2".into());
             riding(ui, scene == "paused");
+        }
+        // The ride paused itself after five seconds without watts; ERG released the target.
+        "auto-paused" => {
+            ui.global::<Actions>().invoke_select_workout("p:2".into());
+            riding(ui, true);
+            ui.set_ride_auto_paused(true);
+            ui.set_ride_erg_state(3);
+            ui.set_ride_power("0".into());
+            ui.set_ride_cadence("0".into());
+            ui.set_ride_delta("".into());
+            ui.set_ride_delta_state(0);
         }
         "free" => {
             ui.global::<Actions>().invoke_start_free_ride();

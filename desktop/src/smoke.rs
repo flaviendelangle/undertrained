@@ -7,9 +7,9 @@ use crate::player::{Plan, Segment};
 use crate::recording::Phase;
 use crate::workouts::{Workout, WorkoutId};
 use crate::{
-    Actions, AppState, AppWindow, RideOnSignIn, apply_language, apply_live, connected, device_rows,
-    disconnected, erg_event, guard_erg_power, refresh_player, reset_session_ui, ride_on_sign_in,
-    workout_rows,
+    Actions, AppState, AppWindow, RideOnSignIn, apply_language, apply_live, auto_pause, connected,
+    device_rows, disconnected, erg_event, guard_erg_power, refresh_player, reset_session_ui,
+    ride_on_sign_in, start_on_power, workout_rows,
 };
 use slint::{ComponentHandle, Model};
 use std::{
@@ -708,7 +708,120 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         "No ride while a sign-in is pending"
     );
     ui.set_signing_in(false);
+    // With a trainer, Start waits for the first pedal stroke and records nothing until then.
+    // The waiting is driven here through the same check the timer runs.
+    let (start_sink, mut start_commands) = tokio::sync::mpsc::unbounded_channel();
+    let pedal = |watts: i16| {
+        state.borrow_mut().sensors.update(
+            0,
+            &Reading {
+                power: Some(watts),
+                cadence: None,
+                heart_rate: None,
+            },
+            false,
+            Instant::now(),
+        );
+        start_on_power(ui, &mut state.borrow_mut(), &start_sink, Instant::now());
+    };
+    ui.global::<Actions>().invoke_start_ride_now();
+    assert!(
+        state.borrow().ride.is_none(),
+        "Start now only answers Start"
+    );
     ui.global::<Actions>().invoke_start_ride();
+    assert!(ui.get_ride_waiting(), "Start waits for power");
+    assert!(
+        state.borrow().ride.is_none(),
+        "Nothing recorded while waiting"
+    );
+    pedal(0);
+    assert!(
+        ui.get_ride_waiting() && state.borrow().ride.is_none(),
+        "A measured zero is a trainer at rest, not a pedal stroke"
+    );
+    ui.global::<Actions>().invoke_navigate(0);
+    pedal(150);
+    assert!(
+        !ui.get_ride_waiting(),
+        "Leaving the ride screen stands it down"
+    );
+    assert!(state.borrow().ride.is_none());
+    ui.global::<Actions>().invoke_navigate(2);
+    pedal(0);
+    // ERG is chosen on the ready screen, only for a trainer that takes control, and the
+    // choice is remembered for the next rides, in the smoke root rather than the rider's
+    // own settings.
+    ui.global::<Actions>().invoke_set_erg(true);
+    assert!(ui.get_ride_erg_enabled(), "The choice waits for the ride");
+    assert_eq!(
+        state.borrow().erg_requests,
+        0,
+        "Nothing sent before the ride"
+    );
+    assert!(
+        crate::store::load(Some(root)).unwrap().start_with_erg,
+        "The choice is saved"
+    );
+    ui.global::<Actions>().invoke_set_erg(false);
+    assert!(!ui.get_ride_erg_enabled());
+    assert!(!crate::store::load(Some(root)).unwrap().start_with_erg);
+    ui.global::<Actions>().invoke_set_erg(true);
+    ui.global::<Actions>().invoke_select_workout("p:2".into());
+    assert!(
+        ui.get_ride_erg_enabled(),
+        "A new ready screen shows the remembered choice"
+    );
+    ui.global::<Actions>().invoke_start_ride();
+    assert!(ui.get_ride_waiting());
+    disconnected(ui, &mut state.borrow_mut(), 0);
+    pedal(0);
+    assert!(
+        !ui.get_ride_waiting(),
+        "Losing the trainer stands the start down"
+    );
+    assert!(
+        !ui.get_ride_erg_enabled(),
+        "Not offered without the trainer"
+    );
+    connected(ui, &mut state.borrow_mut(), &devices[0], 0, false);
+    assert!(!ui.get_ride_erg_enabled(), "Nor on a read-only trainer");
+    ui.global::<Actions>().invoke_set_erg(false);
+    assert!(
+        state.borrow().settings.start_with_erg,
+        "A switch that is not offered changes no choice"
+    );
+    connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
+    assert!(
+        ui.get_ride_erg_enabled(),
+        "The remembered choice is back with a trainer that takes control"
+    );
+    ui.global::<Actions>().invoke_start_ride();
+    pedal(0);
+    assert!(state.borrow().ride.is_none());
+    pedal(150);
+    assert!(!ui.get_ride_waiting());
+    // The first watts start the ride, and the ERG chosen before it goes on with the clock.
+    assert!(ui.get_ride_erg_enabled(), "ERG goes on with the clock");
+    assert_eq!(ui.get_ride_erg_state(), 1, "Pending, not held");
+    assert_eq!(ui.get_ride_erg_watts(), "100", "The first step's target");
+    match start_commands.try_recv() {
+        Ok(crate::ble::Command::SetErg {
+            device_id, watts, ..
+        }) => {
+            assert_eq!(device_id, TRAINER_ID);
+            assert_eq!(watts, Some(100));
+        }
+        other => panic!("expected the first target, got {other:?}"),
+    }
+    assert!(start_commands.try_recv().is_err(), "One command");
+    // Off again, so the guided checks below start from a ride without control. Switching
+    // during a ride leaves the remembered choice alone.
+    ui.global::<Actions>().invoke_set_erg(false);
+    assert!(state.borrow().settings.start_with_erg);
+    let release = state.borrow().erg_requests;
+    erg_event(ui, &mut state.borrow_mut(), &start_sink, release, &Ok(None));
+    assert!(!ui.get_ride_erg_enabled() && ui.get_ride_erg_state() == 0);
     let directory = {
         let state = state.borrow();
         let ride = state.ride.as_ref().expect("The ride started");
@@ -774,6 +887,79 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         assert_eq!(ride.recording.samples().len(), 1);
         assert_eq!(ride.recording.samples()[0].live.power, Some(198.0));
     }
+    // Auto-pause: more than five seconds without watts pauses the ride, and the next pedal
+    // stroke resumes it. A pause the rider asked for waits for Resume.
+    let coast = |watts: i16| {
+        state.borrow_mut().sensors.update(
+            0,
+            &Reading {
+                power: Some(watts),
+                cadence: None,
+                heart_rate: None,
+            },
+            false,
+            Instant::now(),
+        );
+        auto_pause(ui, &mut state.borrow_mut(), &start_sink, Instant::now());
+    };
+    coast(0);
+    assert_eq!(ui.get_ride_phase(), 1, "Not five seconds yet");
+    state.borrow_mut().ride.as_mut().unwrap().pedaled_at =
+        Some(Instant::now() - Duration::from_secs(6));
+    coast(0);
+    assert_eq!(ui.get_ride_phase(), 2, "Five seconds without watts");
+    assert!(ui.get_ride_auto_paused());
+    assert_eq!(
+        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        Phase::Paused
+    );
+    coast(0);
+    assert_eq!(ui.get_ride_phase(), 2, "A zero does not resume");
+    coast(160);
+    assert_eq!(ui.get_ride_phase(), 1, "The next pedal stroke resumes");
+    assert!(!ui.get_ride_auto_paused());
+    assert_eq!(
+        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        Phase::Running
+    );
+    ui.global::<Actions>().invoke_pause_ride();
+    assert!(!ui.get_ride_auto_paused());
+    coast(160);
+    assert_eq!(ui.get_ride_phase(), 2, "The rider's pause waits for Resume");
+    ui.global::<Actions>().invoke_resume_ride();
+    assert_eq!(ui.get_ride_phase(), 1);
+    // A resume restarts the count: the pedals get five seconds again.
+    coast(0);
+    assert_eq!(ui.get_ride_phase(), 1);
+    // Losing the trainer stops the count until the next trainer's first watts.
+    disconnected(ui, &mut state.borrow_mut(), 0);
+    connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
+    assert!(state.borrow().ride.as_ref().unwrap().pedaled_at.is_none());
+    auto_pause(
+        ui,
+        &mut state.borrow_mut(),
+        &start_sink,
+        Instant::now() + Duration::from_secs(6),
+    );
+    assert_eq!(
+        ui.get_ride_phase(),
+        1,
+        "No watts seen from this trainer yet"
+    );
+    assert!(
+        start_commands.try_recv().is_err(),
+        "ERG is off: nothing sent"
+    );
+    state.borrow_mut().sensors.update(
+        0,
+        &Reading {
+            power: Some(198),
+            cadence: Some(86.0),
+            heart_rate: None,
+        },
+        false,
+        Instant::now(),
+    );
     ui.global::<Actions>().invoke_navigate(0);
     assert_eq!(ui.get_screen(), 0);
     assert!(ui.get_ride_active());
