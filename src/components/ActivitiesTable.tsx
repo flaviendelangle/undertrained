@@ -8,13 +8,21 @@ import { Toolbar } from "@base-ui/react/toolbar";
 import type { ListActivity } from "@server/db/types";
 import {
   type Row,
-  type RowData,
+  columnFilteringFeature,
+  columnSizingFeature,
+  columnVisibilityFeature,
   createColumnHelper,
+  createFilteredRowModel,
+  createSortedRowModel,
   flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable,
+  globalFilteringFeature,
+  metaHelper,
+  rowSortingFeature,
+  sortFn_alphanumeric,
+  sortFn_basic,
+  sortFn_text,
+  tableFeatures,
+  useTable,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
@@ -45,15 +53,26 @@ type ActivityWithoutMap = Omit<ListActivity, "mapPolyline"> & {
   load: number | null;
 };
 
-declare module "@tanstack/react-table" {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface ColumnMeta<TData extends RowData, TValue> {
-    minWidth?: number;
-  }
-}
+const features = tableFeatures({
+  columnFilteringFeature,
+  columnSizingFeature,
+  columnVisibilityFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  filteredRowModel: createFilteredRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  // String sort names, including the default "auto", only resolve registered
+  // functions. "auto" picks `text` or `alphanumeric` for the string columns.
+  sortFns: {
+    alphanumeric: sortFn_alphanumeric,
+    basic: sortFn_basic,
+    text: sortFn_text,
+  },
+  columnMeta: metaHelper<{ minWidth?: number }>(),
+});
 
 function ActivityRow(props: {
-  row: Row<ActivityWithoutMap>;
+  row: Row<typeof features, ActivityWithoutMap>;
   index: number;
   style?: React.CSSProperties;
   timePeriodId?: number;
@@ -95,93 +114,94 @@ function ActivityRow(props: {
   );
 }
 
-const columnHelper = createColumnHelper<ActivityWithoutMap>();
+const columnHelper = createColumnHelper<typeof features, ActivityWithoutMap>();
 
-const createColumns = (t: TFunction) => [
-  columnHelper.accessor("type", {
-    cell: (info) => {
-      const type = info.getValue();
-      const Icon = getSportConfig(type).icon;
-      return (
-        <span className="inline-flex items-center gap-2">
-          <Icon className="size-4 shrink-0" />
-          <span className="truncate">{sportTypeLabel(type, t)}</span>
+const createColumns = (t: TFunction) =>
+  columnHelper.columns([
+    columnHelper.accessor("type", {
+      cell: (info) => {
+        const type = info.getValue();
+        const Icon = getSportConfig(type).icon;
+        return (
+          <span className="inline-flex items-center gap-2">
+            <Icon className="size-4 shrink-0" />
+            <span className="truncate">{sportTypeLabel(type, t)}</span>
+          </span>
+        );
+      },
+      header: () => <span>{t("activities.columns.sport")}</span>,
+      size: 2,
+      meta: { minWidth: 155 },
+      filterFn: (row, _columnId, filterValue: string[]) => {
+        if (filterValue.length === 0) return true;
+        return filterValue.includes(row.getValue("type"));
+      },
+    }),
+    columnHelper.accessor("name", {
+      cell: (info) => <span className="truncate">{info.getValue()}</span>,
+      header: () => <span>{t("activities.columns.title")}</span>,
+      size: 3,
+      meta: { minWidth: 140 },
+    }),
+    columnHelper.accessor("startDateLocal", {
+      cell: (info) => (
+        <span className="truncate">
+          {format(new Date(info.getValue()), "P p", {
+            locale: getActiveDateLocale(),
+          })}
         </span>
-      );
-    },
-    header: () => <span>{t("activities.columns.sport")}</span>,
-    size: 2,
-    meta: { minWidth: 155 },
-    filterFn: (row, _columnId, filterValue: string[]) => {
-      if (filterValue.length === 0) return true;
-      return filterValue.includes(row.getValue("type"));
-    },
-  }),
-  columnHelper.accessor("name", {
-    cell: (info) => <span className="truncate">{info.getValue()}</span>,
-    header: () => <span>{t("activities.columns.title")}</span>,
-    size: 3,
-    meta: { minWidth: 140 },
-  }),
-  columnHelper.accessor("startDateLocal", {
-    cell: (info) => (
-      <span className="truncate">
-        {format(new Date(info.getValue()), "P p", {
-          locale: getActiveDateLocale(),
-        })}
-      </span>
-    ),
-    header: () => <span>{t("activities.columns.date")}</span>,
-    size: 2,
-    meta: { minWidth: 140 },
-  }),
-  columnHelper.accessor("distance", {
-    cell: (info) => {
-      const activity = info.row.original;
-      return activity.distance === 0
-        ? ""
-        : getSportConfig(activity.type).formatDistance(activity.distance);
-    },
-    header: () => <span>{t("activities.columns.distance")}</span>,
-    sortingFn: "basic",
-    size: 1,
-  }),
-  columnHelper.accessor("totalElevationGain", {
-    cell: (info) => {
-      const value = info.getValue();
-      return value === 0 ? "" : `${Math.round(value)} m`;
-    },
-    header: () => <span>{t("activities.columns.elevation")}</span>,
-    sortingFn: "basic",
-    size: 1,
-  }),
-  columnHelper.accessor("movingTime", {
-    cell: (info) => formatDuration(info.getValue()),
-    header: () => <span>{t("activities.columns.movingTime")}</span>,
-    sortingFn: "basic",
-    size: 1,
-  }),
-  columnHelper.accessor("averageSpeed", {
-    cell: (info) => {
-      const activity = info.row.original;
-      return activity.averageSpeed === 0
-        ? ""
-        : getSportConfig(activity.type).formatSpeed(activity.averageSpeed);
-    },
-    header: () => <span>{t("activities.columns.pace")}</span>,
-    sortingFn: "basic",
-    size: 1,
-  }),
-  columnHelper.accessor("load", {
-    cell: (info) => {
-      const value = info.getValue();
-      return value != null ? Math.round(value) : "";
-    },
-    header: () => <span>{t("activities.columns.load")}</span>,
-    sortingFn: "basic",
-    size: 1,
-  }),
-];
+      ),
+      header: () => <span>{t("activities.columns.date")}</span>,
+      size: 2,
+      meta: { minWidth: 140 },
+    }),
+    columnHelper.accessor("distance", {
+      cell: (info) => {
+        const activity = info.row.original;
+        return activity.distance === 0
+          ? ""
+          : getSportConfig(activity.type).formatDistance(activity.distance);
+      },
+      header: () => <span>{t("activities.columns.distance")}</span>,
+      sortFn: "basic",
+      size: 1,
+    }),
+    columnHelper.accessor("totalElevationGain", {
+      cell: (info) => {
+        const value = info.getValue();
+        return value === 0 ? "" : `${Math.round(value)} m`;
+      },
+      header: () => <span>{t("activities.columns.elevation")}</span>,
+      sortFn: "basic",
+      size: 1,
+    }),
+    columnHelper.accessor("movingTime", {
+      cell: (info) => formatDuration(info.getValue()),
+      header: () => <span>{t("activities.columns.movingTime")}</span>,
+      sortFn: "basic",
+      size: 1,
+    }),
+    columnHelper.accessor("averageSpeed", {
+      cell: (info) => {
+        const activity = info.row.original;
+        return activity.averageSpeed === 0
+          ? ""
+          : getSportConfig(activity.type).formatSpeed(activity.averageSpeed);
+      },
+      header: () => <span>{t("activities.columns.pace")}</span>,
+      sortFn: "basic",
+      size: 1,
+    }),
+    columnHelper.accessor("load", {
+      cell: (info) => {
+        const value = info.getValue();
+        return value != null ? Math.round(value) : "";
+      },
+      header: () => <span>{t("activities.columns.load")}</span>,
+      sortFn: "basic",
+      size: 1,
+    }),
+  ]);
 
 const ROW_HEIGHT = 48;
 const VIRTUALIZER_OVERSCAN = 20;
@@ -189,7 +209,11 @@ const SKELETON_ROW_COUNT = 25;
 
 const createActivitySearchFilter =
   (t: TFunction) =>
-  (row: Row<ActivityWithoutMap>, _columnId: string, filterValue: string) => {
+  (
+    row: Row<typeof features, ActivityWithoutMap>,
+    _columnId: string,
+    filterValue: string,
+  ) => {
     if (!filterValue) return true;
     const activity = row.original;
     const haystack = [
@@ -243,14 +267,12 @@ export function ActivitiesTable(props: {
     [activitiesQuery.data, loadPreferences],
   );
 
-  const table = useReactTable({
+  const table = useTable({
+    features,
     data,
     columns,
     state: { globalFilter: props.searchFilter ?? "" },
     globalFilterFn,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     initialState: {
       sorting: [{ id: "startDateLocal", desc: true }],
     },
@@ -304,7 +326,7 @@ export function ActivitiesTable(props: {
             {t("common.sortBy")}
             <select
               className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-              value={table.getState().sorting[0]?.id ?? "startDateLocal"}
+              value={table.state.sorting[0]?.id ?? "startDateLocal"}
               onChange={(event) =>
                 table.setSorting([{ id: event.target.value, desc: false }])
               }
@@ -329,24 +351,20 @@ export function ActivitiesTable(props: {
             variant="ghost"
             size="icon"
             aria-label={t(
-              table.getState().sorting[0]?.desc
+              table.state.sorting[0]?.desc
                 ? "activities.sortAscending"
                 : "activities.sortDescending",
             )}
             onClick={() =>
               table.setSorting([
                 {
-                  id: table.getState().sorting[0]?.id ?? "startDateLocal",
-                  desc: !table.getState().sorting[0]?.desc,
+                  id: table.state.sorting[0]?.id ?? "startDateLocal",
+                  desc: !table.state.sorting[0]?.desc,
                 },
               ])
             }
           >
-            {table.getState().sorting[0]?.desc ? (
-              <ArrowDownIcon />
-            ) : (
-              <ArrowUpIcon />
-            )}
+            {table.state.sorting[0]?.desc ? <ArrowDownIcon /> : <ArrowUpIcon />}
           </Button>
         </div>
         <div ref={tableContainerRef} className="min-h-0 flex-1 overflow-y-auto">
