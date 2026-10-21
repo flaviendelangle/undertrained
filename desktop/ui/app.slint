@@ -23,10 +23,6 @@ export component AppWindow inherits Window {
 
     // Native accessors, one per State property. `set_x` and `get_x` in Rust land here and
     // flow into the global the designs read.
-    in-out property <int> library-variant <=> State.library-variant;
-    in-out property <WorkoutRow> preview-workout <=> State.preview-workout;
-    in-out property <bool> preview-free <=> State.preview-free;
-    in-out property <bool> previewing <=> State.previewing;
     in-out property <string> language <=> State.language;
     in-out property <bool> logged-in <=> State.logged-in;
     in-out property <string> rider-name <=> State.rider-name;

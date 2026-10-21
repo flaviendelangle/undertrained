@@ -6,7 +6,7 @@
 //! scene is shown so the fixture numbers stay on screen for the capture.
 use crate::smoke::fixture_workouts;
 use crate::{Actions, AppState, AppWindow, ChartBin, workout_rows};
-use slint::{ComponentHandle, Model, ModelRc, VecModel};
+use slint::{ComponentHandle, ModelRc, VecModel};
 use std::{cell::RefCell, rc::Rc};
 
 /// Apply a named scene. Unknown names leave the login screen, so a typo cannot pass for a
@@ -31,14 +31,7 @@ pub fn apply(ui: &AppWindow, state: &Rc<RefCell<AppState>>, scene: &str) {
             ui.set_screen(0);
             picker(ui);
         }
-        "workouts" => {
-            ui.set_screen(1);
-            // The split layout's pane shows the second personal workout.
-            if let Some(row) = ui.get_workouts().row_data(1) {
-                ui.set_preview_workout(row);
-                ui.set_previewing(true);
-            }
-        }
+        "workouts" => ui.set_screen(1),
         // The library as an account without personal workouts sees it: the tests alone.
         "workouts-tests" => {
             ui.set_screen(1);

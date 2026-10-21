@@ -1477,7 +1477,6 @@ fn main() -> anyhow::Result<()> {
         tracing::warn!(%error, "Could not load preferences");
         store::Settings::default()
     });
-    ui.set_library_variant(i32::from(settings.library_variant.min(2)));
     // Validate the compiled origin once. A bad build says so instead of failing at sign-in.
     let origin: Option<String> = match auth::server_url(SERVER_ORIGIN) {
         Ok(url) => {
@@ -2222,24 +2221,6 @@ fn main() -> anyhow::Result<()> {
     {
         let weak = ui.as_weak();
         let state = state.clone();
-        // The workout board's layout: applied at once, remembered with the other preferences.
-        // A failed write keeps the switch working for this launch and is only logged, since
-        // nothing about the session or the sensors depends on it.
-        ui.global::<Actions>()
-            .on_set_library_variant(move |variant| {
-                let ui = weak.unwrap();
-                let variant = variant.clamp(0, 2);
-                ui.set_library_variant(variant);
-                let mut state = state.borrow_mut();
-                state.settings.library_variant = variant as u8;
-                if let Err(error) = store::save(&state.settings) {
-                    tracing::warn!(%error, "Could not remember the workout board layout");
-                }
-            });
-    }
-    {
-        let weak = ui.as_weak();
-        let state = state.clone();
         ui.global::<Actions>().on_save_setup(move || {
             let ui = weak.unwrap();
             if !ui.get_trainer_connected() {
@@ -2577,14 +2558,7 @@ fn main() -> anyhow::Result<()> {
             ui.window()
                 .set_size(slint::PhysicalSize::new(width, height));
         }
-        // UNDERTRAINED_VARIANT=0|1|2 renders one workout-board layout without touching the
-        // saved choice, and UNDERTRAINED_SCREENSHOT_SCENE names a fixture scene (see scenes.rs).
-        if let Some(variant) = std::env::var("UNDERTRAINED_VARIANT")
-            .ok()
-            .and_then(|v| v.trim().parse::<i32>().ok())
-        {
-            ui.set_library_variant(variant.clamp(0, 2));
-        }
+        // UNDERTRAINED_SCREENSHOT_SCENE names a fixture scene (see scenes.rs).
         if let Ok(scene) = std::env::var("UNDERTRAINED_SCREENSHOT_SCENE") {
             scenes::apply(&ui, &state, &scene);
         }

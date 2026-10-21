@@ -807,9 +807,6 @@ msgstr "Nouvelle"
 msgid "Next: {}"
 msgstr "Ensuite : {}"
 
-msgid "No targets · readings only"
-msgstr "Sans cible · mesures seules"
-
 msgid "PERSONAL"
 msgstr "PERSONNELLES"
 
@@ -827,9 +824,6 @@ msgstr "SORTIE TERMINÉE"
 
 msgid "Ride"
 msgstr "Sortie"
-
-msgid "Ride free"
-msgstr "Rouler librement"
 
 msgid "STEPS"
 msgstr "ÉTAPES"
@@ -849,68 +843,20 @@ msgstr "bpm"
 msgid "rpm"
 msgstr "tr/min"
 
-msgid "BUILT-IN TEST"
-msgstr "TEST INTÉGRÉ"
-
-msgid "FREE RIDE"
-msgstr "SORTIE LIBRE"
-
 msgid "FTP assessments, ready to ride."
 msgstr "Tests FTP, prêts à rouler."
-
-msgid "Featured"
-msgstr "À la une"
-
-msgid "List"
-msgstr "Liste"
-
-msgid "MORE PERSONAL WORKOUTS"
-msgstr "AUTRES SÉANCES PERSONNELLES"
-
-msgid "NEXT UP · BUILT-IN TEST"
-msgstr "À SUIVRE · TEST INTÉGRÉ"
-
-msgid "NEXT UP · PERSONAL WORKOUT"
-msgstr "À SUIVRE · SÉANCE PERSONNELLE"
-
-msgid "Next: check your sensors and start."
-msgstr "Ensuite : vérifiez vos capteurs et démarrez."
 
 msgid "No targets. Power, heart rate and cadence from the paired sensors."
 msgstr "Sans cible. Puissance, fréquence cardiaque et cadence des capteurs appairés."
 
-msgid "OR"
-msgstr "OU"
-
-msgid "PERSONAL WORKOUT"
-msgstr "SÉANCE PERSONNELLE"
-
 msgid "Pick one to ride it step by step. Create and edit on the website."
 msgstr "Choisissez-en une pour la suivre étape par étape. Créez et modifiez sur le site."
-
-msgid "Preview the free ride"
-msgstr "Aperçu de la sortie libre"
-
-msgid "Preview {}"
-msgstr "Aperçu de {}"
-
-msgid "Ride this workout"
-msgstr "Rouler cette séance"
 
 msgid "Search"
 msgstr "Rechercher"
 
-msgid "Select a workout to preview it here, then ride it."
-msgstr "Sélectionnez une séance pour l'afficher ici, puis roulez-la."
-
-msgid "Split"
-msgstr "Scindé"
-
 msgid "Workout"
 msgstr "Séance"
-
-msgid "‹ Back to the list"
-msgstr "‹ Retour à la liste"
 
 msgid "‹ Workouts"
 msgstr "‹ Séances"

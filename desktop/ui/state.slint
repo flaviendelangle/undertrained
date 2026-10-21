@@ -110,14 +110,6 @@ export global Theme {
 // Everything Rust tells the interface. The window aliases every property so native code
 // keeps its `set_` and `get_` accessors; the design reads the global directly.
 export global State {
-    // Which layout the workout board uses: 0 list, 1 featured, 2 split. Remembered on
-    // this computer.
-    in-out property <int> library-variant: 0;
-    // The split layout's preview: the row the rider looked at, or the free ride. Interface
-    // state only; it lives here so a capture scene can show the pane filled.
-    in-out property <WorkoutRow> preview-workout;
-    in-out property <bool> preview-free: false;
-    in-out property <bool> previewing: false;
     // "en" or "fr": the language in effect, decided by the account or the system. Rust
     // selects the bundled translation; the interface offers no switch of its own.
     in-out property <string> language: "en";
@@ -363,6 +355,4 @@ export global Actions {
     callback adjust-bias(int);
     callback set-erg(bool);
     pure callback name-valid(string) -> bool;
-    // The rider picked another layout for the workout board; Rust remembers it.
-    callback set-library-variant(int);
 }
