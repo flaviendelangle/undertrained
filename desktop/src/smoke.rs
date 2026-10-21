@@ -258,6 +258,36 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         "H10 9F3C",
         "Real Bluetooth names are never translated"
     );
+    // A discovery tick updates the open list in place: a new model recreates every row and
+    // drops a Connect click pressed before the tick. Listed devices keep their place even
+    // when the radios reorder them, and a newcomer joins at the end.
+    let rows = ui.get_nearby();
+    {
+        let mut state = state.borrow_mut();
+        state.devices.rotate_right(1);
+        state.devices.insert(
+            0,
+            Device {
+                id: "hci0/dev_AA_BB_CC_DD_5E_11".into(),
+                name: "TICKR 5E11".into(),
+                capabilities: Capabilities {
+                    heart_rate: true,
+                    ..Default::default()
+                },
+                rssi: Some(-40),
+            },
+        );
+    }
+    device_rows(ui, &state.borrow());
+    assert!(
+        ui.get_nearby() == rows,
+        "The picker keeps its rows across a discovery tick"
+    );
+    let ids: Vec<_> = (0..rows.row_count())
+        .map(|i| rows.row_data(i).unwrap().id.to_string())
+        .collect();
+    assert_eq!(ids, [STRAP_ID, ANT_STRAP_ID, "hci0/dev_AA_BB_CC_DD_5E_11"]);
+    state.borrow_mut().devices = fixture_devices();
 
     let devices = fixture_devices();
     ui.set_picker_open(true);

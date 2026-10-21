@@ -18,7 +18,7 @@ use crate::i18n::Lang;
 use crate::model::Device;
 use crate::recording::{Live, Phase};
 use crate::workouts::{LoadError, Workout, WorkoutId};
-use slint::{ComponentHandle, ModelRc, Timer, TimerMode, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, Timer, TimerMode, VecModel};
 use std::{
     cell::RefCell,
     rc::Rc,
@@ -37,6 +37,8 @@ const SERVER_ORIGIN: &str = match option_env!("UNDERTRAINED_SERVER_URL") {
 
 struct State {
     devices: Vec<Device>,
+    /// The picker rows, updated in place for as long as the window lives.
+    nearby: Rc<VecModel<NearbyDevice>>,
     settings: store::Settings,
     session: Option<auth::Session>,
     auth_job: Option<tokio::task::JoinHandle<()>>,
@@ -1195,7 +1197,30 @@ fn device_rows(ui: &AppWindow, state: &State) {
             }
         })
         .collect();
-    ui.set_nearby(ModelRc::new(VecModel::from(rows)));
+    sync_rows(&state.nearby, rows);
+}
+
+/// Bring the picker list to `rows` without replacing the model. A new model recreates
+/// every row, so a click whose press and release straddle a discovery tick was lost.
+/// Listed devices keep their place, and the button under the pointer stays on its
+/// device; newcomers are appended.
+fn sync_rows(model: &VecModel<NearbyDevice>, mut rows: Vec<NearbyDevice>) {
+    let mut index = 0;
+    while let Some(current) = model.row_data(index) {
+        match rows.iter().position(|row| row.id == current.id) {
+            Some(position) => {
+                let row = rows.remove(position);
+                if row != current {
+                    model.set_row_data(index, row);
+                }
+                index += 1;
+            }
+            None => {
+                model.remove(index);
+            }
+        }
+    }
+    model.extend(rows);
 }
 
 /// Put the window back to the signed-out state. The sign-out handler adds the keyring,
@@ -1373,8 +1398,11 @@ fn main() -> anyhow::Result<()> {
             None
         }
     };
+    let nearby = Rc::new(VecModel::default());
+    ui.set_nearby(ModelRc::from(nearby.clone()));
     let state = Rc::new(RefCell::new(State {
         devices: vec![],
+        nearby,
         // Before sign-in the system decides; the account takes over once it is known.
         lang: i18n::resolve(None),
         settings,
@@ -2029,7 +2057,10 @@ fn main() -> anyhow::Result<()> {
             ui.set_message_detail("".into());
             ui.set_scanning(true);
             let _ = commands.send(ble::Command::Scan);
-            device_rows(&ui, &state.borrow());
+            // A new search lists devices in the radios' order again, strongest first.
+            let state = state.borrow();
+            state.nearby.clear();
+            device_rows(&ui, &state);
         });
     }
     {
