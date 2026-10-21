@@ -1,6 +1,7 @@
 import { SearchIcon, XIcon } from "lucide-react";
 
 import { useT } from "~/i18n/useT";
+import { cn } from "~/lib/utils";
 
 export function SearchInput({
   value,
@@ -21,7 +22,12 @@ export function SearchInput({
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="placeholder:text-muted-foreground h-9 w-full min-w-0 rounded-md bg-transparent py-1 pr-9 pl-8 text-sm outline-none"
+        // Only reserve room for the clear button while it is shown, otherwise
+        // the placeholder gets cut in the narrow toolbar slot.
+        className={cn(
+          "placeholder:text-muted-foreground h-9 w-full min-w-0 rounded-md bg-transparent py-1 pl-8 text-sm text-ellipsis outline-none",
+          value ? "pr-9" : "pr-3",
+        )}
       />
       {value && (
         <button
