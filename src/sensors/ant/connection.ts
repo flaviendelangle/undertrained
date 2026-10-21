@@ -194,8 +194,8 @@ const TRAINER_CHANNEL = 1;
 export class AntHeartRateConnection {
   private sensor: import("ant-plus-next").HeartRateSensor | null = null;
   private handler:
-    | ((state: import("ant-plus-next").HeartRateSensorState) => void)
-    | null = null;
+    ((state: import("ant-plus-next").HeartRateSensorState) => void) | null =
+    null;
   private holdsStick = false;
   private disposed = false;
 
@@ -301,8 +301,8 @@ export class AntTrainerConnection {
     | ((state: import("ant-plus-next").FitnessEquipmentSensorState) => void)
     | null = null;
   private powerHandler:
-    | ((state: import("ant-plus-next").BicyclePowerSensorState) => void)
-    | null = null;
+    ((state: import("ant-plus-next").BicyclePowerSensorState) => void) | null =
+    null;
   private fallbackTimeout: ReturnType<typeof setTimeout> | null = null;
   private holdsStick = false;
   private disposed = false;

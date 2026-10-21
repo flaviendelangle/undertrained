@@ -25,11 +25,7 @@ export type WorkoutSport = "bike" | "run";
  * why a warm-up can be steady and a cool-down can ramp.
  */
 export type StepIntensity =
-  | "warmup"
-  | "work"
-  | "recovery"
-  | "rest"
-  | "cooldown";
+  "warmup" | "work" | "recovery" | "rest" | "cooldown";
 
 /**
  * A relative target uses a **fraction of FTP** (0.88 = 88 %).

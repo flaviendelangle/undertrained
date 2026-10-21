@@ -304,10 +304,7 @@ export function findMaxSquare(clusterTiles: Set<TileKey>): MaxSquareResult {
 // --- Tile classification ---
 
 export type TileCategory =
-  | "maxSquare"
-  | "cluster"
-  | "clusterBorder"
-  | "isolated";
+  "maxSquare" | "cluster" | "clusterBorder" | "isolated";
 
 export interface ClassifiedTile {
   tx: number;

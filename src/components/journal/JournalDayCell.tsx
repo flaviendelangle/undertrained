@@ -186,12 +186,14 @@ export function JournalDayCell({
   // budget keeps a day packed with plans from overflowing the fixed-height cell,
   // and lists both kinds in the "+N more" popover.
   const items: DayItem[] = [
-    ...day.plannedTrainings.map(
-      (planned): DayItem => ({ kind: "planned", planned }),
-    ),
-    ...day.activities.map(
-      (activity): DayItem => ({ kind: "activity", activity }),
-    ),
+    ...day.plannedTrainings.map((planned): DayItem => ({
+      kind: "planned",
+      planned,
+    })),
+    ...day.activities.map((activity): DayItem => ({
+      kind: "activity",
+      activity,
+    })),
   ];
   const visible = items.slice(0, MAX_VISIBLE_ITEMS);
   const hiddenCount = items.length - visible.length;

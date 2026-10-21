@@ -27,12 +27,7 @@ export interface ActivityRanking {
 
 /** Display groups, in render order. Several categories fold into one group. */
 export type RecordGroupKey =
-  | "power"
-  | "speed"
-  | "heartRate"
-  | "climbing"
-  | "overall"
-  | "bestEfforts";
+  "power" | "speed" | "heartRate" | "climbing" | "overall" | "bestEfforts";
 
 export const RECORD_GROUP_ORDER: RecordGroupKey[] = [
   "power",

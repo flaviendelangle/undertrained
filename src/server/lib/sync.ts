@@ -129,10 +129,7 @@ async function callStrava<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export type SyncMode =
-  | "load_new"
-  | "load_missing"
-  | "reload_all"
-  | "recompute_scores";
+  "load_new" | "load_missing" | "reload_all" | "recompute_scores";
 
 /**
  * Fire-and-forget sync orchestration.

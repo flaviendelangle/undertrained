@@ -19,12 +19,7 @@ import type {
 
 /** Broad sport category used to drive load-algorithm selection, TSS labels, and settings UI. */
 export type SportCategory =
-  | "cycling"
-  | "running"
-  | "swimming"
-  | "strength"
-  | "hiking"
-  | "other";
+  "cycling" | "running" | "swimming" | "strength" | "hiking" | "other";
 
 /** Minimal activity shape needed to build the per-sport Journal stats line. */
 export interface JournalStatsActivity {

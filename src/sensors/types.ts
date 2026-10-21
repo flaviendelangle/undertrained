@@ -15,10 +15,7 @@ export interface TrainerData {
 }
 
 export type ConnectionState =
-  | "disconnected"
-  | "connecting"
-  | "connected"
-  | "error";
+  "disconnected" | "connecting" | "connected" | "error";
 
 export type SensorSource = "ble" | "ant+";
 

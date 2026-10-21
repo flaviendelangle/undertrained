@@ -47,11 +47,7 @@ export interface FitnessSeriesOptions {
 
 /** Stable identifier for a form (TSB) band; drives its translated label. */
 export type FormZoneKey =
-  | "highRisk"
-  | "optimal"
-  | "grey"
-  | "fresh"
-  | "transition";
+  "highRisk" | "optimal" | "grey" | "fresh" | "transition";
 
 /** A Training Stress Balance band, used for background shading and the readout. */
 export interface FormZone {
