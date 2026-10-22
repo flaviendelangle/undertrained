@@ -526,62 +526,72 @@ component FlowReady inherits Rectangle {
 
 // "What am I doing right now": the target, how far off, how long is left, what comes next.
 component TargetPanel inherits Rectangle {
+    // The panel's scale: 1 is the default window, the wide ride raises it with the gauge.
+    in property <float> unit: 1;
     property <bool> over: State.ride-workout-complete;
     property <color> tone: State.ride-target != "" ? Theme.zone-color(State.ride-target-zone) : Theme.faint;
-    border-radius: 16px; background: Theme.card.with-alpha(0.85); border-width: 1px; border-color: Theme.border;
+    border-radius: 16px * root.unit; background: Theme.card.with-alpha(0.85); border-width: 1px; border-color: Theme.border;
     height: content.preferred-height;
     content := VerticalLayout {
-        padding: 18px; spacing: 8px; alignment: start;
+        padding: 18px * root.unit; spacing: 8px * root.unit; alignment: start;
         HorizontalLayout {
-            spacing: 8px;
-            Caption { text: @tr("TARGET"); }
+            spacing: 8px * root.unit;
+            Caption { text: @tr("TARGET"); font-size: 11px * root.unit; }
             Rectangle { horizontal-stretch: 1; }
-            if State.ride-step-number > 0 && !over: Caption { text: @tr("STEP {} OF {}", State.ride-step-number, State.ride-plan-steps); horizontal-alignment: right; }
+            if State.ride-step-number > 0 && !over: Caption { text: @tr("STEP {} OF {}", State.ride-step-number, State.ride-plan-steps); font-size: 11px * root.unit; horizontal-alignment: right; }
         }
-        if over: Text { text: @tr("Workout complete"); color: Theme.primary; font-size: 24px; font-weight: 700; wrap: word-wrap; }
-        if over: Text { text: @tr("Keep riding freely, or finish the ride."); color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+        if over: Text { text: @tr("Workout complete"); color: Theme.primary; font-size: 24px * root.unit; font-weight: 700; wrap: word-wrap; }
+        if over: Text { text: @tr("Keep riding freely, or finish the ride."); color: Theme.muted; font-size: 12px * root.unit; wrap: word-wrap; }
         if !over: HorizontalLayout {
-            spacing: 6px; alignment: start;
-            Text { text: State.ride-target != "" ? State.ride-target : "—"; color: tone; font-size: 56px; font-weight: 700; vertical-alignment: bottom; font-family: "DejaVu Sans Mono"; }
-            VerticalLayout { alignment: end; padding-bottom: 10px; Caption { text: State.ride-target != "" ? @tr("W") : @tr("FREE"); font-size: 13px; } }
+            spacing: 6px * root.unit; alignment: start;
+            Text { text: State.ride-target != "" ? State.ride-target : "—"; color: tone; font-size: 56px * root.unit; font-weight: 700; vertical-alignment: bottom; font-family: "DejaVu Sans Mono"; }
+            VerticalLayout { alignment: end; padding-bottom: 10px * root.unit; Caption { text: State.ride-target != "" ? @tr("W") : @tr("FREE"); font-size: 13px * root.unit; } }
         }
         if !over: Text {
             text: Copy.step-words(State.ride-step-duration, State.ride-step-target) + (State.ride-step-role != 0 ? " · " + Copy.role-name(State.ride-step-role) : "");
-            color: Theme.muted; font-size: 13px; overflow: elide;
+            color: Theme.muted; font-size: 13px * root.unit; overflow: elide;
         }
         if !over: HorizontalLayout {
-            spacing: 6px; alignment: start;
+            spacing: 6px * root.unit; alignment: start;
             Text {
                 text: State.ride-step-remaining;
                 color: State.ride-step-remaining-seconds > 0 && State.ride-step-remaining-seconds <= 5 ? Theme.primary : Theme.ink;
-                font-size: 32px; font-weight: 700; vertical-alignment: bottom; font-family: "DejaVu Sans Mono";
+                font-size: 32px * root.unit; font-weight: 700; vertical-alignment: bottom; font-family: "DejaVu Sans Mono";
             }
-            VerticalLayout { alignment: end; padding-bottom: 7px; Caption { text: @tr("LEFT"); } }
+            VerticalLayout { alignment: end; padding-bottom: 7px * root.unit; Caption { text: @tr("LEFT"); font-size: 11px * root.unit; } }
         }
         if !over: Rectangle {
-            height: 6px; border-radius: 3px; background: Theme.sunken;
-            Rectangle { x: 0px; width: parent.width * min(1, max(0, State.ride-step-progress)); height: parent.height; border-radius: 3px; background: State.ride-target != "" ? tone : Theme.muted; }
+            height: 6px * root.unit; border-radius: 3px * root.unit; background: Theme.sunken;
+            Rectangle { x: 0px; width: parent.width * min(1, max(0, State.ride-step-progress)); height: parent.height; border-radius: 3px * root.unit; background: State.ride-target != "" ? tone : Theme.muted; }
         }
         if !over: HorizontalLayout {
-            spacing: 6px; alignment: start; padding-top: 4px;
-            Caption { text: State.ride-next-duration != "" ? @tr("NEXT") : @tr("LAST STEP"); vertical-alignment: center; }
-            if State.ride-next-duration != "": ZoneDot { y: (parent.height - self.height) / 2; zone: State.ride-next-target != "" ? State.ride-next-zone : 0; }
-            if State.ride-next-duration != "": Text { text: Copy.step-words(State.ride-next-duration, State.ride-next-target); color: Theme.ink; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
+            spacing: 6px * root.unit; alignment: start; padding-top: 4px * root.unit;
+            Caption { text: State.ride-next-duration != "" ? @tr("NEXT") : @tr("LAST STEP"); font-size: 11px * root.unit; vertical-alignment: center; }
+            if State.ride-next-duration != "": ZoneDot { y: (parent.height - self.height) / 2; width: 8px * root.unit; height: 8px * root.unit; border-radius: 4px * root.unit; zone: State.ride-next-target != "" ? State.ride-next-zone : 0; }
+            if State.ride-next-duration != "": Text { text: Copy.step-words(State.ride-next-duration, State.ride-next-target); color: Theme.ink; font-size: 13px * root.unit; font-weight: 600; vertical-alignment: center; overflow: elide; }
         }
         if !over && (State.ride-step-cadence != "" || State.ride-step-note != ""): HorizontalLayout {
-            spacing: 8px; alignment: start;
-            if State.ride-step-cadence != "": CadenceCue { y: (parent.height - self.height) / 2; }
-            if State.ride-step-note != "": Text { text: State.ride-step-note; color: Theme.ink; font-size: 13px; overflow: elide; vertical-alignment: center; min-width: 0px; }
+            spacing: 8px * root.unit; alignment: start;
+            if State.ride-step-cadence != "": CadenceCue { y: (parent.height - self.height) / 2; unit: root.unit; }
+            if State.ride-step-note != "": Text { text: State.ride-step-note; color: Theme.ink; font-size: 13px * root.unit; overflow: elide; vertical-alignment: center; min-width: 0px; }
         }
     }
 }
 
-// A callout under the gauge: one line in a tinted pill, for what matters this second.
+// A callout for what matters this second: one line in a tinted pill. The narrow ride
+// stacks it under the gauge; the wide ride lays it over the gauge's open bottom, so it
+// appears without moving anything, at `fitted-width`.
 component GaugeCallout inherits Rectangle {
     in property <string> text;
     in property <color> tone: Theme.primary;
-    height: 30px; border-radius: 15px; background: root.tone.with-alpha(0.16);
-    Text { text: root.text; color: root.tone; font-size: 13px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+    in property <float> unit: 1;
+    out property <length> fitted-width: label.preferred-width + 32px * root.unit;
+    height: 30px * root.unit; border-radius: self.height / 2; background: root.tone.with-alpha(0.16);
+    label := Text {
+        x: 12px * root.unit; width: parent.width - 24px * root.unit;
+        text: root.text; color: root.tone; font-size: 13px * root.unit; font-weight: 700;
+        horizontal-alignment: center; vertical-alignment: center; overflow: elide;
+    }
 }
 
 // The gauge with the live power in it: the zone's color fills the arc, the target sits as
@@ -598,20 +608,25 @@ component PowerGauge inherits Gauge {
         alignment: center; spacing: 0px;
         Text { text: State.ride-power-live ? State.ride-power : "—"; color: State.ride-power-live ? Theme.ink : Theme.faint; font-size: root.size * 0.26; font-weight: 700; horizontal-alignment: center; font-family: "DejaVu Sans Mono"; }
         Caption { text: @tr("WATTS"); horizontal-alignment: center; font-size: root.size * 0.045; }
-        if State.ride-delta != "": Text { text: State.ride-delta; color: State.ride-delta-state == 1 ? Theme.good : State.ride-delta-state == 2 ? Theme.warn : Theme.heart; font-size: root.size * 0.07; font-weight: 600; horizontal-alignment: center; font-family: "DejaVu Sans Mono"; }
+        if State.ride-delta != "": Text { text: State.ride-delta; color: State.ride-delta-state == 1 ? Theme.good : State.ride-delta-state == 2 ? Theme.warn : Theme.heart; font-size: root.size * 0.08; font-weight: 600; horizontal-alignment: center; font-family: "DejaVu Sans Mono"; }
     }
 }
 
 // The guided ride's controls: resistance, intensity, skip. Tests keep their protocol.
 component HudControls inherits VerticalLayout {
     in property <bool> wrap;
+    // The ERG line's text size: what the trainer is doing has to read from the bike, so
+    // the wide ride raises it, within the row the switch sets the height of.
+    in property <length> status-size: 12px;
+    // Compact buttons, as the narrow ride and the default window use; a large window gets full ones.
+    in property <bool> compact: true;
     spacing: 8px;
     if !root.wrap: HorizontalLayout {
         spacing: 12px;
         if State.erg-toggle-shown: ErgToggle { y: (parent.height - self.height) / 2; }
-        ErgStatus { horizontal-stretch: 1; }
-        if State.step-controls-shown && !State.ride-test: IntensityControl { }
-        if State.step-controls-shown && !State.ride-test: SkipButton { y: (parent.height - self.height) / 2; }
+        ErgStatus { horizontal-stretch: 1; font-size: root.status-size; }
+        if State.step-controls-shown && !State.ride-test: IntensityControl { size: root.status-size + 1px; compact: root.compact; }
+        if State.step-controls-shown && !State.ride-test: SkipButton { y: (parent.height - self.height) / 2; compact: root.compact; }
     }
     if root.wrap: HorizontalLayout {
         spacing: 12px;
@@ -637,50 +652,95 @@ component FlowHud inherits Rectangle {
     // The ride's own pause, after five seconds at zero watts or thirty without any reading:
     // the next pedal stroke ends it.
     property <bool> auto-paused: State.ride-phase == 2 && State.ride-auto-paused;
+    // The ride is read from the bike, metres from the screen, so the wide stage grows with
+    // the window instead of sitting as an island in it. Every size here derives from the
+    // window alone (a size fed back from the layout would loop):
+    // - `grow` is the window against the default 1180×800; width and height both count,
+    //   so a wide and short window keeps its chrome modest and its gauge round.
+    // - `chrome` scales the paddings, the plan and the chart at half that rate: they
+    //   matter less from afar than the figures.
+    // - `gauge` is the height the bar, the controls, the plan and the chart leave, within
+    //   the width the three columns need.
+    // - `unit` scales every figure beside the gauge in step with it, so the hierarchy
+    //   holds at any size; `text` is a gentler scale for the words around them.
+    property <float> grow: max(1, min(3, min(root.width / 1180px, root.stage / 800px)));
+    property <float> chrome: 1 + (grow - 1) * 0.5;
+    property <length> bar-height: 60px * grow;
+    property <length> stage-pad: 20px * chrome;
+    property <length> plan-height: 58px * chrome;
+    property <length> chart-height: (guided ? 130px : 180px) * chrome;
+    property <bool> chart-shown: !root.short || !guided;
+    // The desk controls (Devices, intensity, skip) keep their compact size until the
+    // window is large enough for full buttons to sit in proportion with the rest.
+    property <bool> desk-compact: root.grow < 1.5;
+    // The guided ride's controls row (the switch or the full buttons set its height), with
+    // the padding under it; the notices give way elsewhere.
+    property <length> controls-height: guided ? (root.desk-compact ? 48px : 56px) : 0px;
+    property <length> gauge: max(220px, min(
+        root.stage - root.bar-height - 2 * root.stage-pad - root.controls-height - (guided ? root.plan-height : 0px) - (root.chart-shown ? root.chart-height : 0px),
+        (root.width - 2 * root.stage-pad - (guided ? 2 : 1) * root.stage-pad) * 360 / (guided ? 850 : 550)));
+    property <float> unit: max(1, root.gauge / 360px);
+    property <float> text: (root.unit + 1) / 2;
     VerticalLayout {
         // The slim bar: the clock, the ride, a way back to Devices, the two ride controls. No app chrome while riding.
         Rectangle {
-            height: 60px; background: Theme.card.with-alpha(0.6);
+            height: root.bar-height; background: Theme.card.with-alpha(0.6);
             HorizontalLayout {
-                padding-left: 20px; padding-right: 16px; spacing: 12px;
-                Rectangle { y: (parent.height - self.height) / 2; width: 10px; height: 10px; border-radius: 5px; background: State.ride-phase == 1 ? Theme.heart : Theme.pause; }
-                Text { text: State.ride-elapsed; color: Theme.ink; font-size: 26px; font-weight: 700; vertical-alignment: center; font-family: "DejaVu Sans Mono"; }
-                if !root.narrow: Text { text: State.ride-phase == 2 ? (State.ride-auto-paused ? @tr("Auto-paused") : @tr("Paused")) : @tr("Recording"); color: Theme.muted; font-size: 13px; vertical-alignment: center; }
-                Rectangle { width: 1px; height: 24px; y: (parent.height - self.height) / 2; background: Theme.border; }
-                Text { text: Copy.ride-title(); color: Theme.ink; font-size: 15px; font-weight: 600; overflow: elide; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px; }
-                if guided && !root.narrow: Caption { text: State.ride-workout-complete ? @tr("DONE") : @tr("{} LEFT", State.ride-workout-remaining); vertical-alignment: center; }
+                padding-left: 20px * root.chrome; padding-right: 16px * root.chrome; spacing: 12px * root.chrome;
+                Rectangle { y: (parent.height - self.height) / 2; width: 10px * root.chrome; height: self.width; border-radius: self.width / 2; background: State.ride-phase == 1 ? Theme.heart : Theme.pause; }
+                Text { text: State.ride-elapsed; color: Theme.ink; font-size: min(26px * root.unit, root.bar-height * 0.72); font-weight: 700; vertical-alignment: center; font-family: "DejaVu Sans Mono"; }
+                if !root.narrow: Text { text: State.ride-phase == 2 ? (State.ride-auto-paused ? @tr("Auto-paused") : @tr("Paused")) : @tr("Recording"); color: Theme.muted; font-size: 13px * root.text; vertical-alignment: center; }
+                Rectangle { width: 1px; height: 24px * root.chrome; y: (parent.height - self.height) / 2; background: Theme.border; }
+                Text { text: Copy.ride-title(); color: Theme.ink; font-size: 15px * root.text; font-weight: 600; overflow: elide; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px; }
+                if guided && !root.narrow: Caption { text: State.ride-workout-complete ? @tr("DONE") : @tr("{} LEFT", State.ride-workout-remaining); font-size: min(11px * root.unit, root.bar-height * 0.4); vertical-alignment: center; }
                 // The one way back to the sensors: the notices send a rider here when one drops.
-                ActionButton { y: (parent.height - self.height) / 2; label: @tr("Devices"); quiet: true; compact: true; accessible-label: @tr("Devices, to reconnect a sensor"); activated => { Actions.navigate(0); } }
-                if State.ride-phase == 1: GlyphButton { y: (parent.height - self.height) / 2; size: 42px; glyph: "pause"; label: @tr("Pause"); tone: Theme.pause; activated => { Actions.pause-ride(); } }
-                if State.ride-phase == 2: GlyphButton { y: (parent.height - self.height) / 2; size: 42px; glyph: "play"; label: @tr("Resume"); filled: true; activated => { Actions.resume-ride(); } }
-                GlyphButton { y: (parent.height - self.height) / 2; size: 42px; glyph: "stop"; label: @tr("Finish ride"); tone: Theme.heart; activated => { Actions.finish-ride(); } }
+                ActionButton { y: (parent.height - self.height) / 2; label: @tr("Devices"); quiet: true; compact: root.desk-compact; accessible-label: @tr("Devices, to reconnect a sensor"); activated => { Actions.navigate(0); } }
+                if State.ride-phase == 1: GlyphButton { y: (parent.height - self.height) / 2; size: 42px * root.chrome; glyph: "pause"; label: @tr("Pause"); tone: Theme.pause; activated => { Actions.pause-ride(); } }
+                if State.ride-phase == 2: GlyphButton { y: (parent.height - self.height) / 2; size: 42px * root.chrome; glyph: "play"; label: @tr("Resume"); filled: true; activated => { Actions.resume-ride(); } }
+                GlyphButton { y: (parent.height - self.height) / 2; size: 42px * root.chrome; glyph: "stop"; label: @tr("Finish ride"); tone: Theme.heart; activated => { Actions.finish-ride(); } }
             }
             Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
         }
         // The stage: the target beside the gauge beside the heart and the legs.
         if !root.narrow: HorizontalLayout {
-            vertical-stretch: 1; padding: 20px; spacing: 20px; alignment: center;
+            vertical-stretch: 1; padding: root.stage-pad; spacing: root.stage-pad; alignment: center;
             // A row is only as tall as its shortest column allows, so every column here
             // carries an unbounded spacer: the stage then takes the whole window height.
+            // The side columns take a share of the width beyond their figures' own, so a
+            // wide window fills with the ride rather than with margins.
             if guided: VerticalLayout {
-                width: min(300px, root.width * 0.28); alignment: center;
+                width: min(360px * root.unit, root.width * 0.28); alignment: center;
                 Rectangle { vertical-stretch: 1; }
-                TargetPanel { }
-                Rectangle { vertical-stretch: 1; }
-            }
-            VerticalLayout {
-                alignment: center; spacing: 12px;
-                Rectangle { vertical-stretch: 1; }
-                PowerGauge { size: max(220px, min(360px, root.stage - (root.short ? 330px : 380px))); }
-                if root.soon && !root.auto-paused: GaugeCallout { text: @tr("Next: {}", Copy.step-words(State.ride-next-duration, State.ride-next-target)); }
-                if root.auto-paused: GaugeCallout { text: @tr("Auto-paused · pedal to resume"); tone: Theme.pause; }
+                TargetPanel { unit: root.unit; }
                 Rectangle { vertical-stretch: 1; }
             }
             VerticalLayout {
-                width: 190px; alignment: center; spacing: 12px;
+                alignment: center;
                 Rectangle { vertical-stretch: 1; }
-                MetricTile { label: @tr("HEART RATE"); value: State.ride-hr; unit: @tr("bpm"); live: State.ride-hr-live; tone: Theme.heart; }
-                MetricTile { label: @tr("CADENCE"); value: State.ride-cadence; unit: @tr("rpm"); live: State.ride-cadence-live; tone: Theme.cadence; }
+                // The gauge's box asks for the gauge's height and gives some up when a
+                // notice below needs it, so the plan and the chart never leave the window;
+                // the gauge stays round in whatever is left. The callout lies over the
+                // arc's open bottom, so it comes and goes without moving the gauge; a long
+                // line (the French auto-pause) may run into the gaps beside the box.
+                Rectangle {
+                    width: root.gauge; preferred-height: root.gauge; min-height: 0px; vertical-stretch: 0;
+                    PowerGauge { x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; size: min(parent.width, parent.height); }
+                    if root.soon && !root.auto-paused: GaugeCallout {
+                        x: (parent.width - self.width) / 2; y: parent.height - self.height; width: min(parent.width + 2 * root.stage-pad, self.fitted-width); unit: root.unit;
+                        text: @tr("Next: {}", Copy.step-words(State.ride-next-duration, State.ride-next-target));
+                    }
+                    if root.auto-paused: GaugeCallout {
+                        x: (parent.width - self.width) / 2; y: parent.height - self.height; width: min(parent.width + 2 * root.stage-pad, self.fitted-width); unit: root.unit;
+                        text: @tr("Auto-paused · pedal to resume"); tone: Theme.pause;
+                    }
+                }
+                Rectangle { vertical-stretch: 1; }
+            }
+            VerticalLayout {
+                width: min(250px * root.unit, root.width * 0.22); alignment: center; spacing: 12px * root.unit;
+                Rectangle { vertical-stretch: 1; }
+                MetricTile { label: @tr("HEART RATE"); value: State.ride-hr; unit: @tr("bpm"); live: State.ride-hr-live; tone: Theme.heart; size: 40px * root.unit; scale: root.unit; }
+                MetricTile { label: @tr("CADENCE"); value: State.ride-cadence; unit: @tr("rpm"); live: State.ride-cadence-live; tone: Theme.cadence; size: 40px * root.unit; scale: root.unit; }
                 Rectangle { vertical-stretch: 1; }
             }
         }
@@ -704,25 +764,25 @@ component FlowHud inherits Rectangle {
             }
         }
         if !root.narrow && (guided || State.ride-notice != 0 || State.ride-phase == 2 || !State.any-sensor): VerticalLayout {
-            padding-left: 20px; padding-right: 20px; padding-bottom: 12px; spacing: 10px;
-            if guided: HudControls { wrap: false; }
-            RideNotices { }
+            padding-left: root.stage-pad; padding-right: root.stage-pad; padding-bottom: 12px; spacing: 10px;
+            if guided: HudControls { wrap: false; status-size: min(28px, 12px * root.unit); compact: root.desk-compact; }
+            RideNotices { size: 13px * root.text; }
         }
         // The plan across the bottom, then the last ten minutes. Short windows keep the plan.
         if !root.narrow && guided: Rectangle {
-            height: 58px; background: Theme.card.with-alpha(0.6);
+            height: root.plan-height; background: Theme.card.with-alpha(0.6);
             Rectangle { y: 0px; height: 1px; background: Theme.border; }
             HorizontalLayout {
-                padding: 8px; padding-left: 20px; padding-right: 20px; spacing: 14px;
-                Caption { text: @tr("PLAN"); vertical-alignment: center; }
+                padding: 8px * root.chrome; padding-left: root.stage-pad; padding-right: root.stage-pad; spacing: 14px * root.chrome;
+                Caption { text: @tr("PLAN"); font-size: 11px * root.text; vertical-alignment: center; }
                 PlanBar { horizontal-stretch: 1; steps: State.ride-plan; progress: State.ride-workout-progress; step-start: State.ride-step-start; step-share: State.ride-step-share; }
-                Caption { text: State.ride-plan-total; vertical-alignment: center; }
+                Caption { text: State.ride-plan-total; font-size: 11px * root.text; vertical-alignment: center; }
             }
         }
-        if !root.narrow && (!root.short || !guided): Rectangle {
-            height: guided ? 130px : 180px; background: Theme.card.with-alpha(0.4);
+        if !root.narrow && root.chart-shown: Rectangle {
+            height: root.chart-height; background: Theme.card.with-alpha(0.4);
             Rectangle { y: 0px; height: 1px; background: Theme.border; }
-            ChartPanel { x: 20px; y: 8px; width: parent.width - 40px; height: parent.height - 16px; framed: false; title: @tr("LAST 10 MINUTES"); }
+            ChartPanel { x: root.stage-pad; y: 8px * root.chrome; width: parent.width - 2 * root.stage-pad; height: parent.height - 16px * root.chrome; framed: false; caption-size: 11px * root.text; title: @tr("LAST 10 MINUTES"); }
         }
     }
 }
