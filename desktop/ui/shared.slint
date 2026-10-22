@@ -428,7 +428,7 @@ export component SensorCheck inherits Rectangle {
         }
         // With a trainer the pedals drive the clock; a strap alone records at once.
         Text {
-            text: State.trainer-connected ? @tr("Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds without power.")
+            text: State.trainer-connected ? @tr("Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds at zero watts, or 30 seconds without any reading from the trainer.")
                 : State.any-sensor ? @tr("Sensors ready. Readings are recorded once per second.")
                 : @tr("Connect a trainer or a heart-rate sensor on the Devices screen first.");
             color: State.any-sensor ? Theme.muted : Theme.warn; font-size: 12px; wrap: word-wrap;

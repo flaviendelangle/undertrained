@@ -878,8 +878,8 @@ msgstr "ERG activé · {} maintient chaque cible dès le départ"
 msgid "{} paired. Recording starts at your first pedal stroke."
 msgstr "{} appairé. L'enregistrement démarre à votre premier coup de pédale."
 
-msgid "Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds without power."
-msgstr "Capteurs prêts. L'enregistrement démarre à votre premier coup de pédale et se met en pause de lui-même après 5 secondes sans puissance."
+msgid "Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds at zero watts, or 30 seconds without any reading from the trainer."
+msgstr "Capteurs prêts. L'enregistrement démarre à votre premier coup de pédale et se met en pause de lui-même après 5 secondes à zéro watt, ou 30 secondes sans aucune mesure du home trainer."
 
 msgid "Waiting for your first pedal stroke"
 msgstr "En attente du premier coup de pédale"
