@@ -84,10 +84,16 @@ pub fn apply(ui: &AppWindow, state: &Rc<RefCell<AppState>>, scene: &str) {
             ui.set_ride_cadence("0".into());
             ui.set_ride_delta("".into());
             ui.set_ride_delta_state(0);
+            // The simulated speed coasted through the five seconds without watts.
+            ui.set_ride_speed("28.9".into());
         }
         "free" => {
             ui.global::<Actions>().invoke_start_free_ride();
             riding(ui, false);
+            // Well into a free ride, so the distance carries the two figures before the
+            // decimals a real session reaches.
+            ui.set_ride_elapsed("38:20".into());
+            ui.set_ride_distance("21.47".into());
             ui.set_ride_has_workout(false);
             ui.set_ride_guided(false);
             ui.set_ride_target("".into());
@@ -217,6 +223,10 @@ fn riding(ui: &AppWindow, paused: bool) {
     ui.set_ride_power("291".into());
     ui.set_ride_hr("158".into());
     ui.set_ride_cadence("92".into());
+    // Simulated from power, as the ride screen shows them: the speed at 291 W on the
+    // website's defaults, and the road covered in four minutes from a warm-up.
+    ui.set_ride_speed("33.4".into());
+    ui.set_ride_distance("2.14".into());
     ui.set_ride_workout_progress(0.583);
     ui.set_ride_workout_remaining("2:55".into());
     ui.set_ride_step_number(2);
@@ -259,6 +269,9 @@ fn finished(ui: &AppWindow) {
     ui.set_ride_avg_hr("149 bpm".into());
     ui.set_ride_max_hr("171 bpm".into());
     ui.set_ride_avg_cadence("89 rpm".into());
+    ui.set_ride_distance("4.08".into());
+    ui.set_ride_avg_speed("34.0".into());
+    ui.set_ride_max_speed("41.6".into());
     ui.set_ride_save_state(1);
     ui.set_ride_folder(
         "/home/flavien/.local/share/undertrained-indoor/rides/2026-09-25-vo2-max".into(),

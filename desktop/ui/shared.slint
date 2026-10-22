@@ -90,12 +90,16 @@ export global Copy {
     // What the ready screen says about the ride to come.
     pure public function ready-notice() -> string {
         return State.ride-guided && State.ride-test
-            ? @tr("Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the test does not end on its own. Finish the ride yourself once you cannot hold the target. Speed and distance are not measured.")
+            ? @tr("Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the test does not end on its own. Finish the ride yourself once you cannot hold the target. Speed and distance are simulated from power.")
             : State.ride-guided
-            ? @tr("The steps are timed from the plan and the target is shown at every moment. With ERG on, a Bluetooth trainer that supports it sets the resistance to the target; off, you follow the target yourself. No FTP result is computed. Speed and distance are not measured.")
+            ? @tr("The steps are timed from the plan and the target is shown at every moment. With ERG on, a Bluetooth trainer that supports it sets the resistance to the target; off, you follow the target yourself. No FTP result is computed. Speed and distance are simulated from power.")
             : State.ride-has-workout
             ? @tr("This workout came from a server without step data, so its profile is shown for reference only: steps are not timed and nothing is sent to the trainer. Update the Undertrained backend to ride it step by step.")
-            : @tr("Readings only: nothing is sent to the trainer. Speed and distance are not measured.");
+            : @tr("Readings only: nothing is sent to the trainer. Speed and distance are simulated from power.");
+    }
+    // A summary figure with its unit, or the dash alone when the ride has none.
+    pure public function with-unit(value: string, unit: string) -> string {
+        return value == "—" ? value : value + " " + unit;
     }
     // What the ERG choice means for the ride to come, beside the switch on the ready screen.
     pure public function erg-choice() -> string {
@@ -500,13 +504,14 @@ export component RideButtons inherits HorizontalLayout {
     ActionButton { label: @tr("Finish ride"); quiet: true; activated => { Actions.finish-ride(); } }
 }
 
-// The summary's figures. Columns follow the available width.
+// The summary's figures: the sensors' first, then the road simulated from power. Columns
+// follow the available width; four make two even rows.
 export component SummaryStats inherits Rectangle {
     property <length> gap: 12px;
-    property <int> columns: root.width < 520px ? 2 : root.width < 760px ? 3 : 5;
+    property <int> columns: root.width < 520px ? 2 : root.width < 760px ? 3 : 4;
     property <length> card-width: (root.width - (columns - 1) * gap) / columns;
     property <length> card-height: 74px;
-    property <float> rows: ceil(5 / columns);
+    property <float> rows: ceil(8 / columns);
     height: rows * card-height + (rows - 1) * gap;
     for stat[i] in [
         { label: @tr("AVG POWER"), value: State.ride-avg-power },
@@ -514,6 +519,9 @@ export component SummaryStats inherits Rectangle {
         { label: @tr("AVG HEART RATE"), value: State.ride-avg-hr },
         { label: @tr("MAX HEART RATE"), value: State.ride-max-hr },
         { label: @tr("AVG CADENCE"), value: State.ride-avg-cadence },
+        { label: @tr("DISTANCE"), value: Copy.with-unit(State.ride-distance, @tr("km")) },
+        { label: @tr("AVG SPEED"), value: Copy.with-unit(State.ride-avg-speed, @tr("km/h")) },
+        { label: @tr("MAX SPEED"), value: Copy.with-unit(State.ride-max-speed, @tr("km/h")) },
     ]: StatCard {
         x: mod(i, root.columns) * (root.card-width + root.gap);
         y: floor(i / root.columns) * (root.card-height + root.gap);
