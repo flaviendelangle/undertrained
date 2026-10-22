@@ -35,77 +35,87 @@ mod platform {
     const TIMEOUT: Duration = Duration::from_secs(2);
     const REASON: &str = "Recording an indoor ride";
 
-    enum Inhibitor {
-        /// GNOME, Cinnamon and MATE sessions.
-        Session(u32),
-        /// KDE, Xfce and others.
-        ScreenSaver(u32),
+    /// A D-Bus inhibit service: bus name, object path, interface and release method.
+    struct Service {
+        name: &'static str,
+        path: &'static str,
+        interface: &'static str,
+        release: &'static str,
     }
+
+    /// GNOME, Cinnamon and MATE sessions.
+    const SESSION: Service = Service {
+        name: "org.gnome.SessionManager",
+        path: "/org/gnome/SessionManager",
+        interface: "org.gnome.SessionManager",
+        release: "Uninhibit",
+    };
+    /// KDE and others.
+    const SCREEN_SAVER: Service = Service {
+        name: "org.freedesktop.ScreenSaver",
+        path: "/org/freedesktop/ScreenSaver",
+        interface: "org.freedesktop.ScreenSaver",
+        release: "UnInhibit",
+    };
+    /// Xfce's power manager, which also holds off its screensaver and display blanking.
+    const POWER_MANAGEMENT: Service = Service {
+        name: "org.freedesktop.PowerManagement",
+        path: "/org/freedesktop/PowerManagement/Inhibit",
+        interface: "org.freedesktop.PowerManagement.Inhibit",
+        release: "UnInhibit",
+    };
 
     /// The desktop forgets an inhibitor whose D-Bus connection closes, so the connection
     /// lives as long as the request.
     pub struct Guard {
         connection: Connection,
-        inhibitor: Inhibitor,
+        service: &'static Service,
+        cookie: u32,
     }
 
     impl Guard {
         pub fn acquire() -> Result<Self> {
             let connection = Connection::new_session()?;
+            let proxy =
+                |service: &Service| connection.with_proxy(service.name, service.path, TIMEOUT);
             // Flags: 4 inhibits suspending, 8 marks the session as not idle, which keeps the
             // screen from blanking and locking.
-            let session = connection.with_proxy(
-                "org.gnome.SessionManager",
-                "/org/gnome/SessionManager",
-                TIMEOUT,
-            );
-            let inhibitor = match session.method_call(
-                "org.gnome.SessionManager",
+            let (service, (cookie,)) = match proxy(&SESSION).method_call(
+                SESSION.interface,
                 "Inhibit",
                 ("undertrained-indoor", 0u32, REASON, 4u32 | 8),
             ) {
-                Ok((cookie,)) => Inhibitor::Session(cookie),
-                Err(_) => {
-                    let saver = connection.with_proxy(
-                        "org.freedesktop.ScreenSaver",
-                        "/org/freedesktop/ScreenSaver",
-                        TIMEOUT,
-                    );
-                    let (cookie,) = saver.method_call(
-                        "org.freedesktop.ScreenSaver",
-                        "Inhibit",
-                        ("Undertrained Indoor", REASON),
-                    )?;
-                    Inhibitor::ScreenSaver(cookie)
-                }
+                Ok(reply) => (&SESSION, reply),
+                Err(_) => match proxy(&SCREEN_SAVER).method_call(
+                    SCREEN_SAVER.interface,
+                    "Inhibit",
+                    ("Undertrained Indoor", REASON),
+                ) {
+                    Ok(reply) => (&SCREEN_SAVER, reply),
+                    Err(_) => (
+                        &POWER_MANAGEMENT,
+                        proxy(&POWER_MANAGEMENT).method_call(
+                            POWER_MANAGEMENT.interface,
+                            "Inhibit",
+                            ("Undertrained Indoor", REASON),
+                        )?,
+                    ),
+                },
             };
             Ok(Self {
                 connection,
-                inhibitor,
+                service,
+                cookie,
             })
         }
     }
 
     impl Drop for Guard {
         fn drop(&mut self) {
-            let released: Result<(), dbus::Error> = match self.inhibitor {
-                Inhibitor::Session(cookie) => self
-                    .connection
-                    .with_proxy(
-                        "org.gnome.SessionManager",
-                        "/org/gnome/SessionManager",
-                        TIMEOUT,
-                    )
-                    .method_call("org.gnome.SessionManager", "Uninhibit", (cookie,)),
-                Inhibitor::ScreenSaver(cookie) => self
-                    .connection
-                    .with_proxy(
-                        "org.freedesktop.ScreenSaver",
-                        "/org/freedesktop/ScreenSaver",
-                        TIMEOUT,
-                    )
-                    .method_call("org.freedesktop.ScreenSaver", "UnInhibit", (cookie,)),
-            };
+            let released: Result<(), dbus::Error> = self
+                .connection
+                .with_proxy(self.service.name, self.service.path, TIMEOUT)
+                .method_call(self.service.interface, self.service.release, (self.cookie,));
             // Closing the connection right after releases it anyway.
             if let Err(error) = released {
                 tracing::debug!(%error, "Keep-awake release was not acknowledged");
