@@ -305,9 +305,10 @@ struct Seen {
     reading: Reading,
     time: Instant,
 }
-/// Let go of a trainer's control: a held target is released, and the worker waits up to five
-/// seconds for the trainer's answer, enough to ride out a short dropout, before freeing the
-/// control channel. A release that waited for a command still out gets its own five seconds.
+/// Let go of a trainer's control: a target still out is cancelled, a target the trainer may
+/// hold is released, and the worker waits up to five seconds for the trainer's answer, enough
+/// to ride out a short dropout, before freeing the control channel. A release that starts
+/// later gets its own five seconds.
 /// Readings that arrive meanwhile are dropped.
 fn retire(
     control: &mut Option<Control>,

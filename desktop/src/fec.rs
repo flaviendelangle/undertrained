@@ -281,8 +281,8 @@ impl Control {
         }
     }
 
-    /// The trainer is being let go: requests still waiting are dropped, and a held target is
-    /// released once the command still out, if any, has its outcome. The worker waits while
+    /// The trainer is being let go: requests still waiting are dropped, a target still out is
+    /// cancelled, and a target the trainer may hold is released. The worker waits while
     /// `busy`, then unassigns.
     pub fn wind_down(
         &mut self,
@@ -293,13 +293,28 @@ impl Control {
         self.closing = true;
         self.desired = None;
         self.probe = None;
-        // A capability request needs no answer any more; unassigning drops it from the stick.
-        if self
-            .transfer
-            .as_ref()
-            .is_some_and(|t| matches!(t.job, Job::Probe))
-        {
-            self.transfer = None;
+        match self.transfer.as_ref().map(|t| &t.job) {
+            // A capability request needs no answer any more; unassigning drops it from the stick.
+            Some(Job::Probe) => self.transfer = None,
+            // Its outcome may take longer than the worker waits: clear the channel so it cannot
+            // reach the trainer later, and release instead, since an attempt may have.
+            Some(Job::Command(Request { watts: Some(_), .. })) => {
+                let Some(Transfer {
+                    job: Job::Command(request),
+                    ..
+                }) = self.transfer.take()
+                else {
+                    unreachable!("matched above");
+                };
+                self.assign(radio);
+                self.held = true;
+                report(
+                    events,
+                    request,
+                    Err("The trainer was let go before it answered".into()),
+                );
+            }
+            _ => {}
         }
         self.next(radio, now, events);
     }
@@ -907,12 +922,9 @@ mod tests {
         rig.set(2, Some(210));
         rig.set(3, Some(220));
         rig.control.wind_down(&mut rig.radio, rig.now, &rig.events);
-        assert!(rig.control.busy(), "The 210 W target is still out");
-        assert!(!rig.control.releasing());
-        rig.stick(&event(COMPLETED));
         assert!(
             rig.control.releasing(),
-            "Its acknowledgement is followed by a release"
+            "The 210 W target still out is cancelled for a release"
         );
         rig.stick(&event(COMPLETED));
         assert!(!rig.control.busy());
@@ -921,6 +933,24 @@ mod tests {
             [target_page(200), target_page(210), RELEASE_PAGE],
             "The waiting 220 W never goes out"
         );
+        let answers = rig.answers();
+        assert_eq!(answers[0], ok(1, Some(200)));
+        assert!(matches!(answers[1], (2, Err(_))));
+        // A target with no outcome yet, nothing held before, is released too: it may have
+        // reached the trainer.
+        let mut rig = Rig::ready();
+        rig.set(1, Some(200));
+        rig.control.wind_down(&mut rig.radio, rig.now, &rig.events);
+        assert!(rig.control.releasing());
+        assert_eq!(rig.radio.pages(), [target_page(200), RELEASE_PAGE]);
+        // A release still out is waited for.
+        let mut rig = Rig::ready();
+        rig.set(1, Some(200));
+        rig.stick(&event(COMPLETED));
+        rig.set(2, None);
+        rig.control.wind_down(&mut rig.radio, rig.now, &rig.events);
+        assert!(rig.control.releasing());
+        assert_eq!(rig.radio.pages(), [target_page(200), RELEASE_PAGE]);
         // A trainer that never confirmed anything is let go without a command.
         let mut rig = Rig::ready();
         rig.control.wind_down(&mut rig.radio, rig.now, &rig.events);
