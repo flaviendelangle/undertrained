@@ -4,7 +4,7 @@ The desktop records the connected BLE or ANT+ sensors. A free ride can use a tra
 
 ## Time and measurements
 
-With a trainer connected, Start arms the ride and the recording begins at the first reading above zero watts; a measured zero is a trainer at rest. Leaving the ride screen, losing the trainer or a pending sign-in stands it down, and "Start now" begins at once for a trainer that never reports watts. Once the ride has seen watts from the connected trainer, more than five seconds without a reading above zero pauses it, and the next one resumes it; these pauses are journaled like the rider's own, which only Resume ends.
+With a trainer connected, Start arms the ride and the recording begins at the first reading above zero watts; a measured zero is a trainer at rest. Leaving the ride screen, losing the trainer or a pending sign-in stands it down, and "Start now" begins at once for a trainer that never reports watts. Once the ride has seen watts from the connected trainer, more than five seconds at a measured zero pauses it, and the next reading above zero resumes it. A trainer that sends nothing is treated as a radio dropout rather than a rider at rest: the clock keeps running, missing samples stay null, and only thirty seconds without any reading pause the ride; these pauses are journaled like the rider's own, which only Resume ends.
 
 The recorder samples at most once per second. Active elapsed time uses a monotonic clock and excludes pauses. Sample timestamps use the start's UTC time plus monotonic elapsed time, so changing the system clock during a ride cannot reorder records. A delayed timer leaves a gap instead of backfilling invented samples.
 

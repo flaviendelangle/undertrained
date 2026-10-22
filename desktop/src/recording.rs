@@ -41,10 +41,16 @@ pub struct Sensors {
     cadence: Field,
     trainer_hr: Field,
     hr: Field,
+    /// When the trainer last reported any valid power, zero included. Unlike `power`, it
+    /// outlives the five-second freshness, so a dropout can be told apart from a long one.
+    power_seen: Option<Instant>,
 }
 impl Sensors {
     pub fn update(&mut self, role: usize, reading: &Reading, snapshot: bool, now: Instant) {
         if role == 0 {
+            if reading.power.is_some_and(|w| w >= 0) {
+                self.power_seen = Some(now);
+            }
             self.power
                 .update(reading.power.map(f64::from), snapshot, now);
             self.cadence
@@ -67,6 +73,7 @@ impl Sensors {
             self.power = Field::default();
             self.cadence = Field::default();
             self.trainer_hr = Field::default();
+            self.power_seen = None;
         } else if role == 1 {
             self.hr = Field::default();
         }
@@ -84,6 +91,10 @@ impl Sensors {
                 ..Default::default()
             }
         }
+    }
+    /// How long since the trainer last reported power, whatever the value; None before any.
+    pub fn power_silence(&self, now: Instant) -> Option<Duration> {
+        self.power_seen.map(|at| now.saturating_duration_since(at))
     }
     /// When the live power reading above zero watts arrived: a pedal stroke dates from the
     /// trainer's report, not from the ticks that keep showing it.
@@ -659,6 +670,34 @@ mod tests {
         assert_eq!(s.live(t + Duration::from_secs(5)).heart_rate, Some(150.0));
         s.update(1, &Reading::default(), true, t + Duration::from_secs(6));
         assert!(s.live(t + Duration::from_secs(6)).heart_rate.is_none());
+    }
+
+    #[test]
+    fn power_silence_counts_from_any_reading_and_outlives_freshness() {
+        let t = Instant::now();
+        let mut s = Sensors::default();
+        assert_eq!(s.power_silence(t), None, "Nothing heard yet");
+        let power = |watts: Option<i16>| Reading {
+            power: watts,
+            ..Default::default()
+        };
+        s.update(0, &power(Some(0)), true, t);
+        // A snapshot without power clears the live value but is not a power reading.
+        s.update(0, &power(None), true, t + Duration::from_secs(2));
+        assert!(s.live(t + Duration::from_secs(2)).power.is_none());
+        assert_eq!(
+            s.power_silence(t + Duration::from_secs(20)),
+            Some(Duration::from_secs(20)),
+            "A measured zero counts, and is remembered past five seconds"
+        );
+        s.update(0, &power(Some(-1)), false, t + Duration::from_secs(21));
+        assert_eq!(
+            s.power_silence(t + Duration::from_secs(21)),
+            Some(Duration::from_secs(21)),
+            "An invalid value is no reading"
+        );
+        s.disconnect(0);
+        assert_eq!(s.power_silence(t + Duration::from_secs(22)), None);
     }
     #[test]
     fn pause_clock_missing_data_export_and_idempotent_finish() {

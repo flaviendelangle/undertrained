@@ -247,8 +247,8 @@ export global State {
     // above zero watts starts the recording. Leaving the ride screen or losing the trainer
     // stands it down; Actions.start-ride-now starts at once instead.
     in-out property <bool> ride-waiting: false;
-    // The ride paused itself after five seconds without a reading above zero watts; the next
-    // one resumes it. False for a pause the rider asked for.
+    // The ride paused itself after five seconds at zero watts, or thirty without any reading;
+    // the next reading above zero resumes it. False for a pause the rider asked for.
     in-out property <bool> ride-auto-paused: false;
     // Completion.
     in-out property <string> ride-avg-power: "—";
@@ -263,7 +263,8 @@ export global State {
     // 0 none, 1 writing samples failed so the ride paused itself (detail), 2 could not start (detail),
     // 3 could not open the folder (detail), 4 could not open the browser (detail),
     // 5 the trainer refused a target so control is off (detail), 6 the trainer disconnected
-    // while controlling, so control is off, 7 no power reading for five seconds, control off.
+    // while controlling, so control is off, 7 no power reading, so control is off (fifteen
+    // seconds of silence while on, or no fresh reading when enabling).
     in-out property <int> ride-notice: 0;
     in-out property <string> ride-notice-detail: "";
     // The upload to Strava through the Undertrained account. Only the Upload button starts it.

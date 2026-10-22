@@ -128,9 +128,9 @@ export global Copy {
     // A pause of the ride's own says why and how it ends; the rider's pause waits for Resume.
     pure public function paused-words() -> string {
         return State.ride-auto-paused && State.ride-guided
-            ? @tr("Paused for {}. The ride paused itself after 5 seconds without power from the trainer; the clock and the workout step are stopped. Pedal to resume, or press Resume.", State.ride-paused-for)
+            ? @tr("Paused for {}. The ride paused itself after 5 seconds at zero watts, or 30 seconds without any reading from the trainer; the clock and the workout step are stopped. Pedal to resume, or press Resume.", State.ride-paused-for)
             : State.ride-auto-paused
-            ? @tr("Paused for {}. The ride paused itself after 5 seconds without power from the trainer; the clock is stopped. Pedal to resume, or press Resume.", State.ride-paused-for)
+            ? @tr("Paused for {}. The ride paused itself after 5 seconds at zero watts, or 30 seconds without any reading from the trainer; the clock is stopped. Pedal to resume, or press Resume.", State.ride-paused-for)
             : State.ride-guided
             ? @tr("Paused for {}. The clock and the workout step are stopped; readings keep showing what the sensors send.", State.ride-paused-for)
             : @tr("Paused for {}. The clock is stopped; readings keep showing what the sensors send.", State.ride-paused-for);
@@ -428,7 +428,7 @@ export component SensorCheck inherits Rectangle {
         }
         // With a trainer the pedals drive the clock; a strap alone records at once.
         Text {
-            text: State.trainer-connected ? @tr("Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds without power.")
+            text: State.trainer-connected ? @tr("Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds at zero watts, or 30 seconds without any reading from the trainer.")
                 : State.any-sensor ? @tr("Sensors ready. Readings are recorded once per second.")
                 : @tr("Connect a trainer or a heart-rate sensor on the Devices screen first.");
             color: State.any-sensor ? Theme.muted : Theme.warn; font-size: 12px; wrap: word-wrap;
@@ -443,7 +443,7 @@ export component RideNotices inherits VerticalLayout {
     if State.ride-notice == 1: Notice { text: @tr("Writing the recording failed, so the ride paused itself. Free some disk space or fix the folder, then resume."); detail: State.ride-notice-detail; }
     if State.ride-notice == 5: Notice { text: @tr("The trainer did not accept the command, so ERG control stopped. The ride keeps recording; reconnect the trainer if it stays unresponsive, then enable ERG again."); detail: State.ride-notice-detail; }
     if State.ride-notice == 6: Notice { text: @tr("The trainer disconnected, so ERG is off. The ride keeps recording; reconnect the trainer from the Devices screen, then enable ERG again."); }
-    if State.ride-notice == 7: Notice { text: @tr("No power reading from the trainer for five seconds, so ERG control stopped. The ride keeps recording; check the trainer's link, then enable ERG again once readings are back."); }
+    if State.ride-notice == 7: Notice { text: @tr("No power reading from the trainer, so ERG is off. The ride keeps recording; check the trainer's link, then enable ERG again once readings are back."); }
     if State.ride-active && !State.any-sensor: Notice { text: @tr("No sensor is connected. The ride keeps running and missing readings stay empty; reconnect from the Devices screen."); }
     if State.ride-active && State.ride-has-workout && !State.ride-guided: Text { text: @tr("Reference only: this workout came without step data, so steps are not timed and nothing is sent to the trainer."); color: Theme.faint; font-size: 12px; wrap: word-wrap; }
     if State.ride-active && State.ride-guided && State.ride-test: Text { text: @tr("Built-in test: no FTP result is computed and the test does not end on its own. Finish the ride once you cannot hold the target."); color: Theme.faint; font-size: 12px; wrap: word-wrap; }
