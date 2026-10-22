@@ -307,7 +307,8 @@ struct Seen {
 }
 /// Let go of a trainer's control: a held target is released, and the worker waits up to five
 /// seconds for the trainer's answer, enough to ride out a short dropout, before freeing the
-/// control channel. Readings that arrive meanwhile are dropped.
+/// control channel. A release that waited for a command still out gets its own five seconds.
+/// Readings that arrive meanwhile are dropped.
 fn retire(
     control: &mut Option<Control>,
     stick: Option<&mut Stick>,
@@ -316,8 +317,10 @@ fn retire(
     let (Some(mut control), Some(stick)) = (control.take(), stick) else {
         return;
     };
+    const WAIT: Duration = Duration::from_secs(5);
     control.wind_down(stick, Instant::now(), events);
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut releasing = control.releasing();
+    let mut deadline = Instant::now() + WAIT;
     while control.busy() && Instant::now() < deadline {
         match stick.read() {
             Ok(Some((id, bytes))) => control.message(stick, id, &bytes, Instant::now(), events),
@@ -325,6 +328,10 @@ fn retire(
             Err(_) => return,
         }
         control.tick(stick, Instant::now(), events);
+        if !releasing && control.releasing() {
+            releasing = true;
+            deadline = Instant::now() + WAIT;
+        }
     }
     control.unassign(stick);
 }

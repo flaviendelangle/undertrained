@@ -35,6 +35,9 @@ const PROBE_PAGE: [u8; 8] = [0x46, 0xff, 0xff, 0xff, 0xff, 0x04, 0x36, 0x01];
 /// rolling resistance 0.004). Target power is sticky in FE-C, and a 0 W target would keep
 /// the trainer in ERG at zero watts.
 const RELEASE_PAGE: [u8; 8] = [0x33, 0xff, 0xff, 0xff, 0xff, 0x20, 0x4e, 0x50];
+/// Release for a trainer without simulation mode, which ignores page 51: basic resistance
+/// at 0 % (page 48).
+const BASIC_RELEASE_PAGE: [u8; 8] = [0x30, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00];
 
 /// Page 49: target power in quarter watts.
 fn target_page(watts: u16) -> [u8; 8] {
@@ -87,8 +90,10 @@ pub struct Control {
     extended: bool,
     /// Capability requests sent and when the last one is given up, until page 54 arrives.
     probe: Option<(u8, Instant)>,
-    /// The trainer confirmed target power support.
+    /// The trainer confirmed target power support, and a mode to release it into.
     ready: bool,
+    /// The page that takes the trainer out of ERG, in a mode it supports.
+    release: [u8; 8],
     transfer: Option<Transfer>,
     /// The newest request that came in while a transfer was out; older ones are dropped.
     desired: Option<Request>,
@@ -121,6 +126,7 @@ impl Control {
             extended: true,
             probe: Some((1, now + PROBE_WAIT)),
             ready: false,
+            release: RELEASE_PAGE,
             transfer: None,
             desired: None,
             held: false,
@@ -146,6 +152,16 @@ impl Control {
     /// A command is out and its outcome not known yet.
     pub fn busy(&self) -> bool {
         self.transfer.is_some()
+    }
+
+    /// The command out is a release.
+    pub fn releasing(&self) -> bool {
+        self.transfer.as_ref().is_some_and(|t| {
+            matches!(
+                t.job,
+                Job::Release | Job::Command(Request { watts: None, .. })
+            )
+        })
     }
 
     /// A request from the ride. While another command is out, it replaces any request still
@@ -210,7 +226,11 @@ impl Control {
             && let Some(capabilities) = capabilities(id, bytes, &self.device.id)
         {
             self.probe = None;
-            self.ready = capabilities & 0x02 != 0;
+            // Without simulation or basic resistance, nothing could take it out of ERG.
+            self.ready = capabilities & 0x02 != 0 && capabilities & 0x05 != 0;
+            if capabilities & 0x04 == 0 {
+                self.release = BASIC_RELEASE_PAGE;
+            }
             let _ = events.send(Event::Connected(0, self.device.clone(), self.ready));
         }
     }
@@ -415,7 +435,7 @@ impl Control {
         self.fault = true;
         report(events, request, Err(error));
         if self.held && !self.poisoned {
-            self.begin(radio, Job::Release, RELEASE_PAGE, now, events);
+            self.begin(radio, Job::Release, self.release, now, events);
         } else {
             self.held = false;
             self.next(radio, now, events);
@@ -429,7 +449,7 @@ impl Control {
         if let Some(request) = self.desired.take() {
             self.start(radio, request, now, events);
         } else if self.closing && self.held && !self.poisoned {
-            self.begin(radio, Job::Release, RELEASE_PAGE, now, events);
+            self.begin(radio, Job::Release, self.release, now, events);
         }
     }
 
@@ -450,7 +470,7 @@ impl Control {
                         Err("Trainer release could not be confirmed. Reconnect the trainer before enabling ERG.".into()),
                     );
                 } else if self.held {
-                    self.begin(radio, Job::Command(request), RELEASE_PAGE, now, events);
+                    self.begin(radio, Job::Command(request), self.release, now, events);
                 } else {
                     report(events, request, Ok(None));
                 }
@@ -557,9 +577,13 @@ mod tests {
         }
         /// A control whose trainer confirmed target power, with nothing sent since.
         fn ready() -> Self {
+            Self::ready_with(0x07)
+        }
+        /// A control whose trainer answered with these capability bits.
+        fn ready_with(bits: u8) -> Self {
             let mut rig = Self::connect();
             rig.stick(&event(COMPLETED));
-            rig.trainer(&capabilities_page(0x07));
+            rig.trainer(&capabilities_page(bits));
             rig.drain();
             rig.radio.sent.clear();
             rig.radio.commands.clear();
@@ -689,6 +713,14 @@ mod tests {
         ));
         assert!(rig.control.unsupported());
 
+        // Target power alone: nothing could release it.
+        let mut rig = Rig::connect();
+        rig.trainer(&capabilities_page(0x02));
+        assert!(matches!(
+            rig.drain().as_slice(),
+            [Event::Connected(0, _, false)]
+        ));
+
         // Silence: three requests, three seconds apart, then read-only.
         let mut rig = Rig::connect();
         rig.stick(&event(COMPLETED));
@@ -814,6 +846,17 @@ mod tests {
     }
 
     #[test]
+    fn a_trainer_without_simulation_is_released_into_basic_resistance() {
+        let mut rig = Rig::ready_with(0x03);
+        rig.set(1, Some(200));
+        rig.stick(&event(COMPLETED));
+        rig.set(2, None);
+        assert_eq!(rig.radio.pages(), [target_page(200), BASIC_RELEASE_PAGE]);
+        rig.stick(&event(COMPLETED));
+        assert_eq!(rig.answers(), [ok(1, Some(200)), ok(2, None)]);
+    }
+
+    #[test]
     fn letting_go_releases_a_held_target() {
         let mut rig = Rig::ready();
         rig.set(1, Some(200));
@@ -822,9 +865,10 @@ mod tests {
         rig.set(3, Some(220));
         rig.control.wind_down(&mut rig.radio, rig.now, &rig.events);
         assert!(rig.control.busy(), "The 210 W target is still out");
+        assert!(!rig.control.releasing());
         rig.stick(&event(COMPLETED));
         assert!(
-            rig.control.busy(),
+            rig.control.releasing(),
             "Its acknowledgement is followed by a release"
         );
         rig.stick(&event(COMPLETED));

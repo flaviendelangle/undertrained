@@ -7,7 +7,7 @@ The app receives ANT+ directly from USB through `rusb` and vendored libusb. It d
 - Dynastream/Garmin ANTUSB2 (`0fcf:1008`) and ANTUSB-m (`0fcf:1009`) USB sticks with extended continuous scan support.
 - Heart Rate profile, including common heartbeat fields on background pages.
 - Fitness Equipment trainer data page 25: instantaneous power and cadence.
-- Fitness Equipment control: the capabilities page (54), requested through common page 70, then target power (page 49) and a release as flat-road track resistance (page 51), for a trainer that set the target power bit. See [workout playback](workout-playback.md) for the rules ERG follows.
+- Fitness Equipment control: the capabilities page (54), requested through common page 70, then target power (page 49) and a release as flat-road track resistance (page 51, or basic resistance at 0 %, page 48, without simulation), for a trainer that set the target power bit and one of those modes. See [workout playback](workout-playback.md) for the rules ERG follows.
 - Bicycle Power page 16: instantaneous power and cadence.
 - One receive channel discovers both roles. Selecting a device filters by its full ANT device number, profile and transmission type. The receiver stays active for selected sensors and releases USB after disconnect/reset/shutdown. Idle discovery releases USB after a short selection grace period.
 - Bluetooth being unavailable does not cancel ANT discovery. Each radio reports its own status. Unplugging the ANT stick clears its devices and connections; another search retries initialization.
