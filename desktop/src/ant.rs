@@ -181,8 +181,9 @@ impl Stick {
                 }
                 return Ok(message.1);
             }
-            // Samples and trainer answers arriving meanwhile are kept for the worker.
-            if self.backlog.len() < 256 {
+            // Samples and trainer answers arriving meanwhile are kept for the worker, but not
+            // the outcome of a control command the channel commands are dropping.
+            if kept(*kind, data) && self.backlog.len() < 256 {
                 self.backlog.push_back(message);
             }
         }
@@ -212,6 +213,13 @@ impl Stick {
         self.backlog.clear();
         Ok(())
     }
+}
+/// Whether a message read while waiting for a command response is kept for later reads.
+/// Control channel commands only clear it, so a transfer outcome met meanwhile belongs to the
+/// command they drop, and the next one must not take it for its own: events name only the
+/// channel.
+fn kept(kind: u8, data: &[u8]) -> bool {
+    kind != 0x40 || data.first() != Some(&crate::fec::CHANNEL)
 }
 impl Radio for Stick {
     fn send(&mut self, id: u8, payload: &[u8]) -> Result<()> {
@@ -562,6 +570,14 @@ mod tests {
         bytes.extend(page);
         bytes.extend([0x80, 0xd4, 0xa8, kind, 1]);
         bytes
+    }
+    #[test]
+    fn a_dropped_control_command_outcome_is_not_kept() {
+        let channel = crate::fec::CHANNEL;
+        assert!(!kept(0x40, &[channel, 0x01, 0x05]), "TX_COMPLETED");
+        assert!(!kept(0x40, &[channel, 0x5e, 0x28]), "Refusal");
+        assert!(kept(0x40, &[0, 0x01, 0x05]), "Scan channel event");
+        assert!(kept(0x4e, &packet(120, [0; 8])), "Sample");
     }
     #[test]
     fn framing_handles_split_multiple_corrupt_and_noise() {

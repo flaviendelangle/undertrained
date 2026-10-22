@@ -17,8 +17,9 @@ use tokio::sync::mpsc::UnboundedSender;
 pub const CHANNEL: u8 = 1;
 /// The highest target the app asks for, as for Bluetooth trainers.
 const MAX_WATTS: u16 = 1000;
-/// Sends of one command. A trainer that did not acknowledge (EVENT_TRANSFER_TX_FAILED) did
-/// not hear it, so the same command goes out again, a bounded number of times.
+/// Sends of one command. A trainer that did not acknowledge (EVENT_TRANSFER_TX_FAILED) most
+/// likely did not hear it, so the same command goes out again, a bounded number of times. Its
+/// acknowledgement can be lost too, so a target that failed this way may still be applied.
 const ATTEMPTS: u8 = 5;
 /// A command leaves after the trainer's next broadcast the stick hears. ANT+ links drop a
 /// trainer's broadcasts for four or five seconds several times an hour (seen on the owner's
@@ -97,7 +98,7 @@ pub struct Control {
     transfer: Option<Transfer>,
     /// The newest request that came in while a transfer was out; older ones are dropped.
     desired: Option<Request>,
-    /// A target was acknowledged and not released since.
+    /// A target was acknowledged, or may have reached the trainer, and was not released since.
     held: bool,
     /// A command failed: only a release may go out before any new target.
     fault: bool,
@@ -412,6 +413,7 @@ impl Control {
         let Some(transfer) = self.transfer.take() else {
             return;
         };
+        let attempts = transfer.attempts;
         match (transfer.job, result) {
             // The answer to a capability request is page 54; `tick` asks again or gives up.
             (Job::Probe, _) => {}
@@ -420,6 +422,8 @@ impl Control {
                 report(events, request, Ok(request.watts));
             }
             (Job::Command(request), Err(error)) if request.watts.is_some() => {
+                // An unacknowledged attempt may have reached the trainer, as in `tick`.
+                self.held |= attempts > 1;
                 return self.fail(radio, request, error, now, events);
             }
             (Job::Command(request), Err(error)) => {
@@ -838,6 +842,19 @@ mod tests {
         assert_eq!(rig.answers(), [ok(4, None)], "Already released");
         rig.set(5, Some(270));
         assert_eq!(rig.radio.pages().last(), Some(&target_page(270)));
+
+        // Nothing held, but the trainer may have applied the target and lost its
+        // acknowledgements: it is released all the same.
+        let mut rig = Rig::ready();
+        rig.set(1, Some(200));
+        for _ in 0..ATTEMPTS {
+            rig.stick(&event(FAILED));
+        }
+        assert!(matches!(rig.answers().as_slice(), [(1, Err(_))]));
+        assert_eq!(rig.radio.pages().last(), Some(&RELEASE_PAGE));
+        rig.stick(&event(COMPLETED));
+        rig.set(2, None);
+        assert_eq!(rig.answers(), [ok(2, None)], "Already released");
     }
 
     #[test]
