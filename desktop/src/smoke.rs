@@ -7,11 +7,11 @@ use crate::player::{Plan, Segment};
 use crate::recording::Phase;
 use crate::workouts::{Workout, WorkoutId};
 use crate::{
-    AppWindow, RideOnSignIn, State, apply_language, apply_live, connected, device_rows,
-    disconnected, erg_event, guard_erg_power, refresh_player, reset_session_ui, ride_on_sign_in,
-    workout_rows,
+    Actions, AppState, AppWindow, RideOnSignIn, apply_language, apply_live, auto_pause, connected,
+    device_rows, disconnected, erg_event, guard_erg_power, refresh_player, reset_session_ui,
+    ride_on_sign_in, start_on_power, workout_rows,
 };
-use slint::Model;
+use slint::{ComponentHandle, Model};
 use std::{
     cell::RefCell,
     fs,
@@ -112,7 +112,7 @@ fn fixture_plan() -> Plan {
     }
 }
 
-fn fixture_workouts() -> Vec<Workout> {
+pub(crate) fn fixture_workouts() -> Vec<Workout> {
     let workout = |id,
                    name: &str,
                    tss,
@@ -186,7 +186,7 @@ fn fixture_workouts() -> Vec<Workout> {
     ]
 }
 
-fn settle_save(ui: &AppWindow, state: &Rc<RefCell<State>>) {
+fn settle_save(ui: &AppWindow, state: &Rc<RefCell<AppState>>) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while ui.get_ride_save_state() == 3 {
         crate::poll_ride_save(ui, &mut state.borrow_mut());
@@ -196,7 +196,7 @@ fn settle_save(ui: &AppWindow, state: &Rc<RefCell<State>>) {
 }
 
 /// `root` is the throwaway folder the ride callbacks record under during the smoke test.
-pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
+pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert!(!ui.get_logged_in());
     assert!(
         ui.get_server_configured(),
@@ -216,7 +216,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         state.devices = fixture_devices();
         state.settings.trainer_id = Some(TRAINER_ID.into());
     }
-    ui.invoke_save_setup();
+    ui.global::<Actions>().invoke_save_setup();
     assert!(
         !ui.get_setup_saved(),
         "A trainer is required to finish setup"
@@ -314,7 +314,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         assert!(state.library.finish(generation, Ok(fixture_workouts())));
     }
     workout_rows(ui, &mut state.borrow_mut());
-    ui.invoke_navigate(1);
+    ui.global::<Actions>().invoke_navigate(1);
     assert_eq!(ui.get_screen(), 1);
     assert_eq!(ui.get_workouts_total(), 4);
     assert_eq!(ui.get_workouts_personal(), 3);
@@ -350,7 +350,8 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     );
     assert!(!ui.get_workouts_filtering(), "No search yet");
     // One search over both sections: personal-only, built-in-only, none, then cleared.
-    ui.invoke_filter_workouts("  SWEET ".into());
+    ui.global::<Actions>()
+        .invoke_filter_workouts("  SWEET ".into());
     assert!(ui.get_workouts_filtering());
     assert_eq!(
         ui.get_workouts().row_count(),
@@ -362,7 +363,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         0,
         "No built-in matches 'sweet'"
     );
-    ui.invoke_filter_workouts("step".into());
+    ui.global::<Actions>().invoke_filter_workouts("step".into());
     assert_eq!(
         ui.get_workouts().row_count(),
         0,
@@ -378,7 +379,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         4,
         "The total stays the whole library"
     );
-    ui.invoke_filter_workouts("zzz".into());
+    ui.global::<Actions>().invoke_filter_workouts("zzz".into());
     assert!(ui.get_workouts_filtering());
     assert_eq!(
         ui.get_workouts().row_count() + ui.get_built_ins().row_count(),
@@ -390,13 +391,13 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         3,
         "No matches never reads as an empty account"
     );
-    ui.invoke_filter_workouts("   ".into());
+    ui.global::<Actions>().invoke_filter_workouts("   ".into());
     assert!(!ui.get_workouts_filtering(), "Blank queries do not filter");
     assert_eq!(
         ui.get_workouts().row_count() + ui.get_built_ins().row_count(),
         4
     );
-    ui.invoke_filter_workouts("".into());
+    ui.global::<Actions>().invoke_filter_workouts("".into());
     assert!(!ui.get_workouts_filtering());
     assert_eq!(
         ui.get_workouts().row_count(),
@@ -410,7 +411,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     );
     for key in ["p:1", "b:fixture-step-test"] {
         ui.set_workouts_notice(0);
-        ui.invoke_open_workout(key.into());
+        ui.global::<Actions>().invoke_open_workout(key.into());
         assert_eq!(
             ui.get_workouts_notice(),
             1,
@@ -420,7 +421,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     ui.set_workouts_notice(0);
 
     // Selecting a card opens the ready-to-record screen; nothing is sent anywhere.
-    ui.invoke_select_workout("p:2".into());
+    ui.global::<Actions>().invoke_select_workout("p:2".into());
     assert_eq!(ui.get_screen(), 2);
     assert_eq!(ui.get_ride_phase(), 0, "Ready, not recording");
     assert!(ui.get_ride_has_workout());
@@ -440,19 +441,20 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         "The fixture trainer advertised ERG"
     );
     assert!(!ui.get_ride_erg_enabled(), "Never on by itself");
-    ui.invoke_select_workout("p:1".into());
+    ui.global::<Actions>().invoke_select_workout("p:1".into());
     assert!(ui.get_ride_has_workout());
     assert!(
         !ui.get_ride_guided(),
         "A workout from an older server has no plan: reference only"
     );
     assert_eq!(ui.get_ride_plan_steps(), 0);
-    ui.invoke_select_workout("b:fixture-step-test".into());
+    ui.global::<Actions>()
+        .invoke_select_workout("b:fixture-step-test".into());
     assert!(
         ui.get_ride_guided() && ui.get_ride_test(),
         "Tests play timed steps"
     );
-    ui.invoke_select_workout("p:2".into());
+    ui.global::<Actions>().invoke_select_workout("p:2".into());
     assert!(
         ui.get_trainer_connected() && ui.get_hr_connected(),
         "The ready screen leaves pairings alone"
@@ -496,11 +498,11 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     assert!(!ui.get_ride_hr_live());
     assert_eq!(ui.get_ride_hr(), "—");
     assert!(ui.get_ride_power_live(), "The trainer is untouched");
-    ui.invoke_close_training();
+    ui.global::<Actions>().invoke_close_training();
     assert_eq!(ui.get_screen(), 1);
     assert!(ui.get_selected_workout().id.is_empty());
     // A free ride is offered from the device screen and needs at least one sensor.
-    ui.invoke_start_free_ride();
+    ui.global::<Actions>().invoke_start_free_ride();
     assert_eq!(ui.get_screen(), 2);
     assert!(!ui.get_ride_has_workout());
     assert_eq!(ui.get_ride_phase(), 0);
@@ -508,37 +510,38 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     disconnected(ui, &mut state.borrow_mut(), 0);
     disconnected(ui, &mut state.borrow_mut(), 1);
     assert!(!ui.get_any_sensor());
-    ui.invoke_start_ride();
+    ui.global::<Actions>().invoke_start_ride();
     assert_eq!(ui.get_ride_phase(), 0, "No sensor, no recording");
     assert!(state.borrow().ride.is_none());
-    ui.invoke_close_training();
+    ui.global::<Actions>().invoke_close_training();
     let devices = fixture_devices();
     connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
     connected(ui, &mut state.borrow_mut(), &devices[1], 1, false);
     // The guard, exercised on the screen state alone so no journal is written here: an active
     // ride keeps navigation open but blocks sign-out and the library's expiry from moving it.
-    ui.invoke_select_workout("b:fixture-step-test".into());
+    ui.global::<Actions>()
+        .invoke_select_workout("b:fixture-step-test".into());
     ui.set_ride_phase(1);
     assert!(ui.get_ride_active());
-    ui.invoke_navigate(0);
+    ui.global::<Actions>().invoke_navigate(0);
     assert_eq!(ui.get_screen(), 0, "Devices stay reachable mid-ride");
     assert!(ui.get_ride_active(), "Navigating never touches the ride");
-    ui.invoke_navigate(2);
+    ui.global::<Actions>().invoke_navigate(2);
     assert_eq!(ui.get_screen(), 2);
-    ui.invoke_sign_out();
+    ui.global::<Actions>().invoke_sign_out();
     assert!(ui.get_logged_in(), "Sign-out is held back");
     assert_eq!(ui.get_leave_guard(), 2);
-    ui.invoke_keep_riding();
+    ui.global::<Actions>().invoke_keep_riding();
     assert_eq!(ui.get_leave_guard(), 0);
     assert_eq!(ui.get_screen(), 2);
-    ui.invoke_select_workout("p:1".into());
+    ui.global::<Actions>().invoke_select_workout("p:1".into());
     assert_eq!(ui.get_screen(), 2);
     assert_eq!(
         ui.get_selected_workout().id,
         "b:fixture-step-test",
         "One ride at a time"
     );
-    ui.invoke_close_training();
+    ui.global::<Actions>().invoke_close_training();
     assert_eq!(ui.get_ride_phase(), 1, "Back is refused mid-ride");
     {
         let mut state = state.borrow_mut();
@@ -558,38 +561,47 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     ui.set_ride_phase(3);
     ui.set_ride_save_state(2);
     assert!(ui.get_ride_unsaved());
-    ui.invoke_sign_out();
+    ui.global::<Actions>().invoke_sign_out();
     assert_eq!(ui.get_leave_guard(), 2, "An unsaved ride is guarded too");
-    ui.invoke_keep_riding();
+    ui.global::<Actions>().invoke_keep_riding();
     ui.set_ride_save_state(1);
     assert!(!ui.get_ride_unsaved());
     // The upload card of a saved ride. Names follow the one rule the button also uses.
-    assert!(ui.invoke_name_valid("Morning ride".into()));
-    assert!(!ui.invoke_name_valid("   ".into()));
-    assert!(!ui.invoke_name_valid("x".repeat(201).into()));
-    assert!(ui.invoke_name_valid("x".repeat(200).into()));
+    assert!(
+        ui.global::<Actions>()
+            .invoke_name_valid("Morning ride".into())
+    );
+    assert!(!ui.global::<Actions>().invoke_name_valid("   ".into()));
+    assert!(
+        !ui.global::<Actions>()
+            .invoke_name_valid("x".repeat(201).into())
+    );
+    assert!(
+        ui.global::<Actions>()
+            .invoke_name_valid("x".repeat(200).into())
+    );
     // Without a recording behind the screen nothing is sent and nothing changes.
     ui.set_ride_activity_name("Morning ride".into());
-    ui.invoke_upload_ride();
+    ui.global::<Actions>().invoke_upload_ride();
     assert_eq!(ui.get_ride_upload_state(), 0, "No ride, no upload");
     assert!(!ui.get_ride_upload_submitted());
     // A running upload holds the screen: Back is refused, sign-out and other rides wait.
     ui.set_ride_upload_state(1);
     assert!(ui.get_ride_uploading());
-    ui.invoke_close_training();
+    ui.global::<Actions>().invoke_close_training();
     assert_eq!(ui.get_screen(), 2, "Back waits for Strava's answer");
-    ui.invoke_sign_out();
+    ui.global::<Actions>().invoke_sign_out();
     assert_eq!(ui.get_leave_guard(), 2, "Sign-out waits too");
     assert!(ui.get_logged_in());
-    ui.invoke_keep_riding();
-    ui.invoke_navigate(1);
+    ui.global::<Actions>().invoke_keep_riding();
+    ui.global::<Actions>().invoke_navigate(1);
     assert_eq!(ui.get_screen(), 1, "Other screens stay reachable");
-    ui.invoke_select_workout("p:1".into());
+    ui.global::<Actions>().invoke_select_workout("p:1".into());
     assert_eq!(ui.get_screen(), 2, "Another ride waits for the answer");
     // The refresh above dropped the library row; the ride's own copy is what the screen shows.
     assert_eq!(ui.get_ride_name(), "Step test");
     assert_eq!(ui.get_ride_phase(), 3);
-    ui.invoke_start_free_ride();
+    ui.global::<Actions>().invoke_start_free_ride();
     assert_eq!(ui.get_screen(), 2);
     assert!(ui.get_ride_uploading(), "Nothing above touched the upload");
     ui.set_ride_upload_state(2);
@@ -601,7 +613,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         assert!(state.library.finish(generation, Ok(fixture_workouts())));
         workout_rows(ui, &mut state);
     }
-    ui.invoke_close_training();
+    ui.global::<Actions>().invoke_close_training();
     assert_eq!(ui.get_screen(), 1);
     assert_eq!(
         ui.get_ride_upload_state(),
@@ -609,10 +621,11 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         "Leaving a ride forgets its upload"
     );
     assert!(ui.get_ride_activity_name().is_empty());
-    ui.invoke_select_workout("p:999".into());
+    ui.global::<Actions>().invoke_select_workout("p:999".into());
     assert_eq!(ui.get_screen(), 1);
     assert_eq!(ui.get_workouts_notice(), 3, "Unknown ids are refused");
-    ui.invoke_select_workout("b:fixture-step-test".into());
+    ui.global::<Actions>()
+        .invoke_select_workout("b:fixture-step-test".into());
     assert_eq!(ui.get_screen(), 2);
     assert!(ui.get_selected_workout().built_in);
     // A refresh that drops the selected workout returns to the list and says so.
@@ -644,7 +657,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     // An expired session while previewing: back to the list, which shows the expired-session
     // panel rather than claiming the workout was removed.
     ui.set_workouts_notice(0);
-    ui.invoke_select_workout("p:1".into());
+    ui.global::<Actions>().invoke_select_workout("p:1".into());
     assert_eq!(ui.get_screen(), 2);
     {
         let mut state = state.borrow_mut();
@@ -673,10 +686,10 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         assert!(state.library.finish(generation, Ok(fixture_workouts())));
         workout_rows(ui, &mut state);
     }
-    ui.invoke_select_workout("p:3".into());
+    ui.global::<Actions>().invoke_select_workout("p:3".into());
     assert_eq!(ui.get_screen(), 2);
 
-    ui.invoke_navigate(0);
+    ui.global::<Actions>().invoke_navigate(0);
     assert_eq!(ui.get_screen(), 0);
     assert!(
         ui.get_trainer_connected() && ui.get_hr_connected(),
@@ -686,16 +699,129 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     // A real ride through the callbacks, recorded under the throwaway folder: the journal,
     // the export and every guard, with no account and nothing sent anywhere.
     assert!(ui.get_trainer_connected() && ui.get_hr_connected());
-    ui.invoke_select_workout("p:2".into());
+    ui.global::<Actions>().invoke_select_workout("p:2".into());
     assert_eq!(ui.get_ride_phase(), 0);
     ui.set_signing_in(true);
-    ui.invoke_start_ride();
+    ui.global::<Actions>().invoke_start_ride();
     assert!(
         state.borrow().ride.is_none(),
         "No ride while a sign-in is pending"
     );
     ui.set_signing_in(false);
-    ui.invoke_start_ride();
+    // With a trainer, Start waits for the first pedal stroke and records nothing until then.
+    // The waiting is driven here through the same check the timer runs.
+    let (start_sink, mut start_commands) = tokio::sync::mpsc::unbounded_channel();
+    let pedal = |watts: i16| {
+        state.borrow_mut().sensors.update(
+            0,
+            &Reading {
+                power: Some(watts),
+                cadence: None,
+                heart_rate: None,
+            },
+            false,
+            Instant::now(),
+        );
+        start_on_power(ui, &mut state.borrow_mut(), &start_sink, Instant::now());
+    };
+    ui.global::<Actions>().invoke_start_ride_now();
+    assert!(
+        state.borrow().ride.is_none(),
+        "Start now only answers Start"
+    );
+    ui.global::<Actions>().invoke_start_ride();
+    assert!(ui.get_ride_waiting(), "Start waits for power");
+    assert!(
+        state.borrow().ride.is_none(),
+        "Nothing recorded while waiting"
+    );
+    pedal(0);
+    assert!(
+        ui.get_ride_waiting() && state.borrow().ride.is_none(),
+        "A measured zero is a trainer at rest, not a pedal stroke"
+    );
+    ui.global::<Actions>().invoke_navigate(0);
+    pedal(150);
+    assert!(
+        !ui.get_ride_waiting(),
+        "Leaving the ride screen stands it down"
+    );
+    assert!(state.borrow().ride.is_none());
+    ui.global::<Actions>().invoke_navigate(2);
+    pedal(0);
+    // ERG is chosen on the ready screen, only for a trainer that takes control, and the
+    // choice is remembered for the next rides, in the smoke root rather than the rider's
+    // own settings.
+    ui.global::<Actions>().invoke_set_erg(true);
+    assert!(ui.get_ride_erg_enabled(), "The choice waits for the ride");
+    assert_eq!(
+        state.borrow().erg_requests,
+        0,
+        "Nothing sent before the ride"
+    );
+    assert!(
+        crate::store::load(Some(root)).unwrap().start_with_erg,
+        "The choice is saved"
+    );
+    ui.global::<Actions>().invoke_set_erg(false);
+    assert!(!ui.get_ride_erg_enabled());
+    assert!(!crate::store::load(Some(root)).unwrap().start_with_erg);
+    ui.global::<Actions>().invoke_set_erg(true);
+    ui.global::<Actions>().invoke_select_workout("p:2".into());
+    assert!(
+        ui.get_ride_erg_enabled(),
+        "A new ready screen shows the remembered choice"
+    );
+    ui.global::<Actions>().invoke_start_ride();
+    assert!(ui.get_ride_waiting());
+    disconnected(ui, &mut state.borrow_mut(), 0);
+    pedal(0);
+    assert!(
+        !ui.get_ride_waiting(),
+        "Losing the trainer stands the start down"
+    );
+    assert!(
+        !ui.get_ride_erg_enabled(),
+        "Not offered without the trainer"
+    );
+    connected(ui, &mut state.borrow_mut(), &devices[0], 0, false);
+    assert!(!ui.get_ride_erg_enabled(), "Nor on a read-only trainer");
+    ui.global::<Actions>().invoke_set_erg(false);
+    assert!(
+        state.borrow().settings.start_with_erg,
+        "A switch that is not offered changes no choice"
+    );
+    connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
+    assert!(
+        ui.get_ride_erg_enabled(),
+        "The remembered choice is back with a trainer that takes control"
+    );
+    ui.global::<Actions>().invoke_start_ride();
+    pedal(0);
+    assert!(state.borrow().ride.is_none());
+    pedal(150);
+    assert!(!ui.get_ride_waiting());
+    // The first watts start the ride, and the ERG chosen before it goes on with the clock.
+    assert!(ui.get_ride_erg_enabled(), "ERG goes on with the clock");
+    assert_eq!(ui.get_ride_erg_state(), 1, "Pending, not held");
+    assert_eq!(ui.get_ride_erg_watts(), "100", "The first step's target");
+    match start_commands.try_recv() {
+        Ok(crate::ble::Command::SetErg {
+            device_id, watts, ..
+        }) => {
+            assert_eq!(device_id, TRAINER_ID);
+            assert_eq!(watts, Some(100));
+        }
+        other => panic!("expected the first target, got {other:?}"),
+    }
+    assert!(start_commands.try_recv().is_err(), "One command");
+    // Off again, so the guided checks below start from a ride without control. Switching
+    // during a ride leaves the remembered choice alone.
+    ui.global::<Actions>().invoke_set_erg(false);
+    assert!(state.borrow().settings.start_with_erg);
+    let release = state.borrow().erg_requests;
+    erg_event(ui, &mut state.borrow_mut(), &start_sink, release, &Ok(None));
+    assert!(!ui.get_ride_erg_enabled() && ui.get_ride_erg_state() == 0);
     let directory = {
         let state = state.borrow();
         let ride = state.ride.as_ref().expect("The ride started");
@@ -719,19 +845,19 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     assert_eq!(ui.get_ride_phase(), 1);
     assert_eq!(ui.get_screen(), 2);
     assert_eq!(ui.get_ride_name(), "VO2 max 5 × 3");
-    ui.invoke_start_ride();
+    ui.global::<Actions>().invoke_start_ride();
     assert_eq!(
         state.borrow().ride.as_ref().unwrap().recording.directory(),
         directory,
         "A second start changes nothing"
     );
-    ui.invoke_start_free_ride();
+    ui.global::<Actions>().invoke_start_free_ride();
     assert_eq!(ui.get_screen(), 2);
     assert!(ui.get_ride_has_workout(), "One ride at a time");
-    ui.invoke_sign_in();
+    ui.global::<Actions>().invoke_sign_in();
     assert_eq!(ui.get_leave_guard(), 2, "Sign-in asks first mid-ride");
     assert!(!ui.get_signing_in());
-    ui.invoke_keep_riding();
+    ui.global::<Actions>().invoke_keep_riding();
     {
         // Samples come from the sensor model; the engine takes one per second.
         let mut state = state.borrow_mut();
@@ -761,7 +887,80 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         assert_eq!(ride.recording.samples().len(), 1);
         assert_eq!(ride.recording.samples()[0].live.power, Some(198.0));
     }
-    ui.invoke_navigate(0);
+    // Auto-pause: more than five seconds without watts pauses the ride, and the next pedal
+    // stroke resumes it. A pause the rider asked for waits for Resume.
+    let coast = |watts: i16| {
+        state.borrow_mut().sensors.update(
+            0,
+            &Reading {
+                power: Some(watts),
+                cadence: None,
+                heart_rate: None,
+            },
+            false,
+            Instant::now(),
+        );
+        auto_pause(ui, &mut state.borrow_mut(), &start_sink, Instant::now());
+    };
+    coast(0);
+    assert_eq!(ui.get_ride_phase(), 1, "Not five seconds yet");
+    state.borrow_mut().ride.as_mut().unwrap().pedaled_at =
+        Some(Instant::now() - Duration::from_secs(6));
+    coast(0);
+    assert_eq!(ui.get_ride_phase(), 2, "Five seconds without watts");
+    assert!(ui.get_ride_auto_paused());
+    assert_eq!(
+        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        Phase::Paused
+    );
+    coast(0);
+    assert_eq!(ui.get_ride_phase(), 2, "A zero does not resume");
+    coast(160);
+    assert_eq!(ui.get_ride_phase(), 1, "The next pedal stroke resumes");
+    assert!(!ui.get_ride_auto_paused());
+    assert_eq!(
+        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        Phase::Running
+    );
+    ui.global::<Actions>().invoke_pause_ride();
+    assert!(!ui.get_ride_auto_paused());
+    coast(160);
+    assert_eq!(ui.get_ride_phase(), 2, "The rider's pause waits for Resume");
+    ui.global::<Actions>().invoke_resume_ride();
+    assert_eq!(ui.get_ride_phase(), 1);
+    // A resume restarts the count: the pedals get five seconds again.
+    coast(0);
+    assert_eq!(ui.get_ride_phase(), 1);
+    // Losing the trainer stops the count until the next trainer's first watts.
+    disconnected(ui, &mut state.borrow_mut(), 0);
+    connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
+    assert!(state.borrow().ride.as_ref().unwrap().pedaled_at.is_none());
+    auto_pause(
+        ui,
+        &mut state.borrow_mut(),
+        &start_sink,
+        Instant::now() + Duration::from_secs(6),
+    );
+    assert_eq!(
+        ui.get_ride_phase(),
+        1,
+        "No watts seen from this trainer yet"
+    );
+    assert!(
+        start_commands.try_recv().is_err(),
+        "ERG is off: nothing sent"
+    );
+    state.borrow_mut().sensors.update(
+        0,
+        &Reading {
+            power: Some(198),
+            cadence: Some(86.0),
+            heart_rate: None,
+        },
+        false,
+        Instant::now(),
+    );
+    ui.global::<Actions>().invoke_navigate(0);
     assert_eq!(ui.get_screen(), 0);
     assert!(ui.get_ride_active());
     assert_eq!(
@@ -769,7 +968,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         Phase::Running,
         "Navigating never touches the ride"
     );
-    ui.invoke_navigate(2);
+    ui.global::<Actions>().invoke_navigate(2);
     // The guide, refreshed as the timer does it from the plan copied into the ride and the
     // sensor model: first step, ramp start.
     {
@@ -818,10 +1017,10 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         workout_rows(ui, &mut state);
     }
     // Intensity: five percent per step, and the target follows at once.
-    ui.invoke_adjust_bias(1);
+    ui.global::<Actions>().invoke_adjust_bias(1);
     assert_eq!(ui.get_ride_bias(), "105 %");
     assert_eq!(ui.get_ride_target(), "105");
-    ui.invoke_adjust_bias(-1);
+    ui.global::<Actions>().invoke_adjust_bias(-1);
     assert_eq!(ui.get_ride_bias(), "100 %");
     assert_eq!(ui.get_ride_target(), "100");
     // Answers from the trainer are fed through the same handler the sensor events use; the
@@ -848,7 +1047,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     let requests_before = state.borrow().erg_requests;
     connected(ui, &mut state.borrow_mut(), &devices[0], 0, false);
     assert!(!ui.get_ride_erg_available());
-    ui.invoke_set_erg(true);
+    ui.global::<Actions>().invoke_set_erg(true);
     assert!(!ui.get_ride_erg_enabled(), "No control without support");
     assert_eq!(ui.get_ride_erg_state(), 0);
     assert_eq!(state.borrow().erg_requests, requests_before, "Nothing sent");
@@ -860,7 +1059,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         !ui.get_ride_erg_enabled(),
         "Connecting never enables control"
     );
-    ui.invoke_set_erg(true);
+    ui.global::<Actions>().invoke_set_erg(true);
     assert!(ui.get_ride_erg_enabled());
     assert_eq!(ui.get_ride_erg_state(), 1, "Pending, not held");
     assert_eq!(ui.get_ride_erg_watts(), "100");
@@ -889,7 +1088,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         let ride = state.ride.as_ref().unwrap();
         ride.recording.elapsed(Instant::now())
     };
-    ui.invoke_skip_step();
+    ui.global::<Actions>().invoke_skip_step();
     let elapsed_after = {
         let state = state.borrow();
         let ride = state.ride.as_ref().unwrap();
@@ -933,9 +1132,9 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     let release = released(&mut captured).expect("One release after the failure");
     assert_eq!(release, request + 1);
     assert!(released(&mut captured).is_none(), "Exactly one");
-    ui.invoke_skip_step();
-    ui.invoke_adjust_bias(1);
-    ui.invoke_adjust_bias(-1);
+    ui.global::<Actions>().invoke_skip_step();
+    ui.global::<Actions>().invoke_adjust_bias(1);
+    ui.global::<Actions>().invoke_adjust_bias(-1);
     assert_eq!(state.borrow().erg_requests, release, "No retry on its own");
     assert_eq!(ui.get_ride_step_number(), 3);
     assert_eq!(ui.get_ride_target(), "", "A free step has no target");
@@ -949,7 +1148,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     assert_eq!(ui.get_ride_erg_state(), 0, "Released and off");
     assert_eq!(ui.get_ride_notice(), 5, "The failure stays explained");
     // Enabling again is the rider's call; a free step gives nothing to send.
-    ui.invoke_set_erg(true);
+    ui.global::<Actions>().invoke_set_erg(true);
     assert!(ui.get_ride_erg_enabled());
     assert_eq!(ui.get_ride_erg_state(), 3, "On, nothing to hold");
     assert_eq!(
@@ -958,7 +1157,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         "Enabling clears the failure notice"
     );
     assert_eq!(state.borrow().erg_requests, release, "Nothing to send");
-    ui.invoke_skip_step();
+    ui.global::<Actions>().invoke_skip_step();
     assert_eq!(ui.get_ride_step_number(), 4);
     assert_eq!(ui.get_ride_target(), "120");
     assert_eq!(ui.get_ride_erg_state(), 1, "A targeted step sends again");
@@ -993,7 +1192,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     );
     erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
     assert_eq!(ui.get_ride_erg_state(), 0);
-    ui.invoke_set_erg(true);
+    ui.global::<Actions>().invoke_set_erg(true);
     assert_eq!(
         ui.get_ride_erg_state(),
         1,
@@ -1005,7 +1204,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     assert_eq!(ui.get_ride_erg_state(), 2);
     // Pause freezes the recording clock and the workout with it, and asks for a release
     // before the journal is written; the rider's choice stays on for Resume.
-    ui.invoke_pause_ride();
+    ui.global::<Actions>().invoke_pause_ride();
     assert_eq!(ui.get_ride_phase(), 2);
     assert_eq!(
         state.borrow().ride.as_ref().unwrap().recording.phase(),
@@ -1043,7 +1242,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         release,
         "Nothing sent while paused"
     );
-    ui.invoke_resume_ride();
+    ui.global::<Actions>().invoke_resume_ride();
     assert_eq!(ui.get_ride_phase(), 1);
     assert_eq!(
         state.borrow().ride.as_ref().unwrap().recording.phase(),
@@ -1092,7 +1291,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
             Instant::now() - Duration::from_secs(6),
         );
     }
-    ui.invoke_set_erg(true);
+    ui.global::<Actions>().invoke_set_erg(true);
     assert!(!ui.get_ride_erg_enabled(), "No fresh power, no control");
     assert_eq!(ui.get_ride_notice(), 7);
     assert_eq!(state.borrow().erg_requests, release, "Nothing sent");
@@ -1110,7 +1309,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
             Instant::now(),
         );
     }
-    ui.invoke_set_erg(true);
+    ui.global::<Actions>().invoke_set_erg(true);
     assert!(ui.get_ride_erg_enabled(), "A real zero is fresh power");
     assert_eq!(ui.get_ride_erg_state(), 1);
     let request = state.borrow().erg_requests;
@@ -1131,7 +1330,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         request,
         "Nothing sent to the new connection"
     );
-    ui.invoke_set_erg(true);
+    ui.global::<Actions>().invoke_set_erg(true);
     assert!(
         !ui.get_ride_erg_enabled(),
         "The reconnected trainer has not reported power yet"
@@ -1150,13 +1349,13 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
             Instant::now(),
         );
     }
-    ui.invoke_set_erg(true);
+    ui.global::<Actions>().invoke_set_erg(true);
     assert_eq!(ui.get_ride_erg_state(), 1);
     let request = state.borrow().erg_requests;
     erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
     assert_eq!(ui.get_ride_erg_state(), 2);
     // Reaching the end asks for a release and keeps recording until Finish.
-    ui.invoke_skip_step();
+    ui.global::<Actions>().invoke_skip_step();
     assert!(ui.get_ride_workout_complete());
     assert_eq!(ui.get_ride_phase(), 1, "Recording continues as a free ride");
     assert_eq!(
@@ -1172,22 +1371,22 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     assert_eq!(release, request + 1);
     erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
     assert_eq!(ui.get_ride_erg_state(), 3);
-    ui.invoke_skip_step();
+    ui.global::<Actions>().invoke_skip_step();
     assert_eq!(
         state.borrow().erg_requests,
         release,
         "Nothing left to skip or send"
     );
-    ui.invoke_close_training();
+    ui.global::<Actions>().invoke_close_training();
     assert_eq!(ui.get_screen(), 2, "Back is refused mid-ride");
-    ui.invoke_finish_ride();
+    ui.global::<Actions>().invoke_finish_ride();
     assert_eq!(
         ui.get_ride_save_state(),
         3,
         "Finishing queues a background export"
     );
     assert!(ui.get_ride_unsaved(), "Saving protects the in-memory ride");
-    ui.invoke_close_training();
+    ui.global::<Actions>().invoke_close_training();
     assert_eq!(ui.get_screen(), 2, "Cannot dismiss a pending export");
     settle_save(ui, state);
     assert_eq!(ui.get_ride_phase(), 3);
@@ -1205,9 +1404,9 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     assert!(state.borrow().ride.as_ref().unwrap().recording.saved());
     assert!(directory.join("ride.fit").exists() && directory.join("ride.json").exists());
     let fit = fs::read(directory.join("ride.fit")).unwrap();
-    ui.invoke_finish_ride();
+    ui.global::<Actions>().invoke_finish_ride();
     settle_save(ui, state);
-    ui.invoke_retry_save();
+    ui.global::<Actions>().invoke_retry_save();
     settle_save(ui, state);
     assert_eq!(ui.get_ride_phase(), 3);
     assert_eq!(
@@ -1217,15 +1416,15 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     );
     assert!(!ui.get_ride_unsaved() && !ui.get_ride_uploading());
     assert!(ui.get_ride_present(), "A saved ride stays accessible");
-    ui.invoke_navigate(0);
+    ui.global::<Actions>().invoke_navigate(0);
     assert!(ui.get_ride_present());
-    ui.invoke_navigate(2);
+    ui.global::<Actions>().invoke_navigate(2);
     assert_eq!(ui.get_ride_phase(), 3);
     assert_eq!(ui.get_ride_activity_name(), "VO2 max 5 × 3");
     assert_eq!(ui.get_ride_save_state(), 1);
 
     // Uploading needs the account that started the ride; without one nothing is sent.
-    ui.invoke_upload_ride();
+    ui.global::<Actions>().invoke_upload_ride();
     assert_eq!(ui.get_ride_upload_state(), 5);
     assert_eq!(ui.get_ride_upload_error(), 1, "No session: sign in again");
     assert!(ui.get_ride_upload_submitted());
@@ -1237,7 +1436,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     // goes through the real callback, and the sign-in outcomes go through the helper the
     // handler uses, with made-up accounts that never reach a server.
     ui.set_signing_in(true);
-    ui.invoke_cancel_sign_in();
+    ui.global::<Actions>().invoke_cancel_sign_in();
     assert!(!ui.get_signing_in());
     assert_eq!(
         ui.get_auth_notice(),
@@ -1251,7 +1450,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     let owner = ("https://undertrained.invalid/".to_owned(), 7);
     let other = ("https://undertrained.invalid/".to_owned(), 8);
     state.borrow_mut().ride.as_mut().unwrap().owner = Some(owner.clone());
-    ui.invoke_navigate(1);
+    ui.global::<Actions>().invoke_navigate(1);
     assert_eq!(
         ride_on_sign_in(ui, &mut state.borrow_mut(), &owner),
         RideOnSignIn::Kept
@@ -1269,7 +1468,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
     );
     assert!(state.borrow().ride.as_ref().unwrap().recording.saved());
     // Actionable again: the click reaches the account check, and nothing is sent on its own.
-    ui.invoke_upload_ride();
+    ui.global::<Actions>().invoke_upload_ride();
     assert_eq!(ui.get_ride_upload_state(), 5);
     assert_eq!(
         ui.get_ride_upload_error(),
@@ -1304,7 +1503,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         RideOnSignIn::Absent
     );
     ui.set_auth_notice(0);
-    ui.invoke_close_training();
+    ui.global::<Actions>().invoke_close_training();
     assert_eq!(ui.get_screen(), 1);
     assert!(state.borrow().ride.is_none());
     assert!(
@@ -1355,7 +1554,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<State>>, root: &Path) {
         "Changing a device invalidates the saved confirmation"
     );
     ui.set_picker_open(true);
-    ui.invoke_close_picker();
+    ui.global::<Actions>().invoke_close_picker();
     assert!(!ui.get_picker_open());
 
     reset_session_ui(ui, &mut state.borrow_mut());

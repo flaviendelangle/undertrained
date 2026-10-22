@@ -7,10 +7,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-# Wording follows the Undertrained website's fr-FR messages: "séance" for a workout,
-# "séances intégrées" for the built-in tests, "home trainer" and "capteur cardiaque".
-# Personal workout names, device names and raw diagnostics are never translated.
-
 msgid "A sensor radio reported an error."
 msgstr "Une radio de capteurs a signalé une erreur."
 
@@ -22,9 +18,6 @@ msgstr "Toute ceinture cardiaque Bluetooth ou ANT+, ou une montre en diffusion."
 
 msgid "BPM"
 msgstr "BPM"
-
-msgid "Back to workouts"
-msgstr "Retour aux séances"
 
 msgid "Bluetooth FTMS trainers, ANT+ FE-C trainers, or power meters as read-only."
 msgstr "Home trainers Bluetooth FTMS ou ANT+ FE-C, ou capteurs de puissance en lecture seule."
@@ -49,9 +42,6 @@ msgstr "Bluetooth · {}"
 
 msgid "Browser links need a signed-in account session."
 msgstr "Les liens vers le navigateur nécessitent une session de compte connectée."
-
-msgid "Built-in workouts"
-msgstr "Séances intégrées"
 
 msgid "Built-in"
 msgstr "Intégrée"
@@ -95,9 +85,6 @@ msgstr "Connecté · en attente de données"
 msgid "Connecting…"
 msgstr "Connexion…"
 
-msgid "Connection help"
-msgstr "Aide à la connexion"
-
 msgid "Could not open your browser."
 msgstr "Impossible d'ouvrir votre navigateur."
 
@@ -110,9 +97,6 @@ msgstr "Impossible de joindre Undertrained"
 msgid "Could not save your devices."
 msgstr "Impossible d'enregistrer vos appareils."
 
-msgid "Device setup"
-msgstr "Configuration des appareils"
-
 msgid "Devices"
 msgstr "Appareils"
 
@@ -121,9 +105,6 @@ msgstr "Déconnecter"
 
 msgid "ERG supported"
 msgstr "Mode ERG pris en charge"
-
-msgid "FTP assessments, ready to ride. Your personal workouts stay separate."
-msgstr "Des tests FTP prêts à utiliser, séparés de vos séances personnelles."
 
 msgid "Find a heart-rate sensor"
 msgstr "Trouver un capteur cardiaque"
@@ -209,14 +190,8 @@ msgstr "Ouvrir"
 msgid "Optional"
 msgstr "Facultatif"
 
-msgid "Pair a smart trainer and a heart-rate strap over Bluetooth or ANT+, then save the setup for next time."
-msgstr "Associez un home trainer connecté et une ceinture cardiaque en Bluetooth ou ANT+, puis enregistrez la configuration pour la prochaine fois."
-
 msgid "Pedal a few strokes to wake the trainer, then find it below. Saved devices are marked in the list."
 msgstr "Donnez quelques coups de pédale pour réveiller le home trainer, puis trouvez-le ci-dessous. Les appareils enregistrés sont signalés dans la liste."
-
-msgid "Personal workouts"
-msgstr "Séances personnelles"
 
 msgid "Plug the trainer in and pedal to wake it. Moisten the strap contacts and wear it. Turn Bluetooth on or plug in the ANT+ stick, close other training apps that may hold the connection, then search again. Devices that omit their service in advertisements are not listed."
 msgstr "Branchez le home trainer et pédalez pour le réveiller. Humidifiez les contacts de la ceinture et portez-la. Activez le Bluetooth ou branchez la clé ANT+, fermez les autres applications d'entraînement qui pourraient garder la connexion, puis relancez la recherche. Les appareils qui n'annoncent pas leur service ne sont pas listés."
@@ -248,9 +223,6 @@ msgstr "Obligatoire"
 msgid "Ride inside."
 msgstr "Roulez à l'intérieur."
 
-msgid "Save device setup"
-msgstr "Enregistrer la configuration"
-
 msgid "Saved"
 msgstr "Enregistré"
 
@@ -268,9 +240,6 @@ msgstr "Recherche en Bluetooth et ANT+…"
 
 msgid "Searching…"
 msgstr "Recherche…"
-
-msgid "Select a workout to preview it. Create and edit on the website."
-msgstr "Sélectionnez une séance pour l'afficher. Créez et modifiez sur le site."
 
 msgid "Select {}"
 msgstr "Sélectionner {}"
@@ -293,9 +262,6 @@ msgstr "La clé USB ANT+ est occupée ou son accès est refusé. Fermez les autr
 msgid "Server: {}"
 msgstr "Serveur : {}"
 
-msgid "Setup saved"
-msgstr "Configuration enregistrée"
-
 msgid "Setup saved."
 msgstr "Configuration enregistrée."
 
@@ -307,9 +273,6 @@ msgstr "Se reconnecter"
 
 msgid "Sign in with Undertrained"
 msgstr "Se connecter avec Undertrained"
-
-msgid "Sign in"
-msgstr "Connexion"
 
 msgid "Sign out"
 msgstr "Se déconnecter"
@@ -413,16 +376,8 @@ msgstr "Votre session enregistrée n'a pas pu être vérifiée. Reconnectez-vous
 msgid "Your session has expired"
 msgstr "Votre session a expiré"
 
-msgid "{n} workout in the library"
-msgid_plural "{n} workouts in the library"
-msgstr[0] "{n} séance dans la bibliothèque"
-msgstr[1] "{n} séances dans la bibliothèque"
-
 msgid "Clear"
 msgstr "Effacer"
-
-msgid "Search all workouts"
-msgstr "Rechercher dans toutes les séances"
 
 msgid "{} of {} match"
 msgstr "{} sur {} correspondent"
@@ -502,9 +457,6 @@ msgstr "En pause depuis {}. Le chronomètre est arrêté ; les mesures continuen
 msgid "Paused"
 msgstr "En pause"
 
-msgid "REFERENCE"
-msgstr "REPÈRE"
-
 msgid "RPM"
 msgstr "TR/MIN"
 
@@ -522,9 +474,6 @@ msgstr "Réessayer l'enregistrement"
 
 msgid "Retry the save before leaving so the ride is not lost."
 msgstr "Réessayez l'enregistrement avant de quitter pour ne pas perdre la sortie."
-
-msgid "Ride complete · {}"
-msgstr "Sortie terminée · {}"
 
 msgid "Saved on this computer as a journal and a FIT file."
 msgstr "Enregistrée sur cet ordinateur sous forme de journal et de fichier FIT."
@@ -631,9 +580,6 @@ msgstr "Capteurs prêts. Les mesures sont enregistrées une fois par seconde."
 msgid "Start a free ride with the connected sensors"
 msgstr "Démarrer une sortie libre avec les capteurs connectés"
 
-msgid "Start recording"
-msgstr "Démarrer l'enregistrement"
-
 msgid "The recording could not be started."
 msgstr "L'enregistrement n'a pas pu démarrer."
 
@@ -670,20 +616,11 @@ msgstr "{} tr/min"
 msgid "{} unavailable"
 msgstr "{} indisponible"
 
-# The guided workout: timed steps, the target, the cues and resistance control (ERG).
-# "Étape" for a step and "cible" for the target follow the website's live-training HUD.
-
 msgid "ANT+ trainer · follow the targets yourself"
 msgstr "Home trainer ANT+ · suivez les cibles vous-même"
 
 msgid "ANT+ trainer · readings only, follow the target yourself"
 msgstr "Home trainer ANT+ · mesures uniquement, suivez la cible vous-même"
-
-msgid "Built-in test: no FTP result is computed and the app does not detect when you stop. Finish the ride once you cannot hold the target."
-msgstr "Test intégré : aucun résultat FTP n'est calculé et l'application ne détecte pas votre arrêt. Terminez la sortie dès que vous ne tenez plus la cible."
-
-msgid "Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the app does not detect when you stop. Finish the ride yourself once you cannot hold the target. Speed and distance are not measured."
-msgstr "Test intégré : les étapes sont chronométrées et la cible affichée, mais aucun résultat FTP n'est calculé et l'application ne détecte pas votre arrêt. Terminez la sortie vous-même dès que vous ne tenez plus la cible. La vitesse et la distance ne sont pas mesurées."
 
 msgid "Cadence cue {} rpm"
 msgstr "Consigne de cadence {} tr/min"
@@ -700,9 +637,6 @@ msgstr "Retour au calme"
 msgid "DONE"
 msgstr "TERMINÉE"
 
-msgid "ERG available on {}"
-msgstr "Mode ERG disponible sur {}"
-
 msgid "ERG off · target shown, resistance is yours"
 msgstr "ERG désactivé · cible affichée, résistance libre"
 
@@ -714,9 +648,6 @@ msgstr "ERG activé · en pause, aucune cible"
 
 msgid "ERG on · workout complete, no target"
 msgstr "ERG activé · séance terminée, aucune cible"
-
-msgid "Enable ERG"
-msgstr "Activer l'ERG"
 
 msgid "FREE"
 msgstr "LIBRE"
@@ -781,17 +712,8 @@ msgstr "Envoi de {} W au home trainer…"
 msgid "Skip step"
 msgstr "Passer l'étape"
 
-msgid "Switch resistance control off"
-msgstr "Désactiver le pilotage de la résistance"
-
-msgid "Switch resistance control on for this trainer"
-msgstr "Activer le pilotage de la résistance sur ce home trainer"
-
 msgid "TARGET"
 msgstr "CIBLE"
-
-msgid "The steps are timed from the plan and the target is shown at every moment. Resistance control (ERG) stays off until you switch it on during the ride, and needs a Bluetooth trainer that supports it. No FTP result is computed. Speed and distance are not measured."
-msgstr "Les étapes sont chronométrées d'après le plan et la cible est affichée à chaque instant. Le pilotage de la résistance (ERG) reste désactivé tant que vous ne l'activez pas pendant la sortie, et nécessite un home trainer Bluetooth compatible. Aucun résultat FTP n'est calculé. La vitesse et la distance ne sont pas mesurées."
 
 msgid "The trainer did not accept the command, so ERG control stopped. The ride keeps recording; reconnect the trainer if it stays unresponsive, then enable ERG again."
 msgstr "Le home trainer n'a pas accepté la commande, le pilotage ERG s'est donc arrêté. L'enregistrement continue ; reconnectez le home trainer s'il ne répond plus, puis réactivez l'ERG."
@@ -810,9 +732,6 @@ msgstr "Cette séance vient d'un serveur sans le détail des étapes : son profi
 
 msgid "Trainer holding {} W"
 msgstr "Home trainer maintenu à {} W"
-
-msgid "Turn ERG off"
-msgstr "Désactiver l'ERG"
 
 msgid "Warm-up"
 msgstr "Échauffement"
@@ -839,3 +758,161 @@ msgstr[1] "{n} étapes chronométrées"
 
 msgid "{} LEFT"
 msgstr "{} RESTANTES"
+
+msgid "All"
+msgstr "Tout"
+
+msgid "BUILT-IN"
+msgstr "INTÉGRÉES"
+
+msgid "Continue"
+msgstr "Continuer"
+
+msgid "Done"
+msgstr "Terminé"
+
+msgid "Help"
+msgstr "Aide"
+
+msgid "Needs a paired sensor."
+msgstr "Nécessite un capteur appairé."
+
+msgid "New"
+msgstr "Nouvelle"
+
+msgid "Next: {}"
+msgstr "Ensuite : {}"
+
+msgid "PERSONAL"
+msgstr "PERSONNELLES"
+
+msgid "Pair a smart trainer and a heart-rate strap over Bluetooth or ANT+, pick a workout from your Undertrained library, and ride it step by step."
+msgstr "Appairez un home trainer et une ceinture cardiaque en Bluetooth ou ANT+, choisissez une séance dans votre bibliothèque Undertrained et suivez-la étape par étape."
+
+msgid "Pair your devices"
+msgstr "Appairez vos appareils"
+
+msgid "Personal"
+msgstr "Personnelles"
+
+msgid "RIDE COMPLETE"
+msgstr "SORTIE TERMINÉE"
+
+msgid "Ride"
+msgstr "Sortie"
+
+msgid "STEPS"
+msgstr "ÉTAPES"
+
+msgid "Save & continue"
+msgstr "Enregistrer et continuer"
+
+msgid "Skip for now"
+msgstr "Passer pour l'instant"
+
+msgid "Start the ride"
+msgstr "Démarrer la sortie"
+
+msgid "bpm"
+msgstr "bpm"
+
+msgid "rpm"
+msgstr "tr/min"
+
+msgid "FTP assessments, ready to ride."
+msgstr "Tests FTP, prêts à rouler."
+
+msgid "No targets. Power, heart rate and cadence from the paired sensors."
+msgstr "Sans cible. Puissance, fréquence cardiaque et cadence des capteurs appairés."
+
+msgid "Pick one to ride it step by step. Create and edit on the website."
+msgstr "Choisissez-en une pour la suivre étape par étape. Créez et modifiez sur le site."
+
+msgid "Search"
+msgstr "Rechercher"
+
+msgid "Workout"
+msgstr "Séance"
+
+msgid "‹ Workouts"
+msgstr "‹ Séances"
+
+# The ride page without a sensor: the reason on top, the action pinned below.
+
+msgid "No trainer or heart-rate sensor is connected, so the ride cannot start."
+msgstr "Aucun home trainer ni capteur cardiaque n'est connecté : la sortie ne peut pas démarrer."
+
+msgid "Pedal a few strokes to wake the trainer, then pair it on the Devices step. A strap alone is enough to record."
+msgstr "Donnez quelques coups de pédale pour réveiller le home trainer, puis appairez-le à l'étape Appareils. Une ceinture seule suffit pour enregistrer."
+
+msgid "Go to Devices"
+msgstr "Aller aux appareils"
+
+msgid "No sensor connected."
+msgstr "Aucun capteur connecté."
+
+msgid "Sensors ready."
+msgstr "Capteurs prêts."
+
+msgid "Pair a trainer or a heart-rate strap on the Devices step; Start unlocks as soon as one delivers."
+msgstr "Appairez un home trainer ou une ceinture cardiaque à l'étape Appareils ; Démarrer se débloque dès qu'un capteur envoie des données."
+
+msgid "Heart rate only: power and cadence stay empty."
+msgstr "Fréquence cardiaque seule : puissance et cadence resteront vides."
+
+msgid "Start the ride (pair a sensor first)"
+msgstr "Démarrer la sortie (appairez d'abord un capteur)"
+
+msgid "ERG"
+msgstr "ERG"
+
+msgid "Resistance control (ERG)"
+msgstr "Pilotage de la résistance (ERG)"
+
+msgid "ERG on · {} holds each target from the start"
+msgstr "ERG activé · {} maintient chaque cible dès le départ"
+
+msgid "{} paired. Recording starts at your first pedal stroke."
+msgstr "{} appairé. L'enregistrement démarre à votre premier coup de pédale."
+
+msgid "Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds without power."
+msgstr "Capteurs prêts. L'enregistrement démarre à votre premier coup de pédale et se met en pause de lui-même après 5 secondes sans puissance."
+
+msgid "Waiting for your first pedal stroke"
+msgstr "En attente du premier coup de pédale"
+
+msgid "{} reports {} W"
+msgstr "{} envoie {} W"
+
+msgid "No reading from {} yet"
+msgstr "Aucune mesure de {} pour l'instant"
+
+msgid "Start now"
+msgstr "Démarrer maintenant"
+
+msgid "Start recording now, without waiting for power"
+msgstr "Démarrer l'enregistrement maintenant, sans attendre la puissance"
+
+msgid "Cancel the start"
+msgstr "Annuler le départ"
+
+msgid "Auto-paused"
+msgstr "Pause automatique"
+
+msgid "Auto-paused · pedal to resume"
+msgstr "Pause automatique · pédalez pour reprendre"
+
+msgid "Paused for {}. The ride paused itself after 5 seconds without power from the trainer; the clock and the workout step are stopped. Pedal to resume, or press Resume."
+msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 secondes sans puissance du home trainer ; le chrono et l'étape de la séance sont arrêtés. Pédalez pour reprendre, ou appuyez sur Reprendre."
+
+msgid "Paused for {}. The ride paused itself after 5 seconds without power from the trainer; the clock is stopped. Pedal to resume, or press Resume."
+msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 secondes sans puissance du home trainer ; le chrono est arrêté. Pédalez pour reprendre, ou appuyez sur Reprendre."
+
+msgid "The steps are timed from the plan and the target is shown at every moment. With ERG on, a Bluetooth trainer that supports it sets the resistance to the target; off, you follow the target yourself. No FTP result is computed. Speed and distance are not measured."
+msgstr "Les étapes sont chronométrées d'après le plan et la cible est affichée à chaque instant. Avec l'ERG activé, un home trainer Bluetooth compatible règle la résistance sur la cible ; désactivé, vous suivez la cible vous-même. Aucun résultat FTP n'est calculé. La vitesse et la distance ne sont pas mesurées."
+
+msgid "Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the test does not end on its own. Finish the ride yourself once you cannot hold the target. Speed and distance are not measured."
+msgstr "Test intégré : les étapes sont chronométrées et la cible affichée, mais aucun résultat FTP n'est calculé et le test ne s'arrête pas de lui-même. Terminez la sortie vous-même dès que vous ne tenez plus la cible. La vitesse et la distance ne sont pas mesurées."
+
+msgid "Built-in test: no FTP result is computed and the test does not end on its own. Finish the ride once you cannot hold the target."
+msgstr "Test intégré : aucun résultat FTP n'est calculé et le test ne s'arrête pas de lui-même. Terminez la sortie dès que vous ne tenez plus la cible."
