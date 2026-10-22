@@ -1177,8 +1177,7 @@ fn refresh_chart(ui: &AppWindow, ride: &mut Ride, now: Instant, whole: bool) {
     let (from, to) = if whole {
         (0.0, elapsed.max(1.0))
     } else {
-        let to = elapsed.max(recording_view::WINDOW_SECONDS);
-        (to - recording_view::WINDOW_SECONDS, to)
+        recording_view::live_window(elapsed)
     };
     let chart = recording_view::chart(&points, from, to, ride.ftp);
     ride.chart_top = chart.power_top;
