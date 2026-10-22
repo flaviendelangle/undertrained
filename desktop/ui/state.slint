@@ -250,7 +250,13 @@ export global State {
     // The ride paused itself after five seconds at zero watts, or thirty without any reading;
     // the next reading above zero resumes it. False for a pause the rider asked for.
     in-out property <bool> ride-auto-paused: false;
+    // Simulated from power as on the website, numbers only (km/h and km are the interface's):
+    // the last sample's speed and the distance so far, then the ride's totals once finished.
+    in-out property <string> ride-speed: "—";
+    in-out property <string> ride-distance: "—";
     // Completion.
+    in-out property <string> ride-avg-speed: "—";
+    in-out property <string> ride-max-speed: "—";
     in-out property <string> ride-avg-power: "—";
     in-out property <string> ride-max-power: "—";
     in-out property <string> ride-avg-hr: "—";

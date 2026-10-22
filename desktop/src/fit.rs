@@ -1,5 +1,6 @@
 //! Minimal FIT activity encoder, following Garmin's public FIT protocol/profile.
-//! Only measured fields are exported. No invented distance, GPS or speed.
+//! Power, heart rate and cadence are exported as measured. Speed and distance are simulated
+//! from power, as the website's own FIT export does for an indoor ride; there is no GPS.
 //! https://developer.garmin.com/fit/articles/fit-protocol/fit_protocol.html
 use crate::recording::{Sample, Summary, TimerEvent};
 
@@ -63,6 +64,15 @@ fn optional_short(fields: &mut Vec<Field>, number: u8, value: Option<f64>) {
         fields.push(short(number, v.round() as u16));
     }
 }
+fn optional_long(fields: &mut Vec<Field>, number: u8, value: Option<f64>) {
+    if let Some(v) = value.filter(|v| v.is_finite() && *v >= 0.0 && *v < (u32::MAX - 1) as f64) {
+        fields.push(long(number, v.round() as u32));
+    }
+}
+/// FIT distances are in centimetres (scale 100).
+fn centimetres(metres: f64) -> Option<f64> {
+    Some(metres * 100.0)
+}
 fn milliseconds(seconds: f64) -> u32 {
     (seconds * 1000.0).round().clamp(0.0, (u32::MAX - 1) as f64) as u32
 }
@@ -108,6 +118,8 @@ pub fn encode(
         optional_short(&mut fields, 7, sample.live.power);
         optional_byte(&mut fields, 3, sample.live.heart_rate);
         optional_byte(&mut fields, 4, sample.live.cadence);
+        optional_long(&mut fields, 5, centimetres(sample.distance));
+        optional_short(&mut fields, 6, Some(sample.speed * 1000.0));
         message(&mut data, 20, &fields);
     }
     for event in events {
@@ -133,6 +145,9 @@ pub fn encode(
     optional_byte(&mut lap, 15, summary.avg_heart_rate);
     optional_byte(&mut lap, 16, summary.max_heart_rate);
     optional_byte(&mut lap, 17, summary.avg_cadence);
+    optional_long(&mut lap, 9, centimetres(summary.distance));
+    optional_short(&mut lap, 13, summary.avg_speed.map(|s| s * 1000.0));
+    optional_short(&mut lap, 14, summary.max_speed.map(|s| s * 1000.0));
     message(&mut data, 19, &lap);
     let mut session = vec![
         short(254, 0),
@@ -155,6 +170,9 @@ pub fn encode(
     optional_byte(&mut session, 16, summary.avg_heart_rate);
     optional_byte(&mut session, 17, summary.max_heart_rate);
     optional_byte(&mut session, 18, summary.avg_cadence);
+    optional_long(&mut session, 9, centimetres(summary.distance));
+    optional_short(&mut session, 14, summary.avg_speed.map(|s| s * 1000.0));
+    optional_short(&mut session, 15, summary.max_speed.map(|s| s * 1000.0));
     message(&mut data, 18, &session);
     message(
         &mut data,
@@ -204,6 +222,9 @@ mod tests {
             avg_heart_rate: None,
             max_heart_rate: None,
             avg_cadence: None,
+            distance: 12.34,
+            avg_speed: Some(2.5),
+            max_speed: Some(2.5),
         };
         let sample = Sample {
             timestamp_ms: 1_790_000_000_000,
@@ -213,6 +234,8 @@ mod tests {
                 power: Some(0.0),
                 ..Default::default()
             },
+            speed: 2.5,
+            distance: 12.34,
         };
         let data = encode(
             sample.timestamp_ms,
@@ -228,10 +251,18 @@ mod tests {
             u32::from_le_bytes(data[4..8].try_into().unwrap()) as usize,
             data.len() - 16
         );
-        // A record with only timestamp and zero power, no zero-valued invented HR/cadence.
-        assert!(
-            data.windows(12)
-                .any(|w| w == [0x40, 0, 0, 20, 0, 2, 253, 4, 0x86, 7, 2, 0x84])
-        );
+        // A record with timestamp, zero power and the simulated distance (cm, uint32) and
+        // speed (mm/s, uint16); no zero-valued invented HR/cadence.
+        let record = [
+            0x40, 0, 0, 20, 0, 4, 253, 4, 0x86, 7, 2, 0x84, 5, 4, 0x86, 6, 2, 0x84, 0,
+        ];
+        let at = data
+            .windows(record.len())
+            .position(|w| w == record)
+            .expect("record definition");
+        let values = &data[at + record.len()..][..12];
+        assert_eq!(&values[4..6], &0u16.to_le_bytes(), "Zero power");
+        assert_eq!(&values[6..10], &1234u32.to_le_bytes(), "12.34 m");
+        assert_eq!(&values[10..12], &2500u16.to_le_bytes(), "2.5 m/s");
     }
 }

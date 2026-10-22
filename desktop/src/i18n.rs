@@ -89,6 +89,25 @@ pub fn cadence_unit(lang: Lang) -> &'static str {
     }
 }
 
+/// A number with `places` decimals, with each language's decimal separator.
+fn decimal(lang: Lang, value: f64, places: usize) -> String {
+    let text = format!("{value:.places$}");
+    match lang {
+        Lang::En => text,
+        Lang::Fr => text.replace('.', ","),
+    }
+}
+
+/// A simulated speed in km/h, one decimal ("32.9", "32,9"); the unit is the interface's.
+pub fn speed(lang: Lang, metres_per_second: f64) -> String {
+    decimal(lang, (metres_per_second * 3.6).max(0.0), 1)
+}
+
+/// A simulated distance in km, two decimals ("12.34", "12,34"); the unit is the interface's.
+pub fn distance(lang: Lang, metres: f64) -> String {
+    decimal(lang, (metres / 1000.0).max(0.0), 2)
+}
+
 /// The name a ride without a workout is recorded under.
 pub fn free_ride_name(lang: Lang) -> &'static str {
     match lang {

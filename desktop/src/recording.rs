@@ -1,5 +1,8 @@
 //! Local ride recording. Monotonic clocks drive elapsed time; absent sensor values remain absent.
-use crate::model::Reading;
+use crate::{
+    model::Reading,
+    speed::{Rider, Simulator},
+};
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use serde::Serialize;
@@ -124,6 +127,10 @@ pub struct Sample {
     pub elapsed: f64,
     pub pause_index: u32,
     pub live: Live,
+    /// Simulated from power, in m/s, as on the website; a trainer measures no road speed.
+    pub speed: f64,
+    /// Metres covered since the start, from the simulated speed.
+    pub distance: f64,
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct Summary {
@@ -133,6 +140,10 @@ pub struct Summary {
     pub avg_heart_rate: Option<f64>,
     pub max_heart_rate: Option<f64>,
     pub avg_cadence: Option<f64>,
+    /// Simulated, like `Sample::speed`: metres, and m/s.
+    pub distance: f64,
+    pub avg_speed: Option<f64>,
+    pub max_speed: Option<f64>,
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct TimerEvent {
@@ -297,6 +308,9 @@ pub struct Recording {
     saving: bool,
     ended_ms: Option<u64>,
     saved: bool,
+    rider: Rider,
+    speed: Simulator,
+    distance: f64,
 }
 impl Recording {
     pub fn start(name: String, workout_key: Option<String>, now: Instant) -> Result<Self> {
@@ -343,7 +357,15 @@ impl Recording {
             saving: false,
             ended_ms: None,
             saved: false,
+            rider: Rider::default(),
+            speed: Simulator::default(),
+            distance: 0.0,
         })
+    }
+    /// The rider and bike the speed simulation moves; the website's defaults until set.
+    pub fn with_rider(mut self, rider: Rider) -> Self {
+        self.rider = rider;
+        self
     }
     pub fn phase(&self) -> Phase {
         self.phase
@@ -379,11 +401,23 @@ impl Recording {
         {
             return Ok(false);
         }
+        // Real running time since the previous sample, or since the clock last started, so a
+        // late tick covers the road it should and a pause covers none.
+        let seconds = self
+            .last_sample
+            .max(self.running_since)
+            .map_or(0.0, |since| {
+                now.saturating_duration_since(since).as_secs_f64()
+            });
+        let speed = self.speed.update(live.power, seconds, &self.rider);
+        self.distance += speed * seconds;
         let sample = Sample {
             timestamp_ms: self.timestamp(now),
             elapsed: self.elapsed(now),
             pause_index: self.pause_index,
             live,
+            speed,
+            distance: self.distance,
         };
         self.last_sample = Some(now);
         // Keep the sample in memory even if disk IO fails so Finish can retry a complete export.
@@ -506,6 +540,7 @@ impl Recording {
         let (avg_power, max_power) = stats(|s| s.live.power);
         let (avg_heart_rate, max_heart_rate) = stats(|s| s.live.heart_rate);
         let (avg_cadence, _) = stats(|s| s.live.cadence);
+        let (avg_speed, max_speed) = stats(|s| Some(s.speed));
         Summary {
             elapsed: self.elapsed(now),
             avg_power,
@@ -513,6 +548,9 @@ impl Recording {
             avg_heart_rate,
             max_heart_rate,
             avg_cadence,
+            distance: self.distance,
+            avg_speed,
+            max_speed,
         }
     }
     pub fn directory(&self) -> &Path {
@@ -751,6 +789,54 @@ mod tests {
         let json: serde_json::Value =
             serde_json::from_slice(&fs::read(r.directory.join("ride.json")).unwrap()).unwrap();
         assert_eq!(json["summary"]["elapsed"], 4.0);
+        drop(r);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn speed_and_distance_follow_running_time_only() {
+        let root = std::env::temp_dir().join(format!(
+            "undertrained-recording-test-{}",
+            rand::random::<u64>()
+        ));
+        let t = Instant::now();
+        let rider = Rider::default();
+        let mut r = Recording::start_in(&root, "Test".into(), None, t)
+            .unwrap()
+            .with_rider(rider);
+        let watts = |w: f64| Live {
+            power: Some(w),
+            ..Live::default()
+        };
+        let at = |s: u64| t + Duration::from_secs(s);
+        for second in 0..=60 {
+            r.tick(at(second), watts(200.0)).unwrap();
+        }
+        // The same physics as the simulator alone, over the same sixty seconds.
+        let mut sim = Simulator::default();
+        let mut distance = 0.0;
+        for _ in 0..60 {
+            distance += sim.update(Some(200.0), 1.0, &rider);
+        }
+        let last = r.samples.last().unwrap().clone();
+        assert!((last.distance - distance).abs() < 1e-6);
+        assert!(
+            last.speed > 8.0,
+            "{} m/s after a minute at 200 W",
+            last.speed
+        );
+        // A paused minute covers no road; the first sample after resuming counts from it.
+        r.pause(at(60)).unwrap();
+        r.resume(at(120)).unwrap();
+        r.tick(at(121), watts(200.0)).unwrap();
+        let resumed = r.samples.last().unwrap();
+        assert!(
+            resumed.distance - last.distance < 15.0,
+            "One second of riding"
+        );
+        assert!(resumed.distance > last.distance);
+        let summary = r.summary(at(121));
+        assert_eq!(summary.distance, resumed.distance);
+        assert!(summary.max_speed >= summary.avg_speed);
         drop(r);
         fs::remove_dir_all(root).unwrap();
     }

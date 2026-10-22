@@ -1,5 +1,8 @@
 //! Read-only account workout access and UI-independent request state.
-use crate::auth::{Session, server_url};
+use crate::{
+    auth::{Session, server_url},
+    speed::Rider,
+};
 use serde::Deserialize;
 use std::{collections::HashSet, time::Duration};
 
@@ -103,13 +106,31 @@ struct BuiltInWire {
     profile: Vec<(u32, Option<f64>)>,
 }
 
-/// Older servers omit `builtInWorkouts`; that parses as an empty list.
+/// Older servers omit `builtInWorkouts`; that parses as an empty list. They also omit
+/// `rider`, and so does a server whose figures are malformed: the speed simulation then
+/// uses the website's defaults.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Response {
     workouts: Vec<PersonalWire>,
     #[serde(default)]
     built_in_workouts: Vec<BuiltInWire>,
+    #[serde(default, deserialize_with = "lenient_rider")]
+    rider: Option<Rider>,
+}
+
+fn lenient_rider<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Rider>, D::Error> {
+    let value = serde_json::Value::deserialize(d)?;
+    Ok(serde_json::from_value::<Rider>(value)
+        .ok()
+        .filter(Rider::valid))
+}
+
+/// The workouts, and the rider figures the speed simulation uses when the server sends them.
+#[derive(Debug, PartialEq)]
+pub struct Catalog {
+    pub workouts: Vec<Workout>,
+    pub rider: Option<Rider>,
 }
 
 fn valid_profile(profile: &[(u32, Option<f64>)], tss: Option<f64>) -> bool {
@@ -123,7 +144,15 @@ fn valid_profile(profile: &[(u32, Option<f64>)], tss: Option<f64>) -> bool {
             .any(|(_, p)| p.is_some_and(|n| !n.is_finite() || n < 0.0))
 }
 
-fn convert(response: Response) -> Result<Vec<Workout>, LoadError> {
+fn convert(response: Response) -> Result<Catalog, LoadError> {
+    let rider = response.rider;
+    Ok(Catalog {
+        workouts: convert_workouts(response)?,
+        rider,
+    })
+}
+
+fn convert_workouts(response: Response) -> Result<Vec<Workout>, LoadError> {
     let mut workouts =
         Vec::with_capacity(response.workouts.len() + response.built_in_workouts.len());
     let mut seen = HashSet::new();
@@ -177,7 +206,7 @@ fn convert(response: Response) -> Result<Vec<Workout>, LoadError> {
 /// Personal workouts first, in server order, then the shared built-in tests. The locale
 /// ("en-GB" or "fr-FR") picks the language of built-in names and labels; older servers
 /// ignore it. Personal workout text is the rider's own and never translated.
-pub async fn fetch(session: &Session, locale: &str) -> Result<Vec<Workout>, LoadError> {
+pub async fn fetch(session: &Session, locale: &str) -> Result<Catalog, LoadError> {
     let origin = server_url(&session.origin).map_err(|_| LoadError::InvalidResponse)?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
@@ -235,6 +264,8 @@ pub fn link(origin: &str, id: &WorkoutId) -> anyhow::Result<String> {
 #[derive(Default)]
 pub struct Library {
     pub workouts: Vec<Workout>,
+    /// The account's rider figures from the last load, for the speed simulation.
+    pub rider: Option<Rider>,
     pub loading: bool,
     pub loaded: bool,
     pub error: Option<LoadError>,
@@ -246,6 +277,7 @@ impl Library {
     pub fn clear(&mut self) {
         self.generation = self.generation.wrapping_add(1);
         self.workouts.clear();
+        self.rider = None;
         self.loading = false;
         self.loaded = false;
         self.error = None;
@@ -339,7 +371,9 @@ mod tests {
     #[test]
     fn execution_is_optional_and_invalid_targets_never_become_runnable() {
         let value = serde_json::json!({"workouts":[{"id":1,"name":"Ramps","durationSeconds":60,"estimatedTss":null,"summary":"", "profile":[[60,80]], "execution":{"referenceFtp":250,"ftpTest":null,"segments":[{"durationSeconds":60,"startWatts":100,"endWatts":200,"cadence":90}]}}]});
-        let valid = convert(serde_json::from_value(value.clone()).unwrap()).unwrap();
+        let valid = convert(serde_json::from_value(value.clone()).unwrap())
+            .unwrap()
+            .workouts;
         assert_eq!(
             valid[0].execution.as_ref().unwrap().segments[0].end_watts,
             Some(200.0)
@@ -347,7 +381,9 @@ mod tests {
         let mut invalid = value.clone();
         invalid["workouts"][0]["execution"]["segments"][0]["endWatts"] = serde_json::Value::Null;
         assert!(
-            convert(serde_json::from_value(invalid).unwrap()).unwrap()[0]
+            convert(serde_json::from_value(invalid).unwrap())
+                .unwrap()
+                .workouts[0]
                 .execution
                 .is_none()
         );
@@ -357,7 +393,9 @@ mod tests {
             .unwrap()
             .remove("execution");
         assert!(
-            convert(serde_json::from_value(old).unwrap()).unwrap()[0]
+            convert(serde_json::from_value(old).unwrap())
+                .unwrap()
+                .workouts[0]
                 .execution
                 .is_none()
         );
@@ -475,11 +513,45 @@ mod tests {
     const PERSONAL: &str = r#"{"id":42,"name":"Tempo ride","durationSeconds":1800,"estimatedTss":null,"summary":"30:00 @ 80%","profile":[[1800,80]]}"#;
     const BUILT_IN: &str = r#"{"id":"step-test","name":"Step test","summary":"Ramps until you stop","durationSeconds":1500,"durationLabel":"up to 25 min","estimatedTss":null,"referenceFtp":250,"profile":[[300,50],[1200,120]]}"#;
 
+    #[test]
+    fn rider_figures_are_used_only_when_complete_and_plausible() {
+        let parse = |rider: &str| {
+            convert(serde_json::from_str(&format!(r#"{{"workouts":[]{rider}}}"#)).unwrap())
+                .unwrap()
+                .rider
+        };
+        assert_eq!(parse(""), None, "An older server sends none");
+        assert_eq!(
+            parse(r#","rider":{"weightKg":68,"bikeWeightKg":8.5,"cdA":0.28,"crr":0.005}"#),
+            Some(Rider {
+                weight_kg: 68.0,
+                bike_weight_kg: 8.5,
+                cda: 0.28,
+                crr: 0.005
+            })
+        );
+        for bad in [
+            r#","rider":{"weightKg":0,"bikeWeightKg":8,"cdA":0.35,"crr":0.004}"#,
+            r#","rider":{"weightKg":75,"cdA":0.35,"crr":0.004}"#,
+            r#","rider":{"weightKg":75,"bikeWeightKg":8,"cdA":"fast","crr":0.004}"#,
+            r#","rider":null"#,
+        ] {
+            assert_eq!(
+                parse(bad),
+                None,
+                "{bad} keeps the workouts and the defaults"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn authenticated_list_and_failures() {
         // A server from before built-ins existed.
         let (session, server) = serve("200 OK", &format!(r#"{{"workouts":[{PERSONAL}]}}"#)).await;
-        assert_eq!(fetch(&session, "fr-FR").await.unwrap(), vec![workout()]);
+        assert_eq!(
+            fetch(&session, "fr-FR").await.unwrap().workouts,
+            vec![workout()]
+        );
         server.await.unwrap();
         // Built-ins arrive after personal workouts and keep their own identity.
         let (session, server) = serve(
@@ -488,7 +560,7 @@ mod tests {
         )
         .await;
         assert_eq!(
-            fetch(&session, "fr-FR").await.unwrap(),
+            fetch(&session, "fr-FR").await.unwrap().workouts,
             vec![workout(), built_in()]
         );
         server.await.unwrap();
@@ -498,10 +570,13 @@ mod tests {
             &format!(r#"{{"workouts":[],"builtInWorkouts":[{BUILT_IN}]}}"#),
         )
         .await;
-        assert_eq!(fetch(&session, "fr-FR").await.unwrap(), vec![built_in()]);
+        assert_eq!(
+            fetch(&session, "fr-FR").await.unwrap().workouts,
+            vec![built_in()]
+        );
         server.await.unwrap();
         let (session, server) = serve("200 OK", r#"{"workouts":[]}"#).await;
-        assert!(fetch(&session, "fr-FR").await.unwrap().is_empty());
+        assert!(fetch(&session, "fr-FR").await.unwrap().workouts.is_empty());
         server.await.unwrap();
         let bad_slug = BUILT_IN.replace("\"step-test\"", "\"Step Test\"");
         let bad_ftp = BUILT_IN.replace("\"referenceFtp\":250", "\"referenceFtp\":0");
