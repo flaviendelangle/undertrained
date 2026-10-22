@@ -51,11 +51,12 @@ pub async fn run(
                         if owner[role] == Some(true) { let _ = ant_tx.send(Command::Disconnect(role)); }
                         else { let _ = ble_tx.send(Command::Disconnect(role)); }
                     }
+                    // Every command names its trainer, so it goes to that trainer's radio.
                     Command::SetErg {device_id,request,watts} => {
-                        if owner[0]==Some(false) {
-                            let _=ble_tx.send(Command::SetErg {device_id,request,watts});
+                        if device_id.starts_with("ant:") {
+                            let _=ant_tx.send(Command::SetErg {device_id,request,watts});
                         } else {
-                            let _=events.send(Event::Device(ble::Event::Erg {request,result:Err("ERG requires a supported Bluetooth trainer. ANT+ currently provides measurements only.".into())}));
+                            let _=ble_tx.send(Command::SetErg {device_id,request,watts});
                         }
                     }
                     Command::Reset => {
