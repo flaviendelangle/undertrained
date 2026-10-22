@@ -710,6 +710,8 @@ mod tests {
     #[test]
     #[ignore = "requires an available ANT+ stick and a pedaled FE-C trainer; commands 120 W for ten seconds, then releases"]
     fn hardware_trainer_takes_a_target_and_releases() {
+        // Past the control's own transfer deadline, so its retries settle first.
+        const TRANSFER_WAIT: Duration = Duration::from_secs(12);
         let mut stick = Stick::open().expect("open ANT+ stick");
         let deadline = Instant::now() + Duration::from_secs(20);
         let mut trainer = None;
@@ -751,19 +753,20 @@ mod tests {
             &mut control,
             &events,
             &mut rx,
-            Duration::from_secs(5),
+            TRANSFER_WAIT,
             |e| matches!(e, Event::Erg { request: 1, .. }),
         );
-        assert!(
-            matches!(
-                answer,
-                Some(Event::Erg {
-                    result: Ok(Some(120)),
-                    ..
-                })
-            ),
-            "120 W was not acknowledged: {answer:?}"
-        );
+        if !matches!(
+            answer,
+            Some(Event::Erg {
+                result: Ok(Some(120)),
+                ..
+            })
+        ) {
+            // The trainer may hold the target all the same: let it go before failing.
+            retire(&mut Some(control), Some(&mut stick), &events);
+            panic!("120 W was not acknowledged: {answer:?}");
+        }
         println!("Holding 120 W for ten seconds");
         pump(
             &mut stick,
@@ -787,10 +790,10 @@ mod tests {
             &mut control,
             &events,
             &mut rx,
-            Duration::from_secs(5),
+            TRANSFER_WAIT,
             |e| matches!(e, Event::Erg { request: 2, .. }),
         );
-        control.unassign(&mut stick);
+        retire(&mut Some(control), Some(&mut stick), &events);
         assert!(
             matches!(
                 answer,
