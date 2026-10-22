@@ -305,9 +305,9 @@ struct Seen {
     reading: Reading,
     time: Instant,
 }
-/// Let go of a trainer's control: a held target is released, and the worker waits up to two
-/// seconds for the trainer's answer before freeing the control channel. Readings that arrive
-/// meanwhile are dropped; the sensor model's five-second freshness hides the gap.
+/// Let go of a trainer's control: a held target is released, and the worker waits up to five
+/// seconds for the trainer's answer, enough to ride out a short dropout, before freeing the
+/// control channel. Readings that arrive meanwhile are dropped.
 fn retire(
     control: &mut Option<Control>,
     stick: Option<&mut Stick>,
@@ -317,7 +317,7 @@ fn retire(
         return;
     };
     control.wind_down(stick, Instant::now(), events);
-    let deadline = Instant::now() + Duration::from_secs(2);
+    let deadline = Instant::now() + Duration::from_secs(5);
     while control.busy() && Instant::now() < deadline {
         match stick.read() {
             Ok(Some((id, bytes))) => control.message(stick, id, &bytes, Instant::now(), events),

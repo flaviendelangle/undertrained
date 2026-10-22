@@ -19,10 +19,12 @@ pub const CHANNEL: u8 = 1;
 const MAX_WATTS: u16 = 1000;
 /// Sends of one command. A trainer that did not acknowledge (EVENT_TRANSFER_TX_FAILED) did
 /// not hear it, so the same command goes out again, a bounded number of times.
-const ATTEMPTS: u8 = 3;
-/// The trainer broadcasts four times a second and a command leaves after a broadcast, so
-/// three seconds without any outcome means the trainer is not there to hear it.
-const TRANSFER_DEADLINE: Duration = Duration::from_secs(3);
+const ATTEMPTS: u8 = 5;
+/// A command leaves after the trainer's next broadcast the stick hears. ANT+ links drop a
+/// trainer's broadcasts for four or five seconds several times an hour (seen on the owner's
+/// Suito-T), so a command waits through such a dropout; ten seconds without any outcome
+/// means the trainer is not there to hear it.
+const TRANSFER_DEADLINE: Duration = Duration::from_secs(10);
 /// How long a capability request waits for its answer, and how many are sent.
 const PROBE_WAIT: Duration = Duration::from_secs(3);
 const PROBES: u8 = 3;
@@ -753,33 +755,31 @@ mod tests {
     }
 
     #[test]
-    fn an_unheard_target_is_sent_three_times_then_fails_and_releases() {
+    fn an_unheard_target_is_resent_a_bounded_number_of_times_then_released() {
         let mut rig = Rig::ready();
         rig.set(1, Some(200));
         rig.stick(&event(COMPLETED));
         assert_eq!(rig.answers(), [ok(1, Some(200))]);
         rig.set(2, Some(250));
-        rig.stick(&event(FAILED));
-        rig.stick(&event(FAILED));
+        for _ in 1..ATTEMPTS {
+            rig.stick(&event(FAILED));
+        }
         assert!(rig.answers().is_empty(), "Radio losses are retried");
         rig.stick(&event(FAILED));
         assert!(matches!(rig.answers().as_slice(), [(2, Err(_))]));
+        let mut expected = vec![target_page(200)];
+        expected.extend([target_page(250); ATTEMPTS as usize]);
+        expected.push(RELEASE_PAGE);
         assert_eq!(
             rig.radio.pages(),
-            [
-                target_page(200),
-                target_page(250),
-                target_page(250),
-                target_page(250),
-                RELEASE_PAGE
-            ],
-            "Three sends, then the held 200 W is released"
+            expected,
+            "Every attempt, then the held 200 W is released"
         );
         // After the failure no target goes out, even once the release went through.
         rig.set(3, Some(260));
         rig.stick(&event(COMPLETED));
         assert!(matches!(rig.answers().as_slice(), [(3, Err(_))]));
-        assert_eq!(rig.radio.sent.len(), 5);
+        assert_eq!(rig.radio.sent.len(), expected.len());
         // The ride's own release clears the failure; the rider can enable again.
         rig.set(4, None);
         assert_eq!(rig.answers(), [ok(4, None)], "Already released");
@@ -791,8 +791,11 @@ mod tests {
     fn a_command_without_outcome_poisons_control_until_reconnection() {
         let mut rig = Rig::ready();
         rig.set(1, Some(200));
-        rig.tick(Duration::from_secs(2));
-        assert!(rig.answers().is_empty());
+        rig.tick(Duration::from_secs(6));
+        assert!(
+            rig.answers().is_empty(),
+            "A dropout's worth of waiting is fine"
+        );
         rig.tick(TRANSFER_DEADLINE);
         assert!(matches!(rig.answers().as_slice(), [(1, Err(_))]));
         assert_eq!(
