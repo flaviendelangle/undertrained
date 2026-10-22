@@ -612,6 +612,40 @@ component PowerGauge inherits Gauge {
     }
 }
 
+// One of the road's two figures: a caption, the number, its unit beside it on the baseline.
+component RoadFigure inherits VerticalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <string> unit;
+    in property <length> size: 22px;
+    in property <float> scale: 1;
+    spacing: 2px * root.scale; alignment: start;
+    Caption { text: root.label; overflow: elide; font-size: 11px * root.scale; }
+    HorizontalLayout {
+        spacing: 5px * root.scale; alignment: start;
+        Text { text: root.value; color: root.value == "—" ? Theme.faint : Theme.ink; font-size: root.size; font-weight: 700; font-family: "DejaVu Sans Mono"; vertical-alignment: bottom; }
+        VerticalLayout { alignment: end; padding-bottom: (root.size - 12px * root.scale) * 0.24; Text { text: root.unit; color: Theme.muted; font-size: 12px * root.scale; } }
+    }
+}
+
+// Speed and distance, simulated from power as the website does. One tile under the heart
+// and the legs holds both, side by side and smaller than the readings above, so the
+// hierarchy stays power, target, heart and legs, then the road.
+component RoadTile inherits Rectangle {
+    // The figures' text size. The two share the tile's width with their units, so the
+    // wide ride sets it from the column rather than from its `unit`.
+    in property <length> size: 22px;
+    in property <float> scale: 1;
+    // The gap between the two figures: they split the tile evenly on either side of it.
+    in property <length> gap: 12px * root.scale;
+    border-radius: 12px * root.scale; background: Theme.card.with-alpha(0.8); border-width: 1px; border-color: Theme.border;
+    HorizontalLayout {
+        padding: 12px * root.scale; spacing: root.gap;
+        RoadFigure { label: @tr("SPEED"); value: State.ride-speed; unit: @tr("km/h"); size: root.size; scale: root.scale; horizontal-stretch: 1; }
+        RoadFigure { label: @tr("DISTANCE"); value: State.ride-distance; unit: @tr("km"); size: root.size; scale: root.scale; horizontal-stretch: 1; }
+    }
+}
+
 // The guided ride's controls: resistance, intensity, skip. Tests keep their protocol.
 component HudControls inherits VerticalLayout {
     in property <bool> wrap;
@@ -681,6 +715,11 @@ component FlowHud inherits Rectangle {
         (root.width - 2 * root.stage-pad - (guided ? 2 : 1) * root.stage-pad) * 360 / (guided ? 850 : 550)));
     property <float> unit: max(1, root.gauge / 360px);
     property <float> text: (root.unit + 1) / 2;
+    // The side column's width, and the road figures' size within it: speed and distance
+    // share one tile, so the two numbers and their units follow the column's width (22.5
+    // × unit when the column is unit-sized, less when the window's width caps it).
+    property <length> side: min(250px * root.unit, root.width * 0.22);
+    property <length> road-size: root.side * 0.09;
     VerticalLayout {
         // The slim bar: the clock, the ride, a way back to Devices, the two ride controls. No app chrome while riding.
         Rectangle {
@@ -701,7 +740,7 @@ component FlowHud inherits Rectangle {
             }
             Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
         }
-        // The stage: the target beside the gauge beside the heart and the legs.
+        // The stage: the target beside the gauge beside the heart, the legs and the road.
         if !root.narrow: HorizontalLayout {
             vertical-stretch: 1; padding: root.stage-pad; spacing: root.stage-pad; alignment: center;
             // A row is only as tall as its shortest column allows, so every column here
@@ -737,10 +776,11 @@ component FlowHud inherits Rectangle {
                 Rectangle { vertical-stretch: 1; }
             }
             VerticalLayout {
-                width: min(250px * root.unit, root.width * 0.22); alignment: center; spacing: 12px * root.unit;
+                width: root.side; alignment: center; spacing: 12px * root.unit;
                 Rectangle { vertical-stretch: 1; }
                 MetricTile { label: @tr("HEART RATE"); value: State.ride-hr; unit: @tr("bpm"); live: State.ride-hr-live; tone: Theme.heart; size: 40px * root.unit; scale: root.unit; }
                 MetricTile { label: @tr("CADENCE"); value: State.ride-cadence; unit: @tr("rpm"); live: State.ride-cadence-live; tone: Theme.cadence; size: 40px * root.unit; scale: root.unit; }
+                RoadTile { size: root.road-size; scale: root.unit; }
                 Rectangle { vertical-stretch: 1; }
             }
         }
@@ -756,6 +796,9 @@ component FlowHud inherits Rectangle {
                     MetricTile { label: @tr("HEART RATE"); value: State.ride-hr; unit: @tr("bpm"); live: State.ride-hr-live; tone: Theme.heart; size: 26px; }
                     MetricTile { label: @tr("CADENCE"); value: State.ride-cadence; unit: @tr("rpm"); live: State.ride-cadence-live; tone: Theme.cadence; size: 26px; }
                 }
+                // The road's halves split where the two tiles above do, so the distance's
+                // caption lines up with the cadence's.
+                RoadTile { size: 22px; gap: 36px; }
                 if guided: TargetPanel { }
                 if guided: HudControls { wrap: true; }
                 RideNotices { }
