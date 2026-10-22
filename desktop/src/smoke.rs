@@ -905,8 +905,8 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         assert_eq!(ride.recording.samples().len(), 1);
         assert_eq!(ride.recording.samples()[0].live.power, Some(198.0));
     }
-    // Auto-pause: more than five seconds without watts pauses the ride, and the next pedal
-    // stroke resumes it. A pause the rider asked for waits for Resume.
+    // Auto-pause: more than five seconds at a measured zero pauses the ride, and the next
+    // pedal stroke resumes it. A pause the rider asked for waits for Resume.
     let coast = |watts: i16| {
         state.borrow_mut().sensors.update(
             0,
@@ -925,7 +925,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     state.borrow_mut().ride.as_mut().unwrap().pedaled_at =
         Some(Instant::now() - Duration::from_secs(6));
     coast(0);
-    assert_eq!(ui.get_ride_phase(), 2, "Five seconds without watts");
+    assert_eq!(ui.get_ride_phase(), 2, "Five seconds at zero watts");
     assert!(ui.get_ride_auto_paused());
     assert_eq!(
         state.borrow().ride.as_ref().unwrap().recording.phase(),
@@ -950,8 +950,9 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     coast(0);
     assert_eq!(ui.get_ride_phase(), 1);
     // The count runs from the last reading with watts, not from the ticks that keep it on
-    // screen: a trainer that falls silent pauses the ride five seconds after its report.
-    let stroke = Instant::now() - Duration::from_millis(5500);
+    // screen. A trainer that falls silent is a dropout rather than a rider at rest: the
+    // clock runs through it, and only half a minute without any reading pauses the ride.
+    let stroke = Instant::now() - Duration::from_secs(31);
     state.borrow_mut().ride.as_mut().unwrap().pedaled_at = Some(stroke - Duration::from_secs(1));
     state.borrow_mut().sensors.update(
         0,
@@ -963,15 +964,21 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         false,
         stroke,
     );
-    auto_pause(
-        ui,
-        &mut state.borrow_mut(),
-        &start_sink,
-        stroke + Duration::from_secs(4),
-    );
-    assert_eq!(ui.get_ride_phase(), 1, "The reading still shows");
+    for (after, why) in [
+        (4, "The reading still shows"),
+        (6, "A dropout keeps the clock running"),
+        (29, "Still within half a minute"),
+    ] {
+        auto_pause(
+            ui,
+            &mut state.borrow_mut(),
+            &start_sink,
+            stroke + Duration::from_secs(after),
+        );
+        assert_eq!(ui.get_ride_phase(), 1, "{why}");
+    }
     auto_pause(ui, &mut state.borrow_mut(), &start_sink, Instant::now());
-    assert_eq!(ui.get_ride_phase(), 2, "Five seconds after the last watts");
+    assert_eq!(ui.get_ride_phase(), 2, "Half a minute without any reading");
     ui.global::<Actions>().invoke_resume_ride();
     assert_eq!(ui.get_ride_phase(), 1);
     // Losing the trainer stops the count until the next trainer's first watts.
@@ -1302,13 +1309,22 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(request, release + 1);
     erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
     assert_eq!(ui.get_ride_erg_state(), 2);
-    // A trainer that stops reporting power for five seconds loses control: one release,
-    // a notice, the recording goes on, and enabling needs a fresh reading first.
+    // A dropout of a few seconds leaves control on.
     guard_erg_power(
         ui,
         &mut state.borrow_mut(),
         &sink,
         Instant::now() + Duration::from_secs(6),
+    );
+    assert!(ui.get_ride_erg_enabled(), "A dropout keeps control");
+    assert!(released(&mut captured).is_none(), "Nothing sent");
+    // A trainer that stops reporting power for fifteen seconds loses control: one release,
+    // a notice, the recording goes on, and enabling needs a fresh reading first.
+    guard_erg_power(
+        ui,
+        &mut state.borrow_mut(),
+        &sink,
+        Instant::now() + Duration::from_secs(16),
     );
     assert!(
         !ui.get_ride_erg_enabled(),

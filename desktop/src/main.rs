@@ -747,17 +747,20 @@ fn erg_event(
     }
 }
 
-/// While control is on, the trainer must keep delivering power. Five seconds without a
+/// While control is on, the trainer must keep delivering power. Fifteen seconds without a
 /// reading (a measured zero counts as a reading) means the link cannot be trusted with a
 /// target: control goes off with a release, the recording goes on, and the rider enables
-/// control again once readings are back.
+/// control again once readings are back. Shorter dropouts, common over ANT+, leave it on.
 fn guard_erg_power(
     ui: &AppWindow,
     state: &mut AppState,
     commands: &mpsc::UnboundedSender<ble::Command>,
     now: Instant,
 ) {
-    let stale = state.sensors.live(now).power.is_none();
+    let stale = state
+        .sensors
+        .power_silence(now)
+        .is_none_or(|silence| silence > ERG_SILENCE);
     let Some(ride) = state.ride.as_mut() else {
         return;
     };
@@ -878,6 +881,11 @@ fn apply_upload_result(ui: &AppWindow, ride: &mut Ride, result: &UploadResult) {
 
 /// More than this long without a reading above zero watts pauses a running ride.
 const AUTO_PAUSE_AFTER: Duration = Duration::from_secs(5);
+/// A trainer that reports nothing at all is more often a radio dropout than a rider at rest,
+/// so the clock runs through it; only this long without any reading pauses the ride.
+const AUTO_PAUSE_SILENT: Duration = Duration::from_secs(30);
+/// While ERG is on, this long without any power reading switches control off.
+const ERG_SILENCE: Duration = Duration::from_secs(15);
 
 /// Stop the clock. `auto` says the ride paused itself because the pedals stopped, so the
 /// next reading above zero watts resumes it; a pause the rider asked for waits for Resume.
@@ -943,10 +951,12 @@ fn resume_ride(
     }
 }
 
-/// While the trainer reports power, the pedals drive the clock: more than five seconds
-/// without a reading above zero watts pauses the ride, and the next one resumes it. Until
-/// the ride has seen watts from the connected trainer nothing pauses, so a heart-rate-only
-/// ride, or one started without waiting for power, runs as before.
+/// While the trainer reports power, the pedals drive the clock: more than five seconds at a
+/// measured zero watts pauses the ride, and the next reading above zero resumes it. A trainer
+/// that sends nothing pauses it only after half a minute, so a radio dropout never stops the
+/// clock of a rider who keeps pedaling. Until the ride has seen watts from the connected
+/// trainer nothing pauses, so a heart-rate-only ride, or one started without waiting for
+/// power, runs as before.
 fn auto_pause(
     ui: &AppWindow,
     state: &mut AppState,
@@ -955,6 +965,8 @@ fn auto_pause(
 ) {
     let stroke = state.sensors.pedaled_at(now);
     let pedaling = stroke.is_some();
+    // Not pedaling with a fresh reading means the trainer measured zero watts.
+    let measured = state.sensors.live(now).power.is_some();
     let Some(ride) = state.ride.as_mut() else {
         return;
     };
@@ -962,9 +974,14 @@ fn auto_pause(
         // Never earlier than the grace a start or resume gave.
         Phase::Running if pedaling => ride.pedaled_at = ride.pedaled_at.max(stroke),
         Phase::Running => {
+            let after = if measured {
+                AUTO_PAUSE_AFTER
+            } else {
+                AUTO_PAUSE_SILENT
+            };
             if ride
                 .pedaled_at
-                .is_some_and(|at| now.saturating_duration_since(at) > AUTO_PAUSE_AFTER)
+                .is_some_and(|at| now.saturating_duration_since(at) > after)
             {
                 pause_ride(ui, state, commands, now, true);
             }

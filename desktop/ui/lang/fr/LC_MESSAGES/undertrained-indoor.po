@@ -721,8 +721,8 @@ msgstr "CIBLE"
 msgid "The trainer did not accept the command, so ERG control stopped. The ride keeps recording; reconnect the trainer if it stays unresponsive, then enable ERG again."
 msgstr "Le home trainer n'a pas accepté la commande, le pilotage ERG s'est donc arrêté. L'enregistrement continue ; reconnectez le home trainer s'il ne répond plus, puis réactivez l'ERG."
 
-msgid "No power reading from the trainer for five seconds, so ERG control stopped. The ride keeps recording; check the trainer's link, then enable ERG again once readings are back."
-msgstr "Aucune mesure de puissance du home trainer depuis cinq secondes, le pilotage ERG s'est donc arrêté. L'enregistrement continue ; vérifiez la liaison du home trainer, puis réactivez l'ERG quand les mesures reviennent."
+msgid "No power reading from the trainer, so ERG is off. The ride keeps recording; check the trainer's link, then enable ERG again once readings are back."
+msgstr "Aucune mesure de puissance du home trainer, l'ERG est donc désactivé. L'enregistrement continue ; vérifiez la liaison du home trainer, puis réactivez l'ERG quand les mesures reviennent."
 
 msgid "The trainer disconnected, so ERG is off. The ride keeps recording; reconnect the trainer from the Devices screen, then enable ERG again."
 msgstr "Le home trainer s'est déconnecté, l'ERG est donc désactivé. L'enregistrement continue ; reconnectez le home trainer depuis l'écran Appareils, puis réactivez l'ERG."
@@ -905,11 +905,11 @@ msgstr "Pause automatique"
 msgid "Auto-paused · pedal to resume"
 msgstr "Pause automatique · pédalez pour reprendre"
 
-msgid "Paused for {}. The ride paused itself after 5 seconds without power from the trainer; the clock and the workout step are stopped. Pedal to resume, or press Resume."
-msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 secondes sans puissance du home trainer ; le chrono et l'étape de la séance sont arrêtés. Pédalez pour reprendre, ou appuyez sur Reprendre."
+msgid "Paused for {}. The ride paused itself after 5 seconds at zero watts, or 30 seconds without any reading from the trainer; the clock and the workout step are stopped. Pedal to resume, or press Resume."
+msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 secondes à zéro watt, ou 30 secondes sans aucune mesure du home trainer ; le chrono et l'étape de la séance sont arrêtés. Pédalez pour reprendre, ou appuyez sur Reprendre."
 
-msgid "Paused for {}. The ride paused itself after 5 seconds without power from the trainer; the clock is stopped. Pedal to resume, or press Resume."
-msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 secondes sans puissance du home trainer ; le chrono est arrêté. Pédalez pour reprendre, ou appuyez sur Reprendre."
+msgid "Paused for {}. The ride paused itself after 5 seconds at zero watts, or 30 seconds without any reading from the trainer; the clock is stopped. Pedal to resume, or press Resume."
+msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 secondes à zéro watt, ou 30 secondes sans aucune mesure du home trainer ; le chrono est arrêté. Pédalez pour reprendre, ou appuyez sur Reprendre."
 
 msgid "The steps are timed from the plan and the target is shown at every moment. With ERG on, a Bluetooth trainer that supports it sets the resistance to the target; off, you follow the target yourself. No FTP result is computed. Speed and distance are not measured."
 msgstr "Les étapes sont chronométrées d'après le plan et la cible est affichée à chaque instant. Avec l'ERG activé, un home trainer Bluetooth compatible règle la résistance sur la cible ; désactivé, vous suivez la cible vous-même. Aucun résultat FTP n'est calculé. La vitesse et la distance ne sont pas mesurées."

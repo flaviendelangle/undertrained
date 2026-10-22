@@ -634,7 +634,8 @@ component FlowHud inherits Rectangle {
     property <bool> short: root.stage < 720px;
     property <bool> guided: State.ride-guided;
     property <bool> soon: State.ride-active && guided && !State.ride-workout-complete && State.ride-step-remaining-seconds > 0 && State.ride-step-remaining-seconds <= 5;
-    // The ride's own pause, after five seconds without watts: the next pedal stroke ends it.
+    // The ride's own pause, after five seconds at zero watts or thirty without any reading:
+    // the next pedal stroke ends it.
     property <bool> auto-paused: State.ride-phase == 2 && State.ride-auto-paused;
     VerticalLayout {
         // The slim bar: the clock, the ride, a way back to Devices, the two ride controls. No app chrome while riding.
