@@ -241,7 +241,7 @@ export global State {
     in-out property <bool> ride-erg-enabled: false;
     in-out property <int> ride-erg-state: 0;
     in-out property <string> ride-erg-watts: "";
-    // Only a connected Bluetooth trainer that advertised control can take targets.
+    // Only a connected trainer that confirmed control (FTMS or FE-C) can take targets.
     out property <bool> ride-erg-available: resistance-state == 1;
     // With a trainer connected, Start arms the ride: waiting is true until the first reading
     // above zero watts starts the recording. Leaving the ride screen or losing the trainer

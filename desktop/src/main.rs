@@ -2,6 +2,7 @@ mod ant;
 mod auth;
 mod awake;
 mod ble;
+mod fec;
 mod fit;
 mod ftms;
 mod i18n;
@@ -115,7 +116,7 @@ fn session_owner(session: &auth::Session) -> (String, i64) {
     (session.origin.clone(), session.athlete.id)
 }
 
-/// Resistance control over the Bluetooth trainer during a guided ride. The rider switches it
+/// Resistance control over the trainer during a guided ride. The rider switches it
 /// on explicitly; the app only ever switches it off. A command goes out when the wanted
 /// target changes, never on a schedule, every command names the trainer it is for, and
 /// nothing is shown as held or released before the trainer answered.
@@ -123,7 +124,7 @@ fn session_owner(session: &auth::Session) -> (String, i64) {
 struct ErgControl {
     /// The rider's explicit choice. Never set by the app on its own.
     enabled: bool,
-    /// The Bluetooth id every command of this control is addressed to, fixed by the first
+    /// The trainer id every command of this control is addressed to, fixed by the first
     /// command. A replaced trainer never inherits it: the control is invalidated instead.
     device: Option<String>,
     /// The last command sent: `Some(Some(w))` a target, `Some(None)` a release, `None`
@@ -160,7 +161,7 @@ impl ErgControl {
     /// The command needed so the trainer follows `wanted`, numbered from `requests` and
     /// addressed to the trainer this control belongs to, or to `trainer` for a first command.
     /// None when the last command already asked for it, when nothing was ever sent and there
-    /// is nothing to release, when no Bluetooth trainer is there to address, or when a
+    /// is nothing to release, when no trainer is there to address, or when a
     /// fault already had its release.
     fn sync(
         &mut self,
@@ -267,13 +268,10 @@ impl ErgControl {
     }
 }
 
-/// The Bluetooth id of the connected trainer, the only device a resistance command may be
-/// addressed to. ANT+ trainers deliver readings alone.
-fn ble_trainer(state: &AppState) -> Option<&str> {
-    state.connected[0]
-        .as_ref()
-        .map(|d| d.id.as_str())
-        .filter(|id| !id.starts_with("ant:"))
+/// The id of the connected trainer, the only device a resistance command may be addressed
+/// to. Commands go out only while it reported that it takes them (resistance state 1).
+fn connected_trainer(state: &AppState) -> Option<&str> {
+    state.connected[0].as_ref().map(|d| d.id.as_str())
 }
 
 /// The role a step plays, as the website names it: 0 none, 1 warm-up, 2 work, 3 recovery,
@@ -647,7 +645,7 @@ fn send_erg(
     commands: &mpsc::UnboundedSender<ble::Command>,
     wanted: Option<u16>,
 ) {
-    let trainer = ble_trainer(state).map(str::to_owned);
+    let trainer = connected_trainer(state).map(str::to_owned);
     let AppState {
         ride, erg_requests, ..
     } = state;
@@ -1720,12 +1718,12 @@ fn connected(ui: &AppWindow, state: &mut AppState, device: &Device, role: usize,
         ui.set_trainer_state(2);
         ui.set_trainer_ant(ant);
         ui.set_trainer_name(name.into());
-        // ANT+ trainers are received, never commanded, so "no ERG" is by design rather
-        // than a missing capability of the trainer.
-        ui.set_resistance_state(if ant {
-            3
-        } else if erg {
+        // An ANT+ trainer that did not confirm target power is shown as readings only over
+        // ANT+; a Bluetooth one as read-only, its control capability not confirmed.
+        ui.set_resistance_state(if erg {
             1
+        } else if ant {
+            3
         } else {
             2
         });
@@ -2209,8 +2207,8 @@ fn main() -> anyhow::Result<()> {
     }
     {
         // The rider's switch, on the ready screen and during the ride. Control goes on only
-        // for a connected Bluetooth trainer that advertised it and is delivering power right
-        // now. Switching off requests a release; the trainer's answer says when it took effect.
+        // for a connected trainer that confirmed it (Bluetooth FTMS or ANT+ FE-C) and is
+        // delivering power right now. Switching off requests a release; the trainer's answer says when it took effect.
         let weak = ui.as_weak();
         let state = state.clone();
         let commands = commands.clone();
@@ -2980,7 +2978,7 @@ mod tests {
         assert_eq!(
             watts(erg.sync(Some(200), None, &mut requests)),
             None,
-            "No Bluetooth trainer, no command"
+            "No trainer, no command"
         );
         assert_eq!(
             watts(erg.sync(Some(200), Some(KICKR), &mut requests)),

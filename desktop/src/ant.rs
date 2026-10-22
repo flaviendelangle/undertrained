@@ -1,14 +1,16 @@
-//! Receive-only ANT+ USB transport. One continuous receive channel serves both
-//! sensor roles. No trainer control packets are sent by device setup.
+//! ANT+ USB transport. One continuous scan channel receives both sensor roles; an FE-C
+//! trainer that supports target power is commanded through `fec`, never by device setup alone.
 //! Protocol references and upstream licensing: docs/ant-bridge.md.
 use crate::{
     ble::{Command, Event},
+    fec::{Control, Radio},
+    ftms::Request,
     model::{Capabilities, Device, Reading},
 };
 use anyhow::{Context, Result, bail};
 use rusb::{DeviceHandle, Direction, GlobalContext, TransferType};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::mpsc,
     time::{Duration, Instant},
 };
@@ -65,6 +67,8 @@ struct Stick {
     input: u8,
     output: u8,
     frames: Frames,
+    /// Messages read while waiting for a command response, delivered by the next reads.
+    backlog: VecDeque<(u8, Vec<u8>)>,
 }
 impl Drop for Stick {
     fn drop(&mut self) {
@@ -111,6 +115,7 @@ impl Stick {
                                 input,
                                 output,
                                 frames: Frames::default(),
+                                backlog: VecDeque::new(),
                             };
                             stick.start()?;
                             return Ok(stick);
@@ -139,9 +144,15 @@ impl Stick {
         Ok(())
     }
     fn read(&mut self) -> Result<Option<(u8, Vec<u8>)>> {
+        if let Some(msg) = self.backlog.pop_front() {
+            return Ok(Some(msg));
+        }
         if let Some(msg) = self.frames.next() {
             return Ok(Some(msg));
         }
+        self.read_more()
+    }
+    fn read_more(&mut self) -> Result<Option<(u8, Vec<u8>)>> {
         let mut data = [0; 64];
         match self.handle.read_bulk(self.input, &mut data, IO_TIMEOUT) {
             Ok(len) => self.frames.push(&data[..len]),
@@ -153,16 +164,27 @@ impl Stick {
     fn wait_for(&mut self, id: u8, response: bool) -> Result<Vec<u8>> {
         let deadline = Instant::now() + Duration::from_secs(2);
         while Instant::now() < deadline {
-            if let Some((kind, data)) = self.read()? {
-                if !response && kind == id {
-                    return Ok(data);
+            let Some(message) = self
+                .frames
+                .next()
+                .map_or_else(|| self.read_more(), |m| Ok(Some(m)))?
+            else {
+                continue;
+            };
+            let (kind, data) = &message;
+            if !response && *kind == id {
+                return Ok(message.1);
+            }
+            if response && *kind == 0x40 && data.len() >= 3 && data[1] == id {
+                if data[2] != 0 {
+                    bail!("ANT+ command {id:#x} rejected ({:#x})", data[2]);
                 }
-                if response && kind == 0x40 && data.len() >= 3 && data[1] == id {
-                    if data[2] != 0 {
-                        bail!("ANT+ command {id:#x} rejected ({:#x})", data[2]);
-                    }
-                    return Ok(data);
-                }
+                return Ok(message.1);
+            }
+            // Samples and trainer answers arriving meanwhile are kept for the worker, but not
+            // the outcome of a control command the channel commands are dropping.
+            if kept(*kind, data) && self.backlog.len() < 256 {
+                self.backlog.push_back(message);
             }
         }
         bail!("ANT+ stick did not respond to command {id:#x}")
@@ -187,19 +209,43 @@ impl Stick {
         self.command(0x66, &[0, 1])?;
         self.command(0x6e, &[0, 0x80])?; // extended device identity, no RSSI needed
         self.command(0x5b, &[0, 1])?;
+        // Anything read before the scan started is not a reading.
+        self.backlog.clear();
         Ok(())
     }
 }
+/// Whether a message read while waiting for a command response is kept for later reads.
+/// Control channel commands only clear it, so a transfer outcome met meanwhile belongs to the
+/// command they drop, and the next one must not take it for its own: events name only the
+/// channel.
+fn kept(kind: u8, data: &[u8]) -> bool {
+    kind != 0x40 || data.first() != Some(&crate::fec::CHANNEL)
+}
+impl Radio for Stick {
+    fn send(&mut self, id: u8, payload: &[u8]) -> Result<()> {
+        Stick::send(self, id, payload)
+    }
+    fn command(&mut self, id: u8, data: &[u8]) -> Result<()> {
+        Stick::command(self, id, data)
+    }
+}
 
-fn decode(id: u8, bytes: &[u8]) -> Option<(Device, Reading)> {
-    // Extended broadcast/ack frames: channel, 8 data bytes, flags, device ID.
+/// The sender's id and the 8-byte page of an extended broadcast or acknowledged frame:
+/// channel, 8 data bytes, flags, device number, device type, transmission type.
+pub fn identity(id: u8, bytes: &[u8]) -> Option<(String, &[u8])> {
     if ![0x4e, 0x4f].contains(&id) || bytes.len() < 14 || bytes[9] & 0x80 == 0 {
         return None;
     }
     let number = u16::from_le_bytes([bytes[10], bytes[11]]);
     let kind = bytes[12] & 0x7f;
     let transmission = bytes[13];
-    let page = &bytes[1..9];
+    Some((format!("ant:{kind}:{number}:{transmission}"), &bytes[1..9]))
+}
+
+fn decode(id: u8, bytes: &[u8]) -> Option<(Device, Reading)> {
+    let (device_id, page) = identity(id, bytes)?;
+    let number = u16::from_le_bytes([bytes[10], bytes[11]]);
+    let kind = bytes[12] & 0x7f;
     let mut reading = Reading::default();
     let (name, capabilities) = match kind {
         120 => {
@@ -253,7 +299,7 @@ fn decode(id: u8, bytes: &[u8]) -> Option<(Device, Reading)> {
     };
     Some((
         Device {
-            id: format!("ant:{kind}:{number}:{transmission}"),
+            id: device_id,
             name: format!("{name} {number} · ANT+"),
             capabilities,
             rssi: None,
@@ -267,11 +313,45 @@ struct Seen {
     reading: Reading,
     time: Instant,
 }
+/// Let go of a trainer's control: a target still out is cancelled, a target the trainer may
+/// hold is released, and the worker waits up to five seconds for the trainer's answer, enough
+/// to ride out a short dropout, before freeing the control channel. A release that starts
+/// later gets its own five seconds.
+/// Readings that arrive meanwhile are dropped.
+fn retire(
+    control: &mut Option<Control>,
+    stick: Option<&mut Stick>,
+    events: &UnboundedSender<Event>,
+) {
+    let (Some(mut control), Some(stick)) = (control.take(), stick) else {
+        return;
+    };
+    const WAIT: Duration = Duration::from_secs(5);
+    control.wind_down(stick, Instant::now(), events);
+    let mut releasing = control.releasing();
+    let mut deadline = Instant::now() + WAIT;
+    while control.busy() && Instant::now() < deadline {
+        match stick.read() {
+            Ok(Some((id, bytes))) => control.message(stick, id, &bytes, Instant::now(), events),
+            Ok(None) => {}
+            Err(_) => return,
+        }
+        control.tick(stick, Instant::now(), events);
+        if !releasing && control.releasing() {
+            releasing = true;
+            deadline = Instant::now() + WAIT;
+        }
+    }
+    control.unassign(stick);
+}
+
 /// Blocking USB reads live on a dedicated worker, never on the UI thread.
 pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
     let mut stick: Option<Stick> = None;
     let mut found: HashMap<String, Seen> = HashMap::new();
     let mut selected: [Option<String>; 2] = [None, None];
+    // The selected trainer's control, from its capability request on.
+    let mut control: Option<Control> = None;
     let mut scan_until = None;
     let mut release_at = None;
     let mut publish_at = Instant::now();
@@ -313,6 +393,9 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
                     let _ = events.send(Event::ScanDone);
                 }
                 Command::Connect(id, role) if role < 2 => {
+                    if role == 0 {
+                        retire(&mut control, stick.as_mut(), &events);
+                    }
                     let valid = found.get(&id).filter(|s| {
                         s.time.elapsed() < FRESH
                             && if role == 1 {
@@ -321,11 +404,22 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
                                 s.device.capabilities.power
                             }
                     });
-                    if let Some(seen) = valid.filter(|_| stick.is_some()) {
+                    if let Some((seen, active)) = valid.zip(stick.as_mut()) {
                         selected[role] = Some(id);
                         let _ = events.send(Event::Connecting(role));
-                        // Receiving FE-C data is not implemented ERG control.
-                        let _ = events.send(Event::Connected(role, seen.device.clone(), false));
+                        // An FE-C trainer is connected once it said whether it takes target
+                        // power; receiving its measurements says nothing about control.
+                        if role == 0 {
+                            control = Control::connect(
+                                active,
+                                seen.device.clone(),
+                                Instant::now(),
+                                &events,
+                            );
+                        }
+                        if role == 1 || control.is_none() {
+                            let _ = events.send(Event::Connected(role, seen.device.clone(), false));
+                        }
                         if seen.time.elapsed() < Duration::from_secs(5) {
                             let _ = events.send(Event::Sample(role, seen.reading.clone()));
                         }
@@ -338,17 +432,45 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
                     }
                 }
                 Command::Disconnect(role) if role < 2 => {
+                    if role == 0 {
+                        retire(&mut control, stick.as_mut(), &events);
+                    }
                     selected[role] = None;
                     release_at = Some(Instant::now() + Duration::from_secs(1));
                     let _ = events.send(Event::Disconnected(role));
                 }
                 Command::Reset => {
+                    retire(&mut control, stick.as_mut(), &events);
                     selected = [None, None];
                     scan_until = None;
                     found.clear();
                     stick = None;
                     let _ = events.send(Event::Devices(vec![]));
                     let _ = events.send(Event::ScanDone);
+                }
+                Command::SetErg {
+                    device_id,
+                    request,
+                    watts,
+                } => {
+                    let request = Request { request, watts };
+                    match control
+                        .as_mut()
+                        .filter(|c| c.device_id() == device_id)
+                        .zip(stick.as_mut())
+                    {
+                        Some((control, active)) => {
+                            control.set(active, request, Instant::now(), &events)
+                        }
+                        None => {
+                            let _ = events.send(Event::Erg {
+                                request: request.request,
+                                result: Err(
+                                    "No matching supported ANT+ trainer is connected".into()
+                                ),
+                            });
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -358,7 +480,7 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
         };
         let received = active.read().and_then(|message| {
             if let Some((id, data)) = &message
-                && (*id == 0x6f || (*id == 0x40 && data.get(1..3) == Some(&[1, 7])))
+                && (*id == 0x6f || (*id == 0x40 && data.get(0..3) == Some(&[0, 1, 7])))
             {
                 bail!("ANT+ receive channel closed unexpectedly");
             }
@@ -366,6 +488,13 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
         });
         match received {
             Ok(Some((id, bytes))) => {
+                if let Some(trainer) = control.as_mut() {
+                    trainer.message(active, id, &bytes, Instant::now(), &events);
+                    if trainer.unsupported() {
+                        trainer.unassign(active);
+                        control = None;
+                    }
+                }
                 if let Some((device, reading)) = decode(id, &bytes) {
                     for (role, selected_id) in selected.iter().enumerate() {
                         if selected_id.as_ref() == Some(&device.id) {
@@ -384,6 +513,8 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
             }
             Ok(None) => {}
             Err(error) => {
+                // Nothing can reach the trainer any more; the ride hears of it as a disconnection.
+                control = None;
                 stick = None;
                 found.clear();
                 scan_until = None;
@@ -398,6 +529,13 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
                 )));
                 let _ = events.send(Event::ScanDone);
                 continue;
+            }
+        }
+        if let Some(trainer) = control.as_mut() {
+            trainer.tick(active, Instant::now(), &events);
+            if trainer.unsupported() {
+                trainer.unassign(active);
+                control = None;
             }
         }
         if Instant::now() >= publish_at {
@@ -421,6 +559,7 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
             stick = None;
         }
     }
+    retire(&mut control, stick.as_mut(), &events);
 }
 
 #[cfg(test)]
@@ -431,6 +570,14 @@ mod tests {
         bytes.extend(page);
         bytes.extend([0x80, 0xd4, 0xa8, kind, 1]);
         bytes
+    }
+    #[test]
+    fn a_dropped_control_command_outcome_is_not_kept() {
+        let channel = crate::fec::CHANNEL;
+        assert!(!kept(0x40, &[channel, 0x01, 0x05]), "TX_COMPLETED");
+        assert!(!kept(0x40, &[channel, 0x5e, 0x28]), "Refusal");
+        assert!(kept(0x40, &[0, 0x01, 0x05]), "Scan channel event");
+        assert!(kept(0x4e, &packet(120, [0; 8])), "Sample");
     }
     #[test]
     fn framing_handles_split_multiple_corrupt_and_noise() {
@@ -513,6 +660,150 @@ mod tests {
         assert!(received, "Selected device did not deliver HR data");
         // A second open verifies the actor released the interface on shutdown.
         let _again = Stick::open().expect("USB stick released after shutdown");
+    }
+
+    #[test]
+    fn trainer_capabilities_page_names_its_sender() {
+        let bytes = packet(17, [0x36, 0xff, 0xff, 0xff, 0xff, 0, 0, 7]);
+        let (id, page) = identity(0x4e, &bytes).unwrap();
+        assert_eq!(id, "ant:17:43220:1");
+        assert_eq!(page, [0x36, 0xff, 0xff, 0xff, 0xff, 0, 0, 7]);
+        let mut unflagged = packet(17, [0; 8]);
+        unflagged[9] = 0;
+        assert!(
+            identity(0x4e, &unflagged).is_none(),
+            "No device id, no sender"
+        );
+        assert!(identity(0x40, &packet(17, [0; 8])).is_none());
+    }
+
+    /// Read the stick, feeding the control, until an event matches or the time is up.
+    fn pump(
+        stick: &mut Stick,
+        control: &mut Control,
+        events: &UnboundedSender<Event>,
+        rx: &mut tokio::sync::mpsc::UnboundedReceiver<Event>,
+        within: Duration,
+        wanted: impl Fn(&Event) -> bool,
+    ) -> Option<Event> {
+        let deadline = Instant::now() + within;
+        while Instant::now() < deadline {
+            if let Some((id, bytes)) = stick.read().unwrap() {
+                control.message(stick, id, &bytes, Instant::now(), events);
+                if let Some((device, reading)) = decode(id, &bytes)
+                    && device.id == control.device_id()
+                    && let Some(watts) = reading.power
+                {
+                    println!("{watts} W");
+                }
+            }
+            control.tick(stick, Instant::now(), events);
+            while let Ok(event) = rx.try_recv() {
+                if wanted(&event) {
+                    return Some(event);
+                }
+            }
+        }
+        None
+    }
+
+    #[test]
+    #[ignore = "requires an available ANT+ stick and a pedaled FE-C trainer; commands 120 W for ten seconds, then releases"]
+    fn hardware_trainer_takes_a_target_and_releases() {
+        // Past the control's own transfer deadline, so its retries settle first.
+        const TRANSFER_WAIT: Duration = Duration::from_secs(12);
+        let mut stick = Stick::open().expect("open ANT+ stick");
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut trainer = None;
+        while trainer.is_none() && Instant::now() < deadline {
+            if let Some((id, bytes)) = stick.read().unwrap()
+                && let Some((device, _)) = decode(id, &bytes)
+                && device.id.starts_with("ant:17:")
+            {
+                trainer = Some(device);
+            }
+        }
+        let trainer = trainer.expect("No FE-C trainer broadcasting; pedal to wake it");
+        println!("Trainer {}", trainer.id);
+        let (events, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut control = Control::connect(&mut stick, trainer, Instant::now(), &events).unwrap();
+        let connected = pump(
+            &mut stick,
+            &mut control,
+            &events,
+            &mut rx,
+            Duration::from_secs(12),
+            |e| matches!(e, Event::Connected(..)),
+        );
+        assert!(
+            matches!(connected, Some(Event::Connected(0, _, true))),
+            "The trainer did not confirm target power: {connected:?}"
+        );
+        control.set(
+            &mut stick,
+            Request {
+                request: 1,
+                watts: Some(120),
+            },
+            Instant::now(),
+            &events,
+        );
+        let answer = pump(
+            &mut stick,
+            &mut control,
+            &events,
+            &mut rx,
+            TRANSFER_WAIT,
+            |e| matches!(e, Event::Erg { request: 1, .. }),
+        );
+        if !matches!(
+            answer,
+            Some(Event::Erg {
+                result: Ok(Some(120)),
+                ..
+            })
+        ) {
+            // The trainer may hold the target all the same: let it go before failing.
+            retire(&mut Some(control), Some(&mut stick), &events);
+            panic!("120 W was not acknowledged: {answer:?}");
+        }
+        println!("Holding 120 W for ten seconds");
+        pump(
+            &mut stick,
+            &mut control,
+            &events,
+            &mut rx,
+            Duration::from_secs(10),
+            |_| false,
+        );
+        control.set(
+            &mut stick,
+            Request {
+                request: 2,
+                watts: None,
+            },
+            Instant::now(),
+            &events,
+        );
+        let answer = pump(
+            &mut stick,
+            &mut control,
+            &events,
+            &mut rx,
+            TRANSFER_WAIT,
+            |e| matches!(e, Event::Erg { request: 2, .. }),
+        );
+        retire(&mut Some(control), Some(&mut stick), &events);
+        assert!(
+            matches!(
+                answer,
+                Some(Event::Erg {
+                    result: Ok(None),
+                    ..
+                })
+            ),
+            "The release was not acknowledged: {answer:?}"
+        );
     }
 
     #[test]

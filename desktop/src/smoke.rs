@@ -8,8 +8,8 @@ use crate::recording::Phase;
 use crate::workouts::{Workout, WorkoutId};
 use crate::{
     Actions, AppState, AppWindow, Overlay, RideOnSignIn, apply_language, apply_live, auto_pause,
-    connected, device_rows, disconnected, erg_event, guard_erg_power, refresh_player,
-    reset_session_ui, ride_on_sign_in, start_on_power, workout_rows,
+    connected, connected_trainer, device_rows, disconnected, erg_event, guard_erg_power,
+    refresh_player, reset_session_ui, ride_on_sign_in, start_on_power, workout_rows,
 };
 use slint::platform::{Key, WindowEvent};
 use slint::{ComponentHandle, Model};
@@ -24,6 +24,7 @@ use std::{
 const TRAINER_ID: &str = "hci0/dev_AA_BB_CC_DD_1A_2B";
 const STRAP_ID: &str = "hci0/dev_AA_BB_CC_DD_9F_3C";
 const ANT_STRAP_ID: &str = "ant:120:43220:1";
+const ANT_TRAINER_ID: &str = "ant:17:9021:1";
 
 fn press(ui: &AppWindow, key: Key) {
     let text: slint::SharedString = key.into();
@@ -298,6 +299,29 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     state.borrow_mut().devices = fixture_devices();
 
     let devices = fixture_devices();
+    // An ANT+ trainer takes commands only once it confirmed target power over FE-C;
+    // otherwise its readings are all the app uses.
+    let ant_trainer = Device {
+        id: ANT_TRAINER_ID.into(),
+        name: "Trainer 9021 · ANT+".into(),
+        capabilities: Capabilities {
+            trainer: true,
+            power: true,
+            cadence: true,
+            ..Default::default()
+        },
+        rssi: None,
+    };
+    connected(ui, &mut state.borrow_mut(), &ant_trainer, 0, false);
+    assert!(ui.get_trainer_ant());
+    assert_eq!(ui.get_resistance_state(), 3, "Readings only over ANT+");
+    connected(ui, &mut state.borrow_mut(), &ant_trainer, 0, true);
+    assert_eq!(ui.get_resistance_state(), 1, "FE-C target power confirmed");
+    assert_eq!(
+        connected_trainer(&state.borrow()),
+        Some(ANT_TRAINER_ID),
+        "Commands are addressed to the ANT+ trainer"
+    );
     ui.set_picker_open(true);
     connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
     assert!(ui.get_trainer_connected() && !ui.get_picker_open());
