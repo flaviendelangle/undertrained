@@ -1,5 +1,6 @@
 mod ant;
 mod auth;
+mod awake;
 mod ble;
 mod fit;
 mod ftms;
@@ -2503,6 +2504,9 @@ fn main() -> anyhow::Result<()> {
     let timer_commands = commands.clone();
     let scene_frozen = std::env::var_os("UNDERTRAINED_SCREENSHOT").is_some()
         && std::env::var_os("UNDERTRAINED_SCREENSHOT_SCENE").is_some();
+    // Developer runs never touch the desktop's power settings.
+    let mut awake = (!smoke_test && std::env::var_os("UNDERTRAINED_SCREENSHOT").is_none())
+        .then(awake::KeepAwake::default);
     timer.start(TimerMode::Repeated, Duration::from_millis(100), move || {
         let Some(ui) = weak.upgrade() else {
             return;
@@ -2734,6 +2738,15 @@ fn main() -> anyhow::Result<()> {
             // quiet on power loses control first.
             guard_erg_power(&ui, &mut state, &timer_commands, now);
             sync_erg(&ui, &mut state, &timer_commands, now);
+            // The ride screen, from the ready screen to the summary, and any ride still
+            // recording elsewhere keep the screen on and the computer awake.
+            if let Some(awake) = awake.as_mut() {
+                let recording = state
+                    .ride
+                    .as_ref()
+                    .is_some_and(|ride| ride.recording.phase() != Phase::Finished);
+                awake.set(ui.get_logged_in() && (ui.get_screen() == 2 || recording));
+            }
         }
     });
     let screenshot_timer = Timer::default();
