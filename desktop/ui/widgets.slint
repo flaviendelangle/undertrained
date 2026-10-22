@@ -199,6 +199,8 @@ export component Notice inherits Rectangle {
     in property <string> text;
     in property <string> detail: "";
     in property <bool> info: false;
+    // The text size; the ride raises it so a notice reads from the bike.
+    in property <length> size: 13px;
     property <color> tone: root.info ? Theme.primary : Theme.warn;
     border-radius: 8px;
     background: tone.with-alpha(0.12);
@@ -209,8 +211,8 @@ export component Notice inherits Rectangle {
         Rectangle { width: 3px; border-radius: 2px; background: tone; }
         VerticalLayout {
             spacing: 4px;
-            Text { text: root.text; color: root.info ? Theme.ink : tone; font-size: 13px; wrap: word-wrap; vertical-alignment: center; }
-            if root.detail != "": Text { text: root.detail; color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+            Text { text: root.text; color: root.info ? Theme.ink : tone; font-size: root.size; wrap: word-wrap; vertical-alignment: center; }
+            if root.detail != "": Text { text: root.detail; color: Theme.muted; font-size: root.size - 1px; wrap: word-wrap; }
         }
     }
 }
@@ -274,9 +276,11 @@ export component Pill inherits Rectangle {
     in property <string> text;
     in property <color> tone: Theme.muted;
     in property <bool> strong: false;
-    height: 24px; width: pill-label.preferred-width + 18px; border-radius: 12px;
+    // The pill's scale: 1 is the website's size, the ride raises it with its figures.
+    in property <float> unit: 1;
+    height: 24px * root.unit; width: pill-label.preferred-width + 18px * root.unit; border-radius: 12px * root.unit;
     background: root.strong ? root.tone.with-alpha(0.16) : Theme.sunken;
-    pill-label := Text { text: root.text; color: root.strong ? root.tone : Theme.muted; font-size: 12px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+    pill-label := Text { text: root.text; color: root.strong ? root.tone : Theme.muted; font-size: 12px * root.unit; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
 }
 
 // The ride history: power as zone-colored bars per bin, heart rate as a dotted trace.
@@ -313,15 +317,17 @@ export component LiveChart inherits Rectangle {
 export component ChartPanel inherits Rectangle {
     in property <string> title;
     in property <bool> framed: true;
+    // The axis captions' size; the wide ride raises it with the window.
+    in property <length> caption-size: 11px;
     border-radius: 12px; background: root.framed ? Theme.card : transparent; border-width: root.framed ? 1px : 0px; border-color: Theme.border;
     VerticalLayout {
         padding: root.framed ? 14px : 0px; spacing: 6px;
         HorizontalLayout {
             spacing: 12px;
-            Caption { text: root.title; }
+            Caption { text: root.title; font-size: root.caption-size; }
             Rectangle { horizontal-stretch: 1; }
-            if State.ride-chart-top != "": Caption { text: State.ride-chart-top; }
-            if State.ride-chart-hr-range != "": Caption { text: State.ride-chart-hr-range; color: Theme.heart; }
+            if State.ride-chart-top != "": Caption { text: State.ride-chart-top; font-size: root.caption-size; }
+            if State.ride-chart-hr-range != "": Caption { text: State.ride-chart-hr-range; font-size: root.caption-size; color: Theme.heart; }
         }
         LiveChart { vertical-stretch: 1; bins: State.ride-chart; count: State.ride-chart-bins; }
     }
@@ -383,12 +389,15 @@ export component MetricTile inherits Rectangle {
     in property <bool> live;
     in property <color> tone: Theme.ink;
     in property <length> size: 30px;
-    border-radius: 12px; background: Theme.card.with-alpha(0.8); border-width: 1px; border-color: Theme.border;
+    // The scale of the caption, the unit and the padding around the figure: 1 is the
+    // website's tile, the wide ride raises it in step with its other panels.
+    in property <float> scale: 1;
+    border-radius: 12px * root.scale; background: Theme.card.with-alpha(0.8); border-width: 1px; border-color: Theme.border;
     VerticalLayout {
-        padding: 12px; spacing: 2px;
-        Caption { text: root.label; overflow: elide; }
+        padding: 12px * root.scale; spacing: 2px * root.scale;
+        Caption { text: root.label; overflow: elide; font-size: 11px * root.scale; }
         Text { text: root.live ? root.value : "—"; color: root.live ? root.tone : Theme.faint; font-size: root.size; font-weight: 700; font-family: "DejaVu Sans Mono"; }
-        Text { text: root.unit; color: Theme.muted; font-size: 12px; }
+        Text { text: root.unit; color: Theme.muted; font-size: 12px * root.scale; }
     }
 }
 
@@ -541,7 +550,8 @@ export component Gauge inherits Rectangle {
     if root.target >= 0: Path {
         x: 0px; y: 0px; width: parent.width; height: parent.height;
         viewbox-width: 100; viewbox-height: 100;
-        stroke: Theme.ink; stroke-width: 3px; fill: transparent; stroke-line-cap: round;
+        // The tick thickens with the arc, so it stays a mark and not a hairline on a large gauge.
+        stroke: Theme.ink; stroke-width: max(3px, root.thickness / 5); fill: transparent; stroke-line-cap: round;
         MoveTo { x: 50 + (root.r - 6) * cos(root.start + root.sweep * min(1, max(0, root.target))); y: 50 + (root.r - 6) * sin(root.start + root.sweep * min(1, max(0, root.target))); }
         LineTo { x: 50 + (root.r + 6) * cos(root.start + root.sweep * min(1, max(0, root.target))); y: 50 + (root.r + 6) * sin(root.start + root.sweep * min(1, max(0, root.target))); }
     }

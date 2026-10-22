@@ -438,15 +438,17 @@ export component SensorCheck inherits Rectangle {
 
 // The notices a ride shows while recording or paused.
 export component RideNotices inherits VerticalLayout {
+    // The notices' text size; the wide ride raises it with the window.
+    in property <length> size: 13px;
     spacing: 10px;
-    if State.ride-phase == 2: Notice { info: true; text: Copy.paused-words(); }
-    if State.ride-notice == 1: Notice { text: @tr("Writing the recording failed, so the ride paused itself. Free some disk space or fix the folder, then resume."); detail: State.ride-notice-detail; }
-    if State.ride-notice == 5: Notice { text: @tr("The trainer did not accept the command, so ERG control stopped. The ride keeps recording; reconnect the trainer if it stays unresponsive, then enable ERG again."); detail: State.ride-notice-detail; }
-    if State.ride-notice == 6: Notice { text: @tr("The trainer disconnected, so ERG is off. The ride keeps recording; reconnect the trainer from the Devices screen, then enable ERG again."); }
-    if State.ride-notice == 7: Notice { text: @tr("No power reading from the trainer, so ERG is off. The ride keeps recording; check the trainer's link, then enable ERG again once readings are back."); }
-    if State.ride-active && !State.any-sensor: Notice { text: @tr("No sensor is connected. The ride keeps running and missing readings stay empty; reconnect from the Devices screen."); }
-    if State.ride-active && State.ride-has-workout && !State.ride-guided: Text { text: @tr("Reference only: this workout came without step data, so steps are not timed and nothing is sent to the trainer."); color: Theme.faint; font-size: 12px; wrap: word-wrap; }
-    if State.ride-active && State.ride-guided && State.ride-test: Text { text: @tr("Built-in test: no FTP result is computed and the test does not end on its own. Finish the ride once you cannot hold the target."); color: Theme.faint; font-size: 12px; wrap: word-wrap; }
+    if State.ride-phase == 2: Notice { info: true; size: root.size; text: Copy.paused-words(); }
+    if State.ride-notice == 1: Notice { size: root.size; text: @tr("Writing the recording failed, so the ride paused itself. Free some disk space or fix the folder, then resume."); detail: State.ride-notice-detail; }
+    if State.ride-notice == 5: Notice { size: root.size; text: @tr("The trainer did not accept the command, so ERG control stopped. The ride keeps recording; reconnect the trainer if it stays unresponsive, then enable ERG again."); detail: State.ride-notice-detail; }
+    if State.ride-notice == 6: Notice { size: root.size; text: @tr("The trainer disconnected, so ERG is off. The ride keeps recording; reconnect the trainer from the Devices screen, then enable ERG again."); }
+    if State.ride-notice == 7: Notice { size: root.size; text: @tr("No power reading from the trainer, so ERG is off. The ride keeps recording; check the trainer's link, then enable ERG again once readings are back."); }
+    if State.ride-active && !State.any-sensor: Notice { size: root.size; text: @tr("No sensor is connected. The ride keeps running and missing readings stay empty; reconnect from the Devices screen."); }
+    if State.ride-active && State.ride-has-workout && !State.ride-guided: Text { text: @tr("Reference only: this workout came without step data, so steps are not timed and nothing is sent to the trainer."); color: Theme.faint; font-size: root.size - 1px; wrap: word-wrap; }
+    if State.ride-active && State.ride-guided && State.ride-test: Text { text: @tr("Built-in test: no FTP result is computed and the test does not end on its own. Finish the ride once you cannot hold the target."); color: Theme.faint; font-size: root.size - 1px; wrap: word-wrap; }
 }
 
 // Resistance control: the rider's switch, the same one on the ready screen (the choice the
@@ -470,11 +472,14 @@ export component ErgStatus inherits Text {
 
 // Intensity in five-percent steps, and the skip. Tests keep their protocol: neither shows.
 export component IntensityControl inherits HorizontalLayout {
+    // The figure's text size; the wide ride raises it so the intensity reads from the bike.
+    in property <length> size: 13px;
+    in property <bool> compact: true;
     spacing: 6px;
-    Caption { text: @tr("INTENSITY"); vertical-alignment: center; }
-    ActionButton { label: "−"; quiet: true; compact: true; enabled: State.ride-bias-can-down; accessible-label: @tr("Lower the intensity by 5 percent"); activated => { Actions.adjust-bias(-1); } }
-    Text { text: State.ride-bias; color: Theme.ink; font-size: 13px; font-weight: 600; min-width: 46px; horizontal-alignment: center; vertical-alignment: center; }
-    ActionButton { label: "+"; quiet: true; compact: true; enabled: State.ride-bias-can-up; accessible-label: @tr("Raise the intensity by 5 percent"); activated => { Actions.adjust-bias(1); } }
+    Caption { text: @tr("INTENSITY"); font-size: 11px + (root.size - 13px) / 2; vertical-alignment: center; }
+    ActionButton { label: "−"; quiet: true; compact: root.compact; enabled: State.ride-bias-can-down; accessible-label: @tr("Lower the intensity by 5 percent"); activated => { Actions.adjust-bias(-1); } }
+    Text { text: State.ride-bias; color: Theme.ink; font-size: root.size; font-weight: 600; min-width: max(46px, self.preferred-width + 8px); horizontal-alignment: center; vertical-alignment: center; }
+    ActionButton { label: "+"; quiet: true; compact: root.compact; enabled: State.ride-bias-can-up; accessible-label: @tr("Raise the intensity by 5 percent"); activated => { Actions.adjust-bias(1); } }
 }
 
 export component SkipButton inherits ActionButton {
