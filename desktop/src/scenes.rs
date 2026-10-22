@@ -46,6 +46,14 @@ pub fn apply(ui: &AppWindow, state: &Rc<RefCell<AppState>>, scene: &str) {
             );
             workout_rows(ui, &mut state);
         }
+        // The library loaded with nothing in it: the free ride is the one row left.
+        "workouts-empty" => {
+            ui.set_screen(1);
+            let mut state = state.borrow_mut();
+            let generation = state.library.begin();
+            state.library.finish(generation, Ok(Vec::new()));
+            workout_rows(ui, &mut state);
+        }
         "ready" => ui.global::<Actions>().invoke_select_workout("p:2".into()),
         // Start pressed with the trainer paired and ERG chosen: waiting for the first watts.
         "waiting" => {

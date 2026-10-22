@@ -7,10 +7,11 @@ use crate::player::{Plan, Segment};
 use crate::recording::Phase;
 use crate::workouts::{Workout, WorkoutId};
 use crate::{
-    Actions, AppState, AppWindow, RideOnSignIn, apply_language, apply_live, auto_pause, connected,
-    device_rows, disconnected, erg_event, guard_erg_power, refresh_player, reset_session_ui,
-    ride_on_sign_in, start_on_power, workout_rows,
+    Actions, AppState, AppWindow, Overlay, RideOnSignIn, apply_language, apply_live, auto_pause,
+    connected, device_rows, disconnected, erg_event, guard_erg_power, refresh_player,
+    reset_session_ui, ride_on_sign_in, start_on_power, workout_rows,
 };
+use slint::platform::{Key, WindowEvent};
 use slint::{ComponentHandle, Model};
 use std::{
     cell::RefCell,
@@ -23,6 +24,13 @@ use std::{
 const TRAINER_ID: &str = "hci0/dev_AA_BB_CC_DD_1A_2B";
 const STRAP_ID: &str = "hci0/dev_AA_BB_CC_DD_9F_3C";
 const ANT_STRAP_ID: &str = "ant:120:43220:1";
+
+fn press(ui: &AppWindow, key: Key) {
+    let text: slint::SharedString = key.into();
+    let window = ui.window();
+    window.dispatch_event(WindowEvent::KeyPressed { text: text.clone() });
+    window.dispatch_event(WindowEvent::KeyReleased { text });
+}
 
 fn fixture_devices() -> Vec<Device> {
     vec![
@@ -531,8 +539,18 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     ui.global::<Actions>().invoke_sign_out();
     assert!(ui.get_logged_in(), "Sign-out is held back");
     assert_eq!(ui.get_leave_guard(), 2);
-    ui.global::<Actions>().invoke_keep_riding();
-    assert_eq!(ui.get_leave_guard(), 0);
+    assert!(
+        ui.global::<Overlay>().get_open(),
+        "Controls behind the guard take no focus"
+    );
+    press(ui, Key::Tab);
+    press(ui, Key::Escape);
+    assert_eq!(
+        ui.get_leave_guard(),
+        0,
+        "Escape keeps riding from the guard's buttons"
+    );
+    assert!(!ui.global::<Overlay>().get_open());
     assert_eq!(ui.get_screen(), 2);
     ui.global::<Actions>().invoke_select_workout("p:1".into());
     assert_eq!(ui.get_screen(), 2);
@@ -930,6 +948,31 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(ui.get_ride_phase(), 1);
     // A resume restarts the count: the pedals get five seconds again.
     coast(0);
+    assert_eq!(ui.get_ride_phase(), 1);
+    // The count runs from the last reading with watts, not from the ticks that keep it on
+    // screen: a trainer that falls silent pauses the ride five seconds after its report.
+    let stroke = Instant::now() - Duration::from_millis(5500);
+    state.borrow_mut().ride.as_mut().unwrap().pedaled_at = Some(stroke - Duration::from_secs(1));
+    state.borrow_mut().sensors.update(
+        0,
+        &Reading {
+            power: Some(160),
+            cadence: None,
+            heart_rate: None,
+        },
+        false,
+        stroke,
+    );
+    auto_pause(
+        ui,
+        &mut state.borrow_mut(),
+        &start_sink,
+        stroke + Duration::from_secs(4),
+    );
+    assert_eq!(ui.get_ride_phase(), 1, "The reading still shows");
+    auto_pause(ui, &mut state.borrow_mut(), &start_sink, Instant::now());
+    assert_eq!(ui.get_ride_phase(), 2, "Five seconds after the last watts");
+    ui.global::<Actions>().invoke_resume_ride();
     assert_eq!(ui.get_ride_phase(), 1);
     // Losing the trainer stops the count until the next trainer's first watts.
     disconnected(ui, &mut state.borrow_mut(), 0);
@@ -1556,6 +1599,14 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     ui.set_picker_open(true);
     ui.global::<Actions>().invoke_close_picker();
     assert!(!ui.get_picker_open());
+    // Escape still dismisses a dialog once Tab has moved focus onto one of its buttons.
+    ui.set_picker_open(true);
+    press(ui, Key::Tab);
+    press(ui, Key::Escape);
+    assert!(
+        !ui.get_picker_open(),
+        "Escape closes the picker from its buttons"
+    );
 
     reset_session_ui(ui, &mut state.borrow_mut());
     assert!(!ui.get_logged_in());

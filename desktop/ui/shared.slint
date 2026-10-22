@@ -627,44 +627,46 @@ export component FolderRow inherits VerticalLayout {
 // The leave guard: a ride is being recorded and something would take the rider away.
 export component LeaveGuard inherits Rectangle {
     background: Theme.scrim;
-    TouchArea { }
+    // The key scope wraps the card so Escape still bubbles up from a focused button.
     guard-keys := FocusScope {
+        focus-on-click: false;
         init => { self.focus(); }
         key-pressed(event) => {
             if event.text == Key.Escape { Actions.keep-riding(); return accept; }
             return reject;
         }
-    }
-    Rectangle {
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        width: min(480px, parent.width - 32px);
-        height: guard-layout.preferred-height;
-        background: Theme.card; border-radius: 14px; border-width: 1px; border-color: Theme.border;
         TouchArea { }
-        guard-layout := VerticalLayout {
-            padding: 24px; spacing: 14px;
-            Text {
-                text: State.ride-active ? @tr("A ride is being recorded")
-                    : State.ride-uploading ? @tr("The ride is being uploaded")
-                    : State.ride-saving ? @tr("The ride is being saved")
-                    : @tr("This ride is not saved yet");
-                color: Theme.ink; font-size: 20px; font-weight: 600; wrap: word-wrap;
-            }
-            Text {
-                text: State.ride-active
-                    ? (State.leave-guard == 3
-                        ? @tr("Closing now would lose it. Finish the ride first, or keep recording.")
-                        : @tr("Leaving now would lose it. Finish the ride to keep it, or stay and keep recording."))
-                    : State.ride-uploading ? @tr("Wait for Strava's answer before leaving, so the result is not lost.")
-                    : State.ride-saving ? @tr("Wait for the save to finish before leaving, so the ride is not lost.")
-                    : @tr("Retry the save before leaving so the ride is not lost.");
-                color: Theme.muted; font-size: 13px; wrap: word-wrap;
-            }
-            HorizontalLayout {
-                spacing: 10px; alignment: end;
-                ActionButton { label: State.ride-active ? @tr("Keep recording") : @tr("Back to the ride"); primary: true; in-dialog: true; activated => { Actions.keep-riding(); } }
-                if State.ride-active: ActionButton { label: @tr("Finish ride"); quiet: true; in-dialog: true; activated => { Actions.finish-and-stay(); } }
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: min(480px, parent.width - 32px);
+            height: guard-layout.preferred-height;
+            background: Theme.card; border-radius: 14px; border-width: 1px; border-color: Theme.border;
+            TouchArea { }
+            guard-layout := VerticalLayout {
+                padding: 24px; spacing: 14px;
+                Text {
+                    text: State.ride-active ? @tr("A ride is being recorded")
+                        : State.ride-uploading ? @tr("The ride is being uploaded")
+                        : State.ride-saving ? @tr("The ride is being saved")
+                        : @tr("This ride is not saved yet");
+                    color: Theme.ink; font-size: 20px; font-weight: 600; wrap: word-wrap;
+                }
+                Text {
+                    text: State.ride-active
+                        ? (State.leave-guard == 3
+                            ? @tr("Closing now would lose it. Finish the ride first, or keep recording.")
+                            : @tr("Leaving now would lose it. Finish the ride to keep it, or stay and keep recording."))
+                        : State.ride-uploading ? @tr("Wait for Strava's answer before leaving, so the result is not lost.")
+                        : State.ride-saving ? @tr("Wait for the save to finish before leaving, so the ride is not lost.")
+                        : @tr("Retry the save before leaving so the ride is not lost.");
+                    color: Theme.muted; font-size: 13px; wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: 10px; alignment: end;
+                    ActionButton { label: State.ride-active ? @tr("Keep recording") : @tr("Back to the ride"); primary: true; in-dialog: true; activated => { Actions.keep-riding(); } }
+                    if State.ride-active: ActionButton { label: @tr("Finish ride"); quiet: true; in-dialog: true; activated => { Actions.finish-and-stay(); } }
+                }
             }
         }
     }
@@ -673,119 +675,121 @@ export component LeaveGuard inherits Rectangle {
 // The device picker: one dialog for both roles, searching over both radios.
 export component DevicePicker inherits Rectangle {
     background: Theme.scrim;
-    TouchArea { clicked => { Actions.close-picker(); } }
+    // The key scope wraps the card so Escape still bubbles up from a focused button.
     dialog-keys := FocusScope {
+        focus-on-click: false;
         init => { self.focus(); }
         key-pressed(event) => {
             if event.text == Key.Escape { Actions.close-picker(); return accept; }
             return reject;
         }
-    }
-    Rectangle {
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        width: min(560px, parent.width - 24px);
-        height: min(600px, parent.height - 24px);
-        background: Theme.card; border-radius: 14px; border-width: 1px; border-color: Theme.border;
-        TouchArea { }
-        VerticalLayout {
-            padding: 20px; spacing: 12px;
-            HorizontalLayout {
-                spacing: 12px;
-                Text {
-                    text: State.picker-role == 0 ? @tr("Find your trainer") : @tr("Find a heart-rate sensor");
-                    color: Theme.ink; font-size: 20px; font-weight: 600; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; min-width: 0px;
+        TouchArea { clicked => { Actions.close-picker(); } }
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: min(560px, parent.width - 24px);
+            height: min(600px, parent.height - 24px);
+            background: Theme.card; border-radius: 14px; border-width: 1px; border-color: Theme.border;
+            TouchArea { }
+            VerticalLayout {
+                padding: 20px; spacing: 12px;
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text {
+                        text: State.picker-role == 0 ? @tr("Find your trainer") : @tr("Find a heart-rate sensor");
+                        color: Theme.ink; font-size: 20px; font-weight: 600; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; min-width: 0px;
+                    }
+                    ActionButton { label: @tr("Close"); quiet: true; compact: true; in-dialog: true; activated => { Actions.close-picker(); } }
                 }
-                ActionButton { label: @tr("Close"); quiet: true; compact: true; in-dialog: true; activated => { Actions.close-picker(); } }
-            }
-            Text {
-                text: State.scanning ? @tr("Searching over Bluetooth and ANT+…")
-                    : !State.any-radio ? @tr("No radio is available.")
-                    : State.nearby.length == 0 ? @tr("Search finished.") : @tr("Choose a device to connect.");
-                color: State.scanning || State.any-radio ? Theme.muted : Theme.warn; font-size: 13px;
-            }
-            if State.scanning: Pulse { }
-            if !State.scanning: Rectangle { height: 3px; }
-            ScrollView {
-                VerticalLayout {
-                    spacing: 8px; alignment: start;
-                    for device in State.nearby: Rectangle {
-                        height: 68px; border-radius: 8px; background: Theme.dark ? Theme.raised : Theme.sunken; border-width: 1px; border-color: device.saved ? Theme.primary.with-alpha(0.6) : Theme.border;
-                        HorizontalLayout {
-                            padding: 14px; padding-left: 16px; spacing: 14px;
-                            if device.transport == 0: SignalBars { y: (parent.height - self.height) / 2; level: device.signal-level; }
-                            if device.transport == 1: Rectangle {
-                                y: (parent.height - self.height) / 2; width: 18px; height: 18px; border-radius: 4px; background: Theme.primary.with-alpha(0.18);
-                                Text { text: "A"; color: Theme.primary; font-size: 11px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
-                            }
-                            VerticalLayout {
-                                spacing: 4px; alignment: center; horizontal-stretch: 1; min-width: 0px;
-                                HorizontalLayout {
-                                    spacing: 8px; alignment: start;
-                                    Text { text: device.name; color: Theme.ink; font-size: 15px; font-weight: 600; overflow: elide; vertical-alignment: center; }
-                                    if device.saved: Rectangle {
-                                        height: 20px; width: saved-tag.preferred-width + 14px; border-radius: 10px; background: Theme.primary.with-alpha(0.18);
-                                        saved-tag := Text { text: @tr("Saved"); color: Theme.dark ? Theme.primary : Theme.primary.darker(0.1); font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                Text {
+                    text: State.scanning ? @tr("Searching over Bluetooth and ANT+…")
+                        : !State.any-radio ? @tr("No radio is available.")
+                        : State.nearby.length == 0 ? @tr("Search finished.") : @tr("Choose a device to connect.");
+                    color: State.scanning || State.any-radio ? Theme.muted : Theme.warn; font-size: 13px;
+                }
+                if State.scanning: Pulse { }
+                if !State.scanning: Rectangle { height: 3px; }
+                ScrollView {
+                    VerticalLayout {
+                        spacing: 8px; alignment: start;
+                        for device in State.nearby: Rectangle {
+                            height: 68px; border-radius: 8px; background: Theme.dark ? Theme.raised : Theme.sunken; border-width: 1px; border-color: device.saved ? Theme.primary.with-alpha(0.6) : Theme.border;
+                            HorizontalLayout {
+                                padding: 14px; padding-left: 16px; spacing: 14px;
+                                if device.transport == 0: SignalBars { y: (parent.height - self.height) / 2; level: device.signal-level; }
+                                if device.transport == 1: Rectangle {
+                                    y: (parent.height - self.height) / 2; width: 18px; height: 18px; border-radius: 4px; background: Theme.primary.with-alpha(0.18);
+                                    Text { text: "A"; color: Theme.primary; font-size: 11px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                }
+                                VerticalLayout {
+                                    spacing: 4px; alignment: center; horizontal-stretch: 1; min-width: 0px;
+                                    HorizontalLayout {
+                                        spacing: 8px; alignment: start;
+                                        Text { text: device.name; color: Theme.ink; font-size: 15px; font-weight: 600; overflow: elide; vertical-alignment: center; }
+                                        if device.saved: Rectangle {
+                                            height: 20px; width: saved-tag.preferred-width + 14px; border-radius: 10px; background: Theme.primary.with-alpha(0.18);
+                                            saved-tag := Text { text: @tr("Saved"); color: Theme.dark ? Theme.primary : Theme.primary.darker(0.1); font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                                        }
+                                    }
+                                    Text {
+                                        text: (device.kind == 0 ? @tr("Smart trainer") : device.kind == 1 ? @tr("Heart-rate sensor") : @tr("Power meter · read only"))
+                                            + "  ·  " + (device.transport == 1 ? @tr("ANT+ {}", device.suffix)
+                                                : device.signal-level >= 3 ? @tr("Bluetooth · strong signal · {}", device.suffix)
+                                                : device.signal-level == 2 ? @tr("Bluetooth · fair signal · {}", device.suffix)
+                                                : device.signal-level == 1 ? @tr("Bluetooth · weak signal · {}", device.suffix)
+                                                : @tr("Bluetooth · {}", device.suffix));
+                                        color: Theme.muted; font-size: 12px; overflow: elide;
                                     }
                                 }
-                                Text {
-                                    text: (device.kind == 0 ? @tr("Smart trainer") : device.kind == 1 ? @tr("Heart-rate sensor") : @tr("Power meter · read only"))
-                                        + "  ·  " + (device.transport == 1 ? @tr("ANT+ {}", device.suffix)
-                                            : device.signal-level >= 3 ? @tr("Bluetooth · strong signal · {}", device.suffix)
-                                            : device.signal-level == 2 ? @tr("Bluetooth · fair signal · {}", device.suffix)
-                                            : device.signal-level == 1 ? @tr("Bluetooth · weak signal · {}", device.suffix)
-                                            : @tr("Bluetooth · {}", device.suffix));
-                                    color: Theme.muted; font-size: 12px; overflow: elide;
+                                ActionButton {
+                                    y: (parent.height - self.height) / 2;
+                                    label: @tr("Connect"); primary: true; compact: true; in-dialog: true;
+                                    activated => { Actions.choose(device.id, State.picker-role); }
                                 }
                             }
-                            ActionButton {
-                                y: (parent.height - self.height) / 2;
-                                label: @tr("Connect"); primary: true; compact: true; in-dialog: true;
-                                activated => { Actions.choose(device.id, State.picker-role); }
+                        }
+                        if State.nearby.length == 0: VerticalLayout {
+                            padding-top: 40px; spacing: 10px;
+                            Text {
+                                text: State.scanning ? (State.picker-role == 0 ? @tr("Listening for trainers…") : @tr("Listening for heart-rate sensors…"))
+                                    : !State.any-radio ? @tr("Bluetooth and ANT+ are unavailable")
+                                    : (State.picker-role == 0 ? @tr("No trainer found") : @tr("No heart-rate sensor found"));
+                                color: Theme.ink; font-size: 17px; font-weight: 600; horizontal-alignment: center; wrap: word-wrap;
+                            }
+                            Text {
+                                text: State.scanning
+                                    ? @tr("Wake the device and keep it within a few meters.")
+                                    : !State.any-radio
+                                    ? @tr("Turn Bluetooth on in your system settings or plug in an ANT+ stick, then search again. The app never switches a radio itself.")
+                                    : @tr("Wake the device, close other training apps that may be holding it, and search again.");
+                                color: Theme.muted; font-size: 13px; horizontal-alignment: center; wrap: word-wrap;
                             }
                         }
                     }
-                    if State.nearby.length == 0: VerticalLayout {
-                        padding-top: 40px; spacing: 10px;
-                        Text {
-                            text: State.scanning ? (State.picker-role == 0 ? @tr("Listening for trainers…") : @tr("Listening for heart-rate sensors…"))
-                                : !State.any-radio ? @tr("Bluetooth and ANT+ are unavailable")
-                                : (State.picker-role == 0 ? @tr("No trainer found") : @tr("No heart-rate sensor found"));
-                            color: Theme.ink; font-size: 17px; font-weight: 600; horizontal-alignment: center; wrap: word-wrap;
-                        }
-                        Text {
-                            text: State.scanning
-                                ? @tr("Wake the device and keep it within a few meters.")
-                                : !State.any-radio
-                                ? @tr("Turn Bluetooth on in your system settings or plug in an ANT+ stick, then search again. The app never switches a radio itself.")
-                                : @tr("Wake the device, close other training apps that may be holding it, and search again.");
-                            color: Theme.muted; font-size: 13px; horizontal-alignment: center; wrap: word-wrap;
-                        }
+                }
+                // Known radio conditions are worded here; unexpected ones keep their raw text, small.
+                if State.bluetooth-state == 2 && State.bluetooth-issue != 0: Text {
+                    text: State.bluetooth-issue == 1 ? @tr("Bluetooth is switched off or blocked by the system.") : @tr("No Bluetooth adapter was found.");
+                    color: Theme.muted; font-size: 12px; wrap: word-wrap;
+                }
+                if State.bluetooth-state == 2 && State.bluetooth-issue == 0 && State.bluetooth-detail != "": Text { text: "Bluetooth: " + State.bluetooth-detail; color: Theme.faint; font-size: 11px; wrap: word-wrap; }
+                if State.ant-state == 2 && State.ant-issue != 0: Text {
+                    text: State.ant-issue == 1 ? @tr("No ANT+ USB stick was found. Plug in an ANTUSB2 or ANTUSB-m stick.") : @tr("The ANT+ USB stick is busy or its permission is denied. Close other training apps or check USB permissions.");
+                    color: Theme.muted; font-size: 12px; wrap: word-wrap;
+                }
+                if State.ant-state == 2 && State.ant-issue == 0 && State.ant-detail != "": Text { text: "ANT+: " + State.ant-detail; color: Theme.faint; font-size: 11px; wrap: word-wrap; }
+                if State.message-code != 0: Notice { detail: State.message-detail; text: Copy.device-message(State.message-code); }
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text {
+                        text: State.picker-role == 0 ? @tr("Read-only power meters are listed but cannot take resistance commands. ANT+ trainers deliver readings only.") : @tr("A Bluetooth sensor connected to another app may stay hidden. ANT+ sensors broadcast to every receiver.");
+                        color: Theme.faint; font-size: 12px; wrap: word-wrap; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px;
                     }
-                }
-            }
-            // Known radio conditions are worded here; unexpected ones keep their raw text, small.
-            if State.bluetooth-state == 2 && State.bluetooth-issue != 0: Text {
-                text: State.bluetooth-issue == 1 ? @tr("Bluetooth is switched off or blocked by the system.") : @tr("No Bluetooth adapter was found.");
-                color: Theme.muted; font-size: 12px; wrap: word-wrap;
-            }
-            if State.bluetooth-state == 2 && State.bluetooth-issue == 0 && State.bluetooth-detail != "": Text { text: "Bluetooth: " + State.bluetooth-detail; color: Theme.faint; font-size: 11px; wrap: word-wrap; }
-            if State.ant-state == 2 && State.ant-issue != 0: Text {
-                text: State.ant-issue == 1 ? @tr("No ANT+ USB stick was found. Plug in an ANTUSB2 or ANTUSB-m stick.") : @tr("The ANT+ USB stick is busy or its permission is denied. Close other training apps or check USB permissions.");
-                color: Theme.muted; font-size: 12px; wrap: word-wrap;
-            }
-            if State.ant-state == 2 && State.ant-issue == 0 && State.ant-detail != "": Text { text: "ANT+: " + State.ant-detail; color: Theme.faint; font-size: 11px; wrap: word-wrap; }
-            if State.message-code != 0: Notice { detail: State.message-detail; text: Copy.device-message(State.message-code); }
-            HorizontalLayout {
-                spacing: 12px;
-                Text {
-                    text: State.picker-role == 0 ? @tr("Read-only power meters are listed but cannot take resistance commands. ANT+ trainers deliver readings only.") : @tr("A Bluetooth sensor connected to another app may stay hidden. ANT+ sensors broadcast to every receiver.");
-                    color: Theme.faint; font-size: 12px; wrap: word-wrap; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px;
-                }
-                ActionButton {
-                    y: (parent.height - self.height) / 2;
-                    label: State.scanning ? @tr("Searching…") : @tr("Search again"); enabled: !State.scanning; in-dialog: true;
-                    activated => { Actions.search(State.picker-role); }
+                    ActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: State.scanning ? @tr("Searching…") : @tr("Search again"); enabled: !State.scanning; in-dialog: true;
+                        activated => { Actions.search(State.picker-role); }
+                    }
                 }
             }
         }

@@ -953,16 +953,14 @@ fn auto_pause(
     commands: &mpsc::UnboundedSender<ble::Command>,
     now: Instant,
 ) {
-    let pedaling = state
-        .sensors
-        .live(now)
-        .power
-        .is_some_and(|watts| watts > 0.0);
+    let stroke = state.sensors.pedaled_at(now);
+    let pedaling = stroke.is_some();
     let Some(ride) = state.ride.as_mut() else {
         return;
     };
     match ride.recording.phase() {
-        Phase::Running if pedaling => ride.pedaled_at = Some(now),
+        // Never earlier than the grace a start or resume gave.
+        Phase::Running if pedaling => ride.pedaled_at = ride.pedaled_at.max(stroke),
         Phase::Running => {
             if ride
                 .pedaled_at
@@ -2797,6 +2795,10 @@ fn main() -> anyhow::Result<()> {
         ui.window().on_close_requested(move || {
             let ui = weak.unwrap();
             if ride_guarded(&ui) {
+                // The guard is the one dialog: the picker would otherwise sit on top of it.
+                if ui.get_picker_open() {
+                    ui.global::<Actions>().invoke_close_picker();
+                }
                 ui.set_screen(2);
                 ui.set_leave_guard(3);
                 slint::CloseRequestResponse::KeepWindowShown

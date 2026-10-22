@@ -100,6 +100,9 @@ msgstr "Impossible d'enregistrer vos appareils."
 msgid "Devices"
 msgstr "Appareils"
 
+msgid "Devices, to reconnect a sensor"
+msgstr "Appareils, pour reconnecter un capteur"
+
 msgid "Disconnect"
 msgstr "Déconnecter"
 

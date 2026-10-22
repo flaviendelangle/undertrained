@@ -59,7 +59,9 @@ export struct PlanStep {
 
 // While a dialog is open, controls behind it must not take keyboard focus.
 export global Overlay {
-    in-out property <bool> open: false;
+    in-out property <bool> picker: false;
+    in-out property <int> guard: 0;
+    out property <bool> open: picker || guard != 0;
 }
 
 // Colors come from the Undertrained website (src/styles/globals.css, `:root` for light
@@ -131,7 +133,7 @@ export global State {
     in-out property <int> message-code: 0;
     in-out property <string> message-detail: "";
     in-out property <bool> scanning: false;
-    in-out property <bool> picker-open <=> Overlay.open;
+    in-out property <bool> picker-open <=> Overlay.picker;
     in-out property <int> picker-role: 0;
     // 0 = devices, 1 = workouts, 2 = the ride (ready, recording, paused, finished).
     in-out property <int> screen: 0;
@@ -278,7 +280,7 @@ export global State {
     // The name goes with the first submission and cannot change afterwards.
     in-out property <bool> ride-upload-submitted: false;
     // The leave guard: 0 closed, 1 asked by navigation, 2 by sign-out, 3 by closing the window.
-    in-out property <int> leave-guard: 0;
+    in-out property <int> leave-guard <=> Overlay.guard;
     out property <bool> ride-active: ride-phase == 1 || ride-phase == 2;
     out property <bool> ride-unsaved: ride-phase == 3 && ride-save-state != 1;
     out property <bool> ride-uploading: ride-phase == 3 && ride-upload-state == 1;

@@ -345,23 +345,28 @@ component FlowChoose inherits Rectangle {
             if State.workouts-filtering: ActionButton { y: (parent.height - self.height) / 2; label: @tr("Clear"); quiet: true; compact: true; accessible-label: @tr("Clear search"); activated => { State.workout-query = ""; Actions.filter-workouts(""); } }
             Rectangle { horizontal-stretch: 1; min-width: 0px; }
         }
-        Rectangle {
-            vertical-stretch: 1;
-            if nothing: LibraryState { }
-            // The board: the free ride first, then each section under a small-caps heading.
-            if !nothing: ScrollView {
-                VerticalLayout {
-                    spacing: 8px; alignment: start; padding-right: 4px;
-                    if root.category == 0: FreeRideRow { narrow: root.narrow; }
-                    if show-personal: SectionLabel { text: @tr("PERSONAL"); count: State.workouts-personal; }
-                    if show-personal: VerticalLayout { spacing: 8px; for workout in State.workouts: LibraryRow { workout: workout; live: State.session-live; narrow: root.narrow; } }
-                    if show-personal && State.workouts.length == 0: Text {
-                        text: State.workouts-filtering ? @tr("No personal workout matches this search.") : @tr("No personal workouts yet. Create one on the website; it appears here after a refresh.");
-                        color: Theme.faint; font-size: 13px; wrap: word-wrap;
+        VerticalLayout {
+            vertical-stretch: 1; spacing: 8px;
+            // The free ride needs no library: it stays above the board while the list loads,
+            // fails, is empty or matches nothing, and leaves only with the Personal and Built-in filters.
+            if root.category == 0: FreeRideRow { narrow: root.narrow; }
+            Rectangle {
+                vertical-stretch: 1;
+                if nothing: LibraryState { }
+                // The board: each section under a small-caps heading.
+                if !nothing: ScrollView {
+                    VerticalLayout {
+                        spacing: 8px; alignment: start; padding-right: 4px;
+                        if show-personal: SectionLabel { text: @tr("PERSONAL"); count: State.workouts-personal; }
+                        if show-personal: VerticalLayout { spacing: 8px; for workout in State.workouts: LibraryRow { workout: workout; live: State.session-live; narrow: root.narrow; } }
+                        if show-personal && State.workouts.length == 0: Text {
+                            text: State.workouts-filtering ? @tr("No personal workout matches this search.") : @tr("No personal workouts yet. Create one on the website; it appears here after a refresh.");
+                            color: Theme.faint; font-size: 13px; wrap: word-wrap;
+                        }
+                        if show-built-ins: SectionLabel { text: @tr("BUILT-IN"); count: State.workouts-total - State.workouts-personal; note: root.narrow ? "" : @tr("FTP assessments, ready to ride."); }
+                        if show-built-ins: VerticalLayout { spacing: 8px; for workout in State.built-ins: LibraryRow { workout: workout; live: State.session-live; narrow: root.narrow; } }
+                        if show-built-ins && State.built-ins.length == 0: Text { text: @tr("No built-in workout matches this search."); color: Theme.faint; font-size: 13px; wrap: word-wrap; }
                     }
-                    if show-built-ins: SectionLabel { text: @tr("BUILT-IN"); count: State.workouts-total - State.workouts-personal; note: root.narrow ? "" : @tr("FTP assessments, ready to ride."); }
-                    if show-built-ins: VerticalLayout { spacing: 8px; for workout in State.built-ins: LibraryRow { workout: workout; live: State.session-live; narrow: root.narrow; } }
-                    if show-built-ins && State.built-ins.length == 0: Text { text: @tr("No built-in workout matches this search."); color: Theme.faint; font-size: 13px; wrap: word-wrap; }
                 }
             }
         }
@@ -632,7 +637,7 @@ component FlowHud inherits Rectangle {
     // The ride's own pause, after five seconds without watts: the next pedal stroke ends it.
     property <bool> auto-paused: State.ride-phase == 2 && State.ride-auto-paused;
     VerticalLayout {
-        // The slim bar: the clock, the ride, the two ride controls. No app chrome while riding.
+        // The slim bar: the clock, the ride, a way back to Devices, the two ride controls. No app chrome while riding.
         Rectangle {
             height: 60px; background: Theme.card.with-alpha(0.6);
             HorizontalLayout {
@@ -643,6 +648,8 @@ component FlowHud inherits Rectangle {
                 Rectangle { width: 1px; height: 24px; y: (parent.height - self.height) / 2; background: Theme.border; }
                 Text { text: Copy.ride-title(); color: Theme.ink; font-size: 15px; font-weight: 600; overflow: elide; vertical-alignment: center; horizontal-stretch: 1; min-width: 0px; }
                 if guided && !root.narrow: Caption { text: State.ride-workout-complete ? @tr("DONE") : @tr("{} LEFT", State.ride-workout-remaining); vertical-alignment: center; }
+                // The one way back to the sensors: the notices send a rider here when one drops.
+                ActionButton { y: (parent.height - self.height) / 2; label: @tr("Devices"); quiet: true; compact: true; accessible-label: @tr("Devices, to reconnect a sensor"); activated => { Actions.navigate(0); } }
                 if State.ride-phase == 1: GlyphButton { y: (parent.height - self.height) / 2; size: 42px; glyph: "pause"; label: @tr("Pause"); tone: Theme.pause; activated => { Actions.pause-ride(); } }
                 if State.ride-phase == 2: GlyphButton { y: (parent.height - self.height) / 2; size: 42px; glyph: "play"; label: @tr("Resume"); filled: true; activated => { Actions.resume-ride(); } }
                 GlyphButton { y: (parent.height - self.height) / 2; size: 42px; glyph: "stop"; label: @tr("Finish ride"); tone: Theme.heart; activated => { Actions.finish-ride(); } }

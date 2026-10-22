@@ -28,9 +28,11 @@ impl Field {
         }
     }
     fn value(&self, now: Instant) -> Option<f64> {
+        self.reading(now).map(|(v, _)| v)
+    }
+    fn reading(&self, now: Instant) -> Option<(f64, Instant)> {
         self.0
             .filter(|(_, t)| now.saturating_duration_since(*t) < Duration::from_secs(5))
-            .map(|(v, _)| v)
     }
 }
 #[derive(Default)]
@@ -82,6 +84,14 @@ impl Sensors {
                 ..Default::default()
             }
         }
+    }
+    /// When the live power reading above zero watts arrived: a pedal stroke dates from the
+    /// trainer's report, not from the ticks that keep showing it.
+    pub fn pedaled_at(&self, now: Instant) -> Option<Instant> {
+        self.power
+            .reading(now)
+            .filter(|(watts, _)| *watts > 0.0)
+            .map(|(_, at)| at)
     }
     pub fn live(&self, now: Instant) -> Live {
         Live {
