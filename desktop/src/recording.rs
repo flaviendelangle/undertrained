@@ -409,8 +409,8 @@ impl Recording {
             .map_or(0.0, |since| {
                 now.saturating_duration_since(since).as_secs_f64()
             });
-        let speed = self.speed.update(live.power, seconds, &self.rider);
-        self.distance += speed * seconds;
+        let (speed, metres) = self.speed.update(live.power, seconds, &self.rider);
+        self.distance += metres;
         let sample = Sample {
             timestamp_ms: self.timestamp(now),
             elapsed: self.elapsed(now),
@@ -542,9 +542,12 @@ impl Recording {
         let (avg_power, max_power) = stats(|s| s.live.power);
         let (avg_heart_rate, max_heart_rate) = stats(|s| s.live.heart_rate);
         let (avg_cadence, _) = stats(|s| s.live.cadence);
-        let (avg_speed, max_speed) = stats(|s| Some(s.speed));
+        let (_, max_speed) = stats(|s| Some(s.speed));
+        let elapsed = self.elapsed(now);
+        // Distance over running time, so the average agrees with the distance and duration.
+        let avg_speed = (max_speed.is_some() && elapsed > 0.0).then(|| self.distance / elapsed);
         Summary {
-            elapsed: self.elapsed(now),
+            elapsed,
             avg_power,
             max_power,
             avg_heart_rate,
@@ -817,7 +820,7 @@ mod tests {
         let mut sim = Simulator::default();
         let mut distance = 0.0;
         for _ in 0..60 {
-            distance += sim.update(Some(200.0), 1.0, &rider);
+            distance += sim.update(Some(200.0), 1.0, &rider).1;
         }
         let last = r.samples.last().unwrap().clone();
         assert!((last.distance - distance).abs() < 1e-6);
@@ -844,6 +847,7 @@ mod tests {
         let summary = r.summary(at(121));
         assert_eq!(summary.distance, resumed.distance);
         assert!(summary.max_speed >= summary.avg_speed);
+        assert_eq!(summary.avg_speed, Some(resumed.distance / 61.0));
         drop(r);
         fs::remove_dir_all(root).unwrap();
     }

@@ -65,25 +65,28 @@ impl Simulator {
         self.speed = 0.0;
     }
 
-    /// Advance by `seconds` at `watts` and return the speed in m/s. No power is zero power:
-    /// the rider coasts and slows down, as on the website.
-    pub fn update(&mut self, watts: Option<f64>, seconds: f64, rider: &Rider) -> f64 {
+    /// Advance by `seconds` at `watts` and return the speed in m/s with the metres covered on
+    /// the way, so a long step speeds up or coasts down over the road it covers. No power is
+    /// zero power: the rider coasts and slows down, as on the website.
+    pub fn update(&mut self, watts: Option<f64>, seconds: f64, rider: &Rider) -> (f64, f64) {
         if !seconds.is_finite() || seconds <= 0.0 {
-            return self.speed;
+            return (self.speed, 0.0);
         }
         let power = watts.filter(|w| w.is_finite() && *w > 0.0).unwrap_or(0.0);
         let mass = rider.weight_kg + rider.bike_weight_kg;
         let effective_mass = mass + WHEEL_INERTIA_KG;
         let steps = (seconds * SUB_STEPS_PER_SECOND).ceil().max(1.0);
         let step = seconds / steps;
+        let mut distance = 0.0;
         for _ in 0..steps as u32 {
             let v = self.speed;
             let drive = (power * DRIVETRAIN_EFFICIENCY / v.max(MIN_SPEED)).min(MAX_DRIVE_FORCE);
             let drag = 0.5 * AIR_DENSITY * rider.cda * v * v;
             let rolling = rider.crr * mass * GRAVITY;
             self.speed = (v + (drive - drag - rolling) / effective_mass * step).max(0.0);
+            distance += self.speed * step;
         }
-        self.speed
+        (self.speed, distance)
     }
 }
 
@@ -97,7 +100,7 @@ mod tests {
         let mut sim = Simulator::default();
         let mut speed = 0.0;
         for _ in 0..300 {
-            speed = sim.update(Some(200.0), 1.0, &rider);
+            speed = sim.update(Some(200.0), 1.0, &rider).0;
         }
         // 200 W · 0.97 = (½ ρ CdA v² + Crr m g) · v at v ≈ 9.15 m/s (32.9 km/h).
         let resistance = 0.5 * AIR_DENSITY * rider.cda * speed * speed
@@ -113,25 +116,30 @@ mod tests {
         for _ in 0..120 {
             sim.update(Some(250.0), 1.0, &rider);
         }
-        let cruising = sim.update(None, 1.0, &rider);
-        let later = sim.update(None, 5.0, &rider);
+        let cruising = sim.update(None, 1.0, &rider).0;
+        let later = sim.update(None, 5.0, &rider).0;
         assert!(later < cruising, "Coasting slows down");
         assert!(later > 0.0, "Inertia keeps it rolling for a while");
-        assert_eq!(sim.update(None, 600.0, &rider), 0.0);
-        assert_eq!(sim.update(Some(-40.0), 1.0, &rider), 0.0);
-        assert_eq!(sim.update(Some(f64::NAN), 1.0, &rider), 0.0);
+        assert_eq!(sim.update(None, 600.0, &rider).0, 0.0);
+        assert_eq!(sim.update(Some(-40.0), 1.0, &rider), (0.0, 0.0));
+        assert_eq!(sim.update(Some(f64::NAN), 1.0, &rider), (0.0, 0.0));
     }
 
     #[test]
     fn one_long_step_integrates_like_many_short_ones() {
         let rider = Rider::default();
         let (mut short, mut long) = (Simulator::default(), Simulator::default());
-        for _ in 0..10 {
-            short.update(Some(180.0), 1.0, &rider);
+        // Speeding up, then coasting: the distance covers the whole curve, not the end speed.
+        for watts in [Some(180.0), None] {
+            let mut short_distance = 0.0;
+            for _ in 0..10 {
+                short_distance += short.update(watts, 1.0, &rider).1;
+            }
+            let (long_speed, long_distance) = long.update(watts, 10.0, &rider);
+            assert!((short.speed - long_speed).abs() < 1e-9);
+            assert!((short_distance - long_distance).abs() < 1e-9);
         }
-        let long_speed = long.update(Some(180.0), 10.0, &rider);
-        assert!((short.speed - long_speed).abs() < 1e-9);
-        assert_eq!(long.update(Some(180.0), 0.0, &rider), long_speed);
+        assert_eq!(long.update(Some(180.0), 0.0, &rider), (long.speed, 0.0));
     }
 
     #[test]
@@ -139,7 +147,7 @@ mod tests {
         let base = Rider::default();
         let speed_of = |rider: Rider| {
             let mut sim = Simulator::default();
-            (0..300).fold(0.0, |_, _| sim.update(Some(200.0), 1.0, &rider))
+            (0..300).fold(0.0, |_, _| sim.update(Some(200.0), 1.0, &rider).0)
         };
         let reference = speed_of(base);
         assert!(speed_of(Rider { cda: 0.45, ..base }) < reference);
