@@ -246,13 +246,19 @@ impl Control {
                 Job::Probe => {}
                 Job::Command(request) => {
                     self.poisoned = true;
-                    self.held = false;
                     report(
                         events,
                         request,
                         Err("The trainer did not answer over ANT+. Reconnect it before enabling ERG."
                             .into()),
                     );
+                    // Unlike a Bluetooth timeout, nothing disconnects the trainer, so it would
+                    // keep a held target, or this one if an unacknowledged attempt reached it:
+                    // try a release once, which nobody waits on.
+                    let reached = request.watts.is_some() && transfer.attempts > 1;
+                    if std::mem::take(&mut self.held) || reached {
+                        self.begin(radio, Job::Release, self.release, now, events);
+                    }
                 }
                 Job::Release => {
                     self.poisoned = true;
@@ -843,6 +849,43 @@ mod tests {
         let answers = rig.answers();
         assert!(matches!(answers.as_slice(), [(2, Err(_)), (3, Err(_))]));
         assert_eq!(rig.radio.sent.len(), 1, "Nothing more is sent");
+    }
+
+    #[test]
+    fn a_target_without_outcome_still_tries_to_release_the_trainer() {
+        let mut rig = Rig::ready();
+        rig.set(1, Some(200));
+        rig.stick(&event(COMPLETED));
+        rig.set(2, Some(250));
+        rig.tick(TRANSFER_DEADLINE);
+        let answers = rig.answers();
+        assert_eq!(answers[0], ok(1, Some(200)));
+        assert!(matches!(answers[1..], [(2, Err(_))]));
+        assert_eq!(
+            rig.radio.pages(),
+            [target_page(200), target_page(250), RELEASE_PAGE],
+            "The held 200 W is released on the cleared channel"
+        );
+        assert!(rig.control.releasing());
+        rig.stick(&event(COMPLETED));
+        // Control stays off: the ride's release and any target are refused, nothing is sent.
+        rig.set(3, None);
+        rig.set(4, Some(210));
+        assert!(matches!(
+            rig.answers().as_slice(),
+            [(3, Err(_)), (4, Err(_))]
+        ));
+        assert_eq!(rig.radio.sent.len(), 3);
+
+        // Nothing held, but an unacknowledged attempt may have reached the trainer.
+        let mut rig = Rig::ready();
+        rig.set(1, Some(200));
+        rig.stick(&event(FAILED));
+        rig.tick(TRANSFER_DEADLINE);
+        assert_eq!(
+            rig.radio.pages(),
+            [target_page(200), target_page(200), RELEASE_PAGE]
+        );
     }
 
     #[test]
