@@ -60,6 +60,11 @@ pub struct Simulator {
 }
 
 impl Simulator {
+    /// The bike stops: a paused ride starts again from a standstill.
+    pub fn stop(&mut self) {
+        self.speed = 0.0;
+    }
+
     /// Advance by `seconds` at `watts` and return the speed in m/s. No power is zero power:
     /// the rider coasts and slows down, as on the website.
     pub fn update(&mut self, watts: Option<f64>, seconds: f64, rider: &Rider) -> f64 {

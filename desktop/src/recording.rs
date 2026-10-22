@@ -438,6 +438,8 @@ impl Recording {
         Ok(true)
     }
     fn stop_clock(&mut self, now: Instant) {
+        // A stopped clock is a stopped bike: the simulation starts again from a standstill.
+        self.speed.stop();
         if self.running_since.is_some() {
             self.accumulated = self.elapsed(now);
             self.running_since = None;
@@ -829,6 +831,11 @@ mod tests {
         r.resume(at(120)).unwrap();
         r.tick(at(121), watts(200.0)).unwrap();
         let resumed = r.samples.last().unwrap();
+        assert!(
+            resumed.speed < 3.0,
+            "From a standstill: {} m/s",
+            resumed.speed
+        );
         assert!(
             resumed.distance - last.distance < 15.0,
             "One second of riding"
