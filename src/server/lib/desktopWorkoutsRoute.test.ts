@@ -187,6 +187,41 @@ describe("desktop workout library", () => {
     );
   });
 
+  it("sends the rider's weight and drag figures for speed, with the website's defaults", async () => {
+    mocks.athlete.mockResolvedValue({ id: 7, name: "Rider" });
+    const res = response();
+    await handler(
+      { method: "GET", headers: {} } as NextApiRequest,
+      res as unknown as NextApiResponse,
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rider: { weightKg: 75, bikeWeightKg: 8, cdA: 0.35, crr: 0.004 },
+      }),
+    );
+
+    mocks.settings.mockResolvedValue({
+      cdA: 0.28,
+      crr: 0.005,
+      bikeWeightKg: null,
+      initialValues: { ftp: 250, weightKg: 70 },
+      changes: [
+        { id: "a", date: "2000-01-01", weightKg: 68 },
+        { id: "b", date: "2999-01-01", weightKg: 90 },
+      ],
+    });
+    const later = response();
+    await handler(
+      { method: "GET", headers: {} } as NextApiRequest,
+      later as unknown as NextApiResponse,
+    );
+    expect(later.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rider: { weightKg: 68, bikeWeightKg: 8, cdA: 0.28, crr: 0.005 },
+      }),
+    );
+  });
+
   it("rejects unauthenticated sessions before reading workouts", async () => {
     mocks.athlete.mockResolvedValue(null);
     const res = response();

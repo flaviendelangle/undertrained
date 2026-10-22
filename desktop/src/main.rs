@@ -1,5 +1,6 @@
 mod ant;
 mod auth;
+mod awake;
 mod ble;
 mod fec;
 mod fit;
@@ -12,6 +13,7 @@ mod recording_view;
 mod scenes;
 mod sensors;
 mod smoke;
+mod speed;
 mod store;
 mod upload;
 mod workouts;
@@ -100,7 +102,7 @@ struct Ride {
     chart_top: Option<f64>,
 }
 
-type WorkoutResult = Result<Vec<Workout>, LoadError>;
+type WorkoutResult = Result<workouts::Catalog, LoadError>;
 type UploadResult = Result<upload::Outcome, upload::Error>;
 
 /// True while leaving would lose data: a ride is running or paused, finished but not saved,
@@ -781,6 +783,8 @@ fn drop_ride(ui: &AppWindow, state: &mut AppState) {
     ui.set_ride_erg_enabled(false);
     ui.set_ride_erg_state(0);
     ui.set_ride_erg_watts("".into());
+    ui.set_ride_speed("—".into());
+    ui.set_ride_distance("—".into());
     reset_upload_ui(ui);
 }
 
@@ -1063,7 +1067,10 @@ fn begin_ride(
     let started = match &state.smoke_root {
         Some(root) => recording::Recording::start_in(root, name, key, now),
         None => recording::Recording::start(name, key, now),
-    };
+    }
+    // Speed is simulated from power with the account's figures, the website's defaults
+    // when the server sent none.
+    .map(|recording| recording.with_rider(state.library.rider.unwrap_or_default()));
     match started {
         Ok(recording) => {
             apply_ride_workout(ui, workout.as_ref());
@@ -1091,6 +1098,7 @@ fn begin_ride(
             let live = state.sensors.live(now);
             refresh_player(ui, &ride, &live, 0.0);
             apply_erg_state(ui, &ride);
+            apply_motion(ui, state.lang, &ride);
             state.ride = Some(ride);
             ui.set_ride_present(true);
             ui.set_ride_phase(1);
@@ -1167,6 +1175,17 @@ fn refresh_device_readings(ui: &AppWindow, state: &AppState, now: Instant) {
     }
 }
 
+/// The simulated speed and distance of the ride's last sample.
+fn apply_motion(ui: &AppWindow, lang: Lang, ride: &Ride) {
+    let (speed, distance) = ride
+        .recording
+        .samples()
+        .last()
+        .map_or((0.0, 0.0), |s| (s.speed, s.distance));
+    ui.set_ride_speed(i18n::speed(lang, speed).into());
+    ui.set_ride_distance(i18n::distance(lang, distance).into());
+}
+
 fn apply_live(ui: &AppWindow, live: &Live) {
     ui.set_ride_power(recording_view::value(live.power).into());
     ui.set_ride_power_live(live.power.is_some());
@@ -1192,8 +1211,7 @@ fn refresh_chart(ui: &AppWindow, ride: &mut Ride, now: Instant, whole: bool) {
     let (from, to) = if whole {
         (0.0, elapsed.max(1.0))
     } else {
-        let to = elapsed.max(recording_view::WINDOW_SECONDS);
-        (to - recording_view::WINDOW_SECONDS, to)
+        recording_view::live_window(elapsed)
     };
     let chart = recording_view::chart(&points, from, to, ride.ftp);
     ride.chart_top = chart.power_top;
@@ -1274,6 +1292,10 @@ fn finish_ride(
     }
     let summary = ride.recording.summary(now);
     ui.set_ride_elapsed(recording_view::elapsed(summary.elapsed).into());
+    ui.set_ride_distance(i18n::distance(lang, summary.distance).into());
+    let speed = |s: Option<f64>| s.map_or_else(|| "—".to_owned(), |s| i18n::speed(lang, s));
+    ui.set_ride_avg_speed(speed(summary.avg_speed).into());
+    ui.set_ride_max_speed(speed(summary.max_speed).into());
     ui.set_ride_avg_power(recording_view::value_with_unit(summary.avg_power, "W").into());
     ui.set_ride_max_power(recording_view::value_with_unit(summary.max_power, "W").into());
     ui.set_ride_avg_hr(recording_view::value_with_unit(summary.avg_heart_rate, "bpm").into());
@@ -2502,14 +2524,26 @@ fn main() -> anyhow::Result<()> {
     let timer_commands = commands.clone();
     let scene_frozen = std::env::var_os("UNDERTRAINED_SCREENSHOT").is_some()
         && std::env::var_os("UNDERTRAINED_SCREENSHOT_SCENE").is_some();
+    // Developer runs never touch the desktop's power settings.
+    let mut awake = (!smoke_test && std::env::var_os("UNDERTRAINED_SCREENSHOT").is_none())
+        .then(awake::KeepAwake::default);
     timer.start(TimerMode::Repeated, Duration::from_millis(100), move || {
         let Some(ui) = weak.upgrade() else {
             return;
         };
         while let Ok((generation, result)) = workout_receiver.try_recv() {
             let expired = matches!(result, Err(LoadError::Unauthorized));
+            let rider = result.as_ref().ok().map(|catalog| catalog.rider);
             // Only the latest request for the current account may touch the library.
-            if timer_state.borrow_mut().library.finish(generation, result) {
+            let mut state = timer_state.borrow_mut();
+            if state
+                .library
+                .finish(generation, result.map(|catalog| catalog.workouts))
+            {
+                if let Some(rider) = rider {
+                    state.library.rider = rider;
+                }
+                drop(state);
                 if expired {
                     ui.set_session_live(false);
                 }
@@ -2685,7 +2719,13 @@ fn main() -> anyhow::Result<()> {
             poll_ride_save(&ui, &mut state);
             start_on_power(&ui, &mut state, &timer_commands, now);
             refresh_device_readings(&ui, &state, now);
-            let AppState { ride, sensors, .. } = &mut *state;
+            let AppState {
+                ride,
+                sensors,
+                lang,
+                ..
+            } = &mut *state;
+            let lang = *lang;
             let live = sensors.live(now);
             if ui.get_screen() == 2 || ride.is_some() {
                 apply_live(&ui, &live);
@@ -2695,7 +2735,10 @@ fn main() -> anyhow::Result<()> {
                 match ride.recording.phase() {
                     Phase::Running => {
                         match ride.recording.tick(now, live.clone()) {
-                            Ok(true) => refresh_chart(&ui, ride, now, false),
+                            Ok(true) => {
+                                refresh_chart(&ui, ride, now, false);
+                                apply_motion(&ui, lang, ride);
+                            }
                             Ok(false) => {}
                             Err(error) => {
                                 ride.paused_at = Some(now);
@@ -2733,6 +2776,15 @@ fn main() -> anyhow::Result<()> {
             // quiet on power loses control first.
             guard_erg_power(&ui, &mut state, &timer_commands, now);
             sync_erg(&ui, &mut state, &timer_commands, now);
+            // The ride screen, from the ready screen to the summary, and any ride still
+            // recording elsewhere keep the screen on and the computer awake.
+            if let Some(awake) = awake.as_mut() {
+                let recording = state
+                    .ride
+                    .as_ref()
+                    .is_some_and(|ride| ride.recording.phase() != Phase::Finished);
+                awake.set(ui.get_logged_in() && (ui.get_screen() == 2 || recording));
+            }
         }
     });
     let screenshot_timer = Timer::default();

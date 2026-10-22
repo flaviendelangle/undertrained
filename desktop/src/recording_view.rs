@@ -37,6 +37,16 @@ pub struct Chart {
     pub hr_range: Option<(f64, f64)>,
 }
 
+/// The span the live chart shows at `elapsed`: the last ten minutes, cut on fixed two-second
+/// slots of the ride clock. Sliding then moves whole bins, so a finished bin keeps its
+/// average and the scale only moves when the peak bin enters or leaves; a window that slid
+/// by the second would re-average every bar, and rescale, on every tick.
+pub fn live_window(elapsed: f64) -> (f64, f64) {
+    let bin = WINDOW_SECONDS / CHART_BINS as f64;
+    let to = ((elapsed / bin).ceil() * bin).max(WINDOW_SECONDS);
+    (to - WINDOW_SECONDS, to)
+}
+
 /// "4:05", or "1:04:05" past an hour, like the website's elapsed clock.
 pub fn elapsed(seconds: f64) -> String {
     let total = seconds.max(0.0).floor() as u64;
@@ -256,6 +266,60 @@ mod tests {
         assert!(chart.bins[2].power.is_none() && chart.bins[2].heart_rate.is_none());
         assert_eq!(chart.hr_range, Some((110.0, 150.0)));
         assert!(chart.bins[299].power.is_none(), "The far point stays out");
+    }
+
+    #[test]
+    fn sliding_keeps_finished_bins() {
+        // A ride sampled every second, with power that differs between neighbours.
+        let points: Vec<Point> = (0..900)
+            .map(|second| Point {
+                elapsed: f64::from(second) + 0.1,
+                power: Some(f64::from(100 + (second * 37) % 150)),
+                heart_rate: Some(f64::from(120 + second % 7)),
+            })
+            .collect();
+        // The bins' own averages, back from fractions of the axes, which a new extreme in
+        // the bin still filling may rescale.
+        let averages = |elapsed: f64| {
+            let past: Vec<Point> = points
+                .iter()
+                .copied()
+                .filter(|p| p.elapsed <= elapsed)
+                .collect();
+            let (from, to) = live_window(elapsed);
+            let chart = chart(&past, from, to, None);
+            let top = chart.power_top.unwrap();
+            let (low, high) = chart.hr_range.unwrap();
+            let bins: Vec<(i64, i64)> = chart
+                .bins
+                .iter()
+                .map(|b| {
+                    (
+                        (b.power.unwrap() * top * 1000.0).round() as i64,
+                        ((b.heart_rate.unwrap() * (high - low) + low) * 1000.0).round() as i64,
+                    )
+                })
+                .collect();
+            (from, bins)
+        };
+        for second in 700..760 {
+            let (from, before) = averages(f64::from(second) + 0.5);
+            let (next_from, after) = averages(f64::from(second) + 1.5);
+            let shift = ((next_from - from) / 2.0).round() as usize;
+            assert!(shift <= 1, "The window moves at most one bin per second");
+            // Every bin that was complete before keeps its average, one slot left if the
+            // window moved; only the bin still filling may change.
+            for index in shift..CHART_BINS - 1 {
+                assert_eq!(
+                    before[index],
+                    after[index - shift],
+                    "Bin {index} at {second} s"
+                );
+            }
+        }
+        assert_eq!(live_window(0.0), (0.0, WINDOW_SECONDS));
+        assert_eq!(live_window(601.0), (2.0, 602.0));
+        assert_eq!(live_window(602.0), (2.0, 602.0));
     }
 
     #[test]

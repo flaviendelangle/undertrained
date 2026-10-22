@@ -11,6 +11,7 @@ import { desktopBuiltInWorkouts } from "~/server/lib/desktopBuiltInWorkouts";
 import { desktopAthlete } from "~/server/lib/desktopSession";
 import {
   desktopReferenceFtp,
+  desktopRider,
   desktopWorkoutExecution,
 } from "~/server/lib/desktopWorkoutExecution";
 import { summarizeWorkout } from "~/server/lib/workoutSummary";
@@ -57,6 +58,7 @@ export default async function handler(
       settings,
       requestedLocale ?? account?.language,
     ),
+    rider: desktopRider(settings),
     workouts: rows
       .map((row) => ({
         ...summarizeWorkout(row),

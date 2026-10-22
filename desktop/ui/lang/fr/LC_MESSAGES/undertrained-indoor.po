@@ -406,6 +406,9 @@ msgstr "FC MOY."
 msgid "AVG POWER"
 msgstr "PUISSANCE MOY."
 
+msgid "AVG SPEED"
+msgstr "VITESSE MOY."
+
 msgid "Back to the ride"
 msgstr "Retour à la sortie"
 
@@ -427,6 +430,12 @@ msgstr "Sortie libre"
 msgid "HEART RATE"
 msgstr "FRÉQUENCE CARDIAQUE"
 
+msgid "SPEED"
+msgstr "VITESSE"
+
+msgid "DISTANCE"
+msgstr "DISTANCE"
+
 msgid "Keep recording"
 msgstr "Continuer l'enregistrement"
 
@@ -441,6 +450,9 @@ msgstr "FC MAX."
 
 msgid "MAX POWER"
 msgstr "PUISSANCE MAX."
+
+msgid "MAX SPEED"
+msgstr "VITESSE MAX."
 
 msgid "No sensor is connected. The ride keeps running and missing readings stay empty; reconnect from the Devices screen."
 msgstr "Aucun capteur n'est connecté. La sortie continue et les mesures manquantes restent vides ; reconnectez-le depuis l'écran Appareils."
@@ -463,8 +475,8 @@ msgstr "En pause"
 msgid "RPM"
 msgstr "TR/MIN"
 
-msgid "Readings only: nothing is sent to the trainer. Speed and distance are not measured."
-msgstr "Mesures uniquement : rien n'est envoyé au home trainer. La vitesse et la distance ne sont pas mesurées."
+msgid "Readings only: nothing is sent to the trainer. Speed and distance are simulated from power."
+msgstr "Mesures uniquement : rien n'est envoyé au home trainer. La vitesse et la distance sont simulées à partir de la puissance."
 
 msgid "Recording"
 msgstr "Enregistrement"
@@ -822,6 +834,12 @@ msgstr "bpm"
 msgid "rpm"
 msgstr "tr/min"
 
+msgid "km/h"
+msgstr "km/h"
+
+msgid "km"
+msgstr "km"
+
 msgid "FTP assessments, ready to ride."
 msgstr "Tests FTP, prêts à rouler."
 
@@ -878,8 +896,8 @@ msgstr "ERG activé · {} maintient chaque cible dès le départ"
 msgid "{} paired. Recording starts at your first pedal stroke."
 msgstr "{} appairé. L'enregistrement démarre à votre premier coup de pédale."
 
-msgid "Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds without power."
-msgstr "Capteurs prêts. L'enregistrement démarre à votre premier coup de pédale et se met en pause de lui-même après 5 secondes sans puissance."
+msgid "Sensors ready. Recording starts at your first pedal stroke and pauses itself after 5 seconds at zero watts, or 30 seconds without any reading from the trainer."
+msgstr "Capteurs prêts. L'enregistrement démarre à votre premier coup de pédale et se met en pause de lui-même après 5 secondes à zéro watt, ou 30 secondes sans aucune mesure du home trainer."
 
 msgid "Waiting for your first pedal stroke"
 msgstr "En attente du premier coup de pédale"
@@ -911,11 +929,11 @@ msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 
 msgid "Paused for {}. The ride paused itself after 5 seconds at zero watts, or 30 seconds without any reading from the trainer; the clock is stopped. Pedal to resume, or press Resume."
 msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 secondes à zéro watt, ou 30 secondes sans aucune mesure du home trainer ; le chrono est arrêté. Pédalez pour reprendre, ou appuyez sur Reprendre."
 
-msgid "The steps are timed from the plan and the target is shown at every moment. With ERG on, a trainer that supports it sets the resistance to the target; off, you follow the target yourself. No FTP result is computed. Speed and distance are not measured."
-msgstr "Les étapes sont chronométrées d'après le plan et la cible est affichée à chaque instant. Avec l'ERG activé, un home trainer compatible règle la résistance sur la cible ; désactivé, vous suivez la cible vous-même. Aucun résultat FTP n'est calculé. La vitesse et la distance ne sont pas mesurées."
+msgid "The steps are timed from the plan and the target is shown at every moment. With ERG on, a trainer that supports it sets the resistance to the target; off, you follow the target yourself. No FTP result is computed. Speed and distance are simulated from power."
+msgstr "Les étapes sont chronométrées d'après le plan et la cible est affichée à chaque instant. Avec l'ERG activé, un home trainer compatible règle la résistance sur la cible ; désactivé, vous suivez la cible vous-même. Aucun résultat FTP n'est calculé. La vitesse et la distance sont simulées à partir de la puissance."
 
-msgid "Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the test does not end on its own. Finish the ride yourself once you cannot hold the target. Speed and distance are not measured."
-msgstr "Test intégré : les étapes sont chronométrées et la cible affichée, mais aucun résultat FTP n'est calculé et le test ne s'arrête pas de lui-même. Terminez la sortie vous-même dès que vous ne tenez plus la cible. La vitesse et la distance ne sont pas mesurées."
+msgid "Built-in test: the steps are timed and the target is shown, but no FTP result is computed and the test does not end on its own. Finish the ride yourself once you cannot hold the target. Speed and distance are simulated from power."
+msgstr "Test intégré : les étapes sont chronométrées et la cible affichée, mais aucun résultat FTP n'est calculé et le test ne s'arrête pas de lui-même. Terminez la sortie vous-même dès que vous ne tenez plus la cible. La vitesse et la distance sont simulées à partir de la puissance."
 
 msgid "Built-in test: no FTP result is computed and the test does not end on its own. Finish the ride once you cannot hold the target."
 msgstr "Test intégré : aucun résultat FTP n'est calculé et le test ne s'arrête pas de lui-même. Terminez la sortie dès que vous ne tenez plus la cible."
