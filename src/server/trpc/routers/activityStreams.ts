@@ -5,6 +5,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import { getSportConfig } from "../../../utils/sportConfig";
+import { isOneHertz } from "../../../utils/streamTimeBase";
 import type { Database } from "../../db";
 import { activities, activityStreams, riderSettings } from "../../db/schema";
 import {
@@ -22,6 +23,7 @@ import {
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 const USABLE_TYPES = new Set([
+  "time",
   "heartrate",
   "watts",
   "cadence",
@@ -31,6 +33,21 @@ const USABLE_TYPES = new Set([
   "latlng",
   "temp",
 ]);
+
+/**
+ * Whether a stored `time` stream is worth sending. The client reads a
+ * recording without one as 1 Hz, which is exactly what a 0, 1, 2, … stream
+ * says, so only smart-recorded or paused activities need it. Malformed data is
+ * sent as is and left to the client's decoding.
+ */
+function isTimeNeeded(data: string): boolean {
+  try {
+    const time: unknown = JSON.parse(data);
+    return !Array.isArray(time) || !isOneHertz(time);
+  } catch {
+    return true;
+  }
+}
 
 /** Store streams and recompute scores for an activity. */
 async function storeAndRecomputeScores(
@@ -120,7 +137,7 @@ export const activityStreamsRouter = router({
                   .sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0))
                   .flatMap((c) => JSON.parse(c.data) as number[]),
               ),
-      }));
+      })).filter((s) => s.type !== "time" || isTimeNeeded(s.data));
     }),
 
   reload: protectedProcedure
