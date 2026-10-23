@@ -86,13 +86,25 @@ function stored(
   };
 }
 
-/** An in-memory library, plus a switch that leaves `get` hanging. */
+/**
+ * An in-memory library, plus a switch that leaves `get` hanging and a hook to
+ * answer the next `get` whenever the test decides.
+ */
 function library(rows: StructuredWorkoutRow[]) {
-  const state = { rows, getHangs: false };
+  const state = {
+    rows,
+    getHangs: false,
+    nextGet: null as Promise<StructuredWorkoutRow> | null,
+  };
   const procedures: TestProcedures = {
     structuredWorkouts: {
       list: () => state.rows.map(listed),
       get: ({ id }) => {
+        if (state.nextGet != null) {
+          const answer = state.nextGet;
+          state.nextGet = null;
+          return answer;
+        }
         if (state.getHangs) {
           return new Promise<never>(() => undefined);
         }
@@ -163,6 +175,42 @@ it("hands the saved version to the library and to a reader that mounts later", a
 
   const editor = server.render(() => useStructuredWorkout(workout.id));
   expect(editor.result.current.data?.name).toBe("Sweet spot, longer");
+});
+
+it("keeps the saved version when a read sent before the save answers after it", async () => {
+  const server = library([workout]);
+  const page = server.render(() => ({
+    detail: useStructuredWorkout(workout.id),
+    update: useUpdateStructuredWorkout(),
+  }));
+  await waitFor(() => expect(page.result.current.detail.data).toEqual(workout));
+
+  // A background refetch that is still on the wire when the save lands.
+  let answerStaleRead!: (row: StructuredWorkoutRow) => void;
+  server.state.nextGet = new Promise((resolve) => {
+    answerStaleRead = resolve;
+  });
+  act(() => {
+    void page.result.current.detail.refetch();
+  });
+  server.state.getHangs = true;
+
+  act(() =>
+    page.result.current.update.mutate({
+      athleteId: ATHLETE_ID,
+      id: workout.id,
+      name: "Sweet spot, longer",
+      sport: "bike",
+      structure: workout.structure,
+    }),
+  );
+  await waitFor(() => expect(page.result.current.update.isSuccess).toBe(true));
+  await act(async () => {
+    answerStaleRead(workout);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(page.result.current.detail.data?.name).toBe("Sweet spot, longer");
 });
 
 it("leaves no cached copy of a deleted workout for a reader that mounts later", async () => {

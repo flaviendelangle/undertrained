@@ -66,11 +66,15 @@ export function useUpdateStructuredWorkout(options?: WriteOptions) {
   const onSuccess = options?.onSuccess;
 
   return trpc.structuredWorkouts.update.useMutation({
-    onSuccess: (saved, { athleteId }) => {
+    onSuccess: async (saved, { athleteId }) => {
       // Written, not invalidated: an invalidated entry still hands its pre-edit
       // tree to an editor that mounts before the refetch lands, and the editor
       // seeds its undo history from it, so the next save would undo this one.
-      utils.structuredWorkouts.get.setData({ athleteId, id: saved.id }, saved);
+      // A read sent before the save is cancelled first, or its pre-edit row
+      // would land on top of the saved one.
+      const input = { athleteId, id: saved.id };
+      await utils.structuredWorkouts.get.cancel(input);
+      utils.structuredWorkouts.get.setData(input, saved);
       onSuccess?.();
       return utils.structuredWorkouts.list.invalidate();
     },
