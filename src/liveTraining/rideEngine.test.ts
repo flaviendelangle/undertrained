@@ -520,9 +520,13 @@ describe("the ramp test", () => {
       clock.stall(250);
     }
     expect(ride().workout.currentSegment?.intensity).toBe("cooldown");
+    // The held-back sample lands, and finds the cooldown just begun.
+    clock.advance(0);
+    expect(ride().workout.currentSegment?.intensity).toBe("cooldown");
+    expect(ride().workout.secondsIntoSegment).toBeLessThan(1);
   });
 
-  it.each([
+  it.each<[string, (ride: Ride) => void | Promise<void>]>([
     [
       "a brief dip",
       ({ pedal }: Ride) => {
@@ -551,6 +555,18 @@ describe("the ramp test", () => {
       },
     ],
     [
+      "readings further apart than they last, between heart rate packets",
+      async ({ engine, clock, trainer, heartRate }: Ride) => {
+        await engine.connect("heartRate");
+        for (let ms = 0; ms <= 15_000; ms += 3000) {
+          trainer.live.onData(STOPPED);
+          clock.stall(1500);
+          heartRate.live.onData({ heartRate: 150 });
+          clock.stall(1500);
+        }
+      },
+    ],
+    [
       "a suspended tab",
       ({ clock, trainer, pedal }: Ride) => {
         pedal(5, STOPPED);
@@ -562,7 +578,7 @@ describe("the ramp test", () => {
     ],
   ])("is not ended by %s", async (_, scenario) => {
     const ride = await intoTheRamp();
-    scenario(ride);
+    await scenario(ride);
     expect(ride.ride().workout.currentSegment?.intensity).toBe("work");
   });
 

@@ -269,7 +269,11 @@ export class RideEngine {
       source: "ant+",
       kind: TRAINER,
       clock: this.clock,
-      onChange: (change) => this.commit({ resend: change?.resumed }),
+      onChange: (change) => {
+        // Readings either side of a silence are not one stretch of zero power.
+        if (change?.resumed) this.zeroSince = null;
+        this.commit({ resend: change?.resumed });
+      },
     });
     this.heartRate = new SensorLink({
       adapters: options.sensors.heartRate,
@@ -720,6 +724,10 @@ export class RideEngine {
 
   /** Moves the workout clock to the cooldown's start, if the test allows it. */
   private skipToCooldown(): boolean {
+    // From the clock as it is now: in a background tab the last sample can be
+    // most of a minute old, and the cooldown would start that far in.
+    if (this.runningSince != null)
+      this.elapsed = this.elapsedAt(this.clock.now());
     const position = this.position();
     const cooldown = this.cooldown();
     if (!this.canFinishTest(position) || !cooldown) return false;
