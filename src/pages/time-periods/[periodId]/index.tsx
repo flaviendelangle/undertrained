@@ -14,6 +14,7 @@ import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
 
 import { ActivitiesTable } from "~/components/ActivitiesTable";
 import { PageTitle } from "~/components/PageTitle";
+import { makePeriodRange } from "~/components/charts/PowerCurve/dateRanges";
 import { TimePeriodForm } from "~/components/periods/TimePeriodForm";
 import { TimePeriodStats } from "~/components/periods/TimePeriodStats";
 import { CardTitle } from "~/components/primitives/CardTitle";
@@ -160,14 +161,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
               <PowerCurve
                 activityTypes={powerActivityTypes}
                 timePeriodId={periodId}
-                defaultRanges={[
-                  {
-                    id: `period-${period.id}`,
-                    label: period.name,
-                    dateFrom: period.startDate,
-                    dateTo: period.endDate,
-                  },
-                ]}
+                defaultRanges={[makePeriodRange(period)]}
               />
             )}
             <section className="md:border-border md:bg-card p-5 md:rounded-xl md:border">
