@@ -35,7 +35,6 @@ vi.mock("../../env", () => ({ env: { APP_URL: undefined } }));
 vi.mock("../../lib/strava", () => ({
   getAccessToken: vi.fn(),
   updateActivityOnStrava: vi.fn(),
-  workoutTypeForSport: vi.fn(),
 }));
 vi.mock("../../../pages/api/auth/[...nextauth]", () => ({ authOptions: {} }));
 

@@ -14,14 +14,11 @@ import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
+import { workoutChoiceToValue } from "../../../utils/sportConfig";
 import type { Database } from "../../db";
 import { activities, athletes, plannedTrainings } from "../../db/schema";
 import { env } from "../../env";
-import {
-  getAccessToken,
-  updateActivityOnStrava,
-  workoutTypeForSport,
-} from "../../lib/strava";
+import { getAccessToken, updateActivityOnStrava } from "../../lib/strava";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 /** Shared field validators for create/update. */
@@ -339,7 +336,9 @@ export const plannedTrainingsRouter = router({
       }
 
       const accessToken = await getAccessToken(ctx.db, input.athleteId);
-      const workoutType = workoutTypeForSport(plan.sportType);
+      // Flag the activity as a structured workout; sports without a Strava
+      // workout type keep the field untouched.
+      const workoutType = workoutChoiceToValue(plan.sportType, "workout");
 
       // Push to Strava first; on failure this throws and we change nothing local.
       await updateActivityOnStrava(accessToken, input.stravaId, {
