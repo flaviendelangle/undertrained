@@ -4,7 +4,7 @@ import { z } from "zod";
 import { LOCALES } from "~/i18n/locales";
 
 import { athletes } from "../../db/schema";
-import { deleteAllAthleteData } from "../../lib/webhook";
+import { eraseAthleteData } from "../../lib/athleteErasure";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 export const accountRouter = router({
@@ -12,7 +12,7 @@ export const accountRouter = router({
     .input(z.object({ athleteId: z.number() }))
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
-      await deleteAllAthleteData(ctx.db, input.athleteId);
+      await eraseAthleteData(ctx.db, input.athleteId);
     }),
 
   // Account-level UI locale. Kept separate from riderSettings.save so that

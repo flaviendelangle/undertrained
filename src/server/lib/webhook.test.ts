@@ -1,22 +1,15 @@
-import { and, eq, getTableName, is } from "drizzle-orm";
-import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TRPCError } from "@trpc/server";
 
-import type { Database } from "../db";
-import * as schema from "../db/schema";
-import {
-  activities,
-  athletes,
-  desktopCodes,
-  desktopSessions,
-} from "../db/schema";
+import { activities } from "../db/schema";
 
 // `webhook.ts` reaches for the singleton db and a pile of sync helpers at import
 // time; stub them so these cases exercise the dispatcher alone, with no database
 // and no environment.
 vi.mock("../db", () => ({ db: dbMock }));
+vi.mock("./athleteErasure", () => ({ eraseAthleteData }));
 vi.mock("./strava", () => ({
   getAccessToken,
   fetchStreamsFromStrava: vi.fn(),
@@ -33,12 +26,7 @@ vi.mock("./sync", () => ({
 const ATHLETE_ID = 7;
 const STRAVA_ATHLETE_ID = 12345;
 
-type Op = {
-  verb: "delete" | "update";
-  table: unknown;
-  where: unknown;
-  values?: unknown;
-};
+type Op = { verb: "delete" | "update"; table: unknown; where: unknown };
 
 /** Every write the handler attempted, in order. */
 let ops: Op[] = [];
@@ -47,6 +35,7 @@ let activityRow: Record<string, unknown> | undefined;
 /** Condition the handler looked the activity up with. */
 let activityLookup: unknown;
 const getAccessToken = vi.fn<() => Promise<string>>();
+const eraseAthleteData = vi.fn<() => Promise<void>>();
 
 /**
  * Awaitable stand-in for a drizzle query builder tail: `await …where(x)` and
@@ -77,17 +66,16 @@ const dbMock = {
     },
   }),
   update: (table: unknown) => ({
-    set: (values: unknown) => ({
+    set: () => ({
       where: (where: unknown) => {
-        ops.push({ verb: "update", table, where, values });
+        ops.push({ verb: "update", table, where });
         return thenable([]);
       },
     }),
   }),
-  transaction: (run: (tx: unknown) => Promise<unknown>) => run(dbMock),
 };
 
-const { deleteAllAthleteData, processWebhookEvent, resetDeauthCheckThrottle } =
+const { processWebhookEvent, resetDeauthCheckThrottle } =
   await import("./webhook");
 
 function deauthEvent() {
@@ -102,9 +90,9 @@ function deauthEvent() {
   };
 }
 
-/** True when the handler wiped the athlete (activities + settings + tokens). */
+/** True when the handler erased the athlete's data. */
 function wiped() {
-  return ops.some((op) => op.verb === "delete" && op.table === activities);
+  return eraseAthleteData.mock.calls.length > 0;
 }
 
 beforeEach(() => {
@@ -114,6 +102,7 @@ beforeEach(() => {
   vi.unstubAllGlobals();
   resetDeauthCheckThrottle();
   getAccessToken.mockReset().mockResolvedValue("live-token");
+  eraseAthleteData.mockReset().mockResolvedValue();
   athleteRow = {
     id: ATHLETE_ID,
     stravaAthleteId: STRAVA_ATHLETE_ID,
@@ -143,21 +132,10 @@ describe("deauthorization events", () => {
   it("wipes the athlete once Strava rejects the token", async () => {
     stravaReplies(401);
     await processWebhookEvent(deauthEvent());
-    expect(wiped()).toBe(true);
-    expect(ops).toContainEqual({
-      verb: "delete",
-      table: desktopCodes,
-      where: eq(desktopCodes.athlete, ATHLETE_ID),
-    });
-    expect(ops).toContainEqual({
-      verb: "delete",
-      table: desktopSessions,
-      where: eq(desktopSessions.athlete, ATHLETE_ID),
-    });
-    // Tokens cleared too, so a stale grant can't be reused.
-    expect(
-      ops.some((op) => op.verb === "update" && op.table === athletes),
-    ).toBe(true);
+    expect(eraseAthleteData).toHaveBeenCalledExactlyOnceWith(
+      dbMock,
+      ATHLETE_ID,
+    );
   });
 
   it("wipes when the refresh token itself was revoked", async () => {
@@ -238,55 +216,6 @@ describe("deauthorization events", () => {
       updates: { authorized: "true" },
     });
     expect(ops).toHaveLength(0);
-  });
-});
-
-describe("account data deletion", () => {
-  /**
-   * Every table with a foreign key to `athletes.id`, and the column holding it.
-   * Read off the schema so a table added later can't be left out of the erasure
-   * without this failing.
-   */
-  const athleteOwned = Object.values(schema)
-    .filter((value) => is(value, PgTable))
-    .flatMap((table) =>
-      getTableConfig(table).foreignKeys.flatMap((fk) => {
-        const { columns, foreignColumns } = fk.reference();
-        return foreignColumns[0] === athletes.id
-          ? [{ table, column: columns[0] }]
-          : [];
-      }),
-    );
-
-  it("deletes every athlete-owned table for only this athlete", async () => {
-    // Guards the schema walk itself: an empty list would pass vacuously.
-    expect(athleteOwned.map(({ table }) => table)).toContain(activities);
-
-    await deleteAllAthleteData(dbMock as unknown as Database, ATHLETE_ID);
-    for (const { table, column } of athleteOwned) {
-      expect(ops, getTableName(table)).toContainEqual({
-        verb: "delete",
-        table,
-        where: eq(column, ATHLETE_ID),
-      });
-    }
-    expect(
-      ops.some((op) => op.verb === "delete" && op.table === athletes),
-    ).toBe(false);
-  });
-
-  it("clears the tokens, calendar feed token and name on the kept athlete row", async () => {
-    await deleteAllAthleteData(dbMock as unknown as Database, ATHLETE_ID);
-    const update = ops.find(
-      (op) => op.verb === "update" && op.table === athletes,
-    );
-    expect(update?.where).toEqual(eq(athletes.id, ATHLETE_ID));
-    expect(update?.values).toMatchObject({
-      accessToken: "",
-      refreshToken: "",
-      calendarToken: null,
-      name: null,
-    });
   });
 });
 

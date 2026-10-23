@@ -6,20 +6,8 @@ import { TRPCError } from "@trpc/server";
 import { getSportConfig } from "../../utils/sportConfig";
 import { db } from "../db";
 import type { Database } from "../db";
-import {
-  activities,
-  athleteStats,
-  athletes,
-  calendarSubscriptions,
-  desktopCodes,
-  desktopSessions,
-  plannedTrainings,
-  riderSettings,
-  routes,
-  structuredWorkouts,
-  syncJobs,
-  timePeriods,
-} from "../db/schema";
+import { activities, athletes, riderSettings } from "../db/schema";
+import { eraseAthleteData } from "./athleteErasure";
 import {
   fetchStreamsFromStrava,
   getAccessToken,
@@ -497,66 +485,6 @@ async function handleAthleteDeauthorization(
     return;
   }
   console.log(`[webhook] Athlete ${athleteId} deauthorized, cleaning up`);
-  await deleteAllAthleteData(db, athleteId);
+  await eraseAthleteData(db, athleteId);
   console.log(`[webhook] Cleanup complete for athlete ${athleteId}`);
-}
-
-// ── Shared deletion helper ──────────────────────────────────────────────
-
-/**
- * Deletes everything an athlete owns (every table keyed on `athletes.id`) in
- * one transaction, and clears the OAuth tokens, calendar feed token and name.
- * Keeps the athlete row for NextAuth session reference.
- */
-export async function deleteAllAthleteData(
-  db: Database,
-  athleteId: number,
-): Promise<void> {
-  await db.transaction(async (tx) => {
-    // The athlete row is retained, so its foreign-key cascades never run.
-    // Remove pending grants before sessions to prevent their later exchange.
-    await tx.delete(desktopCodes).where(eq(desktopCodes.athlete, athleteId));
-    await tx
-      .delete(desktopSessions)
-      .where(eq(desktopSessions.athlete, athleteId));
-
-    // Plans go before the activities and workouts they link to, so the
-    // `set null` cascades on those links have nothing left to rewrite.
-    await tx
-      .delete(plannedTrainings)
-      .where(eq(plannedTrainings.athlete, athleteId));
-
-    // Delete all activities (streams and best efforts cascade via FK)
-    await tx.delete(activities).where(eq(activities.athlete, athleteId));
-
-    await tx
-      .delete(structuredWorkouts)
-      .where(eq(structuredWorkouts.athlete, athleteId));
-    await tx.delete(routes).where(eq(routes.athlete, athleteId));
-    await tx
-      .delete(calendarSubscriptions)
-      .where(eq(calendarSubscriptions.athlete, athleteId));
-    await tx.delete(athleteStats).where(eq(athleteStats.athlete, athleteId));
-    await tx.delete(riderSettings).where(eq(riderSettings.athlete, athleteId));
-    await tx.delete(timePeriods).where(eq(timePeriods.athlete, athleteId));
-    await tx.delete(syncJobs).where(eq(syncJobs.athlete, athleteId));
-
-    // Clear tokens but keep athlete row (NextAuth session reference). Nulling
-    // `calendarToken` takes the iCal feed URL offline; `name` is restored from
-    // the Strava profile on the next sign-in.
-    // `lastSeenActivityId` goes back to 0 alongside the activities it indexes: if
-    // the athlete ever reconnects, the re-import mints ids above any stale
-    // watermark and the link prompt would offer their entire history.
-    await tx
-      .update(athletes)
-      .set({
-        accessToken: "",
-        refreshToken: "",
-        tokenExpiresAt: 0,
-        calendarToken: null,
-        name: null,
-        lastSeenActivityId: 0,
-      })
-      .where(eq(athletes.id, athleteId));
-  });
 }
