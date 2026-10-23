@@ -348,7 +348,9 @@ export class AntTrainerAdapter implements TrainerAdapter {
   }
 
   async setTargetPower(watts: number): Promise<void> {
-    if (!this.feSensor || !this.controlAvailable) {
+    // Once disconnect() has started, a target would land after the release
+    // and leave the trainer in ERG.
+    if (this.disposed || !this.feSensor || !this.controlAvailable) {
       throw new Error("FE-C sensor not connected — cannot set target power");
     }
     await this.feSensor.setTargetPower(

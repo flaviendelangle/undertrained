@@ -211,6 +211,23 @@ describe("ANT+ trainer", () => {
     await trainer.disconnect();
     expect(feSensor.setTrackResistance).toHaveBeenCalledWith(0, 0.005);
   });
+
+  it("sends no target once it has started letting go", async () => {
+    const { antPlus, AntTrainerAdapter } = await load();
+    const trainer = new AntTrainerAdapter();
+    await trainer.connect(trainerEvents());
+    const feSensor = antPlus.sensors[0] as InstanceType<
+      typeof antPlus.FitnessEquipmentSensor
+    >;
+    feSensor.emit("fitnessData", { InstantaneousPower: 200 });
+
+    const disconnecting = trainer.disconnect();
+    // A debounced ERG write landing while the release is on its way.
+    await expect(trainer.setTargetPower(250)).rejects.toThrow();
+    await disconnecting;
+
+    expect(feSensor.setTargetPower).not.toHaveBeenCalled();
+  });
 });
 
 describe("ANT+ stick sharing", () => {
