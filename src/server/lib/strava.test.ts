@@ -207,6 +207,21 @@ describe("stravaApi", () => {
     });
   });
 
+  it.each([
+    ["our app's credentials are rejected", replies(400, applicationRejected)],
+    ["the token endpoint is down", replies(502, {})],
+  ])(
+    "reads a refresh failing because %s as an unavailable token",
+    async (_, response) => {
+      athleteRow!.tokenExpiresAt = 0;
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+      await expect(
+        stravaApi(db).getActivity(ATHLETE_ID, 1),
+      ).rejects.toMatchObject({ kind: "token_unavailable" });
+      expect(stravaV3.activities.get).not.toHaveBeenCalled();
+    },
+  );
+
   it("stops calling Strava until the window resets once the read budget is spent", async () => {
     vi.useFakeTimers();
     try {

@@ -437,24 +437,50 @@ describe("rate limit", () => {
   });
 });
 
-describe("revoked grant", () => {
-  it("fails the sync job without counting attempts against the activity", async () => {
+// Without a usable token every call fails the same way, so it says nothing
+// about the activity at hand.
+describe("token failures", () => {
+  const revoked = new StravaError(
+    "grant_revoked",
+    "Strava session expired. Please sign in again.",
+  );
+  const tokenEndpointDown = new StravaError(
+    "token_unavailable",
+    "Strava token refresh failed (502 Bad Gateway).",
+  );
+
+  it.each([
+    ["a revoked grant", revoked],
+    ["a token refresh that fails", tokenEndpointDown],
+  ])("fails the sync job on %s without counting attempts", async (_, error) => {
     strava.put(ATHLETE, ride(60), rideStreams(200));
-    strava.failNext(
-      "getStreams",
-      new StravaError(
-        "grant_revoked",
-        "Strava session expired. Please sign in again.",
-      ),
-    );
+    strava.put(ATHLETE, ride(61), rideStreams(200));
+    // Mid-sync: the page was listed, then the token goes for good.
+    strava.failNext("getStreams", error, 10);
+    strava.failNext("getActivity", error, 10);
 
     expect(await sync()).toMatchObject({
       status: "failed",
-      lastError: "Strava session expired. Please sign in again.",
+      lastError: error.message,
     });
-    expect(store.activity(60)).toMatchObject({
+    for (const stravaId of [60, 61]) {
+      expect(store.activity(stravaId)).toMatchObject({
+        streamFetchAttempts: 0,
+        detailFetchAttempts: 0,
+      });
+    }
+  });
+
+  it("doesn't count a token failure against the activity on a webhook event", async () => {
+    strava.put(ATHLETE, ride(62), rideStreams(200));
+    strava.failNext("getStreams", tokenEndpointDown);
+
+    await expect(ingestion.activityCreated(ATHLETE, 62)).rejects.toBe(
+      tokenEndpointDown,
+    );
+    expect(store.activity(62)).toMatchObject({
+      areStreamsLoaded: false,
       streamFetchAttempts: 0,
-      detailFetchAttempts: 0,
     });
   });
 });

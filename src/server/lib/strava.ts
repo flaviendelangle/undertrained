@@ -317,15 +317,27 @@ function statusCodeOf(error: unknown): number | undefined {
     : undefined;
 }
 
-/** Translates a strava-v3 or token failure into the port's vocabulary. */
-function toStravaError(error: unknown): StravaError {
-  if (error instanceof StravaError) return error;
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Translates a `getAccessToken` failure into the port's vocabulary. */
+function tokenError(error: unknown): StravaError {
   // `getAccessToken` only says UNAUTHORIZED when Strava rejected the grant
-  // itself or there's no refresh token left.
-  if (error instanceof TRPCError && error.code === "UNAUTHORIZED") {
-    return new StravaError("grant_revoked", error.message, { cause: error });
-  }
-  const message = error instanceof Error ? error.message : String(error);
+  // itself or there's no refresh token left. Anything else (the token
+  // endpoint down, our app credentials rejected) isn't the athlete's doing.
+  return new StravaError(
+    error instanceof TRPCError && error.code === "UNAUTHORIZED"
+      ? "grant_revoked"
+      : "token_unavailable",
+    messageOf(error),
+    { cause: error },
+  );
+}
+
+/** Translates a strava-v3 failure into the port's vocabulary. */
+function requestError(error: unknown): StravaError {
+  const message = messageOf(error);
   switch (statusCodeOf(error)) {
     case 404:
       return new StravaError("not_found", message, { cause: error });
@@ -361,15 +373,18 @@ export function stravaApi(db: Database): StravaPort {
         retryAfterMs: msUntilRateLimitReset(),
       });
     }
+    let accessToken: string;
     try {
-      const accessToken = await getAccessToken(db, athleteId);
-      try {
-        return await request(accessToken);
-      } finally {
-        lastResponseAt = Date.now();
-      }
+      accessToken = await getAccessToken(db, athleteId);
     } catch (e) {
-      throw toStravaError(e);
+      throw tokenError(e);
+    }
+    try {
+      return await request(accessToken);
+    } catch (e) {
+      throw requestError(e);
+    } finally {
+      lastResponseAt = Date.now();
     }
   }
 

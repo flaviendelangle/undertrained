@@ -36,8 +36,9 @@ export interface ActivityIngestion {
    * and detailed activity of every activity still missing them, refreshes the
    * athlete's stats, then re-scores all their activities. Progress goes to the
    * job row, and the run stops early when the job row is failed or completed
-   * by someone else. Waits out Strava's rate limit. Any fatal error, a revoked
-   * grant included, marks the job failed.
+   * by someone else. Waits out Strava's rate limit. Any fatal error marks the
+   * job failed, a revoked grant or an unavailable token included: those count
+   * no attempt against the activity at hand.
    */
   runSync(
     athleteId: number,
@@ -229,8 +230,8 @@ export function createActivityIngestion({
   }
 
   /**
-   * Fetches and stores the streams. A failure other than a revoked grant is
-   * logged and counts against the activity's stream attempts. Returns whether
+   * Fetches and stores the streams. A failure is logged and counts against
+   * the activity's stream attempts, see {@link recordFailure}. Returns whether
    * the streams are stored.
    */
   async function refreshStreams(
@@ -275,13 +276,22 @@ export function createActivityIngestion({
     }
   }
 
+  /**
+   * Counts a failed fetch against the activity, unless the failure says
+   * nothing about it: without a usable token every call for the athlete fails
+   * the same way, so the trigger stops instead and a sync job ends failed.
+   */
   async function recordFailure(
     activity: { id: number; stravaId: number },
     what: "streams" | "details",
     error: unknown,
   ): Promise<void> {
-    // Every other activity would fail the same way; let the trigger stop.
-    if (isStravaError(error, "grant_revoked")) throw error;
+    if (
+      isStravaError(error, "grant_revoked") ||
+      isStravaError(error, "token_unavailable")
+    ) {
+      throw error;
+    }
     console.error(
       `[ingestion] Fetching ${what} failed for ${activity.stravaId}:`,
       error,

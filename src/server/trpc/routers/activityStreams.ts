@@ -41,6 +41,9 @@ function stravaFailure(error: unknown): unknown {
         message: error.message,
         cause: error,
       });
+    case "token_unavailable":
+      // As before the port: `getAccessToken`'s own error, a BAD_GATEWAY.
+      return error.cause ?? error;
     case "other":
       return error;
   }

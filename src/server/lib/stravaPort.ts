@@ -31,10 +31,17 @@ export interface StravaPort {
  *   window resets.
  * - `grant_revoked`: we hold no usable grant for the athlete. Retrying won't
  *   help until they sign in again.
- * - `other`: anything else, transient or not.
+ * - `token_unavailable`: we couldn't get an access token for another reason
+ *   (the token endpoint is down, or rejects our app's credentials). Like a
+ *   revoked grant, it fails every call for the athlete, not just this one.
+ * - `other`: anything else about this one call, transient or not.
  */
 export type StravaErrorKind =
-  "not_found" | "rate_limited" | "grant_revoked" | "other";
+  | "not_found"
+  | "rate_limited"
+  | "grant_revoked"
+  | "token_unavailable"
+  | "other";
 
 export class StravaError extends Error {
   readonly kind: StravaErrorKind;
