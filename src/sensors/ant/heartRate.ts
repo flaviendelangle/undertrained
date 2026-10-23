@@ -39,9 +39,11 @@ export class AntHeartRateAdapter implements HeartRateAdapter {
   private async attachSensor(
     events: SensorEvents<HeartRateData>,
   ): Promise<ConnectResult> {
-    const { HeartRateSensor } = await import("ant-plus-next");
-
+    // Before the first await, so a disconnect() during the import sticks.
     this.disposed = false;
+    const { HeartRateSensor } = await import("ant-plus-next");
+    if (this.disposed) return { status: "cancelled" };
+
     beginStickUse();
 
     let stick: import("ant-plus-next").WebUsbStick;

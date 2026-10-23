@@ -340,4 +340,20 @@ describe("ANT+ stick sharing", () => {
     await expect(connecting).resolves.toEqual({ status: "cancelled" });
     expect(antPlus.sticks[0].closed).toBe(true);
   });
+
+  it("takes no stick when disconnect() comes while the library loads", async () => {
+    const { antPlus, AntHeartRateAdapter, AntTrainerAdapter } = await load();
+    const hr = new AntHeartRateAdapter();
+    const trainer = new AntTrainerAdapter();
+
+    const hrConnecting = hr.connect(heartRateEvents());
+    const trainerConnecting = trainer.connect(trainerEvents());
+    await hr.disconnect();
+    await trainer.disconnect();
+
+    await expect(hrConnecting).resolves.toEqual({ status: "cancelled" });
+    await expect(trainerConnecting).resolves.toEqual({ status: "cancelled" });
+    expect(antPlus.sticks).toHaveLength(0);
+    expect(antPlus.sensors).toHaveLength(0);
+  });
 });

@@ -104,10 +104,12 @@ export class AntTrainerAdapter implements TrainerAdapter {
   }
 
   private async attachSensor(events: TrainerEvents): Promise<ConnectResult> {
+    // Before the first await, so a disconnect() during the import sticks.
+    this.disposed = false;
     const { FitnessEquipmentSensor, BicyclePowerSensor } =
       await import("ant-plus-next");
+    if (this.disposed) return { status: "cancelled" };
 
-    this.disposed = false;
     beginStickUse();
 
     let stick: import("ant-plus-next").WebUsbStick;
