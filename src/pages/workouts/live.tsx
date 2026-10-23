@@ -216,6 +216,7 @@ function LiveWorkout({
           hrErrorReason={ctrl.hr.errorReason}
           hrDeviceName={ctrl.hr.deviceName}
           hrSource={ctrl.hrSource}
+          hrHasDeviceChooser={ctrl.hr.hasDeviceChooser}
           onHrSourceChange={ctrl.setHrSource}
           onHrConnect={ctrl.hr.connect}
           onHrDisconnect={ctrl.hr.disconnect}
@@ -223,6 +224,7 @@ function LiveWorkout({
           trainerErrorReason={ctrl.trainer.errorReason}
           trainerDeviceName={ctrl.trainer.deviceName}
           trainerSource={ctrl.trainerSource}
+          trainerHasDeviceChooser={ctrl.trainer.hasDeviceChooser}
           onTrainerSourceChange={ctrl.setTrainerSource}
           onTrainerConnect={ctrl.trainer.connect}
           onTrainerDisconnect={ctrl.trainer.disconnect}

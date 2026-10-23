@@ -1,5 +1,10 @@
+import type {
+  ConnectResult,
+  TrainerAdapter,
+  TrainerEvents,
+  TrainerTargetStatus,
+} from "../adapter";
 import { MAX_TARGET_POWER_WATTS } from "../types";
-import type { TrainerData } from "../types";
 import {
   acquireStick,
   beginStickUse,
@@ -8,9 +13,6 @@ import {
   logError,
   releaseStick,
 } from "./stick";
-
-/** FE-C page 25 target status, or null once it stops being reported. */
-export type FecTargetStatus = "OnTarget" | "LowSpeed" | "HighSpeed" | null;
 
 /**
  * FE-C carries speed as a 16-bit mm/s value where 0xFFFF means "invalid".
@@ -39,13 +41,25 @@ const DEFAULT_ROLLING_RESISTANCE = 0.004;
 // Fixed channel assignment: HR always uses channel 0, trainer always uses channel 1
 const TRAINER_CHANNEL = 1;
 
+export interface AntTrainerOptions {
+  /**
+   * The rider's rolling resistance, for the flat road the trainer is left on
+   * when ERG ends. Read at every release, so a settings change applies to the
+   * next one.
+   */
+  rollingResistance?: () => number;
+}
+
 /**
  * ANT+ trainer connection.
  * Tries FitnessEquipmentSensor (FE-C) first since smart trainers support it
  * and it provides richer data (speed, distance, HR).
  * Falls back to BicyclePowerSensor if no FE-C data is received within 5 seconds.
  */
-export class AntTrainerConnection {
+export class AntTrainerAdapter implements TrainerAdapter {
+  // ANT+ has no device chooser: it pairs with the first FE-C trainer in range.
+  readonly hasDeviceChooser = false;
+  private readonly rollingResistance: () => number;
   private feSensor: import("ant-plus-next").FitnessEquipmentSensor | null =
     null;
   private powerSensor: import("ant-plus-next").BicyclePowerSensor | null = null;
@@ -66,17 +80,21 @@ export class AntTrainerConnection {
    */
   private controlAvailable = false;
 
-  async connect(params: {
-    onData: (data: TrainerData) => void;
-    onDisconnect: () => void;
-    /** Fires when FE-C control becomes available, and when it is ruled out. */
-    onControlAvailabilityChange?: (available: boolean) => void;
-    /**
-     * FE-C target status: the trainer telling us the rider's speed/gearing is
-     * too low or too high to hold the ERG target.
-     */
-    onTargetStatusChange?: (status: FecTargetStatus) => void;
-  }): Promise<void> {
+  constructor(options: AntTrainerOptions = {}) {
+    this.rollingResistance =
+      options.rollingResistance ?? (() => DEFAULT_ROLLING_RESISTANCE);
+  }
+
+  async connect(events: TrainerEvents): Promise<ConnectResult> {
+    try {
+      return await this.attachSensor(events);
+    } catch (err) {
+      logError("Trainer: Connection failed:", err);
+      return { status: "failed", reason: "failed" };
+    }
+  }
+
+  private async attachSensor(events: TrainerEvents): Promise<ConnectResult> {
     const { FitnessEquipmentSensor, BicyclePowerSensor } =
       await import("ant-plus-next");
 
@@ -98,7 +116,7 @@ export class AntTrainerConnection {
     // Try FE-C first
     const feSensor = new FitnessEquipmentSensor(stick);
     let feReceivedData = false;
-    let lastTargetStatus: FecTargetStatus | undefined;
+    let lastTargetStatus: TrainerTargetStatus | undefined;
 
     feSensor.on("attached", () =>
       log("Trainer: FE-C sensor attached, scanning..."),
@@ -117,15 +135,15 @@ export class AntTrainerConnection {
           this.fallbackTimeout = null;
         }
         this.controlAvailable = true;
-        params.onControlAvailabilityChange?.(true);
+        events.onControlAvailabilityChange(true);
       }
 
       if (state.TargetStatus !== lastTargetStatus) {
         lastTargetStatus = state.TargetStatus;
-        params.onTargetStatusChange?.(state.TargetStatus ?? null);
+        events.onTargetStatusChange(state.TargetStatus ?? null);
       }
 
-      params.onData({
+      events.onData({
         power: state.InstantaneousPower,
         cadence: state.Cadence,
         // RealSpeed is mm/s scaled to m/s by the library, which does not strip
@@ -159,7 +177,7 @@ export class AntTrainerConnection {
         // May already be detached
       }
       endStickUse(false);
-      return;
+      return { status: "cancelled" };
     }
 
     this.feSensor = feSensor;
@@ -171,29 +189,28 @@ export class AntTrainerConnection {
     this.fallbackTimeout = setTimeout(() => {
       this.fallbackTimeout = null;
       if (feReceivedData || this.disposed) return;
-      void this.fallBackToPowerSensor(BicyclePowerSensor, stick, params).catch(
+      void this.fallBackToPowerSensor(BicyclePowerSensor, stick, events).catch(
         (err: unknown) => {
           logError("Trainer: BicyclePowerSensor fallback failed:", err);
         },
       );
     }, 5_000);
+
+    // ANT+ pairs by profile and never learns a device name.
+    return { status: "connected", deviceName: null };
   }
 
   private async fallBackToPowerSensor(
     BicyclePowerSensor: typeof import("ant-plus-next").BicyclePowerSensor,
     stick: import("ant-plus-next").WebUsbStick,
-    params: {
-      onData: (data: TrainerData) => void;
-      onControlAvailabilityChange?: (available: boolean) => void;
-      onTargetStatusChange?: (status: FecTargetStatus) => void;
-    },
+    events: TrainerEvents,
   ): Promise<void> {
     log("Trainer: No FE-C data after 5s, falling back to BicyclePowerSensor");
 
     // No FE-C packets means no ERG control, whatever the UI assumed so far.
     this.controlAvailable = false;
-    params.onControlAvailabilityChange?.(false);
-    params.onTargetStatusChange?.(null);
+    events.onControlAvailabilityChange(false);
+    events.onTargetStatusChange(null);
 
     // Detach FE-C sensor
     try {
@@ -224,7 +241,7 @@ export class AntTrainerConnection {
     this.powerHandler = (
       state: import("ant-plus-next").BicyclePowerSensorState,
     ) => {
-      params.onData({
+      events.onData({
         power: state.Power ?? state.CalculatedPower,
         cadence: state.Cadence ?? state.CalculatedCadence,
       });
@@ -249,10 +266,6 @@ export class AntTrainerConnection {
     log("Trainer: Power sensor attach() returned");
   }
 
-  get supportsControl(): boolean {
-    return this.controlAvailable;
-  }
-
   async setTargetPower(watts: number): Promise<void> {
     if (!this.feSensor || !this.controlAvailable) {
       throw new Error("FE-C sensor not connected — cannot set target power");
@@ -270,23 +283,29 @@ export class AntTrainerConnection {
    * end ERG at all — it would hold the rider in ERG at zero watts, i.e. a
    * free-spinning flywheel. Track resistance (page 51) at 0% grade is the
    * documented way out, and leaves the flat-road feel a rider expects after
-   * switching ERG off.
+   * switching ERG off, at the rider's own rolling resistance.
    */
-  async releaseControl(
-    rollingResistanceCoeff = DEFAULT_ROLLING_RESISTANCE,
-  ): Promise<void> {
+  async releaseControl(): Promise<void> {
     if (!this.feSensor || !this.controlAvailable) return;
-    await this.feSensor.setTrackResistance(0, rollingResistanceCoeff);
+    await this.feSensor.setTrackResistance(0, this.rollingResistance());
   }
 
   async disconnect(): Promise<void> {
     this.disposed = true;
-    this.controlAvailable = false;
 
     if (this.fallbackTimeout != null) {
       clearTimeout(this.fallbackTimeout);
       this.fallbackTimeout = null;
     }
+
+    // Target power is sticky (see releaseControl), so a trainer let go of in
+    // ERG would keep holding the rider at the last target.
+    try {
+      await this.releaseControl();
+    } catch (error) {
+      logError("Trainer: Failed to release control:", error);
+    }
+    this.controlAvailable = false;
 
     if (this.feSensor) {
       if (this.feHandler) {

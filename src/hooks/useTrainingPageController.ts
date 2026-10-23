@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useStableCallback } from "@base-ui/utils/useStableCallback";
 import { useTimeout } from "@base-ui/utils/useTimeout";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 
-import { useAntHeartRate } from "~/hooks/useAntHeartRate";
-import { useAntTrainer } from "~/hooks/useAntTrainer";
-import { useBleHeartRate } from "~/hooks/useBleHeartRate";
-import { useBleTrainer } from "~/hooks/useBleTrainer";
 import { useErgMode } from "~/hooks/useErgMode";
 import { useRampTestFailure } from "~/hooks/useRampTestFailure";
 import { useRiderSettings } from "~/hooks/useRiderSettings";
+import { useHeartRate, useTrainer } from "~/hooks/useSensor";
 import { useTrainingRecorder } from "~/hooks/useTrainingRecorder";
 import { useTrainingSession } from "~/hooks/useTrainingSession";
 import { useWorkoutPlayer } from "~/hooks/useWorkoutPlayer";
+import { createSensorAdapters } from "~/sensors/sources";
 import { SpeedSimulator, msToKmh } from "~/sensors/speedFromPower";
 import type { SensorSource, SessionDataPoint } from "~/sensors/types";
 import type { StructuredWorkout } from "~/utils/structuredWorkout";
@@ -71,18 +70,16 @@ export function useTrainingPageController(
   const { workout, startSuspended = false } = options;
   const [hrSource, setHrSource] = useState<SensorSource>("ant+");
   const [trainerSource, setTrainerSource] = useState<SensorSource>("ant+");
+  const [riderSettings] = useRiderSettings();
 
-  // BLE hooks
-  const bleHr = useBleHeartRate();
-  const bleTrainer = useBleTrainer();
-
-  // ANT+ hooks
-  const antHr = useAntHeartRate();
-  const antTrainer = useAntTrainer();
-
-  // Pick active sensor based on selected source
-  const hr = hrSource === "ble" ? bleHr : antHr;
-  const trainer = trainerSource === "ble" ? bleTrainer : antTrainer;
+  // One adapter per source, kept for the life of the page; the hooks follow
+  // whichever source is selected.
+  const rollingResistance = useStableCallback(() => riderSettings.crr);
+  const [adapters] = useState(() =>
+    createSensorAdapters({ rollingResistance }),
+  );
+  const hr = useHeartRate(adapters.heartRate[hrSource]);
+  const trainer = useTrainer(adapters.trainer[trainerSource]);
 
   const liveHrData = useFreshSensorData(
     hr.data,
@@ -105,7 +102,6 @@ export function useTrainingPageController(
   const session = useTrainingSession();
   const recorder = useTrainingRecorder();
   const { addDataPoint, getDataPoints, clear: clearRecorder } = recorder;
-  const [riderSettings] = useRiderSettings();
 
   // Chart data (copy of data points array for rendering)
   const [chartData, setChartData] = useState<SessionDataPoint[]>([]);
@@ -307,7 +303,7 @@ export function useTrainingPageController(
 
   // Sync trainer control capability into ERG mode context
   useEffect(() => {
-    setSupportsControl(trainer.supportsControl ?? false);
+    setSupportsControl(trainer.supportsControl);
   }, [trainer.supportsControl, setSupportsControl]);
 
   // Auto-disable ERG when the trainer disconnects or loses control capability
@@ -395,10 +391,10 @@ export function useTrainingPageController(
     if (!ergWasEnabledRef.current) return;
     ergWasEnabledRef.current = false;
     setErgError(false);
-    releaseControl(riderSettingsRef.current.crr).catch((err: unknown) => {
+    releaseControl().catch((err: unknown) => {
       console.error("[ERG] Failed to release trainer control:", err);
     });
-  }, [ergMode.ergEnabled, releaseControl, riderSettingsRef]);
+  }, [ergMode.ergEnabled, releaseControl]);
 
   // ── Structured workout ──────────────────────────────────────────────
 

@@ -1,16 +1,20 @@
+import type { ConnectResult, HeartRateAdapter, SensorEvents } from "../adapter";
 import type { HeartRateData } from "../types";
 import {
   acquireStick,
   beginStickUse,
   endStickUse,
   log,
+  logError,
   releaseStick,
 } from "./stick";
 
 // Fixed channel assignment: HR always uses channel 0, trainer always uses channel 1
 const HR_CHANNEL = 0;
 
-export class AntHeartRateConnection {
+export class AntHeartRateAdapter implements HeartRateAdapter {
+  // ANT+ has no device chooser: it pairs with the first strap in range.
+  readonly hasDeviceChooser = false;
   private sensor: import("ant-plus-next").HeartRateSensor | null = null;
   private handler:
     ((state: import("ant-plus-next").HeartRateSensorState) => void) | null =
@@ -18,10 +22,18 @@ export class AntHeartRateConnection {
   private holdsStick = false;
   private disposed = false;
 
-  async connect(params: {
-    onData: (data: HeartRateData) => void;
-    onDisconnect: () => void;
-  }): Promise<void> {
+  async connect(events: SensorEvents<HeartRateData>): Promise<ConnectResult> {
+    try {
+      return await this.attachSensor(events);
+    } catch (err) {
+      logError("HR: Connection failed:", err);
+      return { status: "failed", reason: "failed" };
+    }
+  }
+
+  private async attachSensor(
+    events: SensorEvents<HeartRateData>,
+  ): Promise<ConnectResult> {
     const { HeartRateSensor } = await import("ant-plus-next");
 
     this.disposed = false;
@@ -45,7 +57,7 @@ export class AntHeartRateConnection {
 
     this.handler = (state: import("ant-plus-next").HeartRateSensorState) => {
       if (state.ComputedHeartRate != null) {
-        params.onData({
+        events.onData({
           heartRate: state.ComputedHeartRate,
         });
       }
@@ -67,7 +79,7 @@ export class AntHeartRateConnection {
       // until the browser restarts.
       await this.detachSensor(sensor);
       endStickUse(false);
-      return;
+      return { status: "cancelled" };
     }
 
     // Only now do we own a reference to the stick.
@@ -75,6 +87,7 @@ export class AntHeartRateConnection {
     endStickUse(true);
     this.holdsStick = true;
     log("HR: attach() returned");
+    return { status: "connected", deviceName: null };
   }
 
   private async detachSensor(

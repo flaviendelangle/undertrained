@@ -3,21 +3,24 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 
+import {
+  type FakeSensorAdapters,
+  createFakeSensorAdapters,
+} from "~/sensors/fakeAdapters";
 import { DEFAULT_RIDER_SETTINGS, type TrainerData } from "~/sensors/types";
 import {
   builtInWorkout,
   estimateTestFtp,
 } from "~/utils/structuredWorkout/builtIn";
+import { makeStep, makeWorkout } from "~/utils/structuredWorkout/fixtures";
 
-import { useTrainingPageController } from "./useTrainingPageController";
+import {
+  type TrainingPageControllerOptions,
+  useTrainingPageController,
+} from "./useTrainingPageController";
 
 const mocks = vi.hoisted(() => ({
-  data: null as TrainerData | null,
-  hrState: "disconnected",
-  hrData: null as { heartRate: number } | null,
-  trainerState: "connected",
-  setTargetPower: vi.fn(() => Promise.resolve()),
-  releaseControl: vi.fn(() => Promise.resolve()),
+  sensors: null as unknown as FakeSensorAdapters,
 }));
 vi.mock("~/hooks/useRiderSettings", () => ({
   useRiderSettings: () => [DEFAULT_RIDER_SETTINGS],
@@ -26,23 +29,8 @@ vi.mock("~/i18n/useT", () => {
   const t = (key: string) => key;
   return { useT: () => t };
 });
-vi.mock("~/hooks/useBleHeartRate", () => ({
-  useBleHeartRate: () => ({ state: "disconnected", data: null }),
-}));
-vi.mock("~/hooks/useAntHeartRate", () => ({
-  useAntHeartRate: () => ({ state: mocks.hrState, data: mocks.hrData }),
-}));
-vi.mock("~/hooks/useBleTrainer", () => ({
-  useBleTrainer: () => ({ state: "disconnected", data: null }),
-}));
-vi.mock("~/hooks/useAntTrainer", () => ({
-  useAntTrainer: () => ({
-    state: mocks.trainerState,
-    data: mocks.data,
-    supportsControl: mocks.trainerState === "connected",
-    setTargetPower: mocks.setTargetPower,
-    releaseControl: mocks.releaseControl,
-  }),
+vi.mock("~/sensors/sources", () => ({
+  createSensorAdapters: () => mocks.sensors,
 }));
 vi.mock("~/hooks/useErgMode", async () => {
   const React = await import("react");
@@ -69,16 +57,36 @@ vi.mock("~/hooks/useErgMode", async () => {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
-  mocks.hrState = "disconnected";
-  mocks.hrData = null;
-  mocks.trainerState = "connected";
-  mocks.data = { power: 300, cadence: 85 };
+  mocks.sensors = createFakeSensorAdapters();
 });
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
+
+/** The ANT+ sensors, the default source. */
+const trainer = () => mocks.sensors.trainer["ant+"];
+const heartRate = () => mocks.sensors.heartRate["ant+"];
+
+function sendTrainerData(data: TrainerData) {
+  act(() => trainer().live.onData(data));
+}
+
+type Controller = ReturnType<typeof useTrainingPageController>;
+
+/** Connects the trainer, ERG-capable, as the rider does from the wizard. */
+async function connectTrainer(controller: () => Controller) {
+  await act(() => controller().trainer.connect());
+  act(() => trainer().live.onControlAvailabilityChange(true));
+}
+
+async function renderController(options: TrainingPageControllerOptions) {
+  const view = renderHook(() => useTrainingPageController(options));
+  await connectTrainer(() => view.result.current);
+  sendTrainerData({ power: 300, cadence: 85 });
+  return view;
+}
 
 it.each([false, true])(
   "records a complete FTP effort with timer jitter (paused=%s)",
@@ -99,13 +107,10 @@ it.each([false, true])(
       }
       return now;
     });
-    const { result, rerender } = renderHook(() =>
-      useTrainingPageController({ workout }),
-    );
+    const { result } = await renderController({ workout });
     act(() => result.current.startSession());
     for (let second = 1; second <= 2702; second++) {
-      mocks.data = { power: 300, cadence: 85 };
-      rerender();
+      sendTrainerData({ power: 300, cadence: 85 });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1000);
       });
@@ -137,14 +142,11 @@ const steadyWorkout = builtInWorkout("ramp-test", 200, (key) => key);
 it.each(["disconnected", "stale"])(
   "does not record %s heart-rate data",
   async (mode) => {
-    mocks.hrState = "connected";
-    mocks.hrData = { heartRate: 170 };
-    const { result, rerender } = renderHook(() =>
-      useTrainingPageController({ workout: steadyWorkout }),
-    );
+    const { result } = await renderController({ workout: steadyWorkout });
+    await act(() => result.current.hr.connect());
+    act(() => heartRate().live.onData({ heartRate: 170 }));
     act(() => result.current.startSession());
-    if (mode === "disconnected") mocks.hrState = "disconnected";
-    rerender();
+    if (mode === "disconnected") act(() => heartRate().live.onDisconnect());
     await act(async () => {
       await vi.advanceTimersByTimeAsync(6000);
     });
@@ -152,8 +154,7 @@ it.each(["disconnected", "stale"])(
       result.current.recorder.getDataPoints().at(-1)?.heartRate,
     ).toBeNull();
     expect(result.current.currentHr).toBeNull();
-    mocks.data = { power: 200, heartRate: 145 };
-    rerender();
+    sendTrainerData({ power: 200, heartRate: 145 });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
@@ -161,9 +162,7 @@ it.each(["disconnected", "stale"])(
   },
 );
 it("returns an empty stopped ride to idle", async () => {
-  const { result } = renderHook(() =>
-    useTrainingPageController({ workout: steadyWorkout }),
-  );
+  const { result } = await renderController({ workout: steadyWorkout });
   act(() => result.current.startSession());
   await act(async () => {
     await vi.advanceTimersByTimeAsync(500);
@@ -173,27 +172,31 @@ it("returns an empty stopped ride to idle", async () => {
   expect(result.current.recorder.getDataPoints()).toEqual([]);
 });
 it("keeps the recording and resumes ERG after reconnecting", async () => {
-  const { result, rerender } = renderHook(() =>
-    useTrainingPageController({ workout: steadyWorkout }),
-  );
+  // A target from the first second, unlike the ramp test's free warm-up.
+  const workout = {
+    id: 1,
+    name: "Steady",
+    structure: makeWorkout([makeStep("steady", 600, 1)]),
+  };
+  const { result } = await renderController({ workout });
   act(() => result.current.startSession());
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1000);
   });
-  mocks.trainerState = "disconnected";
-  rerender();
+  act(() => trainer().live.onDisconnect());
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1000);
   });
   expect(result.current.recorder.getDataPoints().at(-1)?.power).toBeNull();
   const points = result.current.recorder.getDataPoints();
-  mocks.trainerState = "connected";
-  mocks.data = { power: 200, cadence: 85 };
-  rerender();
+  trainer().setTargetPower.mockClear();
+  await connectTrainer(() => result.current);
+  sendTrainerData({ power: 200, cadence: 85 });
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1000);
   });
   expect(result.current.recorder.getDataPoints()).toBe(points);
   expect(points.at(-1)?.power).toBe(200);
   expect(result.current.session.state).toBe("running");
+  expect(trainer().setTargetPower).toHaveBeenLastCalledWith(200);
 });

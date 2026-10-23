@@ -13,6 +13,8 @@ interface HudDeviceCardProps {
   errorReason: SensorErrorReason | null;
   deviceName: string | null;
   source: SensorSource;
+  /** Whether the selected source picks the device from a chooser. */
+  hasDeviceChooser: boolean;
   onSourceChange: (s: SensorSource) => void;
   onConnect: (options?: SensorConnectOptions) => void;
   onDisconnect: () => void;
@@ -24,6 +26,7 @@ function HudDeviceCard({
   errorReason,
   deviceName,
   source,
+  hasDeviceChooser,
   onSourceChange,
   onConnect,
   onDisconnect,
@@ -31,9 +34,9 @@ function HudDeviceCard({
   const t = useT();
   const isConnected = state === "connected";
   const isConnecting = state === "connecting";
-  // The unfiltered chooser only makes sense for Bluetooth; ANT+ scans by
-  // profile and never shows a picker.
-  const canBrowseAllDevices = source === "ble" && !isConnected && !isConnecting;
+  // The unfiltered chooser only makes sense where there is a chooser to widen;
+  // ANT+ scans by profile and never shows one.
+  const canBrowseAllDevices = hasDeviceChooser && !isConnected && !isConnecting;
   const label =
     type === "heartRate"
       ? t("liveTraining.heartRate")
@@ -197,6 +200,7 @@ interface HudConnectionWizardProps {
   hrErrorReason: SensorErrorReason | null;
   hrDeviceName: string | null;
   hrSource: SensorSource;
+  hrHasDeviceChooser: boolean;
   onHrSourceChange: (s: SensorSource) => void;
   onHrConnect: (options?: SensorConnectOptions) => void;
   onHrDisconnect: () => void;
@@ -204,6 +208,7 @@ interface HudConnectionWizardProps {
   trainerErrorReason: SensorErrorReason | null;
   trainerDeviceName: string | null;
   trainerSource: SensorSource;
+  trainerHasDeviceChooser: boolean;
   onTrainerSourceChange: (s: SensorSource) => void;
   onTrainerConnect: (options?: SensorConnectOptions) => void;
   onTrainerDisconnect: () => void;
@@ -231,6 +236,7 @@ export function HudConnectionWizard(props: HudConnectionWizardProps) {
             errorReason={props.hrErrorReason}
             deviceName={props.hrDeviceName}
             source={props.hrSource}
+            hasDeviceChooser={props.hrHasDeviceChooser}
             onSourceChange={props.onHrSourceChange}
             onConnect={props.onHrConnect}
             onDisconnect={props.onHrDisconnect}
@@ -241,6 +247,7 @@ export function HudConnectionWizard(props: HudConnectionWizardProps) {
             errorReason={props.trainerErrorReason}
             deviceName={props.trainerDeviceName}
             source={props.trainerSource}
+            hasDeviceChooser={props.trainerHasDeviceChooser}
             onSourceChange={props.onTrainerSourceChange}
             onConnect={props.onTrainerConnect}
             onDisconnect={props.onTrainerDisconnect}
