@@ -239,8 +239,13 @@ export class RideEngine {
   private ergError = false;
   /** Whether the trainer could take a target at the last commit. */
   private controllable = false;
-  /** The target the trainer was last asked to hold, or null once released. */
-  private held: number | null = null;
+  /**
+   * The target the trainer was last asked to hold, or "nothing" once
+   * released. "unknown" on a fresh connection: an FE-C trainer keeps a target
+   * until told otherwise, so one left in ERG by an earlier page still holds
+   * it.
+   */
+  private holding: number | "nothing" | "unknown" = "nothing";
   private pendingWrite: TimerId | null = null;
   /**
    * Counts commands sent to the trainer. A write that fails after a newer
@@ -517,7 +522,9 @@ export class RideEngine {
         enabled: this.ergEnabled,
         error: this.ergError,
         targetStatus:
-          this.held == null ? null : this.trainer.extra.targetStatus,
+          typeof this.holding === "number"
+            ? this.trainer.extra.targetStatus
+            : null,
       },
       workout: {
         ...position,
@@ -773,6 +780,7 @@ export class RideEngine {
       this.trainer.connected && this.trainer.extra.supportsControl;
     if (controllable === this.controllable) return;
     this.controllable = controllable;
+    if (controllable) this.holding = "unknown";
     this.setErg(controllable);
   }
 
@@ -787,20 +795,21 @@ export class RideEngine {
    * goes out when it changes, when holding begins (ERG on, a reconnect, a
    * resume, the end of a free step) and when `resend` says the trainer may
    * have lost it. Holding ends with one release, whatever ended it: ERG off,
-   * a pause, the end of the workout, a free step.
+   * a pause, the end of the workout, a free step. A trainer that comes up with
+   * nothing to hold is released once too, in case it still holds a target.
    */
   private applyErg(resend: boolean) {
     const target = this.heldTarget();
     if (target == null) {
       this.cancelWrite();
-      if (this.held != null) {
-        this.held = null;
+      if (this.holding !== "nothing") {
+        this.holding = "nothing";
         this.release();
       }
       return;
     }
-    if (resend || target !== this.held) {
-      this.held = target;
+    if (resend || target !== this.holding) {
+      this.holding = target;
       this.scheduleWrite();
     }
   }

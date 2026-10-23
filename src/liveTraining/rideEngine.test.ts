@@ -263,6 +263,19 @@ describe("ERG", () => {
     expect(points().at(-1)?.targetPower).toBe(200);
   });
 
+  it("lets go of a trainer that comes up with nothing to hold", async () => {
+    // A trainer left in ERG by an earlier page, then a free warm-up.
+    const structure = makeWorkout([
+      makeStep("warm", 300, { kind: "free" }),
+      makeStep("ramp", 60, 0.5),
+    ]);
+    const { clock, trainer, connectTrainer } = setup(structure);
+    await connectTrainer();
+    clock.advance(200);
+    expect(trainer.releaseControl).toHaveBeenCalledOnce();
+    expect(trainer.setTargetPower).not.toHaveBeenCalled();
+  });
+
   it("holds no target through a free step, even across a pause, then the next step's", async () => {
     const structure = makeWorkout([
       makeStep("warm", 10, 0.5),
