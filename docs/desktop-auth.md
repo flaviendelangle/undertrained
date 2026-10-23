@@ -10,8 +10,9 @@ The native app uses the existing Strava-backed account through a browser confirm
 
 The new endpoints are:
 
-- `GET /api/desktop/authorize`: validate loopback redirect and S256 challenge, require browser login, render consent.
-- `POST /api/desktop/authorize`: verify signed consent bound to the account and request, issue a 60-second code.
+- `GET /api/desktop/authorize`: require browser login, then redirect to `/desktop/connect` with the same query.
+- `GET /desktop/connect`: validate loopback redirect and S256 challenge, render consent with a signed approval that lasts five minutes.
+- `POST /api/desktop/authorize`: verify signed consent bound to the account and request, issue a 60-second code. Rejected approvals redirect to `/desktop/connect?error=…`, which shows the error with status 400, 403 or 503. A rider whose browser session ended is sent to sign in again and back to consent.
 - `POST /api/desktop/token`: atomically consume the hashed code with the matching verifier, create a 30-day desktop session.
 - `GET /api/desktop/session`: validate the desktop bearer session and return athlete ID/name/language.
 - `DELETE /api/desktop/session`: revoke the presented session.
