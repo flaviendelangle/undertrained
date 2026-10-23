@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { riderSettings } from "../../db/schema";
-import { recomputeAllScores } from "../../lib/sync";
+import { activityIngestion } from "../../lib/sync";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 const changePointSchema = z.object({
@@ -79,15 +79,15 @@ export const riderSettingsRouter = router({
       }
 
       // Fire-and-forget recomputation
-      recomputeAllScores(ctx.db, athleteId).catch((err) =>
-        console.error("[recomputeAllScores] Error:", err),
-      );
+      activityIngestion(ctx.db)
+        .rescoreAll(athleteId)
+        .catch((err) => console.error("[rescoreAll] Error:", err));
     }),
 
   recomputeScores: protectedProcedure
     .input(z.object({ athleteId: z.number() }))
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
-      await recomputeAllScores(ctx.db, input.athleteId);
+      await activityIngestion(ctx.db).rescoreAll(input.athleteId);
     }),
 });

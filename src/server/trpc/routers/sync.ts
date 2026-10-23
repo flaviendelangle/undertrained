@@ -2,7 +2,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { activities, syncJobs } from "../../db/schema";
-import { runSyncInBackground } from "../../lib/sync";
+import { activityIngestion } from "../../lib/sync";
 import {
   protectedProcedure,
   rateLimited,
@@ -125,15 +125,9 @@ export const syncRouter = router({
       });
 
       // Fire-and-forget background sync (outside the transaction)
-      runSyncInBackground(
-        ctx.db,
-        input.athleteId,
-        syncJobId,
-        input.mode,
-        afterEpoch,
-      ).catch((err) =>
-        console.error("[runSyncInBackground] Unhandled error:", err),
-      );
+      activityIngestion(ctx.db)
+        .runSync(input.athleteId, syncJobId, input.mode, afterEpoch)
+        .catch((err) => console.error("[runSync] Unhandled error:", err));
 
       return syncJobId;
     }),

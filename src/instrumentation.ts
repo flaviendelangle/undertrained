@@ -3,8 +3,8 @@ import type { Instrumentation } from "next";
 
 import { db } from "./server/db";
 import { syncJobs } from "./server/db/schema";
-import { runSyncInBackground } from "./server/lib/sync";
-import type { SyncMode } from "./server/lib/sync";
+import type { SyncMode } from "./server/lib/activityIngestion";
+import { activityIngestion } from "./server/lib/sync";
 import { ensureWebhookSubscription } from "./server/lib/webhookSubscription";
 
 export async function register() {
@@ -34,13 +34,15 @@ export async function register() {
       .update(syncJobs)
       .set({ startedAt: Date.now(), lastError: null })
       .where(eq(syncJobs.id, job.id));
-    // Fire-and-forget; runSyncInBackground marks the job failed on fatal errors.
-    void runSyncInBackground(db, job.athlete, job.id, mode).catch((err) =>
-      console.error(
-        `[instrumentation] Failed to resume sync job ${job.id}:`,
-        err,
-      ),
-    );
+    // Fire-and-forget; runSync marks the job failed on fatal errors.
+    void activityIngestion(db)
+      .runSync(job.athlete, job.id, mode)
+      .catch((err) =>
+        console.error(
+          `[instrumentation] Failed to resume sync job ${job.id}:`,
+          err,
+        ),
+      );
   }
 
   // Auto-register the Strava webhook subscription if a callback URL is set.

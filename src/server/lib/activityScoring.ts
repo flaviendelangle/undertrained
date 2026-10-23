@@ -3,8 +3,9 @@
  * HR bests, speed efforts, biggest climb, time in zones) from its facts, its
  * stream samples and the rider settings timeline.
  *
- * Pure: no database or network. `computeActivityScoresInternal` in `sync.ts`
- * is the adapter that loads the streams and writes the patch.
+ * Pure: no database or network. `computeActivityScoresInternal` in
+ * `activityStore.ts` is the adapter that loads the streams and writes the
+ * patch.
  */
 import { findRunningPaceZone } from "../../sensors/paceZones";
 import { findHeartRateZone, findPowerZone } from "../../sensors/types";

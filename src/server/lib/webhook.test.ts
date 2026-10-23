@@ -11,22 +11,13 @@ import {
   desktopSessions,
 } from "../db/schema";
 
-// `webhook.ts` reaches for the singleton db and a pile of sync helpers at import
-// time; stub them so these cases exercise the dispatcher alone, with no database
-// and no environment.
+// `webhook.ts` reaches for the singleton db and the production ingestion at
+// import time; stub them so these cases exercise the dispatcher alone, with no
+// database and no environment. Create and update events are covered through
+// the ingestion module in `activityIngestion.test.ts`.
 vi.mock("../db", () => ({ db: dbMock }));
-vi.mock("./strava", () => ({
-  getAccessToken,
-  fetchStreamsFromStrava: vi.fn(),
-  getModelFromStravaActivity: vi.fn(),
-}));
-vi.mock("./sync", () => ({
-  computeActivityScoresInternal: vi.fn(),
-  storeActivityDetails: vi.fn(),
-  storeBestEfforts: vi.fn(),
-  storeStreams: vi.fn(),
-  syncAthleteStats: vi.fn(),
-}));
+vi.mock("./strava", () => ({ getAccessToken }));
+vi.mock("./sync", () => ({ activityIngestion: vi.fn() }));
 
 const ATHLETE_ID = 7;
 const STRAVA_ATHLETE_ID = 12345;

@@ -1,10 +1,5 @@
 import { eq } from "drizzle-orm";
 import strava from "strava-v3";
-import type {
-  ActivityStats,
-  DetailedActivity,
-  DetailedSegmentEffort,
-} from "strava-v3";
 import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
@@ -14,7 +9,7 @@ import { athletes } from "../db/schema";
 import { env } from "../env";
 import { StravaError } from "./stravaPort";
 import type { StravaPort } from "./stravaPort";
-import type { StoredLap, StravaActivity, StravaStream } from "./stravaTypes";
+import type { StravaStream } from "./stravaTypes";
 
 const stravaTokenResponseSchema = z.object({
   access_token: z.string(),
@@ -244,55 +239,6 @@ export async function updateActivityOnStrava(
   }
 }
 
-export function getModelFromStravaActivity(
-  activity: StravaActivity,
-  athleteId: number,
-) {
-  return {
-    stravaId: activity.id,
-    athlete: athleteId,
-    type: activity.type,
-    name: activity.name,
-    startDate: activity.start_date,
-    startDateLocal: activity.start_date_local,
-    distance: activity.distance,
-    totalElevationGain: activity.total_elevation_gain,
-    averageSpeed: activity.average_speed,
-    averageWatts: activity.average_watts ?? undefined,
-    averageCadence: activity.average_cadence ?? undefined,
-    averageHeartrate: activity.average_heartrate ?? undefined,
-    maxHeartrate: activity.max_heartrate ?? undefined,
-    maxSpeed: activity.max_speed ?? undefined,
-    maxWatts: activity.max_watts ?? undefined,
-    weightedAverageWatts: activity.weighted_average_watts ?? undefined,
-    kilojoules: activity.kilojoules ?? undefined,
-    calories: activity.calories ?? undefined,
-    movingTime: activity.moving_time,
-    elapsedTime: activity.elapsed_time,
-    workoutType: activity.workout_type ?? undefined,
-    commute: activity.commute ?? false,
-    mapPolyline: activity.map?.summary_polyline ?? undefined,
-  };
-}
-
-/**
- * Extracts the fields that only live on the full DetailedActivity (not the
- * summary returned by `listActivities`). `perceived_exertion` (RPE) and
- * `private_note` are absent from the strava-v3 type, so we read them through a
- * loosened shape — same approach `getLapModels` uses for lap power.
- */
-export function getActivityDetailFields(detailed: DetailedActivity) {
-  const loose = detailed as DetailedActivity & {
-    perceived_exertion?: number | null;
-    private_note?: string | null;
-  };
-  return {
-    description: detailed.description ?? null,
-    perceivedExertion: loose.perceived_exertion ?? null,
-    privateNote: loose.private_note ?? null,
-  };
-}
-
 export function normalizeStreams(streams: unknown): {
   type: string;
   seriesType: string;
@@ -337,85 +283,6 @@ export async function fetchStreamsFromStrava(
   });
 
   return streams ? normalizeStreams(streams) : [];
-}
-
-/**
- * Fetches the athlete's curated all-time stats (biggest ride/climb, ride·run·swim
- * totals). One cheap call — Strava keeps these in sync with the athlete's edits.
- */
-export async function fetchAthleteStats(
-  accessToken: string,
-  stravaAthleteId: number,
-): Promise<ActivityStats> {
-  return strava.athletes.stats({
-    access_token: accessToken,
-    id: String(stravaAthleteId),
-  });
-}
-
-/**
- * Fetches the full DetailedActivity, which (unlike the summary returned by
- * `listActivities`) includes `best_efforts` for run activities.
- */
-export async function fetchDetailedActivity(
-  accessToken: string,
-  stravaId: number,
-): Promise<DetailedActivity> {
-  return strava.activities.get({
-    access_token: accessToken,
-    id: String(stravaId),
-  });
-}
-
-/**
- * Maps the `best_efforts` of a DetailedActivity into `bestEfforts` table rows.
- * Returns an empty array for activities without best efforts (treadmill/manual
- * runs), which is intentional — they still get marked as loaded.
- */
-export function getBestEffortModels(
-  activity: Pick<DetailedActivity, "best_efforts" | "start_date">,
-  activityId: number,
-) {
-  return (activity.best_efforts ?? []).map((e: DetailedSegmentEffort) => ({
-    activityId,
-    stravaEffortId: e.id ?? null,
-    name: e.name,
-    distance: e.distance ?? 0,
-    elapsedTime: e.elapsed_time,
-    movingTime: e.moving_time ?? null,
-    prRank: e.pr_rank ?? null,
-    startDate: e.start_date ?? activity.start_date,
-  }));
-}
-
-/**
- * Maps the `laps` of a DetailedActivity into the compact `StoredLap[]` we persist
- * on the activity row. `start_index`/`end_index` reference the stream samples, so
- * they map straight onto the Time Series chart. `average_watts` is present on the
- * Strava payload for power-equipped activities but missing from the strava-v3 type,
- * so we read it via a loosened shape.
- */
-export function getLapModels(
-  activity: Pick<DetailedActivity, "laps">,
-): StoredLap[] {
-  return (activity.laps ?? []).map((l) => {
-    const withPower = l as typeof l & {
-      average_watts?: number;
-      average_heartrate?: number;
-    };
-    return {
-      index: l.lap_index,
-      name: l.name,
-      startIndex: l.start_index,
-      endIndex: l.end_index,
-      elapsedTime: l.elapsed_time,
-      distance: l.distance,
-      averageSpeed: l.average_speed,
-      averageWatts: withPower.average_watts,
-      averageHeartrate: withPower.average_heartrate,
-      averageCadence: l.average_cadence,
-    };
-  });
 }
 
 const RATE_LIMIT_WINDOW_MS = 15 * 60_000;
