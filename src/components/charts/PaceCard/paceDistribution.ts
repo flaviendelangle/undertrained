@@ -14,9 +14,8 @@
  * only for display. A faster speed is a smaller seconds/km value, so the "fast"
  * edge of a zone is its lower pace number.
  *
- * Each stream sample is treated as one second, matching how the rest of the
- * client consumes Strava streams (the `time` stream isn't surfaced to the
- * client, so streams are read as 1 Hz — see `ActivityStreams`).
+ * Each sample counts as one second: callers pass the per-second channels of
+ * `~/lib/activityRecording`.
  */
 import { RUNNING_PACE_ZONES, findRunningPaceZone } from "~/sensors/paceZones";
 

@@ -35,6 +35,10 @@ import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { type TFunction } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
+import {
+  activitySettingsDay,
+  useActivityRecording,
+} from "~/lib/activityRecording";
 import { useChartTokens } from "~/lib/chartTokens";
 import { cn } from "~/lib/utils";
 import { trpc } from "~/utils/trpc";
@@ -188,26 +192,15 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
 
   const { data: activity } = trpc.activities.get.useQuery({ stravaId });
 
-  // The Zones and Distribution tabs work off the raw per-second watts stream
-  // (the curve itself comes from the precomputed `powerBests`). `ActivityStreams`
-  // higher on the page is responsible for fetching streams, so we only read the
-  // cached query here.
-  const { data: streamsData } = trpc.activityStreams.getStreams.useQuery({
-    stravaId,
-  });
+  // The 30 s power, Zones and Distribution tabs work off the per-second watts
+  // (the curve itself comes from the precomputed `powerBests`).
+  const { recording } = useActivityRecording(stravaId);
+  const watts = React.useMemo(
+    () => recording?.perSecond.watts ?? [],
+    [recording],
+  );
 
-  const watts = React.useMemo<number[]>(() => {
-    const stream = streamsData?.find((s) => s.type === "watts");
-    if (!stream) return [];
-    try {
-      const parsed: unknown = JSON.parse(stream.data);
-      return Array.isArray(parsed) ? (parsed as number[]) : [];
-    } catch {
-      return [];
-    }
-  }, [streamsData]);
-
-  const ftp = activity?.startDate ? resolveForDate(activity.startDate).ftp : 0;
+  const ftp = activity ? resolveForDate(activitySettingsDay(activity)).ftp : 0;
   const weightedAverageWatts = activity?.weightedAverageWatts ?? null;
 
   // One query per non-activity range. `combine` maps the results down to their
@@ -260,9 +253,8 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
 
     const metadata: ActivityMetadataMap = {};
 
-    const activityStartDate = activity?.startDate;
-    const activityWeight = activityStartDate
-      ? resolveForDate(activityStartDate).weightKg
+    const activityWeight = activity
+      ? resolveForDate(activitySettingsDay(activity)).weightKg
       : null;
 
     let queryIdx = 0;
@@ -449,21 +441,21 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
         ))}
 
       {tab === "timeline" &&
-        (streamsData == null ? (
+        (recording == null ? (
           <StreamLoading />
         ) : (
           <PowerOverTime watts={watts} ftp={ftp} />
         ))}
 
       {tab === "zones" &&
-        (streamsData == null ? (
+        (recording == null ? (
           <StreamLoading />
         ) : (
           <PowerZoneDistribution watts={watts} ftp={ftp} />
         ))}
 
       {tab === "distribution" &&
-        (streamsData == null ? (
+        (recording == null ? (
           <StreamLoading />
         ) : (
           <PowerSliceDistribution

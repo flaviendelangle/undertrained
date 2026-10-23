@@ -1,13 +1,14 @@
 import * as React from "react";
 
-import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
-
 import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { ChartCard } from "~/components/ui/chart-card";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
-import { useAthleteId } from "~/hooks/useAthleteId";
 import { type TFunction } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
+import {
+  type NumericChannel,
+  useActivityRecording,
+} from "~/lib/activityRecording";
 import { useChartTokens } from "~/lib/chartTokens";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
@@ -25,7 +26,7 @@ const createXAxisOptions = (
 ];
 
 interface StreamDef {
-  type: string;
+  type: NumericChannel;
   title: string;
   unit: string;
   /** Index into the chart token palette */
@@ -78,56 +79,18 @@ const createStreamDefs = (t: TFunction): StreamDef[] => [
   },
 ];
 
-function parseStreamData(data: string): number[] | null {
-  try {
-    const parsed = JSON.parse(data);
-    if (!Array.isArray(parsed)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
 export default function ActivityStreams(props: ActivityStreamsProps) {
   const { stravaId, onHoverPositionChange, hiddenStreams } = props;
   const t = useT();
   const streamDefs = React.useMemo(() => createStreamDefs(t), [t]);
-  const athleteId = useAthleteId();
   const tokens = useChartTokens();
 
   const { data: activity } = trpc.activities.get.useQuery({ stravaId });
-  const { data: streamsData } = trpc.activityStreams.getStreams.useQuery({
-    stravaId,
-  });
-  const fetchStreams = trpc.activityStreams.fetchStreams.useMutation();
-  const fetchStreamsRef = useValueAsRef(fetchStreams);
-  const [isFetching, setIsFetching] = React.useState(false);
-  const [fetchError, setFetchError] = React.useState<string | null>(null);
-  const hasFetched = React.useRef(false);
+  const { recording, error: fetchError } = useActivityRecording(stravaId);
   const [xAxisMode, setXAxisMode] = React.useState<XAxisMode>("time");
 
-  React.useEffect(() => {
-    if (streamsData === null && athleteId && !hasFetched.current) {
-      hasFetched.current = true;
-      setIsFetching(true);
-      setFetchError(null);
-      fetchStreamsRef.current
-        .mutateAsync({ stravaId, athleteId })
-        .catch((err: unknown) => setFetchError(String(err)))
-        .finally(() => setIsFetching(false));
-    }
-  }, [streamsData, athleteId, stravaId, fetchStreamsRef]);
-
-  const latlngData = React.useMemo(() => {
-    if (!streamsData) return null;
-    const latlngStream = streamsData.find((s) => s.type === "latlng");
-    if (!latlngStream) return null;
-    try {
-      return JSON.parse(latlngStream.data) as [number, number][];
-    } catch {
-      return null;
-    }
-  }, [streamsData]);
+  // Every panel is drawn per second, so a hovered index is a second too.
+  const latlngData = recording?.perSecond.latlng ?? null;
 
   const handleHoverIndexChange = React.useCallback(
     (index: number | null) => {
@@ -141,16 +104,12 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
     [latlngData, onHoverPositionChange],
   );
 
-  // Parse stream JSON once — only re-runs when raw stream data changes
+  // Per-panel stats — only re-run when the recording changes
   const parsedStreams = React.useMemo(() => {
-    if (!streamsData) return null;
+    if (!recording) return null;
 
-    const streamsByType = new Map(streamsData.map((s) => [s.type, s]));
-
-    const distanceStream = streamsByType.get("distance");
-    const distanceData = distanceStream
-      ? parseStreamData(distanceStream.data)
-      : null;
+    const channels = recording.perSecond;
+    const distanceData = channels.distance ?? null;
 
     const defs = hiddenStreams
       ? streamDefs.filter((d) => !hiddenStreams.includes(d.type))
@@ -158,10 +117,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 
     const parsed = defs
       .map((def) => {
-        const stream = streamsByType.get(def.type);
-        if (!stream) return null;
-
-        const yData = parseStreamData(stream.data);
+        const yData = channels[def.type];
         if (!yData) return null;
 
         const stats = computeStreamStats(def.type, yData);
@@ -190,7 +146,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
       );
 
     return { parsed, distanceData };
-  }, [streamsData, hiddenStreams, streamDefs]);
+  }, [recording, hiddenStreams, streamDefs]);
 
   const sportConfig = activity ? getSportConfig(activity.type) : null;
 
@@ -241,7 +197,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
     ? allXAxisOptions
     : allXAxisOptions.filter((opt) => opt.value !== "distance");
 
-  // Build x-axis data (time indices)
+  // Build x-axis data (seconds since the start)
   const xData = React.useMemo(() => {
     if (streams.length === 0) return [];
     return streams[0].yData.map((_, i) => i);
@@ -257,7 +213,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
     );
   }
 
-  if (isFetching || streamsData === undefined || streamsData === null) {
+  if (!recording) {
     return (
       <ChartCard title={t("charts.streams.title")}>
         <ChartMessage>{t("charts.streams.loading")}</ChartMessage>

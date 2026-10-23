@@ -10,9 +10,8 @@
  *   each power level to its {@link POWER_ZONES} colour, so the area/line shade by
  *   zone the same way the Laps and distribution views do.
  *
- * Each stream sample is treated as one second, matching how the rest of the
- * client consumes Strava streams (the `time` stream isn't surfaced to the
- * client, so streams are read as 1 Hz — see `ActivityStreams`).
+ * Each sample counts as one second: callers pass the per-second channels of
+ * `~/lib/activityRecording`.
  */
 import { POWER_ZONES } from "~/sensors/types";
 

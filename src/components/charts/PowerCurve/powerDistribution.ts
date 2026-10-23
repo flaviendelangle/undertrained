@@ -8,9 +8,8 @@
  * - {@link computePowerSliceDistribution} — seconds spent in each fixed-width
  *   watt slice (e.g. every 25 W), each slice coloured by the zone it sits in.
  *
- * Each stream sample is treated as one second, matching how the rest of the
- * client consumes Strava streams (the `time` stream isn't surfaced to the
- * client, so streams are read as 1 Hz — see `ActivityStreams`).
+ * Each sample counts as one second: callers pass the per-second channels of
+ * `~/lib/activityRecording`.
  */
 import { POWER_ZONES, findPowerZone } from "~/sensors/types";
 
