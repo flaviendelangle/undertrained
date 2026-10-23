@@ -5,8 +5,6 @@ import { useRouter } from "next/router";
 
 import { Draggable } from "@base-ui/react/draggable";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
-import { useQueryClient } from "@tanstack/react-query";
-import { getQueryKey } from "@trpc/react-query";
 
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
@@ -17,7 +15,10 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from "~/components/ui/responsive-dialog";
-import { showErrorToast } from "~/components/ui/toast";
+import {
+  useCreateStructuredWorkout,
+  useUpdateStructuredWorkout,
+} from "~/hooks/structuredWorkouts";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
@@ -33,7 +34,6 @@ import {
   structuredWorkoutSchema,
 } from "~/utils/structuredWorkout";
 import { hasPowerTarget } from "~/utils/structuredWorkout/types";
-import { trpc } from "~/utils/trpc";
 
 import { QuickAddBar } from "./QuickAddBar";
 import { StepList } from "./StepList";
@@ -95,39 +95,16 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
     [segments, ftp, currentSettings.ftp],
   );
 
-  const utils = trpc.useUtils();
-  const queryClient = useQueryClient();
   // Set the instant a save succeeds, so the guard below doesn't prompt on the
   // very navigation the save asked for. A ref, not state: `router.push` runs in
   // the same tick and would not see a re-render.
   const savedRef = React.useRef(false);
   const onSaved = () => {
     savedRef.current = true;
-    void utils.structuredWorkouts.list.invalidate();
     void router.push("/workouts");
   };
-  const onSaveError = () => showErrorToast(t("common.saveError"));
-  const createMutation = trpc.structuredWorkouts.create.useMutation({
-    onSuccess: onSaved,
-    onError: onSaveError,
-  });
-  const updateMutation = trpc.structuredWorkouts.update.useMutation({
-    onSuccess: (_data, input) => {
-      // Removed, not invalidated: an invalidated entry still hands its pre-edit
-      // tree to an editor that mounts before the refetch lands, and the editor
-      // seeds from it, so the next save would undo this one. Not reset either:
-      // that would blank this page while the navigation is still in flight.
-      queryClient.removeQueries({
-        queryKey: getQueryKey(
-          trpc.structuredWorkouts.get,
-          { athleteId: input.athleteId, id: input.id },
-          "query",
-        ),
-      });
-      onSaved();
-    },
-    onError: onSaveError,
-  });
+  const createMutation = useCreateStructuredWorkout({ onSuccess: onSaved });
+  const updateMutation = useUpdateStructuredWorkout({ onSuccess: onSaved });
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   // Memoized on the tree like `segments`/`spans`/`metrics` above: a full parse
