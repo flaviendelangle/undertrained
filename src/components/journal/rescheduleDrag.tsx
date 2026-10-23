@@ -10,6 +10,8 @@ import {
   type DragPosition,
   type DragPreviewSettings,
   Draggable,
+  type DraggableViewportDragScrollEvent,
+  type DraggableViewportDragScrollEventDetails,
 } from "@base-ui/react/draggable";
 import { clamp } from "@base-ui/utils/clamp";
 import { type ReadonlyStore, Store, useStore } from "@base-ui/utils/store";
@@ -367,6 +369,18 @@ interface RescheduleSurface {
   previewSettings: DragPreviewSettings;
 }
 
+// Horizontal edge scrolling is intentionally disabled: each virtualized item
+// is a full week, so the auto-scroller advances several weeks per second and
+// makes precise cross-week drops unusable.
+function scrollVerticallyOnly(
+  { direction }: DraggableViewportDragScrollEvent,
+  details: DraggableViewportDragScrollEventDetails,
+) {
+  if (direction === "horizontal") {
+    details.cancel();
+  }
+}
+
 /** What each {@link RescheduleSource} needs from its viewport. */
 const RescheduleSurfaceContext = React.createContext<RescheduleSurface | null>(
   null,
@@ -427,15 +441,7 @@ export function RescheduleViewport({
         <Draggable.Viewport
           ref={mergedRef}
           accept={trainingKind}
-          // Horizontal edge scrolling is intentionally disabled: each
-          // virtualized item is a full week, so the auto-scroller advances
-          // several weeks per second and makes precise cross-week drops
-          // unusable.
-          onDragScroll={({ direction }, details) => {
-            if (direction === "horizontal") {
-              details.cancel();
-            }
-          }}
+          onDragScroll={scrollVerticallyOnly}
           className={className}
         >
           {children}
