@@ -8,11 +8,14 @@ import { HEART_RATE_MEASUREMENT, HEART_RATE_SERVICE } from "./services";
 export class BleHeartRateAdapter implements HeartRateAdapter {
   readonly hasDeviceChooser = true;
   private readonly connection = new BleConnection();
+  /** Bumped by disconnect(); see BleTrainerAdapter. */
+  private generation = 0;
 
   async connect(
     events: SensorEvents<HeartRateData>,
     options?: SensorConnectOptions,
   ): Promise<ConnectResult> {
+    const generation = this.generation;
     try {
       const { device } = await this.connection.connect({
         candidates: [
@@ -35,13 +38,20 @@ export class BleHeartRateAdapter implements HeartRateAdapter {
         },
         onDisconnect: events.onDisconnect,
       });
+      if (generation !== this.generation) {
+        // disconnect() overtook the pairing: let go of what it paired with.
+        await this.connection.disconnect();
+        return { status: "cancelled" };
+      }
       return { status: "connected", deviceName: device.name ?? null };
     } catch (e) {
+      if (generation !== this.generation) return { status: "cancelled" };
       return connectResultFromError(e, "[BLE HR]");
     }
   }
 
   async disconnect(): Promise<void> {
+    this.generation++;
     await this.connection.disconnect();
   }
 }

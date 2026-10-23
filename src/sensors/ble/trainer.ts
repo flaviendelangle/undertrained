@@ -54,11 +54,18 @@ export class BleTrainerAdapter implements TrainerAdapter {
   readonly hasDeviceChooser = true;
   private readonly connection = new BleConnection();
   private control: FtmsControlPoint | null = null;
+  /**
+   * Bumped by disconnect(). A connect that finds it changed was overtaken —
+   * the rider left with the chooser or the GATT setup still running — and
+   * lets go of whatever it paired with.
+   */
+  private generation = 0;
 
   async connect(
     events: TrainerEvents,
     options?: SensorConnectOptions,
   ): Promise<ConnectResult> {
+    const generation = this.generation;
     // Both protocols are offered in a single chooser and then probed against
     // whichever device the rider picks. Prompting for FTMS and only then for
     // CPS could never work: an FTMS-filtered chooser lists nothing for a plain
@@ -108,13 +115,23 @@ export class BleTrainerAdapter implements TrainerAdapter {
       serviceUuid = result.serviceUuid;
       deviceName = result.device.name ?? null;
     } catch (e) {
+      if (generation !== this.generation) return { status: "cancelled" };
       return connectResultFromError(e, "[BLE Trainer]");
     }
+    if (generation !== this.generation) return this.abandon();
 
     if (serviceUuid === FITNESS_MACHINE_SERVICE) {
-      events.onControlAvailabilityChange(await this.acquireControl());
+      const available = await this.acquireControl();
+      if (generation !== this.generation) return this.abandon();
+      events.onControlAvailabilityChange(available);
     }
     return { status: "connected", deviceName };
+  }
+
+  /** Undoes a connect that disconnect() overtook. */
+  private async abandon(): Promise<ConnectResult> {
+    await this.disconnect();
+    return { status: "cancelled" };
   }
 
   /**
@@ -180,6 +197,7 @@ export class BleTrainerAdapter implements TrainerAdapter {
   }
 
   async disconnect(): Promise<void> {
+    this.generation++;
     const control = this.control;
     this.control = null;
     try {

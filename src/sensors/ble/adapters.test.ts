@@ -7,6 +7,7 @@ import {
   createMeasurementCharacteristic,
   stubBluetooth,
 } from "./fakeGatt";
+import { BleHeartRateAdapter } from "./heartRate";
 import {
   CYCLING_POWER_MEASUREMENT,
   CYCLING_POWER_SERVICE,
@@ -64,6 +65,16 @@ function ftmsTrainer({
     [FITNESS_MACHINE_SERVICE]: characteristics,
   });
   return { device, dropConnection, bikeData, control };
+}
+
+function heartRateStrap() {
+  return createFakeDevice("HRM-Pro", {
+    [HEART_RATE_SERVICE]: {
+      [HEART_RATE_MEASUREMENT]: createMeasurementCharacteristic(
+        HEART_RATE_MEASUREMENT,
+      ).characteristic,
+    },
+  });
 }
 
 it("streams an FTMS trainer's data and drives ERG through its control point", async () => {
@@ -151,14 +162,9 @@ it.each([
   },
 ])("settles a chooser where the rider picked $picked", async ({ result }) => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
-  const strap = createFakeDevice("HRM-Pro", {
-    [HEART_RATE_SERVICE]: {
-      [HEART_RATE_MEASUREMENT]: createMeasurementCharacteristic(
-        HEART_RATE_MEASUREMENT,
-      ).characteristic,
-    },
-  });
-  stubBluetooth(result.status === "cancelled" ? "dismissed" : strap.device);
+  stubBluetooth(
+    result.status === "cancelled" ? "dismissed" : heartRateStrap().device,
+  );
 
   await expect(
     new BleTrainerAdapter().connect(trainerEvents()),
@@ -202,3 +208,36 @@ it("resets the trainer when the rider lets go, without reporting a drop", async 
   expect(trainer.control.opCodes()).toEqual([OP_RESET]);
   expect(events.onDisconnect).not.toHaveBeenCalled();
 });
+
+it.each([
+  {
+    sensor: "trainer",
+    create: () => new BleTrainerAdapter(),
+    device: () => ftmsTrainer().device,
+  },
+  {
+    sensor: "heart rate strap",
+    create: () => new BleHeartRateAdapter(),
+    device: () => heartRateStrap().device,
+  },
+])(
+  "lets go of a $sensor that finishes pairing after disconnect()",
+  async ({ create, device: createDevice }) => {
+    const device = createDevice();
+    let pick!: (device: BluetoothDevice) => void;
+    stubBluetooth(
+      new Promise<BluetoothDevice>((resolve) => {
+        pick = resolve;
+      }),
+    );
+    const adapter = create();
+
+    const connecting = adapter.connect(trainerEvents());
+    // The rider leaves the page with the chooser still open.
+    await adapter.disconnect();
+    pick(device);
+
+    await expect(connecting).resolves.toEqual({ status: "cancelled" });
+    expect(device.gatt?.connected).toBe(false);
+  },
+);

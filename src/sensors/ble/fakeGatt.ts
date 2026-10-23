@@ -163,9 +163,12 @@ export function createFakeDevice(name: string, services: FakeServices) {
 
 /**
  * Installs a `navigator.bluetooth` whose chooser hands back `device`, or
- * rejects as Chrome does when the rider dismisses it.
+ * rejects as Chrome does when the rider dismisses it. A pending promise keeps
+ * the chooser open until it settles.
  */
-export function stubBluetooth(device: BluetoothDevice | "dismissed") {
+export function stubBluetooth(
+  device: BluetoothDevice | Promise<BluetoothDevice> | "dismissed",
+) {
   const requestDevice = vi.fn((_options: RequestDeviceOptions) =>
     device === "dismissed"
       ? Promise.reject(
