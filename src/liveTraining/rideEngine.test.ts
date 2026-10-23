@@ -209,10 +209,15 @@ describe("the ride", () => {
       { startSuspended: true },
     );
     await connectTrainer();
-    trainer.live.onData({ power: 150 });
-    clock.advance(3000);
+    for (let second = 0; second < 3; second++) {
+      trainer.live.onData({ power: 150 });
+      clock.advance(1000);
+    }
     engine.setStartSuspended(false);
-    clock.advance(2000);
+    for (let second = 0; second < 2; second++) {
+      trainer.live.onData({ power: 150 });
+      clock.advance(1000);
+    }
     expect(ride().status).toBe("running");
   });
 
@@ -388,6 +393,16 @@ describe("ERG", () => {
     expect(ride().erg.error).toBe(false);
   });
 
+  it("drops the error once the trainer holds no target", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { engine, trainer, ride, pedal } = await rideFor(55);
+    trainer.setTargetPower.mockRejectedValueOnce(new Error("refused"));
+    pedal(6);
+    await settle();
+    engine.endWorkout();
+    expect(ride().erg.error).toBe(false);
+  });
+
   it("says nothing about a target that a release overtook", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { engine, trainer, ride, pedal } = await rideFor(55);
@@ -483,7 +498,7 @@ describe("the ramp test", () => {
 
   it("moves on to the full cooldown after ten seconds of measured stopped pedaling", async () => {
     const { ride, clock, trainer, pedal } = await intoTheRamp();
-    pedal(10, STOPPED);
+    pedal(9, STOPPED);
     expect(ride().workout.currentSegment?.intensity).toBe("work");
     pedal(1, STOPPED);
     expect(ride()).toMatchObject({
@@ -495,6 +510,16 @@ describe("the ramp test", () => {
     });
     clock.advance(200);
     expect(trainer.setTargetPower).toHaveBeenLastCalledWith(75);
+  });
+
+  it("notices in a background tab whose timers are held back", async () => {
+    const { ride, clock, trainer } = await intoTheRamp();
+    // Readings keep arriving, but no sample is taken.
+    for (let ms = 0; ms <= 10_000; ms += 250) {
+      trainer.live.onData(STOPPED);
+      clock.stall(250);
+    }
+    expect(ride().workout.currentSegment?.intensity).toBe("cooldown");
   });
 
   it.each([

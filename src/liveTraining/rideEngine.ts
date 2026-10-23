@@ -233,6 +233,7 @@ export class RideEngine {
   // The ramp test's stopped-pedaling detector.
   private zeroSince: number | null = null;
   private hasPedaled = false;
+  private rampCheckedAt: number | null = null;
 
   // ERG.
   private ergEnabled = false;
@@ -309,7 +310,6 @@ export class RideEngine {
       return;
     this.status = "running";
     this.runSamples();
-    this.resetRampWatch();
     // The trainer has held the first step's target since ERG came on, maybe
     // for minutes; send it again as the ride starts.
     this.commit({ resend: true });
@@ -325,7 +325,6 @@ export class RideEngine {
       this.pausedSeconds = Math.floor((this.clock.now() - pausedAt) / 1000);
       this.publish();
     }, TICK_MS);
-    this.resetRampWatch();
     this.commit();
   };
 
@@ -446,11 +445,7 @@ export class RideEngine {
 
   /** Ends a ramp test's effort and moves on to its cooldown. */
   finishTest = () => {
-    const position = this.position();
-    const cooldown = this.cooldown();
-    if (!this.canFinishTest(position) || !cooldown) return;
-    this.adjustSeconds -= cooldown.startSeconds - position.workoutSeconds;
-    this.commit();
+    if (this.skipToCooldown()) this.commit();
   };
 
   // ── Page inputs ─────────────────────────────────────────────────────
@@ -488,6 +483,7 @@ export class RideEngine {
   }
 
   private commit(options?: { resend?: boolean }) {
+    this.watchRampTest();
     this.followControl();
     this.applyErg(options?.resend ?? false);
     this.armAutoStart();
@@ -656,8 +652,6 @@ export class RideEngine {
       segmentIndex:
         this.ended || position.segmentIndex < 0 ? null : position.segmentIndex,
     });
-    this.watchRampTest(reading, gapMs, position);
-
     this.samplesSinceResume++;
     if (this.samplesSinceResume % CHART_REFRESH_TICKS === 0) {
       this.chartData = [...this.points];
@@ -724,6 +718,15 @@ export class RideEngine {
     );
   }
 
+  /** Moves the workout clock to the cooldown's start, if the test allows it. */
+  private skipToCooldown(): boolean {
+    const position = this.position();
+    const cooldown = this.cooldown();
+    if (!this.canFinishTest(position) || !cooldown) return false;
+    this.adjustSeconds -= cooldown.startSeconds - position.workoutSeconds;
+    return true;
+  }
+
   private resetRampWatch() {
     this.zeroSince = null;
     this.hasPedaled = false;
@@ -732,19 +735,26 @@ export class RideEngine {
   /**
    * Ends a ramp test once the rider has stopped pedaling, after having
    * pedaled: ten seconds of measured zero power with the cranks still.
+   *
+   * Runs on every commit, so on every reading as well as every sample: a
+   * background tab samples about once a minute, and a check that waited for
+   * samples would never see ten seconds go by.
    */
-  private watchRampTest(
-    reading: Omit<LiveReadings, "speedKmh">,
-    gapMs: number,
-    position: PlayerSnapshot,
-  ) {
-    // A suspended tab is not ten seconds of observed zero-power samples.
-    if (gapMs >= TRAINER_READING_TTL_MS) this.zeroSince = null;
-    if (!this.trainer.connected || !this.canFinishTest(position)) {
+  private watchRampTest() {
+    const now = this.clock.now();
+    const sinceLastCheck = now - (this.rampCheckedAt ?? now);
+    this.rampCheckedAt = now;
+    // A suspended tab is not ten seconds of observed zero power.
+    if (sinceLastCheck >= TRAINER_READING_TTL_MS) this.zeroSince = null;
+    if (
+      this.status !== "running" ||
+      !this.trainer.connected ||
+      !this.canFinishTest(this.position())
+    ) {
       this.resetRampWatch();
       return;
     }
-    const { power, cadence } = reading;
+    const { power, cadence } = this.readings(now);
     if (power == null || !Number.isFinite(power) || power < 0) {
       this.zeroSince = null;
       return;
@@ -755,10 +765,11 @@ export class RideEngine {
       return;
     }
     if (!this.hasPedaled) return;
-    this.zeroSince ??= this.elapsed;
-    if (this.elapsed - this.zeroSince >= RAMP_STOPPED_SECONDS) {
+    const elapsed = this.elapsedAt(now);
+    this.zeroSince ??= elapsed;
+    if (elapsed - this.zeroSince >= RAMP_STOPPED_SECONDS) {
       this.resetRampWatch();
-      this.finishTest();
+      this.skipToCooldown();
     }
   }
 
@@ -804,6 +815,8 @@ export class RideEngine {
       this.cancelWrite();
       if (this.holding !== "nothing") {
         this.holding = "nothing";
+        // Whatever the trainer refused, it has no target to refuse now.
+        this.ergError = false;
         this.release();
       }
       return;
@@ -821,17 +834,17 @@ export class RideEngine {
       const target = this.heldTarget();
       if (target == null) return;
       const command = ++this.commands;
-      const settle = (error: boolean) => {
-        if (command !== this.commands || !this.ergEnabled) return;
+      const report = (error: boolean) => {
         if (error === this.ergError) return;
         this.ergError = error;
         this.publish();
       };
       this.trainer.adapter.setTargetPower(target).then(
-        () => settle(false),
+        // An accepted target clears the error, however late it lands.
+        () => report(false),
         (err: unknown) => {
           console.error("[ERG] Failed to set target power:", err);
-          settle(true);
+          if (command === this.commands && this.ergEnabled) report(true);
         },
       );
     }, ERG_WRITE_DEBOUNCE_MS);
