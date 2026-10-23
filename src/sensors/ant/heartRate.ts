@@ -7,6 +7,7 @@ import {
   holdStick,
   log,
   logError,
+  releaseDroppedChannel,
 } from "./stick";
 
 // Fixed channel assignment: HR always uses channel 0, trainer always uses channel 1
@@ -93,7 +94,10 @@ export class AntHeartRateAdapter implements HeartRateAdapter {
     }
     this.sensor = sensor;
     this.releaseStick = release;
-    this.detachedHandler = () => this.lose(events);
+    this.detachedHandler = () => {
+      releaseDroppedChannel(stick, sensor);
+      this.lose(events);
+    };
     sensor.on("detached", this.detachedHandler);
     log("HR: attach() returned");
     return { status: "connected", deviceName: null };

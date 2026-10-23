@@ -231,6 +231,28 @@ describe("ANT+ stick sharing", () => {
     expect(antPlus.sticks[0].closed).toBe(true);
   });
 
+  it.each([
+    { dropping: "AntTrainerAdapter", holding: "AntHeartRateAdapter" },
+    { dropping: "AntHeartRateAdapter", holding: "AntTrainerAdapter" },
+  ] as const)(
+    "keeps reconnecting $dropping after drops while $holding keeps the stick",
+    async ({ dropping, holding }) => {
+      const loaded = await load();
+      const dropper = new loaded[dropping]();
+      await new loaded[holding]().connect(trainerEvents());
+
+      // More drops than the stick has channels.
+      for (let drop = 0; drop < 10; drop++) {
+        await expect(dropper.connect(trainerEvents())).resolves.toEqual(
+          CONNECTED,
+        );
+        loaded.antPlus.sensors.at(-1)!.drop();
+      }
+
+      expect(loaded.antPlus.sticks).toHaveLength(1);
+    },
+  );
+
   it("does not close the stick under a sensor that is still attaching", async () => {
     const { antPlus, AntHeartRateAdapter, AntTrainerAdapter } = await load();
     const trainerAttached = deferred();

@@ -12,6 +12,7 @@ import {
   holdStick,
   log,
   logError,
+  releaseDroppedChannel,
 } from "./stick";
 
 /**
@@ -192,7 +193,7 @@ export class AntTrainerAdapter implements TrainerAdapter {
     }
     this.feSensor = feSensor;
     this.releaseStick = release;
-    this.watchForLoss(feSensor, events);
+    this.watchForLoss(stick, feSensor, events);
     log("Trainer: FE-C attach() returned");
 
     // Set up fallback: if no FE-C data within 5s, switch to BicyclePowerSensor
@@ -274,12 +275,19 @@ export class AntTrainerAdapter implements TrainerAdapter {
     }
 
     this.powerSensor = powerSensor;
-    this.watchForLoss(powerSensor, events);
+    this.watchForLoss(stick, powerSensor, events);
     log("Trainer: Power sensor attach() returned");
   }
 
-  private watchForLoss(sensor: TrainerSensor, events: TrainerEvents): void {
-    this.lossHandler = () => this.lose(events);
+  private watchForLoss(
+    stick: import("ant-plus-next").WebUsbStick,
+    sensor: TrainerSensor,
+    events: TrainerEvents,
+  ): void {
+    this.lossHandler = () => {
+      releaseDroppedChannel(stick, sensor);
+      this.lose(events);
+    };
     sensor.on("detached", this.lossHandler);
   }
 

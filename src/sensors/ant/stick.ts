@@ -153,6 +153,24 @@ function closeStickIfIdle(): void {
 }
 
 /**
+ * Gives back the channel of a sensor the library dropped on its own.
+ *
+ * When a channel loses its device the library unassigns it and says
+ * "detached", but never tells the stick, which goes on counting the channel
+ * as taken. While another sensor keeps the stick open, every drop and
+ * reconnect would use one up, until attach() fails with "Maximum number of
+ * channels reached". This is bookkeeping only; nothing is sent to the stick.
+ */
+export function releaseDroppedChannel(
+  stick: import("ant-plus-next").WebUsbStick,
+  sensor: Parameters<import("ant-plus-next").WebUsbStick["detach"]>[0],
+): void {
+  stick.detach(sensor).catch((err: unknown) => {
+    logError("Failed to give back a dropped channel:", err);
+  });
+}
+
+/**
  * Marks the start of a connect attempt, before the stick has been acquired.
  *
  * Must be paired with exactly one `abandonStickUse()` or `holdStick()` on
