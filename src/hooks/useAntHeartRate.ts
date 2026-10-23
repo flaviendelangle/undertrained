@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AntHeartRateConnection } from "~/sensors/ant/connection";
+import { AntHeartRateConnection } from "~/sensors/ant/heartRate";
 import type {
   ConnectionState,
   HeartRateData,

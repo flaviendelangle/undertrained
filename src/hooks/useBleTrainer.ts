@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { FecTargetStatus } from "~/sensors/ant/connection";
+import type { FecTargetStatus } from "~/sensors/ant/trainer";
 import {
   BleConnection,
   UnsupportedBleDeviceError,

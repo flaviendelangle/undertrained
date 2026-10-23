@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AntTrainerConnection } from "~/sensors/ant/connection";
-import type { FecTargetStatus } from "~/sensors/ant/connection";
+import { AntTrainerConnection } from "~/sensors/ant/trainer";
+import type { FecTargetStatus } from "~/sensors/ant/trainer";
 import type {
   ConnectionState,
   SensorErrorReason,
