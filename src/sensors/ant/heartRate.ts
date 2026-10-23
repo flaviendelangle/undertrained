@@ -4,6 +4,7 @@ import {
   abandonStickUse,
   acquireStick,
   beginStickUse,
+  detachAndWaitForChannel,
   holdStick,
   log,
   logError,
@@ -134,11 +135,7 @@ export class AntHeartRateAdapter implements HeartRateAdapter {
     sensor: import("ant-plus-next").HeartRateSensor,
   ): Promise<void> {
     this.stopListening(sensor);
-    try {
-      await sensor.detach();
-    } catch {
-      // May already be detached
-    }
+    await detachAndWaitForChannel(sensor);
   }
 
   async disconnect(): Promise<void> {

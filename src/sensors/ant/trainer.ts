@@ -9,6 +9,7 @@ import {
   abandonStickUse,
   acquireStick,
   beginStickUse,
+  detachAndWaitForChannel,
   holdStick,
   log,
   logError,
@@ -54,45 +55,6 @@ export interface AntTrainerOptions {
 type TrainerSensor =
   | import("ant-plus-next").FitnessEquipmentSensor
   | import("ant-plus-next").BicyclePowerSensor;
-
-/**
- * How long the fallback waits for the stick to free the FE-C channel. A close
- * takes about one message period, a quarter of a second for FE-C; this only
- * guards against a confirmation that never comes.
- */
-const CHANNEL_RELEASE_TIMEOUT_MS = 2_000;
-
-/**
- * Detaches `sensor` and resolves once its channel is free to reuse.
- *
- * The library's `detach()` resolves as soon as the close is written, and the
- * sensor keeps its channel number until the stick has closed the channel and
- * confirmed the unassign that follows, which the library then reports as
- * "detached". Until that point it hands every event on the channel number to
- * every sensor set to it, so a sensor attached there early takes the old
- * one's close and unassign as its own, and drops its channel.
- */
-async function detachAndWaitForChannel(sensor: TrainerSensor): Promise<void> {
-  if (sensor.channel === undefined) return;
-  const released = new Promise<void>((resolve) => {
-    const release = () => {
-      clearTimeout(timeout);
-      sensor.removeListener("detached", release);
-      resolve();
-    };
-    const timeout = setTimeout(() => {
-      log("Trainer: Channel close not confirmed, reusing it anyway");
-      release();
-    }, CHANNEL_RELEASE_TIMEOUT_MS);
-    sensor.on("detached", release);
-  });
-  try {
-    await sensor.detach();
-  } catch {
-    // Ignore detach errors
-  }
-  await released;
-}
 
 /**
  * ANT+ trainer connection.
@@ -215,11 +177,7 @@ export class AntTrainerAdapter implements TrainerAdapter {
         feSensor.removeListener("fitnessData", this.feHandler);
         this.feHandler = null;
       }
-      try {
-        await feSensor.detach();
-      } catch {
-        // May already be detached
-      }
+      await detachAndWaitForChannel(feSensor);
       abandonStickUse();
       return { status: "cancelled" };
     }
@@ -296,11 +254,7 @@ export class AntTrainerAdapter implements TrainerAdapter {
       // Raced with disconnect() — undo the attach we just made.
       powerSensor.removeListener("powerData", this.powerHandler);
       this.powerHandler = null;
-      try {
-        await powerSensor.detach();
-      } catch {
-        // May already be detached
-      }
+      await detachAndWaitForChannel(powerSensor);
       return;
     }
 
@@ -416,12 +370,10 @@ export class AntTrainerAdapter implements TrainerAdapter {
     }
     this.controlAvailable = false;
 
+    // Keep the stick until the channel is free, and resolve only then, so a
+    // quick reconnect can't attach a sensor on it while the close is in flight.
     for (const sensor of this.takeSensors()) {
-      try {
-        await sensor.detach();
-      } catch {
-        // May already be detached
-      }
+      await detachAndWaitForChannel(sensor);
     }
     this.releaseStick?.();
     this.releaseStick = null;

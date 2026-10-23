@@ -153,6 +153,49 @@ function closeStickIfIdle(): void {
 }
 
 /**
+ * How long to wait for the stick to free a channel. A close takes about one
+ * message period, a quarter of a second at most; this only guards against a
+ * confirmation that never comes.
+ */
+const CHANNEL_RELEASE_TIMEOUT_MS = 2_000;
+
+/**
+ * Detaches `sensor` and resolves once its channel is free to reuse. Use it for
+ * every detach: the power meter fallback reuses the trainer's channel at once,
+ * and so does a reconnect while another sensor keeps the stick open.
+ *
+ * The library's `detach()` resolves as soon as the close is written, and the
+ * sensor keeps its channel number until the stick has closed the channel and
+ * confirmed the unassign that follows, which the library then reports as
+ * "detached". Until that point it hands every event on the channel number to
+ * every sensor set to it, so a sensor attached there early takes the old
+ * one's close and unassign as its own, and drops its channel.
+ */
+export async function detachAndWaitForChannel(
+  sensor: import("ant-plus-next").BaseSensor,
+): Promise<void> {
+  if (sensor.channel === undefined) return;
+  const released = new Promise<void>((resolve) => {
+    const release = () => {
+      clearTimeout(timeout);
+      sensor.removeListener("detached", release);
+      resolve();
+    };
+    const timeout = setTimeout(() => {
+      log("Channel close not confirmed, reusing it anyway");
+      release();
+    }, CHANNEL_RELEASE_TIMEOUT_MS);
+    sensor.on("detached", release);
+  });
+  try {
+    await sensor.detach();
+  } catch {
+    // May already be detached
+  }
+  await released;
+}
+
+/**
  * Gives back the channel of a sensor the library dropped on its own.
  *
  * When a channel loses its device the library unassigns it and says

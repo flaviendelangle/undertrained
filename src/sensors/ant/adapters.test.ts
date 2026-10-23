@@ -59,6 +59,23 @@ async function flush() {
   await vi.advanceTimersByTimeAsync(CHANNEL_CLOSE_MS);
 }
 
+/**
+ * Awaits `promise`, letting fake time pass only until it settles, so a
+ * disconnect() that waits for the stick gets its confirmation and one that
+ * doesn't resolves at once.
+ */
+async function settled<T>(promise: Promise<T>): Promise<T> {
+  let done = false;
+  promise.then(
+    () => (done = true),
+    () => (done = true),
+  );
+  for (let ms = 0; !done && ms < 5_000; ms++) {
+    await vi.advanceTimersByTimeAsync(1);
+  }
+  return promise;
+}
+
 const CONNECTED = { status: "connected", deviceName: null };
 
 describe("ANT+ disconnects", () => {
@@ -109,25 +126,31 @@ describe("ANT+ disconnects", () => {
     expect(hrEvents.onDisconnect).not.toHaveBeenCalled();
     expect(stick.closed).toBe(false);
     // The trainer gave its reference back, so the strap was the last holder.
-    await hr.disconnect();
+    await settled(hr.disconnect());
     expect(stick.closed).toBe(true);
   });
 
-  it.each(["AntHeartRateAdapter", "AntTrainerAdapter"] as const)(
-    "%s does not report a disconnect the rider asked for, even on a quick reconnect",
-    async (name) => {
+  it.each([
+    { reconnecting: "AntTrainerAdapter", holding: "AntHeartRateAdapter" },
+    { reconnecting: "AntHeartRateAdapter", holding: "AntTrainerAdapter" },
+  ] as const)(
+    "keeps $reconnecting through a quick disconnect and reconnect while $holding keeps the stick",
+    async ({ reconnecting, holding }) => {
       const loaded = await load();
-      const adapter = new loaded[name]();
+      await new loaded[holding]().connect(trainerEvents());
+      const adapter = new loaded[reconnecting]();
       const first = trainerEvents();
       const second = trainerEvents();
       await adapter.connect(first);
 
-      await adapter.disconnect();
-      expect(loaded.antPlus.sticks[0].closed).toBe(true);
+      // The rider reconnects the moment the card lets them.
+      await settled(adapter.disconnect());
       await adapter.connect(second);
-      // The library confirms the first detach only now.
       await flush();
 
+      const sensor = loaded.antPlus.sensors.at(-1)!;
+      expect(sensor.channel).toBeDefined();
+      expect(loaded.antPlus.sticks).toHaveLength(1);
       expect(first.onDisconnect).not.toHaveBeenCalled();
       expect(second.onDisconnect).not.toHaveBeenCalled();
     },
@@ -214,7 +237,7 @@ describe("ANT+ trainer", () => {
 
     // Letting go releases too: FE-C target power would otherwise stick.
     feSensor.setTrackResistance.mockClear();
-    await trainer.disconnect();
+    await settled(trainer.disconnect());
     expect(feSensor.setTrackResistance).toHaveBeenCalledWith(0, 0.005);
   });
 
@@ -230,7 +253,7 @@ describe("ANT+ trainer", () => {
     const disconnecting = trainer.disconnect();
     // A debounced ERG write landing while the release is on its way.
     await expect(trainer.setTargetPower(250)).rejects.toThrow();
-    await disconnecting;
+    await settled(disconnecting);
 
     expect(feSensor.setTargetPower).not.toHaveBeenCalled();
   });
@@ -248,9 +271,9 @@ describe("ANT+ stick sharing", () => {
     ]);
     expect(antPlus.sticks).toHaveLength(1);
 
-    await hr.disconnect();
+    await settled(hr.disconnect());
     expect(antPlus.sticks[0].closed).toBe(false);
-    await trainer.disconnect();
+    await settled(trainer.disconnect());
     expect(antPlus.sticks[0].closed).toBe(true);
   });
 
