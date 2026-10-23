@@ -51,12 +51,12 @@ function deferred() {
 }
 
 /**
- * Lets the library's deferred "detached" events and pending promises run.
- * One millisecond, because a zero-delay timer set while fake timers are
- * ticking is pushed back by that much.
+ * Lets the stick confirm the channels closed so far, and the library say
+ * "detached" for them.
  */
 async function flush() {
-  await vi.advanceTimersByTimeAsync(1);
+  const { CHANNEL_CLOSE_MS } = await import("./fakeAntPlus");
+  await vi.advanceTimersByTimeAsync(CHANNEL_CLOSE_MS);
 }
 
 const CONNECTED = { status: "connected", deviceName: null };
@@ -176,17 +176,23 @@ describe("ANT+ trainer", () => {
     await trainer.connect(events);
 
     await vi.advanceTimersByTimeAsync(5_000);
+    // The FE-C close is written, but channel 1 is not free yet: a power
+    // sensor set to it now would take the FE-C unassign as its own.
+    expect(antPlus.sensors).toHaveLength(1);
+    expect(antPlus.sensors[0].channel).toBe(1);
+
+    await flush();
     const [feSensor, powerSensor] = antPlus.sensors;
-    expect(powerSensor).toBeInstanceOf(antPlus.BicyclePowerSensor);
     expect(feSensor.channel).toBeUndefined();
+    expect(powerSensor).toBeInstanceOf(antPlus.BicyclePowerSensor);
+    // Still attached once everything about the FE-C close has played out.
+    await flush();
     expect(powerSensor.channel).toBe(1);
 
     powerSensor.emit("powerData", { Power: 180, Cadence: 90 });
-    await flush();
 
     expect(events.onControlAvailabilityChange).toHaveBeenLastCalledWith(false);
     expect(events.onData).toHaveBeenCalledWith({ power: 180, cadence: 90 });
-    // Detaching the FE-C sensor was the adapter's own doing.
     expect(events.onDisconnect).not.toHaveBeenCalled();
     await expect(trainer.setTargetPower(200)).rejects.toThrow();
 

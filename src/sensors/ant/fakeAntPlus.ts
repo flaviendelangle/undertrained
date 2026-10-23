@@ -3,14 +3,16 @@ import { vi } from "vitest";
 
 /**
  * A stand-in for `ant-plus-next`, for tests that `vi.mock` it. It reproduces
- * the library's event timing and the stick's channel bookkeeping, which is
- * what the adapters depend on, and nothing of the radio protocol.
- *
- * One known gap: the real library hands a channel's events to every sensor
- * set to that channel number, so a sensor attached on a channel that is still
- * closing also gets the old sensor's close and unassign. Here each sensor
- * only hears about itself.
+ * what the adapters depend on: the library's event timing, the stick's
+ * channel bookkeeping, and the way it hands a channel's events to every
+ * sensor set to that channel number. Nothing of the radio protocol.
  */
+
+/**
+ * How long the stick takes to close a channel and confirm the unassign that
+ * follows. About one message period on a real stick.
+ */
+export const CHANNEL_CLOSE_MS = 50;
 
 /** Every stick created since the module was loaded, oldest first. */
 export const sticks: WebUsbStick[] = [];
@@ -57,6 +59,20 @@ export class WebUsbStick extends EventEmitter {
     return Promise.resolve(this.attachedSensors.delete(sensor));
   }
 
+  /**
+   * The stick confirms a channel unassigned. Like the library, every sensor
+   * set to that channel number takes it as its own, including one attached
+   * there after the close was sent.
+   */
+  confirmUnassigned(channel: number): void {
+    for (const sensor of sensors) {
+      if (sensor.stick === this && sensor.channel === channel) {
+        sensor.channel = undefined;
+        sensor.emit("detached");
+      }
+    }
+  }
+
   close(): Promise<void> {
     this.closed = true;
     this.readLoop?.resolve(true);
@@ -96,14 +112,15 @@ class FakeSensor extends EventEmitter {
   }
 
   /**
-   * Resolves once the channel close is written. The library only says
-   * "detached" later, when the stick confirms it.
+   * Resolves once the channel close is written, keeping the channel number.
+   * The library only clears it, and says "detached", when the stick confirms
+   * the unassign.
    */
   async detach(): Promise<void> {
-    if (this.channel === undefined) return;
-    this.channel = undefined;
+    const channel = this.channel;
+    if (channel === undefined) return;
     await this.stick.detach(this);
-    setTimeout(() => this.emit("detached"), 0);
+    setTimeout(() => this.stick.confirmUnassigned(channel), CHANNEL_CLOSE_MS);
   }
 
   /**
