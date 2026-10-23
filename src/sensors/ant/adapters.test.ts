@@ -223,6 +223,26 @@ describe("ANT+ trainer", () => {
     expect(events.onDisconnect).toHaveBeenCalledOnce();
   });
 
+  it("lets a reconnect keep its FE-C sensor when disconnect() lands during the fallback", async () => {
+    const { antPlus, AntHeartRateAdapter, AntTrainerAdapter } = await load();
+    // The strap keeps the stick open, so the reconnect reuses it.
+    await new AntHeartRateAdapter().connect(heartRateEvents());
+    const trainer = new AntTrainerAdapter();
+    await trainer.connect(trainerEvents());
+    // No FE-C data: the fallback starts closing the FE-C channel.
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    await settled(trainer.disconnect());
+    const second = trainerEvents();
+    await trainer.connect(second);
+    await flush();
+
+    const feSensor = antPlus.sensors.at(-1)!;
+    expect(feSensor).toBeInstanceOf(antPlus.FitnessEquipmentSensor);
+    expect(feSensor.channel).toBe(1);
+    expect(second.onDisconnect).not.toHaveBeenCalled();
+  });
+
   it("leaves ERG on a flat road at the rider's rolling resistance", async () => {
     const { antPlus, AntTrainerAdapter } = await load();
     const trainer = new AntTrainerAdapter({ rollingResistance: () => 0.005 });

@@ -78,6 +78,8 @@ export class AntTrainerAdapter implements TrainerAdapter {
   /** Reports the trainer gone when the library drops its channel on its own. */
   private lossHandler: (() => void) | null = null;
   private fallbackTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** The power meter fallback, while it swaps sensors on the channel. */
+  private fallback: Promise<void> | null = null;
   /** Our reference to the shared stick, while we hold one. */
   private releaseStick: (() => void) | null = null;
   private disposed = false;
@@ -199,11 +201,13 @@ export class AntTrainerAdapter implements TrainerAdapter {
     this.fallbackTimeout = setTimeout(() => {
       this.fallbackTimeout = null;
       if (feReceivedData || this.disposed) return;
-      void this.fallBackToPowerSensor(BicyclePowerSensor, stick, events).catch(
-        (err: unknown) => {
-          logError("Trainer: BicyclePowerSensor fallback failed:", err);
-        },
-      );
+      this.fallback = this.fallBackToPowerSensor(
+        BicyclePowerSensor,
+        stick,
+        events,
+      ).catch((err: unknown) => {
+        logError("Trainer: BicyclePowerSensor fallback failed:", err);
+      });
     }, 5_000);
 
     // ANT+ pairs by profile and never learns a device name.
@@ -374,6 +378,9 @@ export class AntTrainerAdapter implements TrainerAdapter {
 
     // Keep the stick until the channel is free, and resolve only then, so a
     // quick reconnect can't attach a sensor on it while the close is in flight.
+    // A fallback in flight holds the sensor it is closing, so wait for it too.
+    await this.fallback;
+    this.fallback = null;
     for (const sensor of this.takeSensors()) {
       await detachAndWaitForChannel(sensor);
     }
