@@ -173,6 +173,7 @@ function LiveWorkout({ workout }: { workout: RideWorkout }) {
           ftp={riderSettings.ftp}
           weightKg={riderSettings.weightKg}
           workout={hudWorkout}
+          erg={ride.erg}
           onPause={engine.pause}
           onStop={engine.stop}
         />

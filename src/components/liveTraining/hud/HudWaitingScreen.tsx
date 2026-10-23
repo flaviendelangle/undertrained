@@ -5,6 +5,7 @@ import type { WorkoutPlayer } from "~/liveTraining/rideEngine";
 import type { TrainerTargetStatus } from "~/sensors/adapter";
 import { formatCompactDuration } from "~/utils/format";
 
+import { HudErgStatus } from "./HudErgStatus";
 import { HudWorkoutBar } from "./HudWorkoutBar";
 
 interface HudWaitingScreenProps {
@@ -185,29 +186,11 @@ export function HudWaitingScreen({
                   </div>
                 )}
 
-                {ergError && (
-                  <p role="alert" className="text-center text-xs text-red-400">
-                    {t("liveTraining.ergFailed")}
-                  </p>
-                )}
-
-                {/* The trainer reports it cannot reach the target in this gear. */}
-                {!ergError && ergTargetStatus === "LowSpeed" && (
-                  <p
-                    role="status"
-                    className="text-center text-xs text-yellow-500"
-                  >
-                    {t("liveTraining.ergShiftUp")}
-                  </p>
-                )}
-                {!ergError && ergTargetStatus === "HighSpeed" && (
-                  <p
-                    role="status"
-                    className="text-center text-xs text-yellow-500"
-                  >
-                    {t("liveTraining.ergShiftDown")}
-                  </p>
-                )}
+                <HudErgStatus
+                  error={ergError}
+                  targetStatus={ergTargetStatus}
+                  className="text-center"
+                />
               </>
             )}
           </div>

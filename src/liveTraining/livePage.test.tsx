@@ -116,6 +116,10 @@ it("rides a workout from the wizard to the summary", async () => {
     screen.getAllByRole("button", { name: "liveTraining.pause" }),
   ).not.toHaveLength(0);
 
+  // What the trainer says about the target is shown during the ride.
+  act(() => trainer().live.onTargetStatusChange("LowSpeed"));
+  expect(screen.getAllByText("liveTraining.ergShiftUp")).not.toHaveLength(0);
+
   // Coming back to the tab sends the target again.
   trainer().setTargetPower.mockClear();
   act(() => {

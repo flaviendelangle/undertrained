@@ -1,9 +1,10 @@
 import { PowerHrChart } from "~/components/liveTraining/PowerHrChart";
 import { useT } from "~/i18n/useT";
-import type { WorkoutPlayer } from "~/liveTraining/rideEngine";
+import type { ErgStatus, WorkoutPlayer } from "~/liveTraining/rideEngine";
 import type { SessionDataPoint } from "~/sensors/types";
 import { complianceTolerance } from "~/utils/structuredWorkout";
 
+import { HudErgStatus } from "./HudErgStatus";
 import { HudMetricTile } from "./HudMetricTile";
 import { HudPowerGauge } from "./HudPowerGauge";
 import { HudNextSegmentChip, HudSegmentPanel } from "./HudSegmentPanel";
@@ -28,6 +29,8 @@ interface HudMainViewProps {
    * HUD exactly as it was before workouts existed.
    */
   workout?: { name: string; player: WorkoutPlayer } | null;
+  /** What the trainer says about the ERG target, shown under the gauge. */
+  erg: Pick<ErgStatus, "error" | "targetStatus">;
   // Actions
   onPause: () => void;
   onStop: () => void;
@@ -44,6 +47,7 @@ export function HudMainView({
   ftp,
   weightKg,
   workout = null,
+  erg,
   onPause,
   onStop,
 }: HudMainViewProps) {
@@ -52,6 +56,13 @@ export function HudMainView({
   const targetPower = player?.targetWatts ?? null;
   const tolerance =
     targetPower == null ? undefined : complianceTolerance(targetPower);
+  const ergStatus = (
+    <HudErgStatus
+      error={erg.error}
+      targetStatus={erg.targetStatus}
+      className="border-border/50 bg-card/70 max-w-xs rounded-2xl border px-3 py-1 text-center backdrop-blur-sm"
+    />
+  );
   return (
     <div className="from-background to-background absolute inset-0 flex flex-col bg-linear-to-br">
       {/* Top bar */}
@@ -99,6 +110,7 @@ export function HudMainView({
             targetPower={targetPower}
             toleranceWatts={tolerance}
           />
+          {ergStatus}
           {player && <HudNextSegmentChip player={player} />}
         </div>
 
@@ -160,7 +172,7 @@ export function HudMainView({
           )}
 
           {/* Power gauge */}
-          <div className="shrink-0">
+          <div className="flex shrink-0 flex-col items-center gap-2">
             <HudPowerGauge
               power={currentPower}
               ftp={ftp}
@@ -168,6 +180,7 @@ export function HudMainView({
               targetPower={targetPower}
               toleranceWatts={tolerance}
             />
+            {ergStatus}
           </div>
 
           {/* Right metrics stack */}
