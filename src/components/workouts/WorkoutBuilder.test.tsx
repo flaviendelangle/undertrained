@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
-import { afterEach, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   cleanup,
   fireEvent,
@@ -9,8 +12,12 @@ import {
   within,
 } from "@testing-library/react";
 
-import { WorkoutBuilder } from "./WorkoutBuilder";
+import { ToastProvider } from "~/components/ui/toast";
+import { STRUCTURED_WORKOUT_SCHEMA_VERSION } from "~/utils/structuredWorkout";
 
+import { WorkoutBuilder, type WorkoutBuilderProps } from "./WorkoutBuilder";
+
+const backend = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn() }));
 vi.mock("next/router", () => ({
   useRouter: () => ({
     push: vi.fn(),
@@ -25,45 +32,70 @@ vi.mock("~/hooks/useRiderSettings", () => ({
     configuredFtp: 200,
   }),
 }));
-vi.mock("~/utils/trpc", () => ({
-  trpc: {
-    useUtils: () => ({
-      structuredWorkouts: { list: { invalidate: vi.fn() } },
-    }),
-    structuredWorkouts: {
-      create: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
-      update: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
+vi.mock("~/utils/trpc", async () => {
+  const { useMutation } = await import("@tanstack/react-query");
+  return {
+    trpc: {
+      useUtils: () => ({
+        structuredWorkouts: { list: { invalidate: vi.fn() } },
+      }),
+      structuredWorkouts: {
+        create: {
+          useMutation: (options: object) =>
+            useMutation({ ...options, mutationFn: backend.create }),
+        },
+        update: {
+          useMutation: (options: object) =>
+            useMutation({ ...options, mutationFn: backend.update }),
+        },
+      },
     },
-  },
-}));
+  };
+});
 vi.mock("./WorkoutPreviewChart", () => ({ WorkoutPreviewChart: () => null }));
 vi.mock("./WorkoutSummaryPanel", () => ({ WorkoutSummaryPanel: () => null }));
 
-afterEach(cleanup);
+const workout: NonNullable<WorkoutBuilderProps["workout"]> = {
+  id: 1,
+  name: "Workout",
+  description: null,
+  sport: "bike",
+  structure: {
+    version: STRUCTURED_WORKOUT_SCHEMA_VERSION,
+    sport: "bike",
+    nodes: ["a", "b", "c"].map((id) => ({
+      id,
+      type: "step",
+      durationSeconds: 60,
+      power: { kind: "free" },
+    })),
+  },
+};
+
+let client: QueryClient;
+function wrapper({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={client}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  );
+}
+beforeEach(() => {
+  backend.create.mockReset();
+  backend.update.mockReset();
+  client = new QueryClient({
+    defaultOptions: { mutations: { retry: false } },
+  });
+});
+afterEach(() => {
+  cleanup();
+  client.clear();
+});
 
 it.each(["Up", "Down"] as const)(
   "moves a row %s from the keyboard menu without changing selection",
   async (direction) => {
-    render(
-      <WorkoutBuilder
-        workout={{
-          id: 1,
-          name: "Workout",
-          description: null,
-          sport: "bike",
-          structure: {
-            version: 1,
-            sport: "bike",
-            nodes: ["a", "b", "c"].map((id) => ({
-              id,
-              type: "step",
-              durationSeconds: 60,
-              power: { kind: "free" },
-            })),
-          },
-        }}
-      />,
-    );
+    render(<WorkoutBuilder workout={workout} />, { wrapper });
     const rows = screen.getAllByRole("option");
     const trigger = within(rows[1]).getByRole("button", {
       name: "workouts.step.actions",
@@ -91,3 +123,16 @@ it.each(["Up", "Down"] as const)(
     expect(rows[1].getAttribute("aria-selected")).toBe("true");
   },
 );
+
+it("tells the athlete when a save fails", async () => {
+  backend.update.mockRejectedValue(new Error("offline"));
+  render(<WorkoutBuilder workout={workout} />, { wrapper });
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "workouts.updateWorkout" }),
+  );
+
+  // `All`: the toast's text is mirrored into a screen-reader announcement.
+  expect(await screen.findAllByText("common.saveError")).not.toHaveLength(0);
+  expect(backend.update).toHaveBeenCalledOnce();
+});
