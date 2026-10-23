@@ -12,6 +12,8 @@ import { TRPCError } from "@trpc/server";
 import type { Database } from "../db";
 import { athletes } from "../db/schema";
 import { env } from "../env";
+import { StravaError } from "./stravaPort";
+import type { StravaPort } from "./stravaPort";
 import type { StoredLap, StravaActivity, StravaStream } from "./stravaTypes";
 
 const stravaTokenResponseSchema = z.object({
@@ -414,4 +416,130 @@ export function getLapModels(
       averageCadence: l.average_cadence,
     };
   });
+}
+
+const RATE_LIMIT_WINDOW_MS = 15 * 60_000;
+
+/** When a Strava response last refreshed `strava.rateLimiting`. */
+let lastResponseAt = 0;
+
+/**
+ * True while the last response said the read budget is spent and Strava's
+ * 15-minute window (it resets on the quarter-hour) hasn't rolled over since.
+ * strava-v3 updates `strava.rateLimiting` from every response's headers.
+ */
+function readBudgetSpent(): boolean {
+  return (
+    strava.rateLimiting.readExceeded() &&
+    Math.floor(lastResponseAt / RATE_LIMIT_WINDOW_MS) ===
+      Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS)
+  );
+}
+
+/** Milliseconds until Strava's next rate-limit window, plus a small buffer. */
+function msUntilRateLimitReset(): number {
+  return RATE_LIMIT_WINDOW_MS - (Date.now() % RATE_LIMIT_WINDOW_MS) + 2_000;
+}
+
+function statusCodeOf(error: unknown): number | undefined {
+  return typeof error === "object" &&
+    error !== null &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number"
+    ? error.statusCode
+    : undefined;
+}
+
+/** Translates a strava-v3 or token failure into the port's vocabulary. */
+function toStravaError(error: unknown): StravaError {
+  if (error instanceof StravaError) return error;
+  // `getAccessToken` only says UNAUTHORIZED when Strava rejected the grant
+  // itself or there's no refresh token left.
+  if (error instanceof TRPCError && error.code === "UNAUTHORIZED") {
+    return new StravaError("grant_revoked", error.message, { cause: error });
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  switch (statusCodeOf(error)) {
+    case 404:
+      return new StravaError("not_found", message, { cause: error });
+    case 429:
+      return new StravaError("rate_limited", message, {
+        cause: error,
+        retryAfterMs: msUntilRateLimitReset(),
+      });
+    case 401:
+      return new StravaError(
+        "grant_revoked",
+        "Strava session expired. Please sign in again.",
+        { cause: error },
+      );
+    default:
+      return new StravaError("other", message, { cause: error });
+  }
+}
+
+/**
+ * The production {@link StravaPort}: strava-v3 calls made with the athlete's
+ * access token, refreshed when due, and every failure translated into a
+ * {@link StravaError}. While the read budget of the current window is spent,
+ * calls fail as `rate_limited` without reaching Strava.
+ */
+export function stravaApi(db: Database): StravaPort {
+  async function call<T>(
+    athleteId: number,
+    request: (accessToken: string) => Promise<T>,
+  ): Promise<T> {
+    if (readBudgetSpent()) {
+      throw new StravaError("rate_limited", "Strava read rate limit reached", {
+        retryAfterMs: msUntilRateLimitReset(),
+      });
+    }
+    try {
+      const accessToken = await getAccessToken(db, athleteId);
+      try {
+        return await request(accessToken);
+      } finally {
+        lastResponseAt = Date.now();
+      }
+    } catch (e) {
+      throw toStravaError(e);
+    }
+  }
+
+  return {
+    listActivities: (athleteId, { page, perPage, after }) =>
+      call(athleteId, (accessToken) =>
+        strava.athlete.listActivities({
+          access_token: accessToken,
+          per_page: perPage,
+          page,
+          ...(after != null ? { after } : {}),
+        }),
+      ),
+    getActivity: (athleteId, stravaId) =>
+      call(athleteId, (accessToken) =>
+        strava.activities.get({
+          access_token: accessToken,
+          id: String(stravaId),
+        }),
+      ),
+    getStreams: (athleteId, stravaId) =>
+      call(athleteId, (accessToken) =>
+        fetchStreamsFromStrava(accessToken, stravaId),
+      ),
+    async getAthleteStats(athleteId) {
+      const athlete = await db.query.athletes.findFirst({
+        where: eq(athletes.id, athleteId),
+      });
+      if (!athlete) {
+        throw new StravaError("other", `Athlete ${athleteId} not found`);
+      }
+      return call(athleteId, (accessToken) =>
+        strava.athletes.stats({
+          access_token: accessToken,
+          id: String(athlete.stravaAthleteId),
+        }),
+      );
+    },
+  };
 }
