@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConnectResult } from "~/sensors/adapter";
 import { createFakeSensorAdapters } from "~/sensors/fakeAdapters";
 import { DEFAULT_RIDER_SETTINGS, type TrainerData } from "~/sensors/types";
-import type { StructuredWorkout } from "~/utils/structuredWorkout";
+import {
+  type StructuredWorkout,
+  computeSegmentStats,
+} from "~/utils/structuredWorkout";
 import { builtInWorkout } from "~/utils/structuredWorkout/builtIn";
 import { makeStep, makeWorkout } from "~/utils/structuredWorkout/fixtures";
 
@@ -394,6 +397,29 @@ describe("ERG", () => {
 });
 
 describe("the recording", () => {
+  it.each([
+    ["the rider ends the workout", (ride: Ride) => ride.engine.endWorkout()],
+    ["the workout runs out", (ride: Ride) => ride.pedal(149)],
+  ])("credits no step with what is ridden once %s", async (_, end) => {
+    const ride = await rideFor(30);
+    end(ride);
+    const done = ride.points().length;
+    ride.pedal(60);
+
+    const after = ride.points().slice(done);
+    expect(after).toHaveLength(60);
+    expect(
+      after.every(
+        (point) => point.segmentIndex === null && point.targetPower === null,
+      ),
+    ).toBe(true);
+    const stats = computeSegmentStats(
+      ride.points(),
+      ride.ride().workout.segments,
+    );
+    expect(stats.reduce((sum, stat) => sum + stat.seconds, 0)).toBe(done);
+  });
+
   it("shows and records each reading for as long as it lasts", async () => {
     const { engine, clock, trainer, heartRate, ride, points } =
       await rideFor(0);

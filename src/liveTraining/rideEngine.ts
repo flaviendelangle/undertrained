@@ -643,7 +643,11 @@ export class RideEngine {
       distance:
         (this.points.at(-1)?.distance ?? 0) +
         distanceIncrementMeters(this.speedMs, deltaSeconds),
-      segmentIndex: position.segmentIndex,
+      // No step past the end of the workout, or once the rider has ended it:
+      // that keeps riding on out of the compliance figures and the per-step
+      // laps.
+      segmentIndex:
+        this.ended || position.segmentIndex < 0 ? null : position.segmentIndex,
     });
     this.watchRampTest(reading, gapMs, position);
 
