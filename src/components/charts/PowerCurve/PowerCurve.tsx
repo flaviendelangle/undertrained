@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { useActivityFilter } from "~/hooks/useActivityFilter";
+import { useActivitySelection } from "~/hooks/useActivitySelection";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
@@ -660,10 +660,21 @@ function AggregatedPowerCurve({
   const t = useT();
   const tokens = useChartTokens();
   const athleteId = useAthleteId();
-  const filter = useActivityFilter();
-  const workoutTypes =
-    workoutTypesProp ??
-    (filter.workoutTypes.length > 0 ? filter.workoutTypes : undefined);
+  // Which parts of the global filter each tab honours is decided per view in
+  // `useActivitySelection`. The curve and its year list only forward sports
+  // and workout types.
+  const { workoutTypes } = useActivitySelection(
+    timePeriodId != null ? "periodPowerCurve" : "statisticsPowerCurve",
+    { activityTypes, workoutTypes: workoutTypesProp },
+  );
+  const zonesSelection = useActivitySelection("periodPowerZones", {
+    activityTypes,
+    timePeriodId,
+  });
+  const distributionSelection = useActivitySelection(
+    "periodPowerDistribution",
+    { activityTypes, timePeriodId },
+  );
   const [ranges, setRanges] = React.useState<DateRange[]>(
     () => defaultRanges ?? [presetToRange("1y", t)],
   );
@@ -677,17 +688,13 @@ function AggregatedPowerCurve({
   const { resolveForDate } = useRiderSettingsTimeline();
 
   const periodActivities = trpc.activities.list.useQuery(
-    {
-      athleteId: athleteId!,
-      activityTypes: activityTypes ?? [],
-      timePeriodId: timePeriodId!,
-    },
+    { athleteId: athleteId!, ...zonesSelection },
     { enabled: athleteId != null && timePeriodId != null && tab === "zones" },
   );
   const periodDistribution = trpc.analytics.getPowerDistribution.useQuery(
     {
       athleteId: athleteId!,
-      activityTypes,
+      ...distributionSelection,
       timePeriodId: timePeriodId!,
     },
     {

@@ -22,7 +22,7 @@ export interface UseFitnessDataResult {
 export function useFitnessData(): UseFitnessDataResult {
   // No sport filter: the fitness curve aggregates load across all sports on the
   // shared TSS scale.
-  const activitiesQuery = useActivitiesQuery({ activityTypes: [] });
+  const activitiesQuery = useActivitiesQuery("statistics");
   const { timeline } = useRiderSettingsTimeline();
 
   const preferences = React.useMemo(

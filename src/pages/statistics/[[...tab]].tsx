@@ -58,7 +58,7 @@ const StatisticsPage: NextPageWithLayout = () => {
   // request overlaps with the chart modules loading; the three charts that share
   // this exact key then mount already populated. Harmless on SPA navigation —
   // the cache is warm, so this resolves instantly without a network call.
-  useActivitiesQuery({ activityTypes: [] });
+  useActivitiesQuery("statistics");
 
   // Overlap module loading with data, then reveal without waiting for optional
   // analytics, record badges, or calendar feeds.

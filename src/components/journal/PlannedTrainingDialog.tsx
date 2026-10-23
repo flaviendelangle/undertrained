@@ -258,9 +258,9 @@ function MarkDoneSection({
   markDoneMut: ReturnType<typeof trpc.plannedTrainings.markDone.useMutation>;
 }) {
   const t = useT();
-  // Empty options => unfiltered, all-time history, so the global Journal filter
-  // can't hide an activity that's a valid match for this plan.
-  const { data: activities } = useActivitiesQuery({});
+  // Unfiltered, all-time history, so the global Journal filter can't hide an
+  // activity that's a valid match for this plan.
+  const { data: activities } = useActivitiesQuery("planMatching");
   // Internal activity ids already linked to a (completed) plan — never offered.
   const { data: linkedActivityIds } =
     trpc.plannedTrainings.linkedActivityIds.useQuery({ athleteId });
