@@ -1,12 +1,12 @@
 import type { ConnectResult, HeartRateAdapter, SensorEvents } from "../adapter";
 import type { HeartRateData } from "../types";
 import {
+  abandonStickUse,
   acquireStick,
   beginStickUse,
-  endStickUse,
+  holdStick,
   log,
   logError,
-  releaseStick,
 } from "./stick";
 
 // Fixed channel assignment: HR always uses channel 0, trainer always uses channel 1
@@ -19,7 +19,10 @@ export class AntHeartRateAdapter implements HeartRateAdapter {
   private handler:
     ((state: import("ant-plus-next").HeartRateSensorState) => void) | null =
     null;
-  private holdsStick = false;
+  /** Reports the strap gone when the library drops its channel on its own. */
+  private detachedHandler: (() => void) | null = null;
+  /** Our reference to the shared stick, while we hold one. */
+  private releaseStick: (() => void) | null = null;
   private disposed = false;
 
   async connect(events: SensorEvents<HeartRateData>): Promise<ConnectResult> {
@@ -43,7 +46,7 @@ export class AntHeartRateAdapter implements HeartRateAdapter {
     try {
       stick = await acquireStick();
     } catch (err) {
-      endStickUse(false);
+      abandonStickUse();
       throw err;
     }
     log("HR: Stick ready, attaching sensor on channel", HR_CHANNEL);
@@ -68,7 +71,7 @@ export class AntHeartRateAdapter implements HeartRateAdapter {
       await sensor.attach(HR_CHANNEL, 0);
     } catch (err) {
       this.handler = null;
-      endStickUse(false);
+      abandonStickUse();
       throw err;
     }
 
@@ -78,25 +81,55 @@ export class AntHeartRateAdapter implements HeartRateAdapter {
       // would never be released, and the WebUSB device would stay claimed
       // until the browser restarts.
       await this.detachSensor(sensor);
-      endStickUse(false);
+      abandonStickUse();
       return { status: "cancelled" };
     }
 
     // Only now do we own a reference to the stick.
+    const release = holdStick(stick, () => this.lose(events));
+    if (!release) {
+      await this.detachSensor(sensor);
+      throw new Error("Stick lost while the sensor attached");
+    }
     this.sensor = sensor;
-    endStickUse(true);
-    this.holdsStick = true;
+    this.releaseStick = release;
+    this.detachedHandler = () => this.lose(events);
+    sensor.on("detached", this.detachedHandler);
     log("HR: attach() returned");
     return { status: "connected", deviceName: null };
+  }
+
+  /**
+   * The strap or the stick went away without disconnect() being asked for.
+   * There is nothing left to detach: drop the sensor and say so.
+   */
+  private lose(events: SensorEvents<HeartRateData>): void {
+    const sensor = this.sensor;
+    if (!sensor || this.disposed) return;
+    log("HR: Sensor lost");
+    this.sensor = null;
+    this.stopListening(sensor);
+    this.releaseStick?.();
+    this.releaseStick = null;
+    events.onDisconnect();
+  }
+
+  private stopListening(sensor: import("ant-plus-next").HeartRateSensor) {
+    if (this.handler) {
+      sensor.removeListener("heartRateData", this.handler);
+      this.handler = null;
+    }
+    // Our own detach is confirmed by a "detached" event too.
+    if (this.detachedHandler) {
+      sensor.removeListener("detached", this.detachedHandler);
+      this.detachedHandler = null;
+    }
   }
 
   private async detachSensor(
     sensor: import("ant-plus-next").HeartRateSensor,
   ): Promise<void> {
-    if (this.handler) {
-      sensor.removeListener("heartRateData", this.handler);
-      this.handler = null;
-    }
+    this.stopListening(sensor);
     try {
       await sensor.detach();
     } catch {
@@ -112,9 +145,7 @@ export class AntHeartRateAdapter implements HeartRateAdapter {
       this.sensor = null;
       await this.detachSensor(sensor);
     }
-    if (this.holdsStick) {
-      this.holdsStick = false;
-      releaseStick();
-    }
+    this.releaseStick?.();
+    this.releaseStick = null;
   }
 }

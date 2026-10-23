@@ -17,9 +17,25 @@ let stickRefCount = 0;
  * another sensor that is still handshaking on it.
  */
 let stickPendingCount = 0;
+/** What each holder of the stick does if it disappears from under them. */
+const stickLossListeners = new Set<() => void>();
 
 /** How long to wait for the stick's startup handshake. */
 const STARTUP_TIMEOUT_MS = 10_000;
+
+/**
+ * The stick stopped working without us closing it: pulled out, or its read
+ * loop died. Every holder is told, so its sensor can be reported gone, and the
+ * next acquire builds a fresh stick.
+ */
+function markStickLost(stick: import("ant-plus-next").WebUsbStick): void {
+  // Closed by us, or already reported.
+  if (sharedStick !== stick) return;
+  log("Stick lost");
+  sharedStick = null;
+  stickReady = false;
+  for (const onLost of [...stickLossListeners]) onLost();
+}
 
 /**
  * Creates a stick and resolves once it has completed its startup handshake.
@@ -32,6 +48,7 @@ async function openStick(): Promise<import("ant-plus-next").WebUsbStick> {
   const stick = new WebUsbStick();
 
   await new Promise<void>((resolve, reject) => {
+    let started = false;
     const timeout = setTimeout(() => {
       reject(
         new Error("ANT+ startup timeout after 10s — stick did not handshake"),
@@ -39,6 +56,7 @@ async function openStick(): Promise<import("ant-plus-next").WebUsbStick> {
     }, STARTUP_TIMEOUT_MS);
 
     stick.on("startup", () => {
+      started = true;
       clearTimeout(timeout);
       log("Startup handshake complete");
       resolve();
@@ -46,20 +64,22 @@ async function openStick(): Promise<import("ant-plus-next").WebUsbStick> {
 
     stick.on("shutdown", () => {
       log("Stick shutdown");
-      // The stick is gone; force the next acquire to build a fresh one.
-      if (sharedStick === stick) {
-        sharedStick = null;
-        stickReady = false;
-      }
+      markStickLost(stick);
     });
 
     log("Opening stick...");
     // open() returns true on success but only AFTER readLoop ends (never in
     // normal operation). open() returns false on error. We don't await it — we
     // wait for the "startup" event instead.
+    //
+    // Once started, open() settling means the read loop is over. Pulling the
+    // stick out ends it with a throw, and the library's own close() then fails
+    // detaching the sensors, so open() rejects and "shutdown" never fires.
     stick.open().then(
       (result) => {
-        if (!result) {
+        if (started) {
+          markStickLost(stick);
+        } else if (!result) {
           clearTimeout(timeout);
           reject(
             new Error(
@@ -69,6 +89,11 @@ async function openStick(): Promise<import("ant-plus-next").WebUsbStick> {
         }
       },
       (err) => {
+        if (started) {
+          logError("Stick read loop failed:", err);
+          markStickLost(stick);
+          return;
+        }
         clearTimeout(timeout);
         logError("stick.open() threw:", err);
         reject(err instanceof Error ? err : new Error(String(err)));
@@ -130,32 +155,55 @@ function closeStickIfIdle(): void {
 /**
  * Marks the start of a connect attempt, before the stick has been acquired.
  *
- * Must be paired with exactly one `endStickUse()` on every exit path,
- * including the ones that throw.
+ * Must be paired with exactly one `abandonStickUse()` or `holdStick()` on
+ * every exit path, including the ones that throw.
  */
 export function beginStickUse(): void {
   stickPendingCount++;
 }
 
 /**
- * Marks the end of a connect attempt. `kept` is true only when the connection
- * completed `attach()` and is taking a reference — see `holdsStick` on each
- * connection class. Counting an aborted connect, or a `disconnect()` on a
- * sensor that never connected, would either strand the stick open (leaving the
- * WebUSB device claimed until the browser restarts) or close it out from under
- * the other sensor.
+ * Ends a connect attempt that is not keeping the stick: it failed, or a
+ * disconnect() overtook it. Counting it as a reference would strand the stick
+ * open, leaving the WebUSB device claimed until the browser restarts.
  */
-export function endStickUse(kept: boolean): void {
+export function abandonStickUse(): void {
   stickPendingCount = Math.max(0, stickPendingCount - 1);
-  if (kept) {
-    stickRefCount++;
-    return;
-  }
   closeStickIfIdle();
 }
 
-/** Releases one reference to the shared stick. */
-export function releaseStick(): void {
-  stickRefCount = Math.max(0, stickRefCount - 1);
-  closeStickIfIdle();
+/**
+ * Ends a connect attempt whose sensor attached, turning it into a reference
+ * to the stick. Only take one once `attach()` has returned: a reference for a
+ * connection nobody holds would never be released.
+ *
+ * If the stick disappears while held, the reference is released and `onLost`
+ * runs. Returns the release, which is safe to call more than once, or null
+ * when the stick was lost during the attach and no reference was taken.
+ */
+export function holdStick(
+  stick: import("ant-plus-next").WebUsbStick,
+  onLost: () => void,
+): (() => void) | null {
+  stickPendingCount = Math.max(0, stickPendingCount - 1);
+  if (sharedStick !== stick) {
+    closeStickIfIdle();
+    return null;
+  }
+
+  stickRefCount++;
+  let held = true;
+  const release = () => {
+    if (!held) return;
+    held = false;
+    stickLossListeners.delete(handleLoss);
+    stickRefCount = Math.max(0, stickRefCount - 1);
+    closeStickIfIdle();
+  };
+  const handleLoss = () => {
+    release();
+    onLost();
+  };
+  stickLossListeners.add(handleLoss);
+  return release;
 }

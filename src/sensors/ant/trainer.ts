@@ -6,12 +6,12 @@ import type {
 } from "../adapter";
 import { MAX_TARGET_POWER_WATTS } from "../types";
 import {
+  abandonStickUse,
   acquireStick,
   beginStickUse,
-  endStickUse,
+  holdStick,
   log,
   logError,
-  releaseStick,
 } from "./stick";
 
 /**
@@ -50,6 +50,10 @@ export interface AntTrainerOptions {
   rollingResistance?: () => number;
 }
 
+type TrainerSensor =
+  | import("ant-plus-next").FitnessEquipmentSensor
+  | import("ant-plus-next").BicyclePowerSensor;
+
 /**
  * ANT+ trainer connection.
  * Tries FitnessEquipmentSensor (FE-C) first since smart trainers support it
@@ -69,8 +73,11 @@ export class AntTrainerAdapter implements TrainerAdapter {
   private powerHandler:
     ((state: import("ant-plus-next").BicyclePowerSensorState) => void) | null =
     null;
+  /** Reports the trainer gone when the library drops its channel on its own. */
+  private lossHandler: (() => void) | null = null;
   private fallbackTimeout: ReturnType<typeof setTimeout> | null = null;
-  private holdsStick = false;
+  /** Our reference to the shared stick, while we hold one. */
+  private releaseStick: (() => void) | null = null;
   private disposed = false;
   /**
    * Whether the device has proven it speaks FE-C, which is what makes ERG
@@ -105,7 +112,7 @@ export class AntTrainerAdapter implements TrainerAdapter {
     try {
       stick = await acquireStick();
     } catch (err) {
-      endStickUse(false);
+      abandonStickUse();
       throw err;
     }
     log(
@@ -130,10 +137,7 @@ export class AntTrainerAdapter implements TrainerAdapter {
         feReceivedData = true;
         log("Trainer: Receiving FE-C data from device", state.DeviceId);
         // FE-C is working — cancel fallback and unlock ERG control.
-        if (this.fallbackTimeout != null) {
-          clearTimeout(this.fallbackTimeout);
-          this.fallbackTimeout = null;
-        }
+        this.clearFallback();
         this.controlAvailable = true;
         events.onControlAvailabilityChange(true);
       }
@@ -160,7 +164,7 @@ export class AntTrainerAdapter implements TrainerAdapter {
       await feSensor.attach(TRAINER_CHANNEL, 0);
     } catch (err) {
       this.feHandler = null;
-      endStickUse(false);
+      abandonStickUse();
       throw err;
     }
 
@@ -176,13 +180,19 @@ export class AntTrainerAdapter implements TrainerAdapter {
       } catch {
         // May already be detached
       }
-      endStickUse(false);
+      abandonStickUse();
       return { status: "cancelled" };
     }
 
+    const release = holdStick(stick, () => this.lose(events));
+    if (!release) {
+      feSensor.removeListener("fitnessData", this.feHandler);
+      this.feHandler = null;
+      throw new Error("Stick lost while the sensor attached");
+    }
     this.feSensor = feSensor;
-    endStickUse(true);
-    this.holdsStick = true;
+    this.releaseStick = release;
+    this.watchForLoss(feSensor, events);
     log("Trainer: FE-C attach() returned");
 
     // Set up fallback: if no FE-C data within 5s, switch to BicyclePowerSensor
@@ -218,6 +228,7 @@ export class AntTrainerAdapter implements TrainerAdapter {
         if (this.feHandler) {
           this.feSensor.removeListener("fitnessData", this.feHandler);
         }
+        this.stopWatchingForLoss(this.feSensor);
         await this.feSensor.detach();
       }
     } catch {
@@ -263,7 +274,69 @@ export class AntTrainerAdapter implements TrainerAdapter {
     }
 
     this.powerSensor = powerSensor;
+    this.watchForLoss(powerSensor, events);
     log("Trainer: Power sensor attach() returned");
+  }
+
+  private watchForLoss(sensor: TrainerSensor, events: TrainerEvents): void {
+    this.lossHandler = () => this.lose(events);
+    sensor.on("detached", this.lossHandler);
+  }
+
+  /** Before detaching: our own detach is confirmed by a "detached" too. */
+  private stopWatchingForLoss(sensor: TrainerSensor): void {
+    if (this.lossHandler) {
+      sensor.removeListener("detached", this.lossHandler);
+      this.lossHandler = null;
+    }
+  }
+
+  /**
+   * The trainer or the stick went away without disconnect() being asked for.
+   * There is nothing left to detach: drop the sensors and say so.
+   */
+  private lose(events: TrainerEvents): void {
+    if (this.disposed) return;
+    log("Trainer: Sensor lost");
+    // Also stops a fallback in flight from attaching a sensor nobody wants.
+    this.disposed = true;
+    this.clearFallback();
+    this.controlAvailable = false;
+    this.takeSensors();
+    this.releaseStick?.();
+    this.releaseStick = null;
+    events.onDisconnect();
+  }
+
+  /** Stops listening to the trainer's sensors and hands them over. */
+  private takeSensors(): TrainerSensor[] {
+    const taken: TrainerSensor[] = [];
+    if (this.feSensor) {
+      if (this.feHandler) {
+        this.feSensor.removeListener("fitnessData", this.feHandler);
+      }
+      this.stopWatchingForLoss(this.feSensor);
+      taken.push(this.feSensor);
+    }
+    if (this.powerSensor) {
+      if (this.powerHandler) {
+        this.powerSensor.removeListener("powerData", this.powerHandler);
+      }
+      this.stopWatchingForLoss(this.powerSensor);
+      taken.push(this.powerSensor);
+    }
+    this.feSensor = null;
+    this.feHandler = null;
+    this.powerSensor = null;
+    this.powerHandler = null;
+    return taken;
+  }
+
+  private clearFallback(): void {
+    if (this.fallbackTimeout != null) {
+      clearTimeout(this.fallbackTimeout);
+      this.fallbackTimeout = null;
+    }
   }
 
   async setTargetPower(watts: number): Promise<void> {
@@ -292,11 +365,7 @@ export class AntTrainerAdapter implements TrainerAdapter {
 
   async disconnect(): Promise<void> {
     this.disposed = true;
-
-    if (this.fallbackTimeout != null) {
-      clearTimeout(this.fallbackTimeout);
-      this.fallbackTimeout = null;
-    }
+    this.clearFallback();
 
     // Target power is sticky (see releaseControl), so a trainer let go of in
     // ERG would keep holding the rider at the last target.
@@ -307,35 +376,14 @@ export class AntTrainerAdapter implements TrainerAdapter {
     }
     this.controlAvailable = false;
 
-    if (this.feSensor) {
-      if (this.feHandler) {
-        this.feSensor.removeListener("fitnessData", this.feHandler);
-      }
+    for (const sensor of this.takeSensors()) {
       try {
-        await this.feSensor.detach();
+        await sensor.detach();
       } catch {
         // May already be detached
       }
-      this.feSensor = null;
-      this.feHandler = null;
     }
-
-    if (this.powerSensor) {
-      if (this.powerHandler) {
-        this.powerSensor.removeListener("powerData", this.powerHandler);
-      }
-      try {
-        await this.powerSensor.detach();
-      } catch {
-        // May already be detached
-      }
-      this.powerSensor = null;
-      this.powerHandler = null;
-    }
-
-    if (this.holdsStick) {
-      this.holdsStick = false;
-      releaseStick();
-    }
+    this.releaseStick?.();
+    this.releaseStick = null;
   }
 }
