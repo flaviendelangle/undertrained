@@ -380,11 +380,16 @@ export function stravaApi(db: Database): StravaPort {
       throw tokenError(e);
     }
     try {
-      return await request(accessToken);
-    } catch (e) {
-      throw requestError(e);
-    } finally {
+      const result = await request(accessToken);
       lastResponseAt = Date.now();
+      return result;
+    } catch (e) {
+      // Only an HTTP response refreshes the rate-limit headers; a network
+      // failure leaves the previous window's state in place.
+      if (statusCodeOf(e) !== undefined) {
+        lastResponseAt = Date.now();
+      }
+      throw requestError(e);
     }
   }
 

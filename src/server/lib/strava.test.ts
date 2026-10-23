@@ -239,8 +239,15 @@ describe("stravaApi", () => {
       expect(stravaV3.activities.get).toHaveBeenCalledTimes(1);
 
       vi.setSystemTime(new Date("2026-01-01T10:15:02Z"));
+      // A network failure carries no headers, so the spent budget stays stale.
+      stravaV3.activities.get.mockRejectedValueOnce(
+        new Error("socket hang up"),
+      );
+      await expect(api.getActivity(ATHLETE_ID, 1)).rejects.toMatchObject({
+        kind: "other",
+      });
       await expect(api.getActivity(ATHLETE_ID, 1)).resolves.toEqual({ id: 1 });
-      expect(stravaV3.activities.get).toHaveBeenCalledTimes(2);
+      expect(stravaV3.activities.get).toHaveBeenCalledTimes(3);
     } finally {
       vi.useRealTimers();
     }
