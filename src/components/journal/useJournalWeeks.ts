@@ -17,6 +17,7 @@ import {
   type LoadAlgorithmPreferences,
   getActivityLoad,
 } from "~/utils/getActivityLoad";
+import { plannedDay } from "~/utils/plannedTraining";
 import { type SportCategory, getSportConfig } from "~/utils/sportConfig";
 
 import { coveredDayKeys } from "./weekGrid";
@@ -356,7 +357,7 @@ export function useJournalWeeks(
         for (const planned of dayPlanned) {
           // Same as activities: a multi-day plan's duration counts once, on its
           // start day (and so entirely in its start week).
-          if (planned.plannedDate.slice(0, 10) === dayKey) {
+          if (plannedDay(planned.plannedDate) === dayKey) {
             plannedSeconds += planned.durationSeconds;
           }
         }
