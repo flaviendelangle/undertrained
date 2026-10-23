@@ -37,6 +37,7 @@ import { type TFunction } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import { cn } from "~/lib/utils";
+import { activityTypesFor } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 import { ChartMessage } from "../ChartMessage";
@@ -157,7 +158,7 @@ export default PowerCurve;
 // --- Single activity mode ---
 
 const ACTIVITY_RANGE_ID = "activity";
-const SINGLE_ACTIVITY_TYPES = ["Ride", "VirtualRide"];
+const SINGLE_ACTIVITY_TYPES = activityTypesFor("power");
 const SINGLE_ACTIVITY_LOCKED_IDS = new Set([ACTIVITY_RANGE_ID]);
 
 type PowerTab = "curve" | "timeline" | "zones" | "distribution";
