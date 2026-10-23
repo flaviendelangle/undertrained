@@ -75,7 +75,11 @@ export function drizzleActivityStore(db: Database): ActivityStore {
         .values(rows)
         .onConflictDoUpdate({
           target: activities.stravaId,
-          set: overwriteSummaryColumns(rows[0]),
+          set: {
+            ...overwriteSummaryColumns(rows[0]),
+            areStreamsLoaded: sql`CASE WHEN ${metricsChangedSql} THEN false ELSE ${activities.areStreamsLoaded} END`,
+            areDetailsLoaded: sql`CASE WHEN ${metricsChangedSql} THEN false ELSE ${activities.areDetailsLoaded} END`,
+          },
         });
     },
 
@@ -271,6 +275,24 @@ function overwriteSummaryColumns(row: NewActivity) {
       .map((key) => [key, sql`excluded.${sql.identifier(columns[key].name)}`]),
   );
 }
+
+/**
+ * `metricsChanged` in SQL, comparing the stored row with the upserted one.
+ * Both sides are `real`, so the comparison matches its float4 rounding.
+ */
+const metricsChangedSql = sql.join(
+  [
+    activities.distance,
+    activities.movingTime,
+    activities.elapsedTime,
+    activities.averageWatts,
+    activities.weightedAverageWatts,
+  ].map(
+    (column) =>
+      sql`${column} IS DISTINCT FROM excluded.${sql.identifier(column.name)}`,
+  ),
+  sql` OR `,
+);
 
 /**
  * SQL predicate: the activity's streams or details aren't loaded, and that

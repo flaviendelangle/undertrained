@@ -5,6 +5,7 @@
 import type { ActivityStats } from "strava-v3";
 
 import type { activities, syncJobs } from "../db/schema";
+import { metricsChanged } from "./activityIngestion";
 import type {
   ActivityStore,
   BestEffortRow,
@@ -204,8 +205,15 @@ export class InMemoryActivityStore implements ActivityStore {
   upsertActivities(rows: NewActivity[]) {
     for (const { stravaId, athlete, ...columns } of rows) {
       const stored = this.activities.find((a) => a.stravaId === stravaId);
-      if (stored) Object.assign(stored, columns);
-      else this.insert({ stravaId, athlete, ...columns });
+      if (stored) {
+        Object.assign(
+          stored,
+          columns,
+          metricsChanged(stored, columns)
+            ? { areStreamsLoaded: false, areDetailsLoaded: false }
+            : {},
+        );
+      } else this.insert({ stravaId, athlete, ...columns });
     }
     return Promise.resolve();
   }

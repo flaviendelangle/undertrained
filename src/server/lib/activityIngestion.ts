@@ -93,7 +93,10 @@ export interface ActivityStore {
   insertActivity(activity: NewActivity): Promise<number | null>;
   /**
    * Inserts the new activities and overwrites the summary columns of the
-   * stored ones, matched by Strava id. Leaves every other column alone.
+   * stored ones, matched by Strava id. Flags a stored activity's streams and
+   * details pending when {@link metricsChanged} against the row it overwrites,
+   * in the same write, so an update racing the sync can't slip between the
+   * comparison and the overwrite. Leaves every other column alone.
    */
   upsertActivities(activities: NewActivity[]): Promise<void>;
   updateActivity(activityId: number, patch: ActivityPatch): Promise<void>;
@@ -321,18 +324,9 @@ export function createActivityIngestion({
     });
     if (summaries.length === 0) return 0;
 
-    const rows = summaries.map((summary) => newActivity(athleteId, summary));
-    const incoming = new Map(rows.map((row) => [row.stravaId, row]));
-    const stored = await store.findActivities(athleteId, [...incoming.keys()]);
-    // Flag before overwriting the metrics, so an interruption in between
-    // can't lose the change.
-    for (const activity of stored) {
-      const row = incoming.get(activity.stravaId);
-      if (row && metricsChanged(activity, row)) {
-        await store.updateActivity(activity.id, STALE);
-      }
-    }
-    await store.upsertActivities(rows);
+    await store.upsertActivities(
+      summaries.map((summary) => newActivity(athleteId, summary)),
+    );
     return summaries.length;
   }
 
@@ -606,7 +600,7 @@ type MetricColumn =
  * recalculation) rather than editing metadata. Then the stored streams, laps
  * and best efforts are stale.
  */
-function metricsChanged(
+export function metricsChanged(
   stored: Pick<ActivityRow, MetricColumn>,
   incoming: Pick<ActivityColumns, MetricColumn>,
 ): boolean {

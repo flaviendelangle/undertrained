@@ -363,6 +363,24 @@ describe("sync", () => {
     });
   });
 
+  it("re-fetches an activity a webhook updated while the sync read its page", async () => {
+    strava.put(ATHLETE, ride(22), rideStreams(100));
+    await ingestion.activityCreated(ATHLETE, 22);
+    strava.calls.length = 0;
+
+    const upsert = store.upsertActivities.bind(store);
+    vi.spyOn(store, "upsertActivities").mockImplementationOnce(async (rows) => {
+      // The page was listed before this edit; its write lands after it.
+      strava.put(ATHLETE, ride(22, { average_watts: 190 }), rideStreams(300));
+      await ingestion.activityUpdated(ATHLETE, 22);
+      strava.calls.length = 0;
+      return upsert(rows);
+    });
+
+    await sync();
+    expect(activityCalls()).toContain("getStreams 22");
+  });
+
   it("gives up on an activity's streams after three failed fetches", async () => {
     strava.put(ATHLETE, ride(30), rideStreams(200));
     strava.failNext("getStreams", new StravaError("other", "Bad Gateway"), 3);
