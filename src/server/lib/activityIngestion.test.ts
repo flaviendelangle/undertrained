@@ -401,6 +401,25 @@ describe("manual reload", () => {
     await ingestion.reloadActivity(ATHLETE, 41);
     expect(store.activity(41).powerBests).not.toBeNull();
   });
+
+  it("leaves the streams for the next sync when writing them fails", async () => {
+    strava.put(ATHLETE, ride(42), rideStreams(200));
+    await ingestion.activityCreated(ATHLETE, 42);
+    strava.put(ATHLETE, ride(42, { moving_time: 3000 }), rideStreams(250));
+    vi.spyOn(store, "replaceStreams").mockRejectedValueOnce(
+      new Error("connection lost"),
+    );
+
+    await expect(ingestion.reloadActivity(ATHLETE, 42)).rejects.toThrow(
+      "connection lost",
+    );
+    expect(store.activity(42).areStreamsLoaded).toBe(false);
+
+    strava.calls.length = 0;
+    await sync();
+    expect(activityCalls()).toContain("getStreams 42");
+    expect(store.activity(42).areStreamsLoaded).toBe(true);
+  });
 });
 
 describe("rate limit", () => {
