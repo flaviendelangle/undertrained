@@ -17,7 +17,7 @@ import { cn } from "~/lib/utils";
 
 import { WeekBlock, earliestMinutesOfWeek } from "./WeekBlock";
 import { buildWeekGroups } from "./journalView";
-import { type RescheduleDrag, RescheduleViewport } from "./rescheduleDrag";
+import { RescheduleViewport, useRescheduleDrag } from "./rescheduleDrag";
 import type { JournalWeek } from "./useJournalWeeks";
 import { useWeekHorizontalVirtualizer } from "./useWeekHorizontalVirtualizer";
 import {
@@ -59,7 +59,6 @@ function JournalWeekViewImpl({
   weeks,
   dayLoadScale,
   reserveAllDayRow,
-  rescheduleDrag,
   onSelectWeek,
 }: {
   /** The anchor week (URL `?week=`); horizontal scroll mounts onto it. */
@@ -73,8 +72,6 @@ function JournalWeekViewImpl({
    * down when the external feeds finish loading.
    */
   reserveAllDayRow: boolean;
-  /** Drag-to-reschedule handle, owned by the Journal (see `useRescheduleDrag`). */
-  rescheduleDrag: RescheduleDrag;
   /** Navigate the URL to the given week's Monday (debounced via the parent). */
   onSelectWeek: (weekStart: Date) => void;
 }) {
@@ -112,6 +109,11 @@ function JournalWeekViewImpl({
   // Corner picker contents: every loaded week, newest first, grouped under its
   // month for scannability.
   const weekGroups = React.useMemo(() => buildWeekGroups(weeks), [weeks]);
+
+  // A training dropped on the grid shows at its destination right away, before
+  // the query cache catches up.
+  const { weeks: displayedWeeks, drag: rescheduleDrag } =
+    useRescheduleDrag(renderedWeeks);
 
   // ---- Horizontal scroll: mount, resize, and explicit re-anchor ("Today") ----
 
@@ -478,7 +480,7 @@ function JournalWeekViewImpl({
             }}
           >
             {virtualizer.getVirtualItems().map((item) => {
-              const w = renderedWeeks[item.index];
+              const w = displayedWeeks[item.index];
               return (
                 <WeekBlock
                   key={w.weekStart.toISOString()}

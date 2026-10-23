@@ -50,7 +50,6 @@ import {
   JournalPreviewProvider,
 } from "./journalPreview";
 import { type JournalView, JournalViewContext } from "./journalView";
-import { useRescheduleDrag } from "./rescheduleDrag";
 import { type JournalWeek, useJournalWeeks } from "./useJournalWeeks";
 
 const VIEW_OPTIONS: JournalView[] = ["month", "week"];
@@ -80,15 +79,10 @@ export function Journal() {
     [timeline],
   );
 
-  // A training dropped in the week view shows at its destination right away,
-  // before the query cache catches up.
-  const { plannedTrainings: displayedPlannedTrainings, drag: rescheduleDrag } =
-    useRescheduleDrag(plannedTrainings);
-
   const { weeks, dayLoadScale, currentForm } = useJournalWeeks(
     activities,
     loadPreferences,
-    displayedPlannedTrainings,
+    plannedTrainings,
     busyEvents,
   );
 
@@ -313,7 +307,6 @@ export function Journal() {
                   weeks={weeks}
                   dayLoadScale={dayLoadScale}
                   reserveAllDayRow={showAllDayRow}
-                  rescheduleDrag={rescheduleDrag}
                   onSelectWeek={onSelectWeek}
                 />
               ) : (

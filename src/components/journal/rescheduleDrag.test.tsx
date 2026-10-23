@@ -83,21 +83,26 @@ function plan(
 }
 
 /**
- * The Journal's composition: the module's list feeds the one fan-out in
- * `useJournalWeeks`, and the week's columns and blocks register with it. Each
- * block reads "<day> <start time>" and is named after its training.
+ * The week view's composition: the weeks `useJournalWeeks` builds from the
+ * cache go through the module, and the columns and blocks of this week and the
+ * next register with it. Each block reads "<day> <start time>" and is named
+ * after its training.
  */
 function WeekGrid({ trainings }: { trainings: PlannedTraining[] }) {
-  const { plannedTrainings, drag } = useRescheduleDrag(trainings);
-  const { weeks } = useJournalWeeks(
+  const { weeks: cachedWeeks } = useJournalWeeks(
     undefined,
     LOAD_PREFERENCES,
-    plannedTrainings,
+    trainings,
   );
-  const week = weeks.find((w) => w.weekStart.getTime() === monday.getTime());
+  const { weeks, drag } = useRescheduleDrag(cachedWeeks);
+  // `weeks` is newest first: lay out this week, then the next.
+  const days = weeks
+    .filter((week) => week.weekStart.getTime() >= monday.getTime())
+    .toReversed()
+    .flatMap((week) => week.days);
   return (
     <RescheduleViewport drag={drag} gridTop={0} className="viewport">
-      {week?.days.map((day, index) => {
+      {days.map((day, index) => {
         const key = format(day.date, "yyyy-MM-dd");
         return (
           <RescheduleDay
@@ -276,14 +281,15 @@ describe("dropping a planned training", () => {
   it("moves it to the slot under its top edge", async () => {
     render(<WeekGrid trainings={[tempo]} />);
 
-    await drop(screen.getByRole("button", { name: "Tempo" }), 2, "12:15");
+    // Next week's Wednesday.
+    await drop(screen.getByRole("button", { name: "Tempo" }), 9, "12:15");
 
     expect(reschedule).toHaveBeenCalledOnce();
     expect(reschedule.mock.lastCall?.slice(0, 2)).toEqual([
       tempo,
-      `${dayKey(2)}T12:15:00`,
+      `${dayKey(9)}T12:15:00`,
     ]);
-    expect(shown("Tempo")).toEqual([`${dayKey(2)} 12:15`]);
+    expect(shown("Tempo")).toEqual([`${dayKey(9)} 12:15`]);
   });
 
   it.each([

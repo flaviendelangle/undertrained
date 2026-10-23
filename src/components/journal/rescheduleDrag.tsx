@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { format } from "date-fns";
 import { flushSync } from "react-dom";
 
 import {
@@ -18,6 +19,11 @@ import type { PlannedTraining } from "@server/db/types";
 
 import { useReschedulePlannedTraining } from "~/hooks/useReschedulePlannedTraining";
 
+import {
+  type JournalDay,
+  type JournalWeek,
+  bucketPlannedTrainingsByDay,
+} from "./useJournalWeeks";
 import {
   GUTTER_WIDTH_PX,
   HOUR_HEIGHT,
@@ -51,7 +57,7 @@ interface Slot {
 
 /** A dropped training, shown at its destination until the cache shows it. */
 interface Placement {
-  training: PlannedTraining;
+  trainingId: number;
   plannedDate: string;
 }
 
@@ -114,25 +120,74 @@ function resolveSlot(location: DragLocationHistory): Slot | null {
   };
 }
 
-/** `trainings` with the placed training moved, until the cache shows the move. */
+function findTraining(
+  weeks: JournalWeek[],
+  trainingId: number,
+): PlannedTraining | undefined {
+  for (const week of weeks) {
+    for (const day of week.days) {
+      const training = day.plannedTrainings.find(
+        (candidate) => candidate.id === trainingId,
+      );
+      if (training) {
+        return training;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * `weeks` with the placed training moved onto the days it now covers, until
+ * the cache shows the move. Only the weeks it leaves or reaches are rebuilt, so
+ * the others keep their identity (and their blocks' memoized layout).
+ */
 function applyPlacement(
-  trainings: PlannedTraining[] | undefined,
+  weeks: JournalWeek[],
   placement: Placement | null,
-): PlannedTraining[] | undefined {
-  if (trainings == null || placement == null) {
-    return trainings;
+): JournalWeek[] {
+  if (placement == null) {
+    return weeks;
   }
-  const cached = trainings.find(
-    (training) => training.id === placement.training.id,
-  );
-  if (cached == null || cached.plannedDate === placement.plannedDate) {
-    return trainings;
+  const { trainingId, plannedDate } = placement;
+  // The cache's copy, which may be fresher than the dragged payload.
+  const cached = findTraining(weeks, trainingId);
+  if (cached == null || cached.plannedDate === plannedDate) {
+    return weeks;
   }
-  return trainings.map((training) =>
-    training === cached
-      ? { ...training, plannedDate: placement.plannedDate }
-      : training,
-  );
+  // The same fan-out as `useJournalWeeks`, for the moved training alone. Its
+  // days are consecutive, so a week is reached when it overlaps their range.
+  const arrivals = bucketPlannedTrainingsByDay([{ ...cached, plannedDate }]);
+  const arrivalKeys = [...arrivals.keys()];
+  const firstArrival = new Date(`${arrivalKeys[0]}T00:00:00`).getTime();
+  const lastArrival = new Date(`${arrivalKeys.at(-1)}T00:00:00`).getTime();
+  const holdsTraining = (day: JournalDay) =>
+    day.plannedTrainings.some((training) => training.id === trainingId);
+
+  return weeks.map((week) => {
+    const reached =
+      week.weekStart.getTime() <= lastArrival &&
+      week.weekEnd.getTime() >= firstArrival;
+    if (!reached && !week.days.some(holdsTraining)) {
+      return week;
+    }
+    const days = week.days.map((day) => {
+      const arriving = arrivals.get(format(day.date, "yyyy-MM-dd"));
+      if (arriving == null && !holdsTraining(day)) {
+        return day;
+      }
+      return {
+        ...day,
+        plannedTrainings: [
+          ...day.plannedTrainings.filter(
+            (training) => training.id !== trainingId,
+          ),
+          ...(arriving ?? []),
+        ],
+      };
+    });
+    return { ...week, days };
+  });
 }
 
 /**
@@ -143,19 +198,19 @@ function applyPlacement(
  * container, {@link RescheduleDay} for each day column and
  * {@link RescheduleSource} for each planned training.
  *
- * Returns the planned trainings to display (the cached ones, with a dropped
- * training already moved) and the handle for {@link RescheduleViewport}. Feed
- * the list to `useJournalWeeks`, so a multi-day plan fans out onto its new days
- * like any other.
+ * Takes the weeks built from the query cache and returns the weeks to display,
+ * with a dropped training already on the days it now covers (through the same
+ * fan-out as `useJournalWeeks`), and the handle for {@link RescheduleViewport}.
  *
  * The placement lifecycle: a drop sets it, and the mutation settling (saved or
  * rolled back) or the next drag clears it. While it's set, it only moves the
  * training if the cache doesn't show the move yet, so the cache is in charge
  * again as soon as the mutation's optimistic write lands.
  */
-export function useRescheduleDrag(
-  plannedTrainings: PlannedTraining[] | undefined,
-): { plannedTrainings: PlannedTraining[] | undefined; drag: RescheduleDrag } {
+export function useRescheduleDrag(weeks: JournalWeek[]): {
+  weeks: JournalWeek[];
+  drag: RescheduleDrag;
+} {
   const store = useRefWithInit(() => new Store(IDLE)).current;
   const reschedule = useReschedulePlannedTraining();
 
@@ -195,7 +250,7 @@ export function useRescheduleDrag(
         store.setState(IDLE);
         return;
       }
-      const placement = { training, plannedDate };
+      const placement = { trainingId: training.id, plannedDate };
       // Base UI removes the drag clone right after this handler. Commit the
       // destination first so one or the other is on screen in every paint.
       flushSync(() => store.setState({ phase: "placing", placement }));
@@ -214,10 +269,10 @@ export function useRescheduleDrag(
 
   const placement = useStore(store, selectPlacement);
   const displayed = React.useMemo(
-    () => applyPlacement(plannedTrainings, placement),
-    [plannedTrainings, placement],
+    () => applyPlacement(weeks, placement),
+    [weeks, placement],
   );
-  return { plannedTrainings: displayed, drag: store };
+  return { weeks: displayed, drag: store };
 }
 
 /** The visible timed-grid viewport, excluding its sticky gutter and headers. */
