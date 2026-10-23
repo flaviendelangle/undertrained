@@ -399,16 +399,21 @@ describe("the dropped training's placement", () => {
     expect(shown("Tempo")).toEqual([`${dayKey(0)} 10:00`]);
   });
 
-  it("isn't cleared by an earlier drop's save settling", async () => {
-    const { rerender } = render(<WeekGrid trainings={[tempo]} />);
+  it("doesn't disturb the next drag when its save settles", async () => {
+    const easy = plan(3, "Easy", `${dayKey(2)}T07:00:00`);
+    const { rerender } = render(<WeekGrid trainings={[tempo, easy]} />);
     await drop(screen.getByRole("button", { name: "Tempo" }), 1, "08:00");
-    rerender(<WeekGrid trainings={[moved]} />);
-    const firstSave = reschedule.mock.lastCall?.[2];
+    rerender(<WeekGrid trainings={[moved, easy]} />);
 
-    await drop(screen.getByRole("button", { name: "Tempo" }), 4, "18:30");
-    act(() => firstSave?.onSettled?.());
+    await pickUp(screen.getByRole("button", { name: "Easy" }));
+    await dragTopTo(5, "06:00");
+    settleLastSave();
 
-    expect(shown("Tempo")).toEqual([`${dayKey(4)} 18:30`]);
+    expect(dimmed("Easy")).toEqual([true]);
+    await dragTopTo(5, "06:30");
+    expect(screen.getByText(/^Moving Easy/).textContent).toBe(
+      "Moving Easy to 06:30",
+    );
   });
 });
 
@@ -484,6 +489,12 @@ describe("the drag preview", () => {
     await dragTopTo(2, "07:45");
     expect(screen.getByText(/^Moving Tempo/).textContent).toBe(
       "Moving Tempo to 07:45",
+    );
+
+    // Within the same column, so only the move itself reports it.
+    await dragTopTo(2, "09:30");
+    expect(screen.getByText(/^Moving Tempo/).textContent).toBe(
+      "Moving Tempo to 09:30",
     );
 
     await moveTo(GRAB.x, DAY_HEIGHT + 100);
