@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
@@ -15,10 +15,10 @@ import { QueryState } from "~/components/primitives/QueryState";
 import { SettingsCallout } from "~/components/primitives/SettingsCallout";
 import { Button } from "~/components/ui/button";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useRideEngine } from "~/hooks/useRideEngine";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
-import type { TrainingPageControllerOptions } from "~/hooks/useTrainingPageController";
-import { useTrainingPageController } from "~/hooks/useTrainingPageController";
 import { useT } from "~/i18n/useT";
+import type { RideWorkout } from "~/liveTraining/rideEngine";
 import { downloadFitFile, generateFitFile } from "~/utils/fitFileGenerator";
 import {
   type BuiltInWorkoutId,
@@ -63,26 +63,6 @@ export const getServerSideProps: GetServerSideProps<
   };
 };
 
-type Phase = "connection" | "waiting" | "main" | "paused" | "post";
-
-/**
- * Only the trainer is required to ride: heart rate is optional everywhere
- * downstream (the summary, the chart and the FIT record all handle a missing
- * HR), so gating the wizard on it locked out anyone without a strap.
- */
-function getPhase(
-  ctrl: ReturnType<typeof useTrainingPageController>,
-  hrSkipped: boolean,
-): Phase {
-  if (ctrl.session.state === "stopped") return "post";
-  if (ctrl.session.state === "paused") return "paused";
-  if (ctrl.session.state === "running") return "main";
-  if (ctrl.trainer.state === "connected") {
-    if (hrSkipped || ctrl.hr.state === "connected") return "waiting";
-  }
-  return "connection";
-}
-
 export default function LiveTrainingPage({
   initialWorkoutId,
   initialBuiltInId,
@@ -119,11 +99,7 @@ export default function LiveTrainingPage({
   return <LiveWorkout key={workout.id} workout={workout} />;
 }
 
-function LiveWorkout({
-  workout,
-}: {
-  workout: TrainingPageControllerOptions["workout"];
-}) {
+function LiveWorkout({ workout }: { workout: RideWorkout }) {
   const t = useT();
   const { configuredFtp } = useRiderSettingsTimeline();
   const ftpTest = useMemo(
@@ -133,45 +109,38 @@ function LiveWorkout({
   const startBlocked =
     hasPowerTarget(workout.structure.nodes, ["pct", "ramp"]) &&
     configuredFtp == null;
-  const ctrl = useTrainingPageController({
+  const { engine, ride, player, riderSettings } = useRideEngine({
     workout,
     startSuspended: startBlocked,
   });
-  // Set once the rider chooses to continue without a heart rate sensor.
-  const [hrSkipped, setHrSkipped] = useState(false);
-  const phase = getPhase(ctrl, hrSkipped);
+  const { phase } = ride;
+  const hudWorkout = { name: workout.name, player };
 
   return (
     <div className="relative h-full overflow-hidden">
       <RideNavigationDialog
-        enabled={
-          ctrl.session.state === "running" ||
-          ctrl.session.state === "paused" ||
-          ctrl.recorder.getDataPoints().length > 0
-        }
+        enabled={ride.hasRide}
         onSave={() => {
-          const summary = ctrl.recorder.computeSummary();
+          const summary = engine.summarize();
           if (summary)
-            downloadFitFile(
-              generateFitFile(ctrl.recorder.getDataPoints(), summary),
-            );
+            downloadFitFile(generateFitFile(engine.getDataPoints(), summary));
         }}
       />
       <div className="absolute top-0 right-0 left-0 z-[60] flex flex-col gap-2 p-2">
         <BrowserCompatibilityBanner />
         {(phase === "main" || phase === "paused") &&
-          ctrl.trainer.state !== "connected" && (
+          ride.trainer.state !== "connected" && (
             <div
               role="status"
               className="bg-card flex items-center justify-between gap-3 rounded p-3 text-sm"
             >
               <span>{t("liveTraining.trainerDisconnected")}</span>
               <Button
-                disabled={ctrl.trainer.state === "connecting"}
-                onClick={() => void ctrl.trainer.connect()}
+                disabled={ride.trainer.state === "connecting"}
+                onClick={() => void engine.connect("trainer")}
               >
                 {t(
-                  ctrl.trainer.state === "connecting"
+                  ride.trainer.state === "connecting"
                     ? "liveTraining.reconnecting"
                     : "liveTraining.reconnect",
                 )}
@@ -194,84 +163,88 @@ function LiveWorkout({
       {/* Main training view (always mounted when running/paused so it freezes behind overlays) */}
       {(phase === "main" || phase === "paused") && (
         <HudMainView
-          currentPower={ctrl.currentPower}
-          currentHr={ctrl.currentHr}
-          currentCadence={ctrl.currentCadence}
-          currentSpeedKmh={ctrl.currentSpeedKmh}
-          distanceKm={ctrl.distanceKm}
-          elapsedSeconds={ctrl.session.elapsedSeconds}
-          chartData={ctrl.chartData}
-          ftp={ctrl.riderSettings.ftp}
-          weightKg={ctrl.riderSettings.weightKg}
-          workout={ctrl.workout}
-          onPause={ctrl.session.pause}
-          onStop={ctrl.handleStop}
+          currentPower={ride.live.power}
+          currentHr={ride.live.heartRate}
+          currentCadence={ride.live.cadence}
+          currentSpeedKmh={ride.live.speedKmh}
+          distanceKm={ride.distanceKm}
+          elapsedSeconds={ride.elapsedSeconds}
+          chartData={ride.chartData}
+          ftp={riderSettings.ftp}
+          weightKg={riderSettings.weightKg}
+          workout={hudWorkout}
+          onPause={engine.pause}
+          onStop={engine.stop}
         />
       )}
 
       {/* Connection wizard */}
       {phase === "connection" && (
         <HudConnectionWizard
-          hrState={ctrl.hr.state}
-          hrErrorReason={ctrl.hr.errorReason}
-          hrDeviceName={ctrl.hr.deviceName}
-          hrSource={ctrl.hrSource}
-          hrHasDeviceChooser={ctrl.hr.hasDeviceChooser}
-          onHrSourceChange={ctrl.setHrSource}
-          onHrConnect={ctrl.hr.connect}
-          onHrDisconnect={ctrl.hr.disconnect}
-          trainerState={ctrl.trainer.state}
-          trainerErrorReason={ctrl.trainer.errorReason}
-          trainerDeviceName={ctrl.trainer.deviceName}
-          trainerSource={ctrl.trainerSource}
-          trainerHasDeviceChooser={ctrl.trainer.hasDeviceChooser}
-          onTrainerSourceChange={ctrl.setTrainerSource}
-          onTrainerConnect={ctrl.trainer.connect}
-          onTrainerDisconnect={ctrl.trainer.disconnect}
-          onSkipHeartRate={() => setHrSkipped(true)}
+          hrState={ride.heartRate.state}
+          hrErrorReason={ride.heartRate.errorReason}
+          hrDeviceName={ride.heartRate.deviceName}
+          hrSource={ride.heartRate.source}
+          hrHasDeviceChooser={ride.heartRate.hasDeviceChooser}
+          onHrSourceChange={(source) => engine.setSource("heartRate", source)}
+          onHrConnect={(options) => void engine.connect("heartRate", options)}
+          onHrDisconnect={() => void engine.disconnect("heartRate")}
+          trainerState={ride.trainer.state}
+          trainerErrorReason={ride.trainer.errorReason}
+          trainerDeviceName={ride.trainer.deviceName}
+          trainerSource={ride.trainer.source}
+          trainerHasDeviceChooser={ride.trainer.hasDeviceChooser}
+          onTrainerSourceChange={(source) =>
+            engine.setSource("trainer", source)
+          }
+          onTrainerConnect={(options) =>
+            void engine.connect("trainer", options)
+          }
+          onTrainerDisconnect={() => void engine.disconnect("trainer")}
+          onSkipHeartRate={engine.skipHeartRate}
         />
       )}
 
       {/* Waiting screen */}
       {phase === "waiting" && (
         <HudWaitingScreen
-          currentHr={ctrl.currentHr}
-          hrConnected={ctrl.hr.state === "connected"}
-          onManualStart={ctrl.startSession}
+          currentHr={ride.live.heartRate}
+          hrConnected={ride.heartRate.state === "connected"}
+          onManualStart={engine.start}
           startDisabled={startBlocked}
-          ergEnabled={ctrl.ergMode.ergEnabled}
-          onErgEnabledChange={ctrl.ergMode.setErgEnabled}
-          supportsControl={ctrl.ergMode.supportsControl}
-          ergError={ctrl.ergError}
-          ergTargetStatus={ctrl.ergTargetStatus}
-          workout={ctrl.workout}
+          ergEnabled={ride.erg.enabled}
+          onErgEnabledChange={engine.setErgEnabled}
+          supportsControl={ride.trainer.supportsControl}
+          ergError={ride.erg.error}
+          ergTargetStatus={ride.erg.targetStatus}
+          workout={hudWorkout}
         />
       )}
 
       {/* Pause overlay */}
       {phase === "paused" && (
         <HudPauseOverlay
-          pausedSeconds={ctrl.session.pausedSeconds}
-          workout={ctrl.workout}
-          onResume={ctrl.session.resume}
-          onStop={ctrl.handleStop}
+          pausedSeconds={ride.pausedSeconds}
+          workout={hudWorkout}
+          onResume={engine.resume}
+          onStop={engine.stop}
         />
       )}
 
-      {ftpTest && (ctrl.workout?.player.isFinished || phase === "post") && (
-        <FtpTestResult id={ftpTest} points={ctrl.recorder.getDataPoints()} />
+      {ftpTest && (player.isFinished || phase === "post") && (
+        <FtpTestResult id={ftpTest} points={engine.getDataPoints()} />
       )}
 
       {/* Post-training slide-up */}
-      {phase === "post" && ctrl.recorder.summary && (
+      {phase === "post" && ride.summary && (
         <HudPostTraining
-          summary={ctrl.recorder.summary}
-          chartData={ctrl.chartData}
-          dataPoints={ctrl.recorder.getDataPoints()}
-          ftp={ctrl.riderSettings.ftp}
-          workoutName={ctrl.workout?.name ?? null}
-          segments={ctrl.workout?.player.segments ?? null}
-          onReset={ctrl.handleReset}
+          summary={ride.summary}
+          chartData={ride.chartData}
+          dataPoints={engine.getDataPoints()}
+          ftp={riderSettings.ftp}
+          workoutName={workout.name}
+          segments={player.segments}
+          onReset={engine.reset}
         />
       )}
     </div>

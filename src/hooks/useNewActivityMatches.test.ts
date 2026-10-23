@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
-// Scoped to this file for the same reason as `useWorkoutPlayer.test.ts`: most
-// suites here are pure functions that have no reason to pay for a DOM.
+// Scoped to this file rather than set globally: most suites here are pure
+// functions that have no reason to pay for a DOM.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderHook } from "@testing-library/react";

@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import type { UseWorkoutPlayerResult } from "~/hooks/useWorkoutPlayer";
 import { useT } from "~/i18n/useT";
+import type { WorkoutPlayer } from "~/liveTraining/rideEngine";
 import type { TrainerTargetStatus } from "~/sensors/adapter";
 import { formatCompactDuration } from "~/utils/format";
 
@@ -20,7 +20,7 @@ interface HudWaitingScreenProps {
   /** The trainer can't hold the target at this speed (FE-C only). */
   ergTargetStatus: TrainerTargetStatus;
   /** The selected workout is always loaded before training setup. */
-  workout: { name: string; player: UseWorkoutPlayerResult };
+  workout: { name: string; player: WorkoutPlayer };
 }
 
 export function HudWaitingScreen({

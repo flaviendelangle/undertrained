@@ -1,6 +1,6 @@
 import { PowerHrChart } from "~/components/liveTraining/PowerHrChart";
-import type { UseWorkoutPlayerResult } from "~/hooks/useWorkoutPlayer";
 import { useT } from "~/i18n/useT";
+import type { WorkoutPlayer } from "~/liveTraining/rideEngine";
 import type { SessionDataPoint } from "~/sensors/types";
 import { complianceTolerance } from "~/utils/structuredWorkout";
 
@@ -27,7 +27,7 @@ interface HudMainViewProps {
    * group rather than a dozen more flat props — and the null case renders the
    * HUD exactly as it was before workouts existed.
    */
-  workout?: { name: string; player: UseWorkoutPlayerResult } | null;
+  workout?: { name: string; player: WorkoutPlayer } | null;
   // Actions
   onPause: () => void;
   onStop: () => void;
