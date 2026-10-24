@@ -1,3 +1,4 @@
+import type { ConnectResult } from "../adapter";
 import type { ConnectionState } from "../types";
 
 export interface BleDeviceInfo {
@@ -34,6 +35,25 @@ export class UnsupportedBleDeviceError extends Error {
     );
     this.name = "UnsupportedBleDeviceError";
   }
+}
+
+/** What a rejected `BleConnection.connect()` means for the rider. */
+export function connectResultFromError(
+  error: unknown,
+  logPrefix: string,
+): ConnectResult {
+  // The rider dismissed the pairing dialog, or picked nothing from it.
+  if (error instanceof DOMException && error.name === "NotFoundError") {
+    return { status: "cancelled" };
+  }
+  console.error(`${logPrefix} Connection failed:`, error);
+  return {
+    status: "failed",
+    reason:
+      error instanceof UnsupportedBleDeviceError
+        ? "unsupported-device"
+        : "failed",
+  };
 }
 
 export class BleConnection {

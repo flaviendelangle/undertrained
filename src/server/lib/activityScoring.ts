@@ -1,10 +1,239 @@
 /**
- * Server-side score computation utilities.
- * Pure functions — no runtime dependencies.
+ * Activity scoring: derives an activity's score columns (TSS, HRSS, power and
+ * HR bests, speed efforts, biggest climb, time in zones) from its facts, its
+ * stream samples and the rider settings timeline.
+ *
+ * Pure: no database or network. `computeActivityScoresInternal` in `sync.ts`
+ * is the adapter that loads the streams and writes the patch.
  */
 import { findRunningPaceZone } from "../../sensors/paceZones";
 import { findHeartRateZone, findPowerZone } from "../../sensors/types";
+import { CYCLING_SPEED_DISTANCE_METERS } from "../../utils/cyclingRecordDistances";
 import { resolveTimeline } from "../../utils/resolveTimeline";
+import { getSportConfig } from "../../utils/sportConfig";
+import type { activities, riderSettings } from "../db/schema";
+
+// ── Interface ─────────────────────────────────────────────────────────
+
+/** Stream types scoring reads; the adapter loads only these. */
+export const SCORING_STREAM_TYPES = [
+  "time",
+  "heartrate",
+  "watts",
+  "velocity_smooth",
+  "altitude",
+  "distance",
+] as const;
+
+/** Samples per stream type. A type is absent when the activity lacks it. */
+export type ScoringStreams = Partial<
+  Record<(typeof SCORING_STREAM_TYPES)[number], number[]>
+>;
+
+/** The activity facts scoring reads. */
+export type ScoringActivity = Pick<
+  typeof activities.$inferSelect,
+  "type" | "startDateLocal" | "movingTime" | "distance" | "weightedAverageWatts"
+>;
+
+type StoredRiderSettings = typeof riderSettings.$inferSelect;
+
+/** The rider settings timeline as stored, changes sorted by date. */
+export interface ScoringRiderSettings {
+  initialValues: StoredRiderSettings["initialValues"];
+  changes: Omit<StoredRiderSettings["changes"][number], "id">[];
+}
+
+/**
+ * The score columns to write. A column set to null doesn't apply to the
+ * activity and is cleared. A column left out is one the inputs can't decide
+ * (no settings, streams not fetched yet, a stream the activity lacks), so the
+ * stored value stays.
+ */
+export interface ActivityScoresPatch {
+  /** Power TSS, rTSS or sTSS depending on the sport. Never cleared. */
+  tss?: number;
+  /** Never cleared. */
+  hrss?: number;
+  powerBests?: Record<number, number> | null;
+  speedEfforts?: Record<number, number> | null;
+  biggestClimb?: number | null;
+  heartrateBests?: Record<number, number> | null;
+  zoneSeconds?: ZoneSecondsByMetric | null;
+}
+
+/**
+ * Scores one activity against the rider settings in effect on its local
+ * date. `streams` is null while the activity's streams haven't been fetched;
+ * `riderSettings` is null when the athlete has never saved any.
+ */
+export function scoreActivity({
+  activity,
+  streams,
+  riderSettings,
+}: {
+  activity: ScoringActivity;
+  streams: ScoringStreams | null;
+  riderSettings: ScoringRiderSettings | null;
+}): ActivityScoresPatch {
+  const settings = riderSettings
+    ? resolveScoringSettings(
+        riderSettings,
+        activity.startDateLocal.slice(0, 10),
+      )
+    : null;
+
+  const patch: ActivityScoresPatch = {};
+
+  const sc = getSportConfig(activity.type);
+
+  if (settings && activity.weightedAverageWatts != null && sc.hasPowerMetrics) {
+    patch.tss = Math.round(
+      calculateTSS(
+        activity.weightedAverageWatts,
+        activity.movingTime,
+        settings.ftp,
+      ),
+    );
+  }
+
+  // Swimming sTSS (no stream needed — uses distance/movingTime)
+  if (
+    settings &&
+    sc.category === "swimming" &&
+    settings.swimThresholdPace > 0 &&
+    activity.distance > 0
+  ) {
+    patch.tss = Math.round(
+      calculateSwimmingTSS(
+        activity.distance,
+        activity.movingTime,
+        settings.swimThresholdPace,
+      ),
+    );
+  }
+
+  // Everything below comes from the streams. Until they're fetched, the
+  // stored values stay.
+  if (!streams) return patch;
+
+  const timeData = streams.time;
+  const wattsData = sc.hasPowerMetrics ? streams.watts : undefined;
+  const velocityData =
+    sc.category === "running" ? streams.velocity_smooth : undefined;
+
+  // HR powers both HRSS (needs settings) and HR bests (running & cycling,
+  // including indoor — HR is a real sensor metric).
+  const hrData = streams.heartrate;
+  if (settings && hrData) {
+    patch.hrss = Math.round(calculateHRSS(hrData, settings, timeData));
+  }
+  if (hrData && (sc.category === "cycling" || sc.category === "running")) {
+    patch.heartrateBests = computeHeartrateBests(hrData, timeData);
+  } else {
+    patch.heartrateBests = null;
+  }
+
+  if (settings && sc.category === "running" && settings.runThresholdPace > 0) {
+    if (velocityData && timeData) {
+      patch.tss = Math.round(
+        calculateRunningTSS(velocityData, timeData, settings.runThresholdPace),
+      );
+    }
+  }
+
+  if (sc.hasPowerMetrics) {
+    if (wattsData) {
+      patch.powerBests = computePowerBests(wattsData, timeData);
+    }
+  } else {
+    patch.powerBests = null;
+  }
+
+  // Cycling Speed (distance best efforts) & biggest climb, computed from
+  // existing streams. Excludes virtual rides — their distance/altitude are
+  // simulated, not real records.
+  if (sc.category === "cycling" && activity.type !== "VirtualRide") {
+    if (streams.distance && timeData) {
+      patch.speedEfforts = computeSpeedEfforts(
+        streams.distance,
+        timeData,
+        CYCLING_SPEED_DISTANCE_METERS,
+      );
+    }
+
+    if (streams.altitude) {
+      patch.biggestClimb = computeBiggestClimb(streams.altitude);
+    }
+  } else {
+    patch.speedEfforts = null;
+    patch.biggestClimb = null;
+  }
+
+  // Always set-or-null so stale zone data clears when settings or the
+  // sport classification change.
+  patch.zoneSeconds = settings
+    ? computeZoneSeconds({
+        isRunning: sc.category === "running",
+        hasPowerMetrics: sc.hasPowerMetrics,
+        settings,
+        timeData,
+        wattsData,
+        hrData,
+        velocityData,
+      })
+    : null;
+
+  return patch;
+}
+
+// ── Rider settings ────────────────────────────────────────────────────
+
+/** Every time-varying setting, resolved to a number. */
+type ScoringSettings = {
+  [K in keyof StoredRiderSettings["initialValues"]]-?: number;
+};
+
+/**
+ * What scoring assumes for a setting the rider never entered (null or missing
+ * in the stored initial values). FTP and the HR profile fall back to typical
+ * values, so power TSS, HRSS and power/HR zones are computed against them.
+ * Both pace thresholds fall back to 0, which skips rTSS, sTSS and pace zones.
+ * The client's display defaults (`DEFAULT_RIDER_SETTINGS_TIMELINE`) differ:
+ * 3.33 m/s for running and 0.952 m/s for swimming.
+ */
+const SCORING_FALLBACK_SETTINGS: ScoringSettings = {
+  ftp: 200,
+  weightKg: 75,
+  restingHr: 50,
+  maxHr: 185,
+  lthr: 163,
+  runThresholdPace: 0,
+  swimThresholdPace: 0,
+};
+
+/**
+ * The settings in effect on `date` ("YYYY-MM-DD"): the initial values, with
+ * {@link SCORING_FALLBACK_SETTINGS} filling the gaps, then every change dated
+ * on or before `date`, in order.
+ */
+function resolveScoringSettings(
+  timeline: ScoringRiderSettings,
+  date: string,
+): ScoringSettings {
+  const initialValues = { ...SCORING_FALLBACK_SETTINGS };
+  for (const key of Object.keys(
+    SCORING_FALLBACK_SETTINGS,
+  ) as (keyof ScoringSettings)[]) {
+    const v = timeline.initialValues[key];
+    if (v != null) {
+      initialValues[key] = v;
+    }
+  }
+  return resolveTimeline(initialValues, timeline.changes, date);
+}
+
+// ── Maths ─────────────────────────────────────────────────────────────
 
 /**
  * TRIMP gender-specific weighting constants (Banister, 1991).
@@ -23,12 +252,6 @@ import { resolveTimeline } from "../../utils/resolveTimeline";
 const TRIMP_A = 0.64;
 const TRIMP_B = 1.92;
 
-export interface HrssSettings {
-  restingHr: number;
-  maxHr: number;
-  lthr: number;
-}
-
 /**
  * Calculates **HRSS** (Heart Rate Stress Score) from a heart-rate stream
  * and the rider's HR profile settings.
@@ -43,9 +266,9 @@ export interface HrssSettings {
  *                   actual time deltas are used instead of assuming 1 s per sample.
  * @returns          The HRSS value (unitless, TSS-equivalent scale).
  */
-export function calculateHRSS(
+function calculateHRSS(
   hrStream: number[],
-  settings: HrssSettings,
+  settings: Pick<ScoringSettings, "restingHr" | "maxHr" | "lthr">,
   timeStream?: number[],
 ): number {
   const { restingHr, maxHr, lthr } = settings;
@@ -89,7 +312,7 @@ export function calculateHRSS(
 /**
  * Calculates TSS (Training Stress Score) from activity metadata.
  */
-export function calculateTSS(
+function calculateTSS(
   weightedAverageWatts: number,
   movingTime: number,
   ftp: number,
@@ -110,7 +333,7 @@ export function calculateTSS(
  * rTSS = (duration × NGP × IF) / (thresholdPace × 3600) × 100
  * where IF = NGP / thresholdPace
  */
-export function calculateRunningTSS(
+function calculateRunningTSS(
   velocityStream: number[],
   timeStream: number[],
   thresholdPace: number, // m/s
@@ -164,7 +387,7 @@ export function calculateRunningTSS(
  * Uses IF cubed (not squared) because water resistance grows cubically
  * with speed. No normalization needed since pool swimming is steady-state.
  */
-export function calculateSwimmingTSS(
+function calculateSwimmingTSS(
   distance: number, // meters
   movingTime: number, // seconds
   thresholdPace: number, // m/s
@@ -198,17 +421,15 @@ export interface ZoneSecondsByMetric {
  * {@link calculateHRSS}: actual time deltas when a time stream exists, else
  * 1 s per sample. Returns null when no metric qualifies.
  */
-export function computeZoneSeconds(args: {
+function computeZoneSeconds(args: {
   /** Sport category is running — enables pace zones. */
   isRunning: boolean;
   /** Sport supports power — enables power zones. */
   hasPowerMetrics: boolean;
-  settings: {
-    ftp: number;
-    maxHr: number;
-    restingHr: number;
-    runThresholdPace: number;
-  };
+  settings: Pick<
+    ScoringSettings,
+    "ftp" | "maxHr" | "restingHr" | "runThresholdPace"
+  >;
   timeData?: number[];
   wattsData?: number[];
   hrData?: number[];
@@ -296,7 +517,7 @@ const HEADLINE_POWER_DURATIONS = [
  * - Every 300s from 3900s onwards
  * - Plus the headline durations above (so UI chips always have a data point)
  */
-export function generatePowerCurveDurations(maxDuration: number): number[] {
+function generatePowerCurveDurations(maxDuration: number): number[] {
   const durations = new Set<number>();
 
   for (let d = 1; d <= Math.min(30, maxDuration); d += 1) durations.add(d);
@@ -346,7 +567,7 @@ function expandToPerSecond(values: number[], timeStream: number[]): number[] {
  *                     provided, the stream is expanded to true per-second
  *                     data before applying the sliding window.
  */
-export function computePowerBests(
+function computePowerBests(
   wattsStream: number[],
   timeStream?: number[],
 ): Record<number, number> {
@@ -363,7 +584,7 @@ export function computePowerBests(
  * duration, from a `heartrate` stream — the HR equivalent of the power curve.
  * Same durations as {@link computePowerBests}.
  */
-export function computeHeartrateBests(
+function computeHeartrateBests(
   hrStream: number[],
   timeStream?: number[],
 ): Record<number, number> {
@@ -383,7 +604,7 @@ export function computeHeartrateBests(
  * Uses a two-pointer sweep: both streams are monotonic, so for each start index
  * the end index only moves forward. Distances longer than the ride are skipped.
  */
-export function computeSpeedEfforts(
+function computeSpeedEfforts(
   distanceStream: number[],
   timeStream: number[],
   targetDistances: number[],
@@ -425,7 +646,7 @@ export function computeSpeedEfforts(
  * split. A flat absolute tolerance can't do both: too low and big climbs get chopped at
  * every dip, too high and adjacent small hills get merged.
  */
-export function computeBiggestClimb(altitudeStream: number[]): number {
+function computeBiggestClimb(altitudeStream: number[]): number {
   const alt = altitudeStream.filter((v) => Number.isFinite(v));
   if (alt.length < 2) return 0;
 
@@ -498,49 +719,4 @@ function* maxWindowAverages(
 
     yield [duration, maxSum / duration];
   }
-}
-
-interface ResolvedSettings {
-  ftp: number;
-  weightKg: number;
-  restingHr: number;
-  maxHr: number;
-  lthr: number;
-  runThresholdPace: number;
-  swimThresholdPace: number;
-}
-
-const DEFAULT_RESOLVED_SETTINGS: ResolvedSettings = {
-  ftp: 200,
-  weightKg: 75,
-  restingHr: 50,
-  maxHr: 185,
-  lthr: 163,
-  runThresholdPace: 0,
-  swimThresholdPace: 0,
-};
-
-interface SettingsTimeline {
-  initialValues: { [K in keyof ResolvedSettings]?: ResolvedSettings[K] | null };
-  changes: ({ date: string } & Partial<ResolvedSettings>)[];
-}
-
-/**
- * Resolves rider settings for a specific date by walking the change timeline.
- * Missing or null initial values are filled with sensible defaults.
- */
-export function resolveRiderSettings(
-  timeline: SettingsTimeline,
-  targetDate: string,
-): ResolvedSettings {
-  const fullInitialValues: ResolvedSettings = { ...DEFAULT_RESOLVED_SETTINGS };
-  for (const key of Object.keys(
-    DEFAULT_RESOLVED_SETTINGS,
-  ) as (keyof ResolvedSettings)[]) {
-    const v = timeline.initialValues[key];
-    if (v != null) {
-      fullInitialValues[key] = v;
-    }
-  }
-  return resolveTimeline(fullInitialValues, timeline.changes, targetDate);
 }

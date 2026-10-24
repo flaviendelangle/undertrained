@@ -8,7 +8,7 @@
  */
 import { RUNNING_PACE_ZONES } from "~/sensors/paceZones";
 import { HR_ZONES, POWER_ZONES } from "~/sensors/types";
-import type { ZoneSecondsByMetric } from "~/server/lib/computeScores";
+import type { ZoneSecondsByMetric } from "~/server/lib/activityScoring";
 import { getSportConfig } from "~/utils/sportConfig";
 
 export type ZoneMetric = "power" | "pace" | "hr";

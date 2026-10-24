@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
-import { afterEach, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
+
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
   cleanup,
@@ -9,7 +11,11 @@ import {
   within,
 } from "@testing-library/react";
 
-import { WorkoutBuilder } from "./WorkoutBuilder";
+import { ToastProvider } from "~/components/ui/toast";
+import { STRUCTURED_WORKOUT_SCHEMA_VERSION } from "~/utils/structuredWorkout";
+import { createTestBackend } from "~/utils/trpcTestBackend";
+
+import { WorkoutBuilder, type WorkoutBuilderProps } from "./WorkoutBuilder";
 
 vi.mock("next/router", () => ({
   useRouter: () => ({
@@ -25,45 +31,48 @@ vi.mock("~/hooks/useRiderSettings", () => ({
     configuredFtp: 200,
   }),
 }));
-vi.mock("~/utils/trpc", () => ({
-  trpc: {
-    useUtils: () => ({
-      structuredWorkouts: { list: { invalidate: vi.fn() } },
-    }),
-    structuredWorkouts: {
-      create: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
-      update: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
-    },
-  },
-}));
 vi.mock("./WorkoutPreviewChart", () => ({ WorkoutPreviewChart: () => null }));
 vi.mock("./WorkoutSummaryPanel", () => ({ WorkoutSummaryPanel: () => null }));
 
-afterEach(cleanup);
+const workout: NonNullable<WorkoutBuilderProps["workout"]> = {
+  id: 1,
+  name: "Workout",
+  description: null,
+  sport: "bike",
+  structure: {
+    version: STRUCTURED_WORKOUT_SCHEMA_VERSION,
+    sport: "bike",
+    nodes: ["a", "b", "c"].map((id) => ({
+      id,
+      type: "step",
+      durationSeconds: 60,
+      power: { kind: "free" },
+    })),
+  },
+};
+
+const update = vi.fn();
+let server: ReturnType<typeof createTestBackend>;
+function wrapper({ children }: { children: ReactNode }) {
+  return (
+    <server.Wrapper>
+      <ToastProvider>{children}</ToastProvider>
+    </server.Wrapper>
+  );
+}
+beforeEach(() => {
+  update.mockReset();
+  server = createTestBackend({ structuredWorkouts: { update } });
+});
+afterEach(() => {
+  cleanup();
+  server.queryClient.clear();
+});
 
 it.each(["Up", "Down"] as const)(
   "moves a row %s from the keyboard menu without changing selection",
   async (direction) => {
-    render(
-      <WorkoutBuilder
-        workout={{
-          id: 1,
-          name: "Workout",
-          description: null,
-          sport: "bike",
-          structure: {
-            version: 1,
-            sport: "bike",
-            nodes: ["a", "b", "c"].map((id) => ({
-              id,
-              type: "step",
-              durationSeconds: 60,
-              power: { kind: "free" },
-            })),
-          },
-        }}
-      />,
-    );
+    render(<WorkoutBuilder workout={workout} />, { wrapper });
     const rows = screen.getAllByRole("option");
     const trigger = within(rows[1]).getByRole("button", {
       name: "workouts.step.actions",
@@ -91,3 +100,16 @@ it.each(["Up", "Down"] as const)(
     expect(rows[1].getAttribute("aria-selected")).toBe("true");
   },
 );
+
+it("tells the athlete when a save fails", async () => {
+  update.mockRejectedValue(new Error("offline"));
+  render(<WorkoutBuilder workout={workout} />, { wrapper });
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "workouts.updateWorkout" }),
+  );
+
+  // `All`: the toast's text is mirrored into a screen-reader announcement.
+  expect(await screen.findAllByText("common.saveError")).not.toHaveLength(0);
+  expect(update).toHaveBeenCalledOnce();
+});
