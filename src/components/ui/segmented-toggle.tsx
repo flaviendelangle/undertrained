@@ -32,14 +32,19 @@ export function SegmentedToggle<T extends string>({
 }: SegmentedToggleProps<T>) {
   // `default` is laid out for form fields, where the parent is usually a
   // `flex-col` that stretches its children — so the wrapper fills the row and
-  // each option gets an equal share. `sm` keeps the inline, content-sized look
-  // used by chart toolbars.
+  // options split the leftover space. They grow from their content width
+  // (`flex-auto`, not `flex-1`) so a long label like "Sortie longue" stays on
+  // one line instead of being squeezed into an equal share; it only wraps when
+  // the row is too narrow for every label. `sm` keeps the inline, content-sized
+  // look used by chart toolbars.
   const wrapper =
     size === "default"
       ? "bg-muted flex w-full rounded-md p-1 text-sm"
       : "bg-muted inline-flex rounded-md p-0.5 text-xs";
   const button =
-    size === "default" ? "flex-1 rounded px-3 py-1.5" : "rounded px-2 py-0.5";
+    size === "default"
+      ? "flex-auto rounded px-2 py-1.5"
+      : "rounded px-2 py-0.5";
   return (
     <ToggleGroup
       aria-label={ariaLabel}
