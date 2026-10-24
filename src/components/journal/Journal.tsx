@@ -66,7 +66,7 @@ function journalHref(view: JournalView, weekParam: string | null): string {
 
 export function Journal() {
   const t = useT();
-  const { data: activities, isError } = useActivitiesQuery();
+  const { data: activities, isError } = useActivitiesQuery("journal");
   const { data: plannedTrainings } = usePlannedTrainingList();
   const { data: busyEvents, showAllDayRow } = useBusyEvents();
   const { timeline } = useRiderSettingsTimeline();
