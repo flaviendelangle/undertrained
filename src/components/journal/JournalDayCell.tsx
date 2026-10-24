@@ -69,7 +69,26 @@ export function getLoadTier(totalLoad: number, scale: number): LoadTier {
   return "hard";
 }
 
-function ActivityChip({ activity }: { activity: JournalActivity }) {
+/**
+ * A completed activity as a sport-tinted link (race ring, PR medal) that opens
+ * the Journal's shared preview card (one popup for all of them) with this
+ * activity as the payload, and warms its route map on hover. Shared by the
+ * month view's chips and the week view's positioned blocks.
+ */
+export function ActivityBlock({
+  activity,
+  className,
+  backdrop = "transparent",
+  compact,
+}: {
+  activity: JournalActivity;
+  /** Sizing / transition classes for where the block sits. */
+  className?: string;
+  /** What the sport tint is mixed over (opaque in the week time-grid). */
+  backdrop?: string;
+  /** Hide the stats line when too short to fit a second row. */
+  compact?: boolean;
+}) {
   const t = useT();
   const config = getSportConfig(activity.type);
   const Icon = config.icon;
@@ -84,8 +103,6 @@ function ActivityChip({ activity }: { activity: JournalActivity }) {
     activity.stravaId,
   );
 
-  // Open the Journal's shared preview card (one popup for all chips) with this
-  // activity as the payload, and warm its route map on hover.
   const handles = useJournalPreviewHandles();
   const prefetch = useMapPrefetch(activity.stravaId);
 
@@ -104,12 +121,13 @@ function ActivityChip({ activity }: { activity: JournalActivity }) {
               : activity.name
           }
           className={cn(
-            "flex min-w-0 flex-col gap-0.5 rounded px-1 py-0.5 leading-tight transition-colors hover:brightness-95 dark:hover:brightness-110",
+            "flex min-w-0 flex-col gap-0.5 rounded px-1 py-0.5 leading-tight hover:brightness-95 dark:hover:brightness-110",
+            className,
             // Races get a gold ring so they stand out from training days.
             isRace && "ring-1 ring-amber-400/80 ring-inset",
           )}
           style={{
-            backgroundColor: `color-mix(in oklab, ${config.color} 16%, transparent)`,
+            backgroundColor: `color-mix(in oklab, ${config.color} 16%, ${backdrop})`,
           }}
         >
           <span className="flex min-w-0 items-center gap-1">
@@ -132,7 +150,7 @@ function ActivityChip({ activity }: { activity: JournalActivity }) {
               />
             )}
           </span>
-          {stats && (
+          {stats && !compact && (
             <span className="text-muted-foreground truncate text-[11px] tabular-nums">
               {stats}
             </span>
@@ -156,9 +174,10 @@ function renderDayItem(item: DayItem) {
       training={item.planned}
     />
   ) : (
-    <ActivityChip
+    <ActivityBlock
       key={`activity-${item.activity.stravaId}`}
       activity={item.activity}
+      className="transition-colors"
     />
   );
 }

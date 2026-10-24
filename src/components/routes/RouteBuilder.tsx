@@ -88,7 +88,7 @@ export function RouteBuilder({ route }: { route?: Route }) {
 
   const [name, setName] = React.useState(route?.name ?? "");
   const [sport, setSport] = React.useState<RouteSport>(
-    (route?.sport as RouteSport) ?? "cycling",
+    route?.sport ?? "cycling",
   );
   const [profile, setProfile] = React.useState(
     route?.profile ?? DEFAULT_PROFILE_BY_SPORT.cycling,

@@ -2,7 +2,10 @@ import type { SQL } from "drizzle-orm";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { CYCLING_POWER_DURATIONS } from "../../../utils/cyclingPowerDurations";
+import {
+  CYCLING_POWER_DURATIONS,
+  CYCLING_POWER_DURATION_SECONDS,
+} from "../../../utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCE_METERS } from "../../../utils/cyclingRecordDistances";
 import { estimateRpeLoad } from "../../../utils/getActivityLoad";
 import {
@@ -14,10 +17,6 @@ import { activities, riderSettings } from "../../db/schema";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 const DEFAULT_LIMIT = 25;
-// The curated duration set the Personal Bests explorer offers for power & HR.
-const CYCLING_POWER_DURATION_SECONDS = CYCLING_POWER_DURATIONS.map(
-  (d) => d.seconds,
-);
 const CYCLING_TYPES = getActivityTypesByCategory("cycling");
 const RUNNING_TYPES = getActivityTypesByCategory("running");
 // Speed/elevation records exclude virtual rides (simulated distance/altitude).
@@ -49,6 +48,32 @@ function loadSql(algorithm: string | undefined): SQL {
   return algorithm === "hrss"
     ? sql`COALESCE(a.hrss, a.tss, ${RPE_LOAD_SQL})`
     : sql`COALESCE(a.tss, a.hrss, ${RPE_LOAD_SQL})`;
+}
+
+type LoadSettings = Pick<
+  typeof riderSettings.$inferSelect,
+  "cyclingLoadAlgorithm" | "runningLoadAlgorithm"
+>;
+
+/** The athlete's per-sport load-algorithm choices, if they saved any settings. */
+function findLoadSettings(
+  db: Database,
+  athleteId: number,
+): Promise<LoadSettings | undefined> {
+  return db.query.riderSettings.findFirst({
+    where: eq(riderSettings.athlete, athleteId),
+    columns: { cyclingLoadAlgorithm: true, runningLoadAlgorithm: true },
+  });
+}
+
+/** The load algorithm the athlete prefers for `sport`, if they chose one. */
+function loadAlgorithmFor(
+  settings: LoadSettings | undefined,
+  sport: "cycling" | "running",
+): string | undefined {
+  return sport === "cycling"
+    ? settings?.cyclingLoadAlgorithm
+    : settings?.runningLoadAlgorithm;
 }
 
 interface LeaderboardRow {
@@ -101,34 +126,42 @@ const leaderboardInput = z.object({
   limit: z.number().int().positive().max(100).default(DEFAULT_LIMIT),
 });
 
-/** Which leaderboard a single {@link ActivityRanking} belongs to. */
-type RankingCategory =
-  | "power"
-  | "speed"
-  | "heartrate"
-  | "biggestClimb"
-  | "totalElevation"
-  | "distance"
-  | "duration"
-  | "load"
-  | "runEffort";
-
-/** One leaderboard placing held by a single activity (rank ≤ limit). */
-interface ActivityRanking {
-  category: RankingCategory;
-  /**
-   * The metric's parameter: duration (s) for power/HR, distance (m) for speed,
-   * the best-effort name (e.g. "10K") for run efforts, or `null` for the
-   * whole-activity scalars (distance/duration/load/elevation).
-   */
-  paramKey: number | string | null;
+/**
+ * One leaderboard placing held by a single activity (rank ≤ limit). `category`
+ * says which leaderboard; `paramKey` is the metric's parameter.
+ */
+export type ActivityRanking = {
   /** 1-based rank among the athlete's activities (ties share a place). */
   rank: number;
   /** Raw value behind the rank: watts / seconds / bpm / meters / load points. */
   value: number;
-  /** Distance (m) for speed & run efforts, so the client can derive a pace/speed sub-label. */
-  distance?: number;
-}
+} & (
+  | {
+      category: "power" | "heartrate";
+      /** The duration (s). */
+      paramKey: number;
+    }
+  | {
+      category: "speed";
+      /** The distance (m). */
+      paramKey: number;
+      /** Same as `paramKey`, so the client can derive a speed sub-label. */
+      distance: number;
+    }
+  | {
+      category: "runEffort";
+      /** The best-effort name, e.g. "10K". */
+      paramKey: string;
+      /** The effort's distance (m), so the client can derive a pace sub-label. */
+      distance: number;
+    }
+  | {
+      /** Whole-activity scalars, which take no parameter. */
+      category:
+        "biggestClimb" | "totalElevation" | "distance" | "duration" | "load";
+      paramKey: null;
+    }
+);
 
 /**
  * Ranks a single activity within every key of a jsonb `_bests` column at once —
@@ -139,6 +172,8 @@ interface ActivityRanking {
 async function rankJsonbBests(
   db: Database,
   opts: {
+    /** The leaderboard `column` backs: its keys are durations, or distances for speed. */
+    category: "power" | "heartrate" | "speed";
     athleteId: number;
     stravaId: number;
     column: SQL;
@@ -148,7 +183,7 @@ async function rankJsonbBests(
     keys?: readonly number[];
     limit: number;
   },
-): Promise<{ param: number; value: number; rank: number }[]> {
+): Promise<ActivityRanking[]> {
   // Restrict to the curated key set so the card mirrors the Personal Bests page
   // exactly (it never offers ad-hoc durations like 9:30). Filtering keys can't
   // change a kept duration's rank — ranking is partitioned per key.
@@ -186,11 +221,13 @@ async function rankJsonbBests(
     WHERE strava_id = ${opts.stravaId} AND rn <= ${opts.limit}
     ORDER BY param
   `);
-  return rows.map((r) => ({
-    param: Number(r.param),
-    value: Number(r.value),
-    rank: Number(r.rank),
-  }));
+  return rows.map((r): ActivityRanking => {
+    const paramKey = Number(r.param);
+    const placing = { paramKey, rank: Number(r.rank), value: Number(r.value) };
+    return opts.category === "speed"
+      ? { category: "speed", ...placing, distance: paramKey }
+      : { category: opts.category, ...placing };
+  });
 }
 
 export const recordsRouter = router({
@@ -271,7 +308,7 @@ export const recordsRouter = router({
       // windowed pattern from analytics.getPowerCurve) instead of firing one
       // LIMIT-1 query per duration (16 round-trips → 1).
       const powerDurationList = sql.join(
-        CYCLING_POWER_DURATIONS.map((d) => sql`${d.seconds}`),
+        CYCLING_POWER_DURATION_SECONDS.map((seconds) => sql`${seconds}`),
         sql`, `,
       );
 
@@ -377,25 +414,28 @@ export const recordsRouter = router({
       const limit = DEFAULT_LIMIT;
 
       // Only the scalar columns are needed here — skip the heavy `_bests` jsonb.
-      const [activity] = await ctx.db
-        .select({
-          type: activities.type,
-          distance: activities.distance,
-          movingTime: activities.movingTime,
-          biggestClimb: activities.biggestClimb,
-          totalElevationGain: activities.totalElevationGain,
-          tss: activities.tss,
-          hrss: activities.hrss,
-          perceivedExertion: activities.perceivedExertion,
-        })
-        .from(activities)
-        .where(
-          and(
-            eq(activities.stravaId, input.stravaId),
-            eq(activities.athlete, input.athleteId),
-          ),
-        )
-        .limit(1);
+      const [[activity], loadSettings] = await Promise.all([
+        ctx.db
+          .select({
+            type: activities.type,
+            distance: activities.distance,
+            movingTime: activities.movingTime,
+            biggestClimb: activities.biggestClimb,
+            totalElevationGain: activities.totalElevationGain,
+            tss: activities.tss,
+            hrss: activities.hrss,
+            perceivedExertion: activities.perceivedExertion,
+          })
+          .from(activities)
+          .where(
+            and(
+              eq(activities.stravaId, input.stravaId),
+              eq(activities.athlete, input.athleteId),
+            ),
+          )
+          .limit(1),
+        findLoadSettings(ctx.db, input.athleteId),
+      ]);
 
       const isCycling = activity
         ? CYCLING_TYPES.includes(activity.type)
@@ -415,12 +455,10 @@ export const recordsRouter = router({
       // `load` ranking mirrors getLongestActivityLeaderboard: rank by the
       // athlete's preferred per-sport score, falling back to the other, then
       // to the RPE estimate.
-      const settings = await ctx.db.query.riderSettings.findFirst({
-        where: eq(riderSettings.athlete, input.athleteId),
-      });
-      const algorithm = isCycling
-        ? settings?.cyclingLoadAlgorithm
-        : settings?.runningLoadAlgorithm;
+      const algorithm = loadAlgorithmFor(
+        loadSettings,
+        isCycling ? "cycling" : "running",
+      );
       const loadExpr = loadSql(algorithm);
       const targetLoad =
         (algorithm === "hrss"
@@ -470,7 +508,7 @@ export const recordsRouter = router({
 
           const out: ActivityRanking[] = [];
           const add = (
-            category: RankingCategory,
+            category: Extract<ActivityRanking, { paramKey: null }>["category"],
             rankStr: string | null | undefined,
             value: number,
           ) => {
@@ -496,6 +534,7 @@ export const recordsRouter = router({
       // ── Heart rate (both sports), all durations at once.
       tasks.push(
         rankJsonbBests(ctx.db, {
+          category: "heartrate",
           athleteId: input.athleteId,
           stravaId: input.stravaId,
           column: sql`a.heartrate_bests`,
@@ -503,20 +542,14 @@ export const recordsRouter = router({
           typeFilter: sql`AND a.type IN (${sportTypes})`,
           keys: CYCLING_POWER_DURATION_SECONDS,
           limit,
-        }).then((rows) =>
-          rows.map((r) => ({
-            category: "heartrate" as const,
-            paramKey: r.param,
-            rank: r.rank,
-            value: r.value,
-          })),
-        ),
+        }),
       );
 
       if (isCycling) {
         // Power — cycling types, all durations at once.
         tasks.push(
           rankJsonbBests(ctx.db, {
+            category: "power",
             athleteId: input.athleteId,
             stravaId: input.stravaId,
             column: sql`a.power_bests`,
@@ -524,33 +557,19 @@ export const recordsRouter = router({
             typeFilter: sql`AND a.type IN (${typeList(CYCLING_TYPES)})`,
             keys: CYCLING_POWER_DURATION_SECONDS,
             limit,
-          }).then((rows) =>
-            rows.map((r) => ({
-              category: "power" as const,
-              paramKey: r.param,
-              rank: r.rank,
-              value: r.value,
-            })),
-          ),
+          }),
         );
         // Speed — no type filter (mirrors getCyclingSpeedLeaderboard); fastest = ASC.
         tasks.push(
           rankJsonbBests(ctx.db, {
+            category: "speed",
             athleteId: input.athleteId,
             stravaId: input.stravaId,
             column: sql`a.speed_efforts`,
             order: sql`ASC`,
             keys: CYCLING_SPEED_DISTANCE_METERS,
             limit,
-          }).then((rows) =>
-            rows.map((r) => ({
-              category: "speed" as const,
-              paramKey: r.param,
-              rank: r.rank,
-              value: r.value,
-              distance: r.param,
-            })),
-          ),
+          }),
         );
       }
 
@@ -744,14 +763,8 @@ export const recordsRouter = router({
       } else if (input.measure === "duration") {
         valueExpr = sql`a.moving_time`;
       } else {
-        const settings = await ctx.db.query.riderSettings.findFirst({
-          where: eq(riderSettings.athlete, input.athleteId),
-        });
-        const algorithm =
-          input.sport === "cycling"
-            ? settings?.cyclingLoadAlgorithm
-            : settings?.runningLoadAlgorithm;
-        valueExpr = loadSql(algorithm);
+        const settings = await findLoadSettings(ctx.db, input.athleteId);
+        valueExpr = loadSql(loadAlgorithmFor(settings, input.sport));
       }
       return topActivities(ctx.db, {
         athleteId: input.athleteId,

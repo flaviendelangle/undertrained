@@ -49,6 +49,7 @@ import { useAthleteId } from "~/hooks/useAthleteId";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
+import { activityLocalDay } from "~/utils/dateUtils";
 import {
   MAX_PLANNED_DURATION_SECONDS,
   parsePlannedDate,
@@ -66,7 +67,7 @@ import {
 
 import type { ActivityOptionData } from "./ActivityOption";
 import { ActivityOption } from "./ActivityOption";
-import { dayKey, isPerfectMatch } from "./perfectMatch";
+import { isPerfectMatch } from "./perfectMatch";
 
 /** What the planner dialog is currently doing, owned by the Journal. */
 export type PlannerDialogState =
@@ -98,9 +99,9 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
     existing ? Math.round(existing.durationSeconds / 60) : 60,
   );
   const [dateStr, setDateStr] = React.useState(
-    existing
-      ? plannedDay(existing.plannedDate)
-      : format(state.mode === "create" ? state.date : new Date(), "yyyy-MM-dd"),
+    state.mode === "edit"
+      ? plannedDay(state.training.plannedDate)
+      : format(state.date, "yyyy-MM-dd"),
   );
   // The week view passes a date carrying the double-clicked time; the month view
   // passes local midnight, for which we keep a sensible 07:00 default.
@@ -148,7 +149,7 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
     if (fields == null) {
       return;
     }
-    if (isEdit && existing) {
+    if (existing) {
       updateMut.mutate({ athleteId, id: existing.id, ...fields });
     } else {
       createMut.mutate({ athleteId, ...fields });
@@ -233,7 +234,7 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
         />
       </div>
 
-      {isEdit && existing && (
+      {existing && (
         <MarkDoneSection
           sportType={sportType}
           plannedDate={plannedDateOf(dateStr, timeStr)}
@@ -245,7 +246,7 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
       )}
 
       <ResponsiveDialogFooter>
-        {isEdit && existing && (
+        {existing && (
           <ConfirmDialog
             trigger={
               <Button
@@ -333,7 +334,7 @@ function MarkDoneSection({
       if (getSportConfig(a.type).category !== plannedCategory) {
         continue;
       }
-      const activityDay = dayKey(a.startDateLocal);
+      const activityDay = activityLocalDay(a);
       const stravaId = String(a.stravaId);
       if (isPerfectMatch(plan, a)) {
         perfect.push(stravaId);

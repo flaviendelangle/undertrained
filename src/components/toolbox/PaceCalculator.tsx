@@ -34,12 +34,7 @@ const createDistances = (t: TFunction) =>
 const paceRows = (() => {
   const rows: { paceLabel: string; paceSeconds: number }[] = [];
   for (let sec = 150; sec <= 540; sec += 1) {
-    const paceMin = Math.floor(sec / 60);
-    const paceSec = sec % 60;
-    rows.push({
-      paceLabel: `${paceMin}:${String(paceSec).padStart(2, "0")}`,
-      paceSeconds: sec,
-    });
+    rows.push({ paceLabel: formatMinutesSeconds(sec), paceSeconds: sec });
   }
   return rows;
 })();

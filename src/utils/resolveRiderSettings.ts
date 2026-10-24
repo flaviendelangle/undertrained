@@ -48,7 +48,10 @@ export function resolveCurrentRiderSettings(
 
 /** Returns the athlete's explicit FTP, without substituting the display default. */
 export function resolveConfiguredFtp(
-  timeline: RiderSettingsTimeline,
+  timeline: {
+    initialValues: { ftp?: number | null };
+    changes: { date: string; ftp?: number }[];
+  },
   targetDate: string,
 ): number | null {
   const ftp = resolveTimeline(

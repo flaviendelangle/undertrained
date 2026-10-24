@@ -52,7 +52,7 @@ const speedLabel = (meters: number) =>
  * which this activity places in the all-time top 25, grouped by metric. Renders
  * nothing (no empty card) until the query resolves with at least one placing.
  */
-export function ActivityPersonalRecords({
+function ActivityPersonalRecordsImpl({
   stravaId,
   activityType,
 }: {
@@ -79,22 +79,21 @@ export function ActivityPersonalRecords({
     switch (r.category) {
       case "power":
         return {
-          label: durationLabel(r.paramKey as number),
+          label: durationLabel(r.paramKey),
           value: `${r.value} W`,
         };
       case "heartrate":
         return {
-          label: durationLabel(r.paramKey as number),
+          label: durationLabel(r.paramKey),
           value: `${r.value} bpm`,
         };
-      case "speed": {
-        const meters = r.distance ?? (r.paramKey as number);
+      case "speed":
         return {
-          label: speedLabel(r.paramKey as number),
+          label: speedLabel(r.paramKey),
           value: formatElapsed(r.value),
-          sub: r.value > 0 ? formatCyclingSpeed(meters / r.value) : undefined,
+          sub:
+            r.value > 0 ? formatCyclingSpeed(r.distance / r.value) : undefined,
         };
-      }
       case "biggestClimb":
         return {
           label: t("charts.records.metricLabel.biggestClimb"),
@@ -120,17 +119,15 @@ export function ActivityPersonalRecords({
           label: t("charts.records.metricLabel.load"),
           value: String(Math.round(r.value)),
         };
-      case "runEffort": {
-        const meters = r.distance ?? 0;
+      case "runEffort":
         return {
-          label: String(r.paramKey),
+          label: r.paramKey,
           value: formatElapsed(r.value),
           sub:
-            r.value > 0 && meters > 0
-              ? formatPace(meters / r.value)
+            r.value > 0 && r.distance > 0
+              ? formatPace(r.distance / r.value)
               : undefined,
         };
-      }
     }
   };
 
@@ -176,7 +173,7 @@ export function ActivityPersonalRecords({
       case "runEffort":
         p.set("sport", "running");
         p.set("metric", "pace");
-        p.set("name", String(r.paramKey));
+        p.set("name", r.paramKey);
         break;
     }
     return `/personal-bests?${p.toString()}`;
@@ -254,3 +251,5 @@ export function ActivityPersonalRecords({
     </ChartCard>
   );
 }
+
+export const ActivityPersonalRecords = React.memo(ActivityPersonalRecordsImpl);

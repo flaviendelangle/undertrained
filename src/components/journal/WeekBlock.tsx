@@ -20,16 +20,14 @@ import {
   HEADER_HEIGHT_PX,
   HOURS,
   HOUR_HEIGHT,
-  MINUTES_PER_DAY,
   MINUTES_PER_PIXEL,
   type PositionedEvent,
+  TOTAL_HEIGHT,
   buildBusyEvents,
   buildDayEvents,
   packDayEvents,
   snapMinutes,
 } from "./weekGrid";
-
-const TOTAL_HEIGHT = (MINUTES_PER_DAY / 60) * HOUR_HEIGHT;
 
 /**
  * One day's column in the time-grid: a drop target carrying its date, with

@@ -12,7 +12,7 @@ import {
   classifyWeeklyLoad,
   computeFitnessSeries,
 } from "~/lib/fitness";
-import { addUnit, startOf } from "~/utils/dateUtils";
+import { activityLocalDay, addUnit, startOf } from "~/utils/dateUtils";
 import {
   type LoadAlgorithmPreferences,
   getActivityLoad,
@@ -121,13 +121,6 @@ const LOCALE_OPTIONS = { locale: enGB };
 
 /** Number of trailing weeks averaged for the weekly load trend. */
 const TREND_WINDOW = 4;
-
-/** Local calendar-day key for an activity, from its stored local start date. */
-function activityDayKey(activity: JournalActivity): string {
-  // `startDateLocal` is an ISO string already expressed in the athlete's local
-  // time, so its date portion is the calendar day to bucket it under.
-  return activity.startDateLocal.slice(0, 10);
-}
 
 /**
  * Buckets planned trainings onto every local calendar day they cover, same key
@@ -345,7 +338,7 @@ export function useJournalWeeks(
         for (const activity of dayActivities) {
           // A multi-day activity appears in every day it covers, but its time
           // and load count once, on its start day.
-          if (activityDayKey(activity) !== dayKey) {
+          if (activityLocalDay(activity) !== dayKey) {
             continue;
           }
           const load = loadByStravaId.get(activity.stravaId) ?? 0;
@@ -384,7 +377,7 @@ export function useJournalWeeks(
         // Continuation copies excluded, so the summary lists each activity once.
         weekActivities.push(
           ...dayActivities.filter(
-            (activity) => activityDayKey(activity) === dayKey,
+            (activity) => activityLocalDay(activity) === dayKey,
           ),
         );
       }

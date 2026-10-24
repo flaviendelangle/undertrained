@@ -27,6 +27,9 @@ export const HOURS = Array.from({ length: 24 }, (_, h) => h);
 /** Total minutes in a day, the vertical extent of the grid. */
 export const MINUTES_PER_DAY = 24 * 60;
 
+/** Pixel height of the full-day time-grid. */
+export const TOTAL_HEIGHT = (MINUTES_PER_DAY / 60) * HOUR_HEIGHT;
+
 /** Snap dropped events to this minute granularity when rescheduling. */
 export const SNAP_MINUTES = 15;
 
@@ -42,39 +45,30 @@ export const COMPACT_BLOCK_HEIGHT = 34;
 /** One pixel = this many minutes, derived from the hour height. */
 export const MINUTES_PER_PIXEL = 60 / HOUR_HEIGHT;
 
+/** The part of a {@link WeekEvent} that falls on one day column. */
+interface DaySegment {
+  id: string;
+  startMinutes: number;
+  endMinutes: number;
+  /**
+   * True for the day-N segment of an event begun on an earlier day. Always
+   * false for busy events, which are clamped to their start day, not fanned.
+   */
+  continued: boolean;
+}
+
 /**
- * A single timed entry in the week grid — either a completed activity or a
- * still-planned training — reduced to the start/duration the layout needs while
- * keeping the source object for rendering.
+ * A single timed entry in the week grid — a completed activity, a
+ * still-planned training or an external-calendar busy event — reduced to the
+ * start/duration the layout needs while keeping the source object for
+ * rendering.
  */
-export type WeekEvent =
-  | {
-      kind: "activity";
-      id: string;
-      activity: JournalActivity;
-      startMinutes: number;
-      endMinutes: number;
-      /** True for the day-N segment of an event begun on an earlier day. */
-      continued: boolean;
-    }
-  | {
-      kind: "planned";
-      id: string;
-      training: PlannedTraining;
-      startMinutes: number;
-      endMinutes: number;
-      /** True for the day-N segment of an event begun on an earlier day. */
-      continued: boolean;
-    }
-  | {
-      kind: "busy";
-      id: string;
-      busy: BusyEvent;
-      startMinutes: number;
-      endMinutes: number;
-      /** Always false — busy events are clamped to their start day, not fanned. */
-      continued: boolean;
-    };
+export type WeekEvent = DaySegment &
+  (
+    | { kind: "activity"; activity: JournalActivity }
+    | { kind: "planned"; training: PlannedTraining }
+    | { kind: "busy"; busy: BusyEvent }
+  );
 
 /** A {@link WeekEvent} with its resolved geometry within a day column. */
 export interface PositionedEvent {
@@ -166,51 +160,56 @@ function dayOffsetFromIso(iso: string, day: Date): number {
 }
 
 /**
+ * The segment of `day` covered by an event starting at the floating-local ISO
+ * datetime `iso` and lasting `durationSeconds`. On continuation days the start
+ * shifts negative by the day offset, so the clamps carve out exactly this
+ * day's part. The start segment keeps the bare `idBase`; continuations get a
+ * `-dayN` suffix so every segment has a unique key.
+ */
+function daySegment(
+  idBase: string,
+  iso: string,
+  durationSeconds: number,
+  day: Date,
+): DaySegment {
+  const offset = dayOffsetFromIso(iso, day);
+  const start = minutesFromIso(iso) - offset * MINUTES_PER_DAY;
+  return {
+    id: offset === 0 ? idBase : `${idBase}-day${offset}`,
+    startMinutes: Math.max(0, start),
+    endMinutes: Math.min(MINUTES_PER_DAY, start + durationSeconds / 60),
+    continued: offset > 0,
+  };
+}
+
+/**
  * The timed events of a day, activities and still-planned trainings combined.
  * A multi-day event sits in the bucket of every day it covers (see
- * {@link coveredDayKeys}); on continuation days its start shifts negative by
- * the day offset, so the clamps below carve out exactly this day's segment.
+ * {@link coveredDayKeys}) and renders this day's segment of it.
  */
 export function buildDayEvents(day: JournalDay): WeekEvent[] {
-  const events: WeekEvent[] = [];
-  for (const activity of day.activities) {
-    const offset = dayOffsetFromIso(activity.startDateLocal, day.date);
-    const start =
-      minutesFromIso(activity.startDateLocal) - offset * MINUTES_PER_DAY;
-    events.push({
+  return [
+    ...day.activities.map((activity): WeekEvent => ({
       kind: "activity",
-      id:
-        offset === 0
-          ? `activity-${activity.stravaId}`
-          : `activity-${activity.stravaId}-day${offset}`,
       activity,
-      startMinutes: Math.max(0, start),
-      endMinutes: Math.min(MINUTES_PER_DAY, start + activity.elapsedTime / 60),
-      continued: offset > 0,
-    });
-  }
-  for (const training of day.plannedTrainings) {
-    const offset = dayOffsetFromIso(training.plannedDate, day.date);
-    const start =
-      minutesFromIso(training.plannedDate) - offset * MINUTES_PER_DAY;
-    events.push({
-      kind: "planned",
-      // The start segment must keep the bare `planned-<id>` — drag rescheduling
-      // parses the training id back out of it.
-      id:
-        offset === 0
-          ? `planned-${training.id}`
-          : `planned-${training.id}-day${offset}`,
-      training,
-      startMinutes: Math.max(0, start),
-      endMinutes: Math.min(
-        MINUTES_PER_DAY,
-        start + training.durationSeconds / 60,
+      ...daySegment(
+        `activity-${activity.stravaId}`,
+        activity.startDateLocal,
+        activity.elapsedTime,
+        day.date,
       ),
-      continued: offset > 0,
-    });
-  }
-  return events;
+    })),
+    ...day.plannedTrainings.map((training): WeekEvent => ({
+      kind: "planned",
+      training,
+      ...daySegment(
+        `planned-${training.id}`,
+        training.plannedDate,
+        training.durationSeconds,
+        day.date,
+      ),
+    })),
+  ];
 }
 
 /**

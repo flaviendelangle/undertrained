@@ -8,6 +8,8 @@ import type { PlannedTraining } from "@server/db/types";
 import { env } from "@server/env";
 import { zonedWallClockToUtc } from "@server/lib/timezone";
 
+import { formatCompactDuration } from "~/utils/format";
+
 // How much of the schedule the feed exposes, matching TrainingPeaks' window.
 const HISTORY_DAYS = 5;
 const FUTURE_DAYS = 14;
@@ -44,16 +46,13 @@ function toUtcStamp(date: Date): string {
     .replace(/\.\d{3}/, "");
 }
 
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return h > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${m}min`;
-}
-
 function buildEvent(row: PlannedTraining, dtstamp: string): string {
   const start = zonedWallClockToUtc(row.plannedDate, env.CALENDAR_TIMEZONE);
   const end = addSeconds(start, row.durationSeconds);
-  const description = `${row.sportType} · ${formatDuration(row.durationSeconds)}`;
+  const duration = formatCompactDuration(row.durationSeconds, {
+    subHour: "min",
+  });
+  const description = `${row.sportType} · ${duration}`;
   const lines = [
     "BEGIN:VEVENT",
     // Stable UID so a calendar updates the event in place rather than duplicating.

@@ -1,22 +1,16 @@
 import * as React from "react";
 
-import { CalendarIcon, FlagIcon, MedalIcon } from "lucide-react";
-import Link from "next/link";
+import { CalendarIcon } from "lucide-react";
 
-import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import type { PlannedTraining } from "@server/db/types";
 import type { BusyEvent } from "@server/lib/icalFeed";
 
-import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
-import { getSportConfig, workoutKind } from "~/utils/sportConfig";
+import { getSportConfig } from "~/utils/sportConfig";
 
-import { useMapPrefetch } from "./ActivityPreviewCard";
-import { JournalRecordsContext } from "./JournalDayCell";
+import { ActivityBlock } from "./JournalDayCell";
 import { useJournalPlanner } from "./journalPlanner";
-import { useJournalPreviewHandles } from "./journalPreview";
-import { useJournalActivityHref } from "./journalView";
 import {
   PLANNED_BLOCK_CLASS,
   PlannedBlockBody,
@@ -26,9 +20,9 @@ import { RescheduleSource } from "./rescheduleDrag";
 import type { JournalActivity } from "./useJournalWeeks";
 
 /**
- * A completed activity as a solid, sport-coloured block in the week time-grid.
- * Mirrors the month view's activity chip (race ring, PR medal, hover preview)
- * but fills its positioned slot. Not draggable — activities are Strava facts.
+ * A completed activity as a solid, sport-coloured block in the week time-grid:
+ * the month view's activity chip, filling its positioned slot over an opaque
+ * backdrop. Not draggable — activities are Strava facts.
  */
 export function WeekActivityBlock({
   activity,
@@ -37,73 +31,12 @@ export function WeekActivityBlock({
   activity: JournalActivity;
   compact?: boolean;
 }) {
-  const t = useT();
-  const config = getSportConfig(activity.type);
-  const Icon = config.icon;
-  const stats = config.formatJournalStats(activity);
-
-  const records = React.useContext(JournalRecordsContext);
-  const activityRecords = records.get(activity.stravaId);
-  const isRace = workoutKind(activity.workoutType) === "race";
-  const isPr = activityRecords != null && activityRecords.length > 0;
-  const href = useJournalActivityHref(
-    activity.startDateLocal,
-    activity.stravaId,
-  );
-
-  // Same shared preview card as the month view's chips (see ActivityPreviewHost).
-  const handles = useJournalPreviewHandles();
-  const prefetch = useMapPrefetch(activity.stravaId);
-
   return (
-    <PreviewCardPrimitive.Trigger
-      handle={handles.activity}
-      payload={{ activity, records: activityRecords }}
-      onPointerEnter={prefetch.onPointerEnter}
-      onPointerLeave={prefetch.onPointerLeave}
-      render={
-        <Link
-          href={href}
-          aria-label={
-            isRace
-              ? t("journal.activity.race", { name: activity.name })
-              : activity.name
-          }
-          className={cn(
-            "flex h-full w-full min-w-0 flex-col gap-0.5 overflow-hidden rounded px-1 py-0.5 leading-tight transition-[filter] hover:brightness-95 dark:hover:brightness-110",
-            isRace && "ring-1 ring-amber-400/80 ring-inset",
-          )}
-          style={{
-            backgroundColor: `color-mix(in oklab, ${config.color} 16%, var(--background))`,
-          }}
-        >
-          <span className="flex min-w-0 items-center gap-1">
-            <Icon className="size-3 shrink-0" style={{ color: config.color }} />
-            <span className="text-foreground truncate text-xs font-medium">
-              {activity.name || sportTypeLabel(activity.type, t)}
-            </span>
-            {isRace && (
-              <FlagIcon
-                className="size-3 shrink-0 text-amber-500"
-                aria-label={t("journal.raceBadge")}
-              />
-            )}
-            {isPr && (
-              <MedalIcon
-                className="size-3 shrink-0 text-amber-500"
-                aria-label={t("journal.personalRecord", {
-                  records: activityRecords?.join(", ") ?? "",
-                })}
-              />
-            )}
-          </span>
-          {stats && !compact && (
-            <span className="text-muted-foreground truncate text-[11px] tabular-nums">
-              {stats}
-            </span>
-          )}
-        </Link>
-      }
+    <ActivityBlock
+      activity={activity}
+      compact={compact}
+      backdrop="var(--background)"
+      className="h-full w-full overflow-hidden transition-[filter]"
     />
   );
 }

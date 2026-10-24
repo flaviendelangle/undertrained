@@ -1,6 +1,8 @@
 import * as React from "react";
 
-import { CalendarPlusIcon, CheckIcon, CopyIcon } from "lucide-react";
+import { CheckIcon, CopyIcon } from "lucide-react";
+
+import { useTimeout } from "@base-ui/utils/useTimeout";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -18,8 +20,6 @@ import { trpc } from "~/utils/trpc";
  * The calendar-subscription dialog (controlled, trigger-less) revealing the
  * athlete's secret iCal URL so they can add their planned trainings to
  * Google/Apple/Outlook. The token is minted lazily the first time it opens.
- * Used directly where the trigger lives elsewhere (e.g. the mobile menu) and
- * wrapped by {@link CalendarFeedButton} for the desktop header.
  */
 export function CalendarFeedDialog({
   open,
@@ -31,6 +31,7 @@ export function CalendarFeedDialog({
   const t = useT();
   const athleteId = useAthleteId();
   const [copied, setCopied] = React.useState(false);
+  const copiedTimeout = useTimeout();
 
   // Only fetch (and lazily mint the token) once the dialog is opened.
   const { data } = trpc.plannedTrainings.getCalendarToken.useQuery(
@@ -49,7 +50,7 @@ export function CalendarFeedDialog({
     if (!feedUrl) return;
     void navigator.clipboard.writeText(feedUrl);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    copiedTimeout.start(1500, () => setCopied(false));
   };
 
   return (
@@ -82,22 +83,5 @@ export function CalendarFeedDialog({
         </div>
       </ResponsiveDialogContent>
     </ResponsiveDialog>
-  );
-}
-
-/**
- * Header affordance (desktop) that opens the {@link CalendarFeedDialog}.
- */
-export function CalendarFeedButton() {
-  const t = useT();
-  const [open, setOpen] = React.useState(false);
-  return (
-    <>
-      <Button size="xs" variant="outline" onClick={() => setOpen(true)}>
-        <CalendarPlusIcon />
-        {t("journal.subscribe")}
-      </Button>
-      <CalendarFeedDialog open={open} onOpenChange={setOpen} />
-    </>
   );
 }

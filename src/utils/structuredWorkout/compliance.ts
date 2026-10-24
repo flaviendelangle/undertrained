@@ -1,3 +1,5 @@
+import { average } from "~/sensors/sessionSummary";
+
 import type { ResolvedSegment } from "./flatten";
 
 /**
@@ -66,13 +68,6 @@ export function cadenceTolerance(): number {
  */
 export const COMPLIANCE_MIN_PCT = 0.5;
 
-function mean(values: number[]): number | null {
-  if (values.length === 0) return null;
-  let sum = 0;
-  for (const value of values) sum += value;
-  return sum / values.length;
-}
-
 export function computeSegmentStats(
   points: readonly CompliancePoint[],
   segments: readonly ResolvedSegment[],
@@ -115,8 +110,8 @@ export function computeSegmentStats(
       }
     }
 
-    const avgPower = mean(powers);
-    const avgTargetPower = mean(targets);
+    const avgPower = average(powers);
+    const avgTargetPower = average(targets);
 
     stats.push({
       segmentIndex: segment.index,
@@ -124,9 +119,9 @@ export function computeSegmentStats(
       seconds: bucket.length,
       avgPower: avgPower == null ? null : Math.round(avgPower),
       maxPower: powers.length === 0 ? null : Math.max(...powers),
-      avgCadence: cadences.length === 0 ? null : Math.round(mean(cadences)!),
+      avgCadence: cadences.length === 0 ? null : Math.round(average(cadences)!),
       avgHeartRate:
-        heartRates.length === 0 ? null : Math.round(mean(heartRates)!),
+        heartRates.length === 0 ? null : Math.round(average(heartRates)!),
       avgTargetPower:
         avgTargetPower == null ? null : Math.round(avgTargetPower),
       deltaWatts:

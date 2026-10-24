@@ -1,3 +1,4 @@
+import { activityLocalDay } from "~/utils/dateUtils";
 import {
   expandToPerSecond,
   perSecondSampleIndices,
@@ -93,7 +94,7 @@ export function decodeRecording(streams: EncodedStreams): ActivityRecording {
 export function activitySettingsDay(activity: {
   startDateLocal: string;
 }): string {
-  return activity.startDateLocal.slice(0, 10);
+  return activityLocalDay(activity);
 }
 
 function decodeArray(data: string | undefined): unknown[] | undefined {

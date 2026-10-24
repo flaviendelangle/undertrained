@@ -22,15 +22,11 @@
  * `~/lib/activityRecording`.
  */
 import { RUNNING_PACE_ZONES } from "~/sensors/paceZones";
+import { clamp01 } from "~/utils/workoutStructure/stats";
 
 /** Clamp a sample to a usable, non-negative speed (m/s); garbage → 0. */
 function sanitizeSpeed(value: number): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
-}
-
-/** Clamp a fraction to the [0, 1] gradient range. */
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
 }
 
 /**

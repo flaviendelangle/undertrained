@@ -13,6 +13,7 @@ import { useT } from "~/i18n/useT";
 import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import type { SessionDataPoint } from "~/sensors/types";
 import { findPowerZone } from "~/sensors/types";
+import { formatMinutesSeconds } from "~/utils/format";
 
 import { ChartThemeProvider } from "../charts/ChartThemeProvider";
 
@@ -82,7 +83,13 @@ interface PowerHrChartProps {
   showAll?: boolean;
 }
 
-export function PowerHrChart(props: PowerHrChartProps) {
+/**
+ * Memoized because the HUD re-renders on every sensor packet, while
+ * `dataPoints` only changes on the engine's slower chart refresh.
+ */
+export const PowerHrChart = React.memo(function PowerHrChart(
+  props: PowerHrChartProps,
+) {
   const { dataPoints, ftp, showAll = false } = props;
   const t = useT();
   const tokens = useChartTokens();
@@ -108,9 +115,7 @@ export function PowerHrChart(props: PowerHrChartProps) {
       }
       const secsAgo = totalPoints - 1 - i;
       if (secsAgo === 0) return t("liveTraining.chart.now");
-      const min = Math.floor(secsAgo / 60);
-      const sec = secsAgo % 60;
-      return `-${min}:${String(sec).padStart(2, "0")}`;
+      return `-${formatMinutesSeconds(secsAgo)}`;
     });
   }, [points, showAll, t]);
 
@@ -201,6 +206,37 @@ export function PowerHrChart(props: PowerHrChartProps) {
     [showAll, totalPoints],
   );
 
+  const xAxis = React.useMemo(
+    () => [
+      {
+        id: "x",
+        scaleType: "band" as const,
+        data: xLabels,
+        tickLabelInterval: xTickInterval,
+      },
+    ],
+    [xLabels, xTickInterval],
+  );
+
+  const yAxis = React.useMemo(
+    () => [
+      {
+        id: "power",
+        position: "left" as const,
+        label: "W",
+        min: 0,
+      },
+      {
+        id: "hr",
+        position: "right" as const,
+        label: "bpm",
+        min: hrBounds.min,
+        max: hrBounds.max,
+      },
+    ],
+    [hrBounds],
+  );
+
   // MUI X Charts crashes when band-axis data is empty.
   if (points.length === 0) {
     return null;
@@ -210,29 +246,8 @@ export function PowerHrChart(props: PowerHrChartProps) {
     <ChartThemeProvider>
       <ChartsContainerPro
         series={series}
-        xAxis={[
-          {
-            id: "x",
-            scaleType: "band",
-            data: xLabels,
-            tickLabelInterval: xTickInterval,
-          },
-        ]}
-        yAxis={[
-          {
-            id: "power",
-            position: "left",
-            label: "W",
-            min: 0,
-          },
-          {
-            id: "hr",
-            position: "right",
-            label: "bpm",
-            min: hrBounds.min,
-            max: hrBounds.max,
-          },
-        ]}
+        xAxis={xAxis}
+        yAxis={yAxis}
         height={200}
         skipAnimation
         margin={
@@ -249,4 +264,4 @@ export function PowerHrChart(props: PowerHrChartProps) {
       </ChartsContainerPro>
     </ChartThemeProvider>
   );
-}
+});

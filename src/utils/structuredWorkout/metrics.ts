@@ -39,55 +39,6 @@ export function sampleTargetWatts(
   return samples;
 }
 
-export function averageTargetPower(
-  segments: readonly ResolvedSegment[],
-  ftp: number,
-): number | null {
-  const samples = sampleTargetWatts(segments, ftp);
-  if (samples.length === 0) return null;
-  let sum = 0;
-  for (const value of samples) sum += value;
-  return Math.round(sum / samples.length);
-}
-
-/**
- * Normalized Power of the *plan*, using the same 30 s-rolling 4th-power maths
- * the recorder applies to a real ride, so the two numbers are comparable.
- * Returns null for workouts shorter than the 30 s NP window.
- */
-export function estimateNormalizedPower(
-  segments: readonly ResolvedSegment[],
-  ftp: number,
-): number | null {
-  return computeNormalizedPower(sampleTargetWatts(segments, ftp));
-}
-
-/**
- * IF = NP / FTP. Both terms are proportional to FTP, so the result is the same
- * whatever FTP is passed — which is why the summary can show it even when the
- * athlete has no FTP configured.
- */
-export function estimateIntensityFactor(
-  segments: readonly ResolvedSegment[],
-  ftp: number,
-): number | null {
-  const np = estimateNormalizedPower(segments, ftp);
-  if (np == null || ftp <= 0) return null;
-  return np / ftp;
-}
-
-/** TSS = (seconds × NP × IF) / (FTP × 3600) × 100. */
-export function estimateTss(
-  segments: readonly ResolvedSegment[],
-  ftp: number,
-): number | null {
-  const np = estimateNormalizedPower(segments, ftp);
-  if (np == null || ftp <= 0) return null;
-  const intensityFactor = np / ftp;
-  const seconds = sampleTargetWatts(segments, ftp).length;
-  return Math.round(((seconds * np * intensityFactor) / (ftp * 3600)) * 100);
-}
-
 /**
  * Seconds per power zone, sampled per second so a ramp is split across every
  * zone it passes through rather than being attributed wholly to its midpoint.
@@ -154,6 +105,12 @@ export function workoutProfile(
   return bars;
 }
 
+/**
+ * Summary figures for the *plan*. NP uses the same 30 s-rolling 4th-power
+ * maths the recorder applies to a real ride, so the two numbers are comparable;
+ * it is null for workouts shorter than the 30 s window.
+ * TSS = (seconds × NP × IF) / (FTP × 3600) × 100.
+ */
 export function computeWorkoutMetrics(
   segments: readonly ResolvedSegment[],
   ftp: number,

@@ -8,10 +8,6 @@ import {
   endOfWeek,
   endOfYear,
   format,
-  isSameMonth,
-  isSameQuarter,
-  isSameWeek,
-  isSameYear,
   isValid,
   startOfMonth,
   startOfQuarter,
@@ -100,19 +96,12 @@ export function formatSlice(date: Date, precision: SlicePrecision): string {
   }
 }
 
-export function isSameUnit(
-  a: Date,
-  b: Date,
-  precision: SlicePrecision,
-): boolean {
-  switch (precision) {
-    case "year":
-      return isSameYear(a, b);
-    case "quarter":
-      return isSameQuarter(a, b);
-    case "month":
-      return isSameMonth(a, b);
-    case "week":
-      return isSameWeek(a, b, localeOptions());
-  }
+/**
+ * The local calendar day ("yyyy-MM-dd") an activity started on: the date part
+ * of its stored floating-local start. This is the day the activity is bucketed
+ * under, and the day server-side scoring resolves rider settings for; its UTC
+ * start date can fall on the day before or after.
+ */
+export function activityLocalDay(activity: { startDateLocal: string }): string {
+  return activity.startDateLocal.slice(0, 10);
 }
