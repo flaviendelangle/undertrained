@@ -21,8 +21,6 @@ import { useNewActivityMatches } from "./useNewActivityMatches";
  * has not done yet, so plans are held back until their day has started.
  */
 
-vi.mock("./useAthleteId", () => ({ useAthleteId: () => 7 }));
-
 const plan = (id: number, plannedDate: string, sportType: string) =>
   ({
     id,

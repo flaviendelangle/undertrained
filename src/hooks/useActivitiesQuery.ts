@@ -18,8 +18,8 @@ export function useActivitiesQuery(
   const athleteId = useAthleteId();
 
   const result = trpc.activities.list.useQuery(
-    { athleteId: athleteId!, ...selection },
-    { enabled: athleteId != null, placeholderData: keepPreviousData },
+    { athleteId, ...selection },
+    { placeholderData: keepPreviousData },
   );
 
   const filterOptions = useActivityFilterOptions();

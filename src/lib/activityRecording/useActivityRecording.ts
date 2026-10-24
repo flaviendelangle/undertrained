@@ -50,13 +50,13 @@ export function useActivityRecording(
   // however many components read the recording, and shares its outcome.
   const stravaFetch = useQuery({
     queryKey: ["activityRecording", "fetchFromStrava", stravaId, athleteId],
-    enabled: streams === null && athleteId != null,
+    enabled: streams === null,
     staleTime: Infinity,
     retry: false,
     queryFn: async () => {
       await utils.client.activityStreams.fetchStreams.mutate({
         stravaId,
-        athleteId: athleteId!,
+        athleteId,
       });
       // Storing the streams also rescored the activity.
       await Promise.all([

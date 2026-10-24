@@ -352,9 +352,8 @@ export function SyncPanel() {
   const t = useT();
   const athleteId = useAthleteId();
   const { data: syncJob } = trpc.sync.getJob.useQuery(
-    { athleteId: athleteId! },
+    { athleteId },
     {
-      enabled: athleteId != null,
       refetchInterval: (query) => {
         const data = query.state.data;
         if (data && data.status !== "completed" && data.status !== "failed") {
@@ -394,7 +393,6 @@ export function SyncPanel() {
   }, [syncJob, isInProgress, utils]);
 
   const start = (mode: SyncMode) => {
-    if (!athleteId) return;
     startSync.mutate(
       { athleteId, mode },
       { onSuccess: () => utils.sync.getJob.invalidate() },
@@ -402,7 +400,6 @@ export function SyncPanel() {
   };
 
   const handleAction = (mode: SyncMode) => {
-    if (!athleteId) return;
     if (mode === "reload_all") {
       setConfirmReloadOpen(true);
       return;
