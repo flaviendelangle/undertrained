@@ -6,6 +6,7 @@ import { scaleLinear } from "d3-scale";
 import { clamp } from "@base-ui/utils/clamp";
 import { useAnimationFrame } from "@base-ui/utils/useAnimationFrame";
 
+import { useElementSize } from "~/hooks/useElementSize";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import {
   filterVisibleLabels,
@@ -18,7 +19,8 @@ import {
   buildGridLinesMesh,
   buildLineStripMesh,
 } from "~/lib/webgl/geometry";
-import { type PanelRenderData, WebGLChartRenderer } from "~/lib/webgl/renderer";
+import type { PanelRenderData } from "~/lib/webgl/renderer";
+import { useWebGLChartRenderer } from "~/lib/webgl/useWebGLChartRenderer";
 import { formatElapsed } from "~/utils/format";
 import type { SportConfig } from "~/utils/sportConfig";
 
@@ -122,7 +124,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   const isMobile = useIsMobile();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const svgRef = React.useRef<SVGSVGElement>(null);
-  const [width, setWidth] = React.useState(0);
+  const { width } = useElementSize(containerRef);
   const [hoverIndex, setHoverIndex] = React.useState<number | null>(null);
   // Visible x-range, in `activeXData` units. `null` = full extent (no zoom).
   const [zoomDomain, setZoomDomain] = React.useState<[number, number] | null>(
@@ -146,45 +148,6 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   const [dragStart, setDragStart] = React.useState<number | null>(null);
   const [dragCurrent, setDragCurrent] = React.useState<number | null>(null);
   const hoverFrame = useAnimationFrame();
-  const [webglAvailable, setWebglAvailable] = React.useState(true);
-  const [renderer, setRenderer] = React.useState<WebGLChartRenderer | null>(
-    null,
-  );
-
-  // Track container width
-  React.useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setWidth(entry.contentRect.width);
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  // Initialize WebGL renderer via callback ref (canvas may mount later)
-  const canvasRef = React.useCallback((canvas: HTMLCanvasElement | null) => {
-    if (!canvas) return;
-
-    const r = new WebGLChartRenderer(canvas);
-    const ok = r.init();
-    if (!ok) {
-      console.warn("WebGL2 not available, falling back to SVG");
-      setWebglAvailable(false);
-      return;
-    }
-    setRenderer(r);
-  }, []);
-
-  // Dispose renderer on unmount
-  React.useEffect(() => {
-    return () => {
-      renderer?.dispose();
-    };
-  }, [renderer]);
 
   // Compute panel layouts
   const panels = React.useMemo<PanelLayout[]>(() => {
@@ -236,17 +199,13 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     [panels],
   );
 
-  // Resize WebGL canvas when dimensions change
-  React.useEffect(() => {
-    if (width > 0 && totalHeight > 0) {
-      renderer?.resize(width, totalHeight);
-    }
-  }, [renderer, width, totalHeight]);
-
-  // Sync theme colors to WebGL renderer
-  React.useEffect(() => {
-    renderer?.setThemeColors(tokens.grid.gl, tokens.gridStrong.gl);
-  }, [renderer, tokens]);
+  // Kept above the draw effect so a resize or theme change lands before the
+  // redraw it triggers.
+  const { canvasRef, renderer, webglAvailable } = useWebGLChartRenderer({
+    width,
+    height: totalHeight,
+    tokens,
+  });
 
   // Rebuild geometry and render WebGL when data/scales change
   React.useEffect(() => {
