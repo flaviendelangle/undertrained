@@ -38,6 +38,7 @@ const GLOBAL_FILTER_BY_VIEW = {
   // Pickers offer every activity, so the filter can't hide a valid choice.
   sportPicker: [],
   planMatching: [],
+  planTitles: [],
 } satisfies Record<string, readonly GlobalFilterPart[]>;
 
 export type ActivityView = keyof typeof GLOBAL_FILTER_BY_VIEW;

@@ -6,6 +6,13 @@ import type { PlannedTraining } from "@server/db/types";
 
 import { SportPicker } from "~/components/SportPicker";
 import { WorkoutChoiceField } from "~/components/WorkoutChoiceField";
+import {
+  Autocomplete,
+  AutocompleteContent,
+  AutocompleteInput,
+  AutocompleteItem,
+  AutocompleteList,
+} from "~/components/ui/autocomplete";
 import { Button } from "~/components/ui/button";
 import {
   Combobox,
@@ -50,6 +57,7 @@ import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { activityLocalDay } from "~/utils/dateUtils";
+import { readLastPlannedSport } from "~/utils/lastPlannedSport";
 import {
   MAX_PLANNED_DURATION_SECONDS,
   parsePlannedDate,
@@ -68,6 +76,7 @@ import {
 import type { ActivityOptionData } from "./ActivityOption";
 import { ActivityOption } from "./ActivityOption";
 import { isPerfectMatch } from "./perfectMatch";
+import { titleSuggestions } from "./titleSuggestions";
 
 /** What the planner dialog is currently doing, owned by the Journal. */
 export type PlannerDialogState =
@@ -79,21 +88,30 @@ interface FormProps {
   athleteId: number;
   state: NonNullable<PlannerDialogState>;
   onClose: () => void;
+  /** The title input, which the dialog focuses when it opens. */
+  titleRef: React.RefObject<HTMLInputElement | null>;
 }
 
-function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
+function PlannedTrainingForm({
+  athleteId,
+  state,
+  onClose,
+  titleRef,
+}: FormProps) {
   const t = useT();
   const isEdit = state.mode === "edit";
   const existing = state.mode === "edit" ? state.training : null;
 
   const [title, setTitle] = React.useState(existing?.title ?? "");
   const [sportType, setSportType] = React.useState(
-    existing?.sportType ?? PLANNABLE_SPORT_TYPES[0],
+    () =>
+      existing?.sportType ?? readLastPlannedSport() ?? PLANNABLE_SPORT_TYPES[0],
   );
   // Applied to the Strava activity when the plan is marked done. "workout" by
-  // default, which is what linking applied before the athlete could choose.
+  // default, which is what linking applied before the athlete could choose,
+  // and "none" for a sport without a workout type, as a sport switch leaves it.
   const [workoutChoice, setWorkoutChoice] = React.useState<WorkoutChoice>(
-    existing?.workoutChoice ?? "workout",
+    existing?.workoutChoice ?? coerceWorkoutChoice(sportType, "workout"),
   );
   const [durationMinutes, setDurationMinutes] = React.useState<number | null>(
     existing ? Math.round(existing.durationSeconds / 60) : 60,
@@ -176,17 +194,13 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <Field name="title">
-        <FieldLabel>{t("journal.dialog.title")}</FieldLabel>
-        <FieldControl
-          required
-          value={title}
-          onValueChange={setTitle}
-          placeholder={t("journal.dialog.titlePlaceholder")}
-          autoFocus
-        />
-        <FieldError />
-      </Field>
+      <TitleField
+        inputRef={titleRef}
+        value={title}
+        onChange={setTitle}
+        sportType={sportType}
+        workoutChoice={workoutChoice}
+      />
 
       <div className="flex flex-col gap-1.5">
         <Label>{t("journal.dialog.sport")}</Label>
@@ -275,6 +289,72 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
         </Button>
       </ResponsiveDialogFooter>
     </form>
+  );
+}
+
+/**
+ * The plan's title, suggesting the names of past activities of the picked sport
+ * and type. A race gets a plain input instead: no two races share a name.
+ */
+function TitleField({
+  inputRef,
+  value,
+  onChange,
+  sportType,
+  workoutChoice,
+}: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  value: string;
+  onChange: (value: string) => void;
+  sportType: string;
+  workoutChoice: WorkoutChoice;
+}) {
+  const t = useT();
+  // Unfiltered, all-time history, so the global Journal filter can't hide a
+  // title worth reusing.
+  const { data: activities } = useActivitiesQuery("planTitles");
+  const isRace = workoutChoice === "race";
+  const suggestions = React.useMemo(
+    () =>
+      isRace
+        ? []
+        : titleSuggestions(activities ?? [], sportType, workoutChoice),
+    [activities, isRace, sportType, workoutChoice],
+  );
+  const placeholder = t("journal.dialog.titlePlaceholder");
+
+  return (
+    <Field name="title">
+      <FieldLabel>{t("journal.dialog.title")}</FieldLabel>
+      {isRace ? (
+        <FieldControl
+          ref={inputRef}
+          required
+          value={value}
+          onValueChange={onChange}
+          placeholder={placeholder}
+        />
+      ) : (
+        <Autocomplete
+          items={suggestions}
+          value={value}
+          onValueChange={onChange}
+          required
+        >
+          <AutocompleteInput ref={inputRef} placeholder={placeholder} />
+          <AutocompleteContent>
+            <AutocompleteList>
+              {(suggestion: string) => (
+                <AutocompleteItem key={suggestion} value={suggestion}>
+                  {suggestion}
+                </AutocompleteItem>
+              )}
+            </AutocompleteList>
+          </AutocompleteContent>
+        </Autocomplete>
+      )}
+      <FieldError />
+    </Field>
   );
 }
 
@@ -462,10 +542,13 @@ export function PlannedTrainingDialog({
   const t = useT();
   const athleteId = useAthleteId();
   const open = state != null;
+  // Focused on open. Not `autoFocus`: switching the type to or from Race swaps
+  // the input, which would then steal focus from the type toggle.
+  const titleRef = React.useRef<HTMLInputElement>(null);
 
   return (
     <ResponsiveDialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <ResponsiveDialogContent>
+      <ResponsiveDialogContent initialFocus={titleRef}>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
             {state?.mode === "edit"
@@ -480,6 +563,7 @@ export function PlannedTrainingDialog({
             athleteId={athleteId}
             state={state}
             onClose={onClose}
+            titleRef={titleRef}
           />
         )}
       </ResponsiveDialogContent>

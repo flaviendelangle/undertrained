@@ -10,6 +10,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 
 import { ToastProvider } from "~/components/ui/toast";
@@ -22,10 +23,12 @@ const activity = {
   stravaId: 42,
   type: "Run",
   name: "Morning Run",
+  workoutType: null as number | null,
   startDateLocal: "2026-08-10T07:00:00",
 };
+let mockActivities: (typeof activity)[] = [activity];
 vi.mock("~/hooks/useActivitiesQuery", () => ({
-  useActivitiesQuery: () => ({ data: [activity] }),
+  useActivitiesQuery: () => ({ data: mockActivities }),
 }));
 
 const plan = {
@@ -43,7 +46,17 @@ const plan = {
   updatedAt: 1,
 } satisfies PlannedTraining;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+  mockActivities = [activity];
+});
+
+/** The sport and Mark done pickers, in that order: the title can be a combobox too. */
+function pickers() {
+  const title = screen.getByLabelText("journal.dialog.title");
+  return screen.getAllByRole("combobox").filter((el) => el !== title);
+}
 
 it("saves the type picked in the dialog before Mark done links the activity", async () => {
   const calls: string[] = [];
@@ -78,8 +91,7 @@ it("saves the type picked in the dialog before Mark done links the activity", as
   fireEvent.click(
     await screen.findByRole("button", { name: "activities.edit.workout.race" }),
   );
-  // The second combobox: the first is the sport picker.
-  fireEvent.click(screen.getAllByRole("combobox")[1]);
+  fireEvent.click(pickers()[1]);
   fireEvent.click(await screen.findByRole("option", { name: /Morning Run/ }));
   fireEvent.click(
     screen.getByRole("button", { name: "journal.dialog.markDone" }),
@@ -108,9 +120,10 @@ it("drops a picked activity the edited sport no longer matches", async () => {
     </Wrapper>,
   );
 
-  fireEvent.click((await screen.findAllByRole("combobox"))[1]);
+  await screen.findByLabelText("journal.dialog.title");
+  fireEvent.click(pickers()[1]);
   fireEvent.click(await screen.findByRole("option", { name: /Morning Run/ }));
-  fireEvent.click(screen.getAllByRole("combobox")[0]);
+  fireEvent.click(pickers()[0]);
   fireEvent.click(
     await screen.findByRole("option", { name: /^sportType\.Ride$/ }),
   );
@@ -119,4 +132,99 @@ it("drops a picked activity the edited sport no longer matches", async () => {
   expect(
     await screen.findByText("journal.dialog.noMatchingActivity"),
   ).toBeDefined();
+});
+
+it("preselects the sport of the last plan created", async () => {
+  const created: string[] = [];
+  const { Wrapper, queryClient } = createTestBackend({
+    plannedTrainings: {
+      list: () => [],
+      create: ({ athleteId: _athleteId, ...fields }) => {
+        created.push(fields.sportType);
+        return { ...plan, ...fields };
+      },
+    },
+  });
+  onTestFinished(() => queryClient.clear());
+  const onClose = vi.fn();
+  const dialog = (
+    <Wrapper>
+      <ToastProvider>
+        <PlannedTrainingDialog
+          state={{ mode: "create", date: new Date(2026, 7, 10) }}
+          onClose={onClose}
+        />
+      </ToastProvider>
+    </Wrapper>
+  );
+  render(dialog);
+
+  fireEvent.change(await screen.findByLabelText("journal.dialog.title"), {
+    target: { value: "Tempo" },
+  });
+  fireEvent.click(pickers()[0]);
+  fireEvent.click(
+    await screen.findByRole("option", { name: /^sportType\.Run$/ }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "journal.dialog.create" }),
+  );
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  expect(created).toEqual(["Run"]);
+
+  cleanup();
+  render(dialog);
+  await screen.findByLabelText("journal.dialog.title");
+  expect(within(pickers()[0]).getByText("sportType.Run")).toBeDefined();
+});
+
+it("suggests past titles of the plan's sport and type, but not for a race", async () => {
+  const ride = { ...activity, type: "Ride" };
+  mockActivities = [
+    { ...ride, id: 4, name: "Sweet spot 3x15", workoutType: 12 },
+    // Older, same title: offered once.
+    { ...ride, id: 5, name: "sweet spot 3x15", workoutType: 12 },
+    // Not a workout.
+    { ...ride, id: 6, name: "Morning Ride", workoutType: null },
+    // Not a ride.
+    { ...activity, id: 7, name: "Threshold 3x10", workoutType: 3 },
+  ];
+  const { Wrapper, queryClient } = createTestBackend({
+    plannedTrainings: { list: () => [] },
+  });
+  onTestFinished(() => queryClient.clear());
+  render(
+    <Wrapper>
+      <ToastProvider>
+        <PlannedTrainingDialog
+          // A new plan is a Ride workout by default.
+          state={{ mode: "create", date: new Date(2026, 7, 10) }}
+          onClose={vi.fn()}
+        />
+      </ToastProvider>
+    </Wrapper>,
+  );
+
+  const title = await screen.findByRole("combobox", {
+    name: "journal.dialog.title",
+  });
+  fireEvent.keyDown(title, { key: "ArrowDown" });
+  const options = await screen.findAllByRole("option");
+  expect(options.map((option) => option.textContent)).toEqual([
+    "Sweet spot 3x15",
+  ]);
+  fireEvent.click(options[0]);
+  expect((title as HTMLInputElement).value).toBe("Sweet spot 3x15");
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "activities.edit.workout.race" }),
+  );
+  expect(
+    screen.queryByRole("combobox", { name: "journal.dialog.title" }),
+  ).toBeNull();
+  expect(
+    screen.getByRole<HTMLInputElement>("textbox", {
+      name: "journal.dialog.title",
+    }).value,
+  ).toBe("Sweet spot 3x15");
 });

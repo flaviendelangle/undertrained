@@ -3,6 +3,7 @@ import type { PlannedTraining } from "@server/db/types";
 import { showErrorToast } from "~/components/ui/toast";
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
+import { storeLastPlannedSport } from "~/utils/lastPlannedSport";
 import { trpc } from "~/utils/trpc";
 
 import { useAthleteId } from "./useAthleteId";
@@ -46,13 +47,15 @@ export function useNewActivities() {
   return trpc.plannedTrainings.newActivities.useQuery({ athleteId });
 }
 
+/** Also remembers the plan's sport, which the planner preselects next time. */
 export function useCreatePlannedTraining(options?: WriteOptions) {
   const t = useT();
   const utils = trpc.useUtils();
   const onSuccess = options?.onSuccess;
 
   return trpc.plannedTrainings.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, { sportType }) => {
+      storeLastPlannedSport(sportType);
       void utils.plannedTrainings.list.invalidate();
       onSuccess?.();
     },
