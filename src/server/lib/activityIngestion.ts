@@ -547,11 +547,12 @@ export function createActivityIngestion({
         fetchStreams(strava, athleteId, stravaId),
       ]);
 
-      // Flag the streams pending until they're replaced, so a failed write
-      // leaves the next sync to fetch them rather than trust the old ones.
+      // Flag the streams and details pending until they're replaced, so a
+      // failed write leaves the next sync to fetch them rather than trust the
+      // old ones.
       await store.updateActivity(stored.id, {
         ...summaryColumns(detailed),
-        areStreamsLoaded: false,
+        ...STALE,
       });
       await store.replaceStreams(stored.id, streams);
       await saveDetails(stored.id, detailed);
