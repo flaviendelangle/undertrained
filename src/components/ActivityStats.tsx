@@ -23,6 +23,7 @@ import { StatCard } from "~/components/primitives/StatCard";
 import { StatSection } from "~/components/primitives/StatSection";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
+import { activitySettingsDay } from "~/lib/activityRecording";
 import { cn } from "~/lib/utils";
 import { formatHumanDuration } from "~/utils/format";
 import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
@@ -45,7 +46,7 @@ export const ActivityStats = React.memo(function ActivityStats({
   const t = useT();
   const sportConfig = getSportConfig(activity.type);
   const { resolveForDate, hasSettings, timeline } = useRiderSettingsTimeline();
-  const activityDate = activity.startDateLocal.slice(0, 10);
+  const activityDate = activitySettingsDay(activity);
   const riderSettings = resolveForDate(activityDate);
 
   const np = activity.weightedAverageWatts ?? null;

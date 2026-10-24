@@ -18,9 +18,8 @@
  * monotonic and the zone gradient (slow/easy at the bottom → fast/hard at the
  * top) identical in spirit to the Power card.
  *
- * Each stream sample is treated as one second, matching how the rest of the
- * client consumes Strava streams (the `time` stream isn't surfaced to the
- * client, so streams are read as 1 Hz — see `ActivityStreams`).
+ * Each sample counts as one second: callers pass the per-second channels of
+ * `~/lib/activityRecording`.
  */
 import { RUNNING_PACE_ZONES } from "~/sensors/paceZones";
 

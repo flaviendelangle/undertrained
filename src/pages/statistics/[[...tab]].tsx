@@ -11,7 +11,7 @@ import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useInitialLoadComplete } from "~/hooks/useInitialLoadComplete";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
-import { getActivityTypesByCategory } from "~/utils/sportConfig";
+import { activityTypesFor } from "~/utils/sportConfig";
 
 // Loader per chart, shared between `nextDynamic` (lazy render) and the preload
 // effect below (which gates the reveal on the modules being in). Keeping them in
@@ -52,13 +52,15 @@ const PowerCurve = nextDynamic(loadPowerCurve, { ssr: false });
 const EddingtonChart = nextDynamic(loadEddingtonChart, { ssr: false });
 const TimeInZones = nextDynamic(loadTimeInZones, { ssr: false });
 
+const POWER_ACTIVITY_TYPES = activityTypesFor("power");
+
 const StatisticsPage: NextPageWithLayout = () => {
   const t = useT();
   // Prefetch the page's primary dataset from the (non-lazy) page itself so the
   // request overlaps with the chart modules loading; the three charts that share
   // this exact key then mount already populated. Harmless on SPA navigation —
   // the cache is warm, so this resolves instantly without a network call.
-  useActivitiesQuery({ activityTypes: [] });
+  useActivitiesQuery("statistics");
 
   // Overlap module loading with data, then reveal without waiting for optional
   // analytics, record badges, or calendar feeds.
@@ -96,9 +98,7 @@ const StatisticsPage: NextPageWithLayout = () => {
             <div className="divide-border border-border flex flex-col divide-y border-b md:w-full md:max-w-5xl md:gap-4 md:divide-y-0 md:border-0">
               <FitnessChart />
               <ActivitiesTimeline />
-              <PowerCurve
-                activityTypes={getActivityTypesByCategory("cycling")}
-              />
+              <PowerCurve activityTypes={POWER_ACTIVITY_TYPES} />
               <TimeInZones />
               <ActivitiesCumulativeTimeline />
               <EddingtonChart />

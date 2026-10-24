@@ -4,6 +4,7 @@ import type { PlannedTraining } from "@server/db/types";
 
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
+import { plannedTime } from "~/utils/plannedTraining";
 import { getSportConfig } from "~/utils/sportConfig";
 
 import { useJournalPlanner } from "./journalPlanner";
@@ -46,7 +47,7 @@ export function PlannedTrainingChip({
       <PlannedBlockBody
         sportType={training.sportType}
         title={training.title}
-        time={training.plannedDate.slice(11, 16)}
+        time={plannedTime(training.plannedDate)}
         durationSeconds={training.durationSeconds}
         trailing={
           <CalendarClockIcon

@@ -15,7 +15,7 @@
  */
 import type { ActivityStats } from "strava-v3";
 
-import { getSportConfig } from "../../utils/sportConfig";
+import { supportsAnalysis } from "../../utils/sportConfig";
 import type { activities, bestEfforts, syncJobs } from "../db/schema";
 import { isStravaError } from "./stravaPort";
 import type {
@@ -223,7 +223,7 @@ export function createActivityIngestion({
     activityId: number,
     detailed: StravaDetailedActivity,
   ): Promise<void> {
-    if (getsBestEfforts(detailed.type)) {
+    if (supportsAnalysis(detailed.type, "bestEfforts")) {
       await store.replaceBestEfforts(
         activityId,
         bestEffortRows(detailed, activityId),
@@ -579,14 +579,6 @@ export function createActivityIngestion({
 }
 
 // ── Rules ──
-
-/**
- * Whether Strava computes best efforts for this sport, so we store them.
- * Should become `supportsAnalysis(type, "bestEfforts")` once #110 lands.
- */
-function getsBestEfforts(type: string): boolean {
-  return getSportConfig(type).category === "running";
-}
 
 type MetricColumn =
   | "distance"

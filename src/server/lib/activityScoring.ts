@@ -12,6 +12,7 @@ import { findHeartRateZone, findPowerZone } from "../../sensors/types";
 import { CYCLING_SPEED_DISTANCE_METERS } from "../../utils/cyclingRecordDistances";
 import { resolveTimeline } from "../../utils/resolveTimeline";
 import { getSportConfig } from "../../utils/sportConfig";
+import { expandToPerSecond } from "../../utils/streamTimeBase";
 import type { activities, riderSettings } from "../db/schema";
 
 // ── Interface ─────────────────────────────────────────────────────────
@@ -532,30 +533,6 @@ function generatePowerCurveDurations(maxDuration: number): number[] {
   }
 
   return [...durations].sort((a, b) => a - b);
-}
-
-/**
- * Expands a sparse stream (with time offsets) into a per-second array by
- * holding each value until the next sample. Returns the input unchanged
- * if no time stream is provided.
- */
-function expandToPerSecond(values: number[], timeStream: number[]): number[] {
-  if (values.length === 0) return [];
-
-  const totalSeconds = timeStream[timeStream.length - 1] + 1;
-  const result = new Array<number>(totalSeconds);
-
-  let srcIdx = 0;
-  for (let t = 0; t < totalSeconds; t++) {
-    // Advance to the latest sample at or before time t
-    while (srcIdx + 1 < timeStream.length && timeStream[srcIdx + 1] <= t) {
-      srcIdx++;
-    }
-    const v = values[srcIdx];
-    result[t] = Number.isFinite(v) ? v : 0;
-  }
-
-  return result;
 }
 
 /**

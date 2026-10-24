@@ -1,4 +1,3 @@
-import { and, eq } from "drizzle-orm";
 import type { NextApiRequest, NextApiResponse } from "next";
 import type { Session } from "next-auth";
 import { getServerSession } from "next-auth";
@@ -8,7 +7,6 @@ import { TRPCError, initTRPC } from "@trpc/server";
 
 import { authOptions } from "../../pages/api/auth/[...nextauth]";
 import { type Database, db } from "../db";
-import { timePeriods } from "../db/schema";
 import { clientIp, consumeRateLimit } from "../lib/rateLimit";
 
 export async function createContext(opts: {
@@ -87,36 +85,6 @@ export const calendarEventsRateLimited = t.middleware(async ({ ctx, next }) => {
   rateLimit(`calendar-events:${callerKey(ctx)}`, 30, 60_000);
   return next();
 });
-
-export async function resolveTimePeriod(
-  db: Database,
-  timePeriodId: number | undefined,
-  athleteId: number,
-): Promise<{
-  periodDateFrom?: string;
-  periodDateTo?: string;
-  periodSportTypes?: string[];
-}> {
-  if (!timePeriodId) return {};
-
-  const period = await db.query.timePeriods.findFirst({
-    where: and(
-      eq(timePeriods.id, timePeriodId),
-      eq(timePeriods.athlete, athleteId),
-    ),
-  });
-
-  if (!period) return {};
-
-  return {
-    periodDateFrom: period.startDate,
-    periodDateTo: period.endDate,
-    periodSportTypes:
-      period.sportTypes && period.sportTypes.length > 0
-        ? period.sportTypes
-        : undefined,
-  };
-}
 
 export const validateAthleteOwnership = t.middleware(
   async ({ ctx, input, next }) => {

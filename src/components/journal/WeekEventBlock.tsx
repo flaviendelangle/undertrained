@@ -3,7 +3,6 @@ import * as React from "react";
 import { CalendarIcon, FlagIcon, MedalIcon } from "lucide-react";
 import Link from "next/link";
 
-import { Draggable } from "@base-ui/react/draggable";
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import type { PlannedTraining } from "@server/db/types";
 import type { BusyEvent } from "@server/lib/icalFeed";
@@ -11,18 +10,10 @@ import type { BusyEvent } from "@server/lib/icalFeed";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
-import { getSportConfig } from "~/utils/sportConfig";
+import { getSportConfig, workoutKind } from "~/utils/sportConfig";
 
 import { useMapPrefetch } from "./ActivityPreviewCard";
-import { JournalRecordsContext, RACE_WORKOUT_TYPES } from "./JournalDayCell";
-import {
-  getJournalDragPreviewTime,
-  plannedTrainingDragKind,
-} from "./journalDnd";
-import {
-  useJournalDragPreviewDrop,
-  useJournalDragPreviewSettings,
-} from "./journalDragPreview";
+import { JournalRecordsContext } from "./JournalDayCell";
 import { useJournalPlanner } from "./journalPlanner";
 import { useJournalPreviewHandles } from "./journalPreview";
 import { useJournalActivityHref } from "./journalView";
@@ -31,6 +22,7 @@ import {
   PlannedBlockBody,
   plannedBlockStyle,
 } from "./plannedBlock";
+import { RescheduleSource } from "./rescheduleDrag";
 import type { JournalActivity } from "./useJournalWeeks";
 
 /**
@@ -52,9 +44,7 @@ export function WeekActivityBlock({
 
   const records = React.useContext(JournalRecordsContext);
   const activityRecords = records.get(activity.stravaId);
-  const isRace =
-    activity.workoutType != null &&
-    RACE_WORKOUT_TYPES.has(activity.workoutType);
+  const isRace = workoutKind(activity.workoutType) === "race";
   const isPr = activityRecords != null && activityRecords.length > 0;
   const href = useJournalActivityHref(
     activity.startDateLocal,
@@ -175,15 +165,17 @@ export function WeekBusyBlock({
 function WeekPlannedBlockPreview({
   training,
   compact,
+  time,
   width,
   height,
 }: {
   training: PlannedTraining;
   compact?: boolean;
+  /** Where the drop would land, or nothing off-target. */
+  time: string | undefined;
   width: number;
   height: number;
 }) {
-  const drop = useJournalDragPreviewDrop();
   const config = getSportConfig(training.sportType);
 
   return (
@@ -194,7 +186,7 @@ function WeekPlannedBlockPreview({
       <PlannedBlockBody
         sportType={training.sportType}
         title={training.title}
-        time={getJournalDragPreviewTime(drop)}
+        time={time}
         durationSeconds={training.durationSeconds}
         compact={compact}
       />
@@ -204,39 +196,30 @@ function WeekPlannedBlockPreview({
 
 /**
  * A still-planned training as a dashed, draggable block. Dragging reschedules it
- * (committed by the week view's drag monitor); a plain click opens the edit
- * dialog. The default pointer sensor only starts a drag after a small move or
- * short hold, so clicks aren't swallowed. Continuation segments of a multi-day
- * training aren't draggable (rescheduling moves the start day's segment), but
- * still open the edit dialog on click.
+ * (see `useRescheduleDrag`); a plain click opens the edit dialog. The default
+ * pointer sensor only starts a drag after a small move or short hold, so clicks
+ * aren't swallowed. Continuation segments of a multi-day training aren't
+ * draggable (rescheduling moves the start day's segment), but still open the
+ * edit dialog on click.
  */
 export function WeekPlannedBlock({
   training,
   continued,
-  dimmed,
   compact,
 }: {
   training: PlannedTraining;
   /** True for the continuation segment of a training begun on an earlier day. */
   continued?: boolean;
-  /**
-   * Externally-driven dimming while this training is dragged or waiting for its
-   * optimistic move. Continuations are separate draggable roots, so their own
-   * drag state stays false during the source segment's drag.
-   */
-  dimmed?: boolean;
   compact?: boolean;
 }) {
   const t = useT();
   const planner = useJournalPlanner();
   const config = getSportConfig(training.sportType);
   const label = t("journal.plannedLabel", { title: training.title });
-  const previewSettings = useJournalDragPreviewSettings();
 
   return (
-    <Draggable.Root
-      kind={plannedTrainingDragKind}
-      payload={training}
+    <RescheduleSource
+      training={training}
       disabled={continued}
       render={
         <button
@@ -251,9 +234,17 @@ export function WeekPlannedBlock({
       style={plannedBlockStyle(config.color)}
       className={cn(
         PLANNED_BLOCK_CLASS,
-        "h-full w-full transition-[filter] hover:brightness-95 data-dragging:opacity-30 dark:hover:brightness-110",
+        // `data-dimmed` covers every segment of the moving training, including
+        // continuations; `data-dragging` is the picked-up segment's own state.
+        "h-full w-full transition-[filter] hover:brightness-95 data-dimmed:opacity-30 data-dragging:opacity-30 dark:hover:brightness-110",
         continued ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
-        dimmed && "opacity-30",
+      )}
+      renderPreview={(preview) => (
+        <WeekPlannedBlockPreview
+          training={training}
+          compact={compact}
+          {...preview}
+        />
       )}
     >
       <PlannedBlockBody
@@ -263,23 +254,6 @@ export function WeekPlannedBlock({
         durationSeconds={training.durationSeconds}
         compact={compact}
       />
-      <Draggable.Preview
-        kind={plannedTrainingDragKind}
-        {...previewSettings}
-        className="pointer-events-none"
-      >
-        {({ source }) => {
-          const rect = source.element.getBoundingClientRect();
-          return (
-            <WeekPlannedBlockPreview
-              training={source.payload}
-              compact={compact}
-              width={rect.width}
-              height={rect.height}
-            />
-          );
-        }}
-      </Draggable.Preview>
-    </Draggable.Root>
+    </RescheduleSource>
   );
 }

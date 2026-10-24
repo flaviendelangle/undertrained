@@ -22,6 +22,10 @@ import {
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
+import {
+  activitySettingsDay,
+  useActivityRecording,
+} from "~/lib/activityRecording";
 import { trpc } from "~/utils/trpc";
 
 import { ChartMessage } from "../ChartMessage";
@@ -56,26 +60,15 @@ const PaceCard = React.memo(function PaceCard({ stravaId }: PaceCardProps) {
 
   const { data: activity } = trpc.activities.get.useQuery({ stravaId });
 
-  // All three tabs work off the raw per-second speed stream. `ActivityStreams`
-  // higher on the page is responsible for fetching streams, so we only read the
-  // cached query here.
-  const { data: streamsData } = trpc.activityStreams.getStreams.useQuery({
-    stravaId,
-  });
+  // All three tabs work off the per-second speed.
+  const { recording } = useActivityRecording(stravaId);
+  const speeds = React.useMemo(
+    () => recording?.perSecond.velocity_smooth ?? [],
+    [recording],
+  );
 
-  const speeds = React.useMemo<number[]>(() => {
-    const stream = streamsData?.find((s) => s.type === "velocity_smooth");
-    if (!stream) return [];
-    try {
-      const parsed: unknown = JSON.parse(stream.data);
-      return Array.isArray(parsed) ? (parsed as number[]) : [];
-    } catch {
-      return [];
-    }
-  }, [streamsData]);
-
-  const thresholdSpeed = activity?.startDate
-    ? resolveForDate(activity.startDate).runThresholdPace
+  const thresholdSpeed = activity
+    ? resolveForDate(activitySettingsDay(activity)).runThresholdPace
     : 0;
   const averageSpeed = activity?.averageSpeed ?? null;
 
@@ -168,14 +161,14 @@ const PaceCard = React.memo(function PaceCard({ stravaId }: PaceCardProps) {
   return (
     <ChartCard title={t("charts.pace.activityCardTitle")} actions={actions}>
       {tab === "timeline" &&
-        (streamsData == null ? (
+        (recording == null ? (
           <StreamLoading />
         ) : (
           <PaceOverTime speeds={speeds} thresholdSpeed={thresholdSpeed} />
         ))}
 
       {tab === "zones" &&
-        (streamsData == null ? (
+        (recording == null ? (
           <StreamLoading />
         ) : (
           <PaceZoneDistribution
@@ -185,7 +178,7 @@ const PaceCard = React.memo(function PaceCard({ stravaId }: PaceCardProps) {
         ))}
 
       {tab === "distribution" &&
-        (streamsData == null ? (
+        (recording == null ? (
           <StreamLoading />
         ) : (
           <PaceSliceDistribution

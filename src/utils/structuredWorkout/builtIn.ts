@@ -1,5 +1,5 @@
 import type { TFunction } from "~/i18n/I18nProvider";
-import type { SessionDataPoint } from "~/sensors/types";
+import { type SessionDataPoint, TRAINER_READING_TTL_MS } from "~/sensors/types";
 
 import { flattenWorkout } from "./flatten";
 import { workoutProfile } from "./metrics";
@@ -167,7 +167,9 @@ export function estimateTestFtp(
         ((point.pauseIndex ?? 0) !== (previous.pauseIndex ?? 0) ||
           point.elapsed <= previous.elapsed ||
           point.elapsed - previous.elapsed > 2 ||
-          point.timestamp - previous.timestamp > 2500))
+          // Further apart than a power reading lasts, so the power between
+          // them was never measured.
+          point.timestamp - previous.timestamp > TRAINER_READING_TTL_MS))
     ) {
       if (!ramp) return null;
       window = [];

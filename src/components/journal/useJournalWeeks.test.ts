@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
-// Scoped to this file (like useWorkoutPlayer.test.ts): the surrounding suites
-// are pure functions with no reason to pay for a DOM.
+// Scoped to this file rather than set globally: the surrounding suites are
+// pure functions with no reason to pay for a DOM.
 import { addDays, format } from "date-fns";
 import { describe, expect, it } from "vitest";
 

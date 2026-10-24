@@ -14,27 +14,13 @@ import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
+import { plannedTrainingFields } from "../../../utils/plannedTraining";
+import { workoutChoiceToValue } from "../../../utils/sportConfig";
 import type { Database } from "../../db";
 import { activities, athletes, plannedTrainings } from "../../db/schema";
 import { env } from "../../env";
-import {
-  getAccessToken,
-  updateActivityOnStrava,
-  workoutTypeForSport,
-} from "../../lib/strava";
+import { getAccessToken, updateActivityOnStrava } from "../../lib/strava";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
-
-/** Shared field validators for create/update. */
-const trainingFields = {
-  title: z.string().trim().min(1).max(200),
-  plannedDate: z.string().min(1), // floating local ISO datetime
-  durationSeconds: z
-    .number()
-    .int()
-    .positive()
-    .max(24 * 3600),
-  sportType: z.string().min(1),
-};
 
 /**
  * Upper bound on one link-prompt batch. The prompt shows one row per pairing and
@@ -224,7 +210,7 @@ export const plannedTrainingsRouter = router({
     }),
 
   create: protectedProcedure
-    .input(z.object({ athleteId: z.number(), ...trainingFields }))
+    .input(z.object({ athleteId: z.number(), ...plannedTrainingFields }))
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const { athleteId, ...data } = input;
@@ -244,7 +230,11 @@ export const plannedTrainingsRouter = router({
 
   update: protectedProcedure
     .input(
-      z.object({ athleteId: z.number(), id: z.number(), ...trainingFields }),
+      z.object({
+        athleteId: z.number(),
+        id: z.number(),
+        ...plannedTrainingFields,
+      }),
     )
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
@@ -339,7 +329,9 @@ export const plannedTrainingsRouter = router({
       }
 
       const accessToken = await getAccessToken(ctx.db, input.athleteId);
-      const workoutType = workoutTypeForSport(plan.sportType);
+      // Flag the activity as a structured workout; sports without a Strava
+      // workout type keep the field untouched.
+      const workoutType = workoutChoiceToValue(plan.sportType, "workout");
 
       // Push to Strava first; on failure this throws and we change nothing local.
       await updateActivityOnStrava(accessToken, input.stravaId, {

@@ -1,74 +1,24 @@
-import {
-  and,
-  desc,
-  eq,
-  getTableColumns,
-  gte,
-  inArray,
-  isNotNull,
-  lte,
-} from "drizzle-orm";
+import { and, desc, eq, getTableColumns, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
 import { workoutChoiceToValue } from "../../../utils/sportConfig";
-import type { Database } from "../../db";
 import { activities } from "../../db/schema";
+import {
+  activityFilterInput,
+  selectActivities,
+} from "../../lib/activitySelection";
 import { getAccessToken, updateActivityOnStrava } from "../../lib/strava";
 import { activityIngestion } from "../../lib/sync";
-import {
-  protectedProcedure,
-  resolveTimePeriod,
-  router,
-  validateAthleteOwnership,
-} from "../index";
-
-const activityFilters = z.object({
-  athleteId: z.number(),
-  activityTypes: z.array(z.string()).optional(),
-  workoutTypes: z.array(z.number()).optional(),
-  timePeriodId: z.number().optional(),
-  hideCommutes: z.boolean().optional(),
-});
-
-async function activityConditions(
-  db: Database,
-  input: z.infer<typeof activityFilters>,
-) {
-  const { periodDateFrom, periodDateTo, periodSportTypes } =
-    await resolveTimePeriod(db, input.timePeriodId, input.athleteId);
-
-  // Build filter conditions
-  const conditions = [eq(activities.athlete, input.athleteId)];
-  if (input.activityTypes && input.activityTypes.length > 0) {
-    conditions.push(inArray(activities.type, input.activityTypes));
-  }
-  if (periodSportTypes) {
-    conditions.push(inArray(activities.type, periodSportTypes));
-  }
-  if (input.workoutTypes && input.workoutTypes.length > 0) {
-    conditions.push(inArray(activities.workoutType, input.workoutTypes));
-  }
-  if (input.hideCommutes) {
-    conditions.push(eq(activities.commute, false));
-  }
-  if (periodDateFrom) {
-    conditions.push(gte(activities.startDate, periodDateFrom));
-  }
-  if (periodDateTo) {
-    conditions.push(lte(activities.startDate, periodDateTo + "T23:59:59Z"));
-  }
-
-  return conditions;
-}
+import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 export const activitiesRouter = router({
   list: protectedProcedure
-    .input(activityFilters.extend({ includeMap: z.boolean().optional() }))
+    .input(activityFilterInput.extend({ includeMap: z.boolean().optional() }))
     .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
-      const conditions = await activityConditions(ctx.db, input);
+      const selected = await selectActivities(ctx.db, input);
 
       // Omit the heavy jsonb columns (and mapPolyline unless requested) from the
       // list projection — none of the list consumers read them, so shipping them
@@ -91,7 +41,7 @@ export const activitiesRouter = router({
         const filtered = await ctx.db
           .select({ ...leanColumns, mapPolyline: activities.mapPolyline })
           .from(activities)
-          .where(and(...conditions))
+          .where(selected)
           .orderBy(desc(activities.startDate));
         return { activities: filtered };
       }
@@ -99,7 +49,7 @@ export const activitiesRouter = router({
       const filtered = await ctx.db
         .select(leanColumns)
         .from(activities)
-        .where(and(...conditions))
+        .where(selected)
         .orderBy(desc(activities.startDate));
 
       return {
@@ -112,10 +62,10 @@ export const activitiesRouter = router({
 
   // Routes and tooltip fields only; chart metrics stay in the shared list cache.
   maps: protectedProcedure
-    .input(activityFilters)
+    .input(activityFilterInput)
     .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
-      const conditions = await activityConditions(ctx.db, input);
+      const selected = await selectActivities(ctx.db, input);
       return ctx.db
         .select({
           id: activities.id,
@@ -130,7 +80,7 @@ export const activitiesRouter = router({
           mapPolyline: activities.mapPolyline,
         })
         .from(activities)
-        .where(and(...conditions, isNotNull(activities.mapPolyline)))
+        .where(and(selected, isNotNull(activities.mapPolyline)))
         .orderBy(desc(activities.startDate));
     }),
 

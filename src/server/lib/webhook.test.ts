@@ -3,19 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TRPCError } from "@trpc/server";
 
-import type { Database } from "../db";
-import {
-  activities,
-  athletes,
-  desktopCodes,
-  desktopSessions,
-} from "../db/schema";
+import { activities } from "../db/schema";
 
 // `webhook.ts` reaches for the singleton db and the production ingestion at
 // import time; stub them so these cases exercise the dispatcher alone, with no
 // database and no environment. Create and update events are covered through
 // the ingestion module in `activityIngestion.test.ts`.
 vi.mock("../db", () => ({ db: dbMock }));
+vi.mock("./athleteErasure", () => ({ eraseAthleteData }));
 vi.mock("./strava", () => ({ getAccessToken }));
 vi.mock("./sync", () => ({ activityIngestion: vi.fn() }));
 
@@ -31,6 +26,7 @@ let activityRow: Record<string, unknown> | undefined;
 /** Condition the handler looked the activity up with. */
 let activityLookup: unknown;
 const getAccessToken = vi.fn<() => Promise<string>>();
+const eraseAthleteData = vi.fn<() => Promise<void>>();
 
 /**
  * Awaitable stand-in for a drizzle query builder tail: `await …where(x)` and
@@ -70,7 +66,7 @@ const dbMock = {
   }),
 };
 
-const { deleteAllAthleteData, processWebhookEvent, resetDeauthCheckThrottle } =
+const { processWebhookEvent, resetDeauthCheckThrottle } =
   await import("./webhook");
 
 function deauthEvent() {
@@ -85,9 +81,9 @@ function deauthEvent() {
   };
 }
 
-/** True when the handler wiped the athlete (activities + settings + tokens). */
+/** True when the handler erased the athlete's data. */
 function wiped() {
-  return ops.some((op) => op.verb === "delete" && op.table === activities);
+  return eraseAthleteData.mock.calls.length > 0;
 }
 
 beforeEach(() => {
@@ -97,6 +93,7 @@ beforeEach(() => {
   vi.unstubAllGlobals();
   resetDeauthCheckThrottle();
   getAccessToken.mockReset().mockResolvedValue("live-token");
+  eraseAthleteData.mockReset().mockResolvedValue();
   athleteRow = {
     id: ATHLETE_ID,
     stravaAthleteId: STRAVA_ATHLETE_ID,
@@ -126,21 +123,10 @@ describe("deauthorization events", () => {
   it("wipes the athlete once Strava rejects the token", async () => {
     stravaReplies(401);
     await processWebhookEvent(deauthEvent());
-    expect(wiped()).toBe(true);
-    expect(ops).toContainEqual({
-      verb: "delete",
-      table: desktopCodes,
-      where: eq(desktopCodes.athlete, ATHLETE_ID),
-    });
-    expect(ops).toContainEqual({
-      verb: "delete",
-      table: desktopSessions,
-      where: eq(desktopSessions.athlete, ATHLETE_ID),
-    });
-    // Tokens cleared too, so a stale grant can't be reused.
-    expect(
-      ops.some((op) => op.verb === "update" && op.table === athletes),
-    ).toBe(true);
+    expect(eraseAthleteData).toHaveBeenCalledExactlyOnceWith(
+      dbMock,
+      ATHLETE_ID,
+    );
   });
 
   it("wipes when the refresh token itself was revoked", async () => {
@@ -221,25 +207,6 @@ describe("deauthorization events", () => {
       updates: { authorized: "true" },
     });
     expect(ops).toHaveLength(0);
-  });
-});
-
-describe("account data deletion", () => {
-  it("revokes pending desktop codes and sessions for only this athlete", async () => {
-    await deleteAllAthleteData(dbMock as unknown as Database, ATHLETE_ID);
-    expect(ops).toContainEqual({
-      verb: "delete",
-      table: desktopCodes,
-      where: eq(desktopCodes.athlete, ATHLETE_ID),
-    });
-    expect(ops).toContainEqual({
-      verb: "delete",
-      table: desktopSessions,
-      where: eq(desktopSessions.athlete, ATHLETE_ID),
-    });
-    expect(
-      ops.some((op) => op.verb === "delete" && op.table === athletes),
-    ).toBe(false);
   });
 });
 

@@ -1,7 +1,7 @@
-import type { UseWorkoutPlayerResult } from "~/hooks/useWorkoutPlayer";
 import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import { cn } from "~/lib/utils";
+import type { WorkoutPlayer } from "~/liveTraining/rideEngine";
 import { formatElapsed } from "~/utils/format";
 import {
   cadenceTolerance,
@@ -18,7 +18,7 @@ import {
  */
 
 interface HudSegmentPanelProps {
-  player: UseWorkoutPlayerResult;
+  player: WorkoutPlayer;
   currentPower: number | null;
   currentCadence: number | null;
   className?: string;
@@ -142,7 +142,7 @@ export function HudNextSegmentChip({
   player,
   className,
 }: {
-  player: UseWorkoutPlayerResult;
+  player: WorkoutPlayer;
   className?: string;
 }) {
   const t = useT();

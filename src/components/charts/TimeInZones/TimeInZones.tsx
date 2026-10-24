@@ -19,6 +19,7 @@ import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import { startOf } from "~/utils/dateUtils";
 import { formatElapsed } from "~/utils/format";
+import { getSportConfig } from "~/utils/sportConfig";
 
 import { ChartMessage } from "../ChartMessage";
 import { ChartThemeProvider } from "../ChartThemeProvider";
@@ -27,7 +28,6 @@ import {
   type ZoneTimeSpan,
   aggregateTimeInZones,
   buildZoneRows,
-  zoneMetricForSport,
 } from "./timeInZones";
 
 export default function TimeInZones() {
@@ -42,7 +42,7 @@ export default function TimeInZones() {
   const zoneTypes = React.useMemo(
     () =>
       activitiesQuery.allTypes?.filter(
-        (type) => zoneMetricForSport(type) != null,
+        (type) => getSportConfig(type).zoneModel != null,
       ),
     [activitiesQuery.allTypes],
   );

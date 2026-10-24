@@ -183,24 +183,6 @@ async function isRefreshTokenRejection(response: Response): Promise<boolean> {
 }
 
 /**
- * Strava `workout_type` marking an activity as a structured workout ("training").
- * Strava encodes this per sport — runs use `3`, rides use `12`. Returns
- * `undefined` for sports without a "workout" value, leaving the field untouched.
- */
-export function workoutTypeForSport(sportType: string): number | undefined {
-  switch (sportType) {
-    case "Run":
-    case "VirtualRun":
-      return 3;
-    case "Ride":
-    case "VirtualRide":
-      return 12;
-    default:
-      return undefined;
-  }
-}
-
-/**
  * Pushes edits to an existing activity back to Strava (PUT /activities/{id}).
  * Used when a planned training is marked done: the linked activity is renamed to
  * the plan's title and flagged as a workout. The `strava-v3` lib only wraps

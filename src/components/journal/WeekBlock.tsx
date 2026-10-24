@@ -3,8 +3,6 @@ import * as React from "react";
 import { format } from "date-fns";
 import type { Locale } from "date-fns";
 
-import { Draggable } from "@base-ui/react/draggable";
-
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
@@ -14,12 +12,8 @@ import {
   WeekBusyBlock,
   WeekPlannedBlock,
 } from "./WeekEventBlock";
-import {
-  JOURNAL_DAY_SNAP_STEPS,
-  journalDayDropKind,
-  plannedTrainingDragKind,
-} from "./journalDnd";
 import { useJournalPlanner } from "./journalPlanner";
+import { RescheduleDay } from "./rescheduleDrag";
 import type { JournalDay, JournalWeek } from "./useJournalWeeks";
 import {
   COMPACT_BLOCK_HEIGHT,
@@ -47,18 +41,11 @@ function DayColumn({
   date,
   positioned,
   busy,
-  draggedTrainingId,
 }: {
   date: Date;
   positioned: PositionedEvent[];
   /** Timed busy events, packed into their own behind-the-training back layer. */
   busy: PositionedEvent[];
-  /**
-   * Id of the training currently being dragged anywhere in the grid, so the
-   * continuation segments of a multi-day training dim along with the dragged
-   * start segment (they're separate draggable roots, so local state misses them).
-   */
-  draggedTrainingId: number | null;
 }) {
   const planner = useJournalPlanner();
   const dayKey = format(date, "yyyy-MM-dd");
@@ -74,12 +61,8 @@ function DayColumn({
   };
 
   return (
-    <Draggable.Target
-      accept={plannedTrainingDragKind}
-      kind={journalDayDropKind}
-      payload={dayKey}
-      snap={{ y: JOURNAL_DAY_SNAP_STEPS }}
-      data-journal-day-column=""
+    <RescheduleDay
+      dayKey={dayKey}
       onDoubleClick={handleDoubleClick}
       className="border-border data-over:bg-primary/5 relative border-l transition-colors"
       style={{ height: TOTAL_HEIGHT }}
@@ -133,13 +116,12 @@ function DayColumn({
             <WeekPlannedBlock
               training={event.training}
               continued={event.continued}
-              dimmed={event.training.id === draggedTrainingId}
               compact={height < COMPACT_BLOCK_HEIGHT}
             />
           ) : null}
         </div>
       ))}
-    </Draggable.Target>
+    </RescheduleDay>
   );
 }
 
@@ -237,7 +219,6 @@ export function WeekBlock({
   week,
   dayLoadScale,
   allDayRowHeight,
-  draggedTrainingId,
   dateLocale,
   style,
 }: {
@@ -250,8 +231,6 @@ export function WeekBlock({
    * in lock-step with the gutter spacer in {@link JournalWeekView}.
    */
   allDayRowHeight: number;
-  /** Training currently moving, used to dim its continuation segments. */
-  draggedTrainingId: number | null;
   dateLocale: Locale;
   style: React.CSSProperties;
 }) {
@@ -340,7 +319,6 @@ export function WeekBlock({
               date={day.date}
               positioned={dayEvents[index]}
               busy={dayBusyEvents[index]}
-              draggedTrainingId={draggedTrainingId}
             />
           );
         })}

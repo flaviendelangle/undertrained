@@ -16,7 +16,7 @@ import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
-import { getSportConfig } from "~/utils/sportConfig";
+import { getSportConfig, workoutKind } from "~/utils/sportConfig";
 
 import { useMapPrefetch } from "./ActivityPreviewCard";
 import { PlannedTrainingChip } from "./PlannedTrainingChip";
@@ -27,12 +27,6 @@ import type { JournalActivity, JournalDay } from "./useJournalWeeks";
 
 /** Chips (planned + activities) shown before collapsing the rest into a "+N more" badge. */
 const MAX_VISIBLE_ITEMS = 3;
-
-/**
- * Strava `workoutType` values that mark an activity as a race. Strava encodes
- * this per sport: `1` for runs, `11` for rides.
- */
-export const RACE_WORKOUT_TYPES = new Set([1, 11]);
 
 /**
  * Map of `stravaId → all-time record labels` for the loaded athlete, provided by
@@ -83,9 +77,7 @@ function ActivityChip({ activity }: { activity: JournalActivity }) {
 
   const records = React.useContext(JournalRecordsContext);
   const activityRecords = records.get(activity.stravaId);
-  const isRace =
-    activity.workoutType != null &&
-    RACE_WORKOUT_TYPES.has(activity.workoutType);
+  const isRace = workoutKind(activity.workoutType) === "race";
   const isPr = activityRecords != null && activityRecords.length > 0;
   const href = useJournalActivityHref(
     activity.startDateLocal,

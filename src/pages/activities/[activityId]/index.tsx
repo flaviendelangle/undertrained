@@ -23,8 +23,13 @@ import { useTypedParams } from "~/hooks/useTypedParams";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
+import { useActivityRecording } from "~/lib/activityRecording";
 import { NextPageWithLayout } from "~/pages/_app";
-import { getSportConfig } from "~/utils/sportConfig";
+import {
+  getSportConfig,
+  supportsAnalysis,
+  workoutKind,
+} from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 const routerSchema = { activityId: "string" as const };
@@ -78,42 +83,13 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   }, [mapExpanded]);
 
   const [activity] = trpc.activities.get.useSuspenseQuery({ stravaId });
-  const [streamsData] = trpc.activityStreams.getStreams.useSuspenseQuery({
-    stravaId,
-  });
+  const { recording } = useActivityRecording(stravaId);
 
-  const latlngRoute = React.useMemo(() => {
-    if (!streamsData) return null;
-    const stream = streamsData.find((s) => s.type === "latlng");
-    if (!stream) return null;
-    try {
-      return JSON.parse(stream.data) as [number, number][];
-    } catch {
-      return null;
-    }
-  }, [streamsData]);
-
-  const altitudeData = React.useMemo(() => {
-    if (!streamsData) return null;
-    const stream = streamsData.find((s) => s.type === "altitude");
-    if (!stream) return null;
-    try {
-      return JSON.parse(stream.data) as number[];
-    } catch {
-      return null;
-    }
-  }, [streamsData]);
-
-  const distanceData = React.useMemo(() => {
-    if (!streamsData) return null;
-    const stream = streamsData.find((s) => s.type === "distance");
-    if (!stream) return null;
-    try {
-      return JSON.parse(stream.data) as number[];
-    } catch {
-      return null;
-    }
-  }, [streamsData]);
+  // The map and the elevation profile are drawn against position and distance,
+  // so they take the samples as recorded rather than per second.
+  const latlngRoute = recording?.samples.latlng ?? null;
+  const altitudeData = recording?.samples.altitude ?? null;
+  const distanceData = recording?.samples.distance ?? null;
 
   const hiddenStreams = React.useMemo(() => {
     if (!activity) return [];
@@ -132,19 +108,17 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   }
 
   const hasMap = !!activity.mapPolyline;
-  // Strava encodes "race" in workout_type: 1 = run race, 11 = ride race.
-  const isRace = activity.workoutType === 1 || activity.workoutType === 11;
+  const isRace = workoutKind(activity.workoutType) === "race";
   const hasNotes = !!activity.description || !!activity.privateNote;
   const hasPower =
     activity.powerBests != null &&
     Object.keys(activity.powerBests).length > 0 &&
-    (activity.type === "Ride" || activity.type === "VirtualRide");
+    supportsAnalysis(activity.type, "power");
   // Pace card: running activities that covered distance (so a speed stream is
   // expected — same assumption the hidden-streams logic above makes). The card
   // reads the stream itself and shows its own loading/empty states.
   const hasPace =
-    getSportConfig(activity.type).category === "running" &&
-    activity.distance > 0;
+    supportsAnalysis(activity.type, "pace") && activity.distance > 0;
 
   return (
     <>
@@ -308,7 +282,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             />
             <ActivityLaps
               activityType={activity.type}
-              startDate={activity.startDate}
+              startDateLocal={activity.startDateLocal}
               laps={activity.laps}
             />
             {hasPower && <PowerCurve stravaId={activity.stravaId} />}

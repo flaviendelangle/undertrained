@@ -22,11 +22,11 @@ export type SensorSource = "ble" | "ant+";
 /** Why a sensor connection failed, for a useful message on the device card. */
 export type SensorErrorReason = "unsupported-device" | "failed";
 
-/** Options accepted by every sensor hook's `connect`. */
+/** Options accepted by every sensor adapter's `connect`. */
 export interface SensorConnectOptions {
   /**
-   * List every nearby Bluetooth device instead of filtering on the service.
-   * Ignored by ANT+, which has no chooser.
+   * List every nearby device instead of filtering on the service. Only means
+   * something to an adapter with a device chooser.
    */
   acceptAllDevices?: boolean;
 }
@@ -43,6 +43,15 @@ export interface SensorConnectOptions {
  * same number; raise it once the upstream clamp is fixed.
  */
 export const MAX_TARGET_POWER_WATTS = 1000;
+
+/**
+ * How long a reading stands for a sensor's current value, in milliseconds.
+ * Past that the value is missing: shown as missing, recorded as missing, and
+ * never taken for a zero. A stalled stream must not become invented power in
+ * an FTP estimate.
+ */
+export const TRAINER_READING_TTL_MS = 2500;
+export const HEART_RATE_READING_TTL_MS = 5000;
 
 export interface RiderSettings {
   weightKg: number;
@@ -167,14 +176,6 @@ export interface SessionSummary {
   maxCadence: number | null;
   avgSpeed: number | null;
   maxSpeed: number | null;
-}
-
-export interface SensorConnection<T> {
-  state: ConnectionState;
-  data: T | null;
-  deviceName: string | null;
-  connect: () => Promise<void>;
-  disconnect: () => Promise<void>;
 }
 
 // `ramp` indexes the theme-aware cool→hot zone ramp in chartTokens.ts

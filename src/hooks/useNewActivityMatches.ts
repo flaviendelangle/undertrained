@@ -1,15 +1,12 @@
 import * as React from "react";
 
-import { format } from "date-fns";
-
 import type { AppRouter } from "@server/trpc/root";
 import type { inferRouterOutputs } from "@trpc/server";
 
 import { pairPerfectMatches } from "~/components/journal/perfectMatch";
-import { trpc } from "~/utils/trpc";
+import { plannedDateAt } from "~/utils/plannedTraining";
 
-import { useAthleteId } from "./useAthleteId";
-import { usePlannedTrainings } from "./usePlannedTrainings";
+import { useNewActivities, usePlannedTrainingList } from "./plannedTrainings";
 
 /**
  * The activity projection `plannedTrainings.newActivities` returns. Inferred
@@ -40,22 +37,17 @@ export type NewActivity =
  * today that this activity might yet turn out to be.
  */
 export function useNewActivityMatches() {
-  const plans = usePlannedTrainings();
-  const athleteId = useAthleteId();
-
-  const newActivities = trpc.plannedTrainings.newActivities.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  const plans = usePlannedTrainingList();
+  const newActivities = useNewActivities();
 
   const { pairs, hasDeferred } = React.useMemo(() => {
     const all = pairPerfectMatches(
       plans.data ?? [],
       newActivities.data?.activities ?? [],
     );
-    // Floating-local, formatted like `plannedDate`, so a plain string compare is
-    // a chronological one.
-    const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
+    // In `plannedDate`'s own format, so a plain string compare is a
+    // chronological one.
+    const now = plannedDateAt(new Date());
     const due = all.filter((pair) => pair.plan.plannedDate <= now);
     return { pairs: due, hasDeferred: due.length < all.length };
   }, [plans.data, newActivities.data]);

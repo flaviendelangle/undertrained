@@ -351,6 +351,34 @@ const fr: Messages = {
       zoneCalculator: "Calculateur de zones",
       gearCalculator: "Calculateur de braquet",
     },
+    desktop: {
+      title: "Connecter Undertrained Indoor",
+      signedInAs: "Connecté en tant que {name}",
+      signedIn: "Connecté à Undertrained",
+      scopeIntro: "L'application de bureau pourra :",
+      scopeProfile: "Voir votre nom et votre langue",
+      scopeWorkouts: "Lire vos séances de vélo",
+      scopeUploads: "Envoyer sur Strava les sorties que vous enregistrez",
+      warning:
+        "N'approuvez que si vous venez de lancer la connexion depuis Undertrained Indoor sur cet ordinateur.",
+      approve: "Connecter",
+      cancel: "Pour annuler, fermez cette page.",
+      close: "Vous pouvez fermer cette page.",
+      error: {
+        invalid: {
+          title: "Ce lien de connexion ne fonctionne pas",
+          body: "Il est incomplet ou a été modifié en route. Relancez la connexion depuis Undertrained Indoor.",
+        },
+        expired: {
+          title: "Cette autorisation a expiré",
+          body: "Une autorisation dure cinq minutes et ne vaut que pour le compte qui l'a ouverte. Relancez la connexion depuis Undertrained Indoor.",
+        },
+        unavailable: {
+          title: "La connexion de l'application de bureau est indisponible",
+          body: "Ce serveur n'est pas encore configuré pour Undertrained Indoor. Réessayez plus tard.",
+        },
+      },
+    },
     privacy: {
       title: "Politique de confidentialité",
       lastUpdated: "Dernière mise à jour : 4 mars 2026",

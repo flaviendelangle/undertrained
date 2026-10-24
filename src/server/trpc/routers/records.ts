@@ -4,7 +4,10 @@ import { z } from "zod";
 
 import { CYCLING_POWER_DURATIONS } from "../../../utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCE_METERS } from "../../../utils/cyclingRecordDistances";
-import { getActivityTypesByCategory } from "../../../utils/sportConfig";
+import {
+  activityTypesFor,
+  getActivityTypesByCategory,
+} from "../../../utils/sportConfig";
 import type { Database } from "../../db";
 import { activities, riderSettings } from "../../db/schema";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
@@ -17,9 +20,7 @@ const CYCLING_POWER_DURATION_SECONDS = CYCLING_POWER_DURATIONS.map(
 const CYCLING_TYPES = getActivityTypesByCategory("cycling");
 const RUNNING_TYPES = getActivityTypesByCategory("running");
 // Speed/elevation records exclude virtual rides (simulated distance/altitude).
-const NON_VIRTUAL_CYCLING_TYPES = CYCLING_TYPES.filter(
-  (t) => t !== "VirtualRide",
-);
+const NON_VIRTUAL_CYCLING_TYPES = activityTypesFor("speedAndClimbing");
 
 /** Comma-joined SQL list of activity types, for `type IN (...)`. */
 function typeList(types: readonly string[]): SQL {

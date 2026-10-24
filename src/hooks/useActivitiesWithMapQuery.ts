@@ -2,22 +2,15 @@ import { keepPreviousData } from "@tanstack/react-query";
 
 import { trpc } from "~/utils/trpc";
 
-import { useActivityFilter } from "./useActivityFilter";
+import { useActivitySelection } from "./useActivitySelection";
 import { useAthleteId } from "./useAthleteId";
 
 export function useActivitiesWithMapQuery() {
-  const { activityTypes, workoutTypes, timePeriodId, hideCommutes } =
-    useActivityFilter();
+  const selection = useActivitySelection("heatmap");
   const athleteId = useAthleteId();
 
   const result = trpc.activities.maps.useQuery(
-    {
-      athleteId: athleteId!,
-      activityTypes,
-      workoutTypes,
-      timePeriodId,
-      hideCommutes,
-    },
+    { athleteId: athleteId!, ...selection },
     { enabled: athleteId != null, placeholderData: keepPreviousData },
   );
 

@@ -74,7 +74,13 @@ export const syncRouter = router({
           }
         }
 
-        // For "reload_all", delete all activities (streams cascade via FK)
+        // For "reload_all", delete all activities (streams cascade via FK).
+        // Plans marked done stay `completed` but lose `linkedActivityId` to its
+        // `set null` cascade, and the re-import can't restore it: nothing keeps
+        // the Strava id it pointed at. The Journal goes by `status` and the
+        // iCal feed ignores the link, so neither changes. The activity can be
+        // linked to a second plan, though, because the link was the guard
+        // against that.
         if (input.mode === "reload_all") {
           await tx
             .delete(activities)

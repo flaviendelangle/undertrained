@@ -1,39 +1,19 @@
 /**
  * Aggregation logic for the statistics "Time in Zones" card. Sums the
  * per-activity `zoneSeconds` arrays (precomputed server-side at scoring time)
- * in ramp space, picking each sport's metric from its *default* load algorithm
- * (the per-sport preference is deliberately ignored): cycling → power zones,
- * running → pace zones, everything else on HRSS → HR zones. Swimming (sTSS)
- * has no zone model and is excluded entirely.
+ * in ramp space, using each sport's zone model (the rider's per-sport load
+ * algorithm preference is deliberately ignored): cycling → power zones,
+ * running → pace zones, everything else → HR zones. Swimming has no zone model
+ * and is excluded entirely.
  */
 import { RUNNING_PACE_ZONES } from "~/sensors/paceZones";
 import { HR_ZONES, POWER_ZONES } from "~/sensors/types";
 import type { ZoneSecondsByMetric } from "~/server/lib/activityScoring";
-import { getSportConfig } from "~/utils/sportConfig";
-
-export type ZoneMetric = "power" | "pace" | "hr";
+import { type ZoneModel, getSportConfig } from "~/utils/sportConfig";
 
 export type ZoneTimeSpan = "week" | "month" | "year";
 
 const RAMP_COUNT = 7;
-
-/**
- * The zone metric backing a sport's default load algorithm, or null when the
- * sport has no zone system (swimming's sTSS is pace-based but the app has no
- * swim pace-zone model).
- */
-export function zoneMetricForSport(activityType: string): ZoneMetric | null {
-  switch (getSportConfig(activityType).defaultLoadAlgorithm) {
-    case "tss":
-      return "power";
-    case "rtss":
-      return "pace";
-    case "stss":
-      return null;
-    case "hrss":
-      return "hr";
-  }
-}
 
 export interface ZoneActivity {
   type: string;
@@ -51,7 +31,7 @@ export interface TimeInZonesAggregate {
   /** Denominator for percentages: zones + unknown. */
   totalSeconds: number;
   /** Metrics that actually contributed — drives row labels. */
-  metrics: ReadonlySet<ZoneMetric>;
+  metrics: ReadonlySet<ZoneModel>;
 }
 
 export function aggregateTimeInZones(
@@ -60,10 +40,10 @@ export function aggregateTimeInZones(
   const rampSeconds = new Array<number>(RAMP_COUNT).fill(0);
   let unknownSeconds = 0;
   let coastingSeconds = 0;
-  const metrics = new Set<ZoneMetric>();
+  const metrics = new Set<ZoneModel>();
 
   for (const activity of activities) {
-    const metric = zoneMetricForSport(activity.type);
+    const metric = getSportConfig(activity.type).zoneModel;
     if (metric == null) continue;
 
     const zones = activity.zoneSeconds?.[metric];

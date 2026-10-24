@@ -345,6 +345,34 @@ const en = {
       zoneCalculator: "Zone Calculator",
       gearCalculator: "Gear Calculator",
     },
+    desktop: {
+      title: "Connect Undertrained Indoor",
+      signedInAs: "Signed in as {name}",
+      signedIn: "Signed in to Undertrained",
+      scopeIntro: "The desktop app will be able to:",
+      scopeProfile: "See your name and language",
+      scopeWorkouts: "Read your cycling workouts",
+      scopeUploads: "Upload the rides you record to Strava",
+      warning:
+        "Only approve this if you just started signing in from Undertrained Indoor on this computer.",
+      approve: "Connect",
+      cancel: "You can close this page to cancel.",
+      close: "You can close this page.",
+      error: {
+        invalid: {
+          title: "This sign-in link doesn't work",
+          body: "It's incomplete or was changed on the way. Start signing in again from Undertrained Indoor.",
+        },
+        expired: {
+          title: "This approval has expired",
+          body: "Approvals last five minutes and only work for the account that opened them. Start signing in again from Undertrained Indoor.",
+        },
+        unavailable: {
+          title: "Desktop sign-in isn't available",
+          body: "This server isn't set up for Undertrained Indoor yet. Try again later.",
+        },
+      },
+    },
     privacy: {
       title: "Privacy Policy",
       lastUpdated: "Last updated: March 4, 2026",

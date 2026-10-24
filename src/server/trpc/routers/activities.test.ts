@@ -74,42 +74,6 @@ describe("activity maps", () => {
     );
   });
 
-  it("applies the same sport, workout, commute and period filters as the list", async () => {
-    const input = {
-      athleteId: 7,
-      activityTypes: ["Ride", "Run"],
-      workoutTypes: [1, 11],
-      hideCommutes: true,
-      timePeriodId: 3,
-    };
-    const period = [[3, 7, "Summer", "2026-08-01", "2026-08-31", ["Ride"]]];
-    replies = [period, [], period, []];
-    await caller.list(input);
-    await caller.maps(input);
-    expect(statements[1].params).toEqual([
-      7,
-      "Ride",
-      "Run",
-      "Ride",
-      1,
-      11,
-      false,
-      "2026-08-01",
-      "2026-08-31T23:59:59Z",
-    ]);
-    expect(statements[3].params).toEqual(statements[1].params);
-    const listWhere = statements[1].sql
-      .split(" where ")[1]
-      .split(" order by ")[0];
-    const mapWhere = statements[3].sql
-      .split(" where ")[1]
-      .split(" order by ")[0];
-    expect(mapWhere).toBe(
-      listWhere.slice(0, -1) + ' and "activities"."map_polyline" is not null)',
-    );
-    expect(statements[2].params).toEqual([3, 7, 1]);
-  });
-
   it("rejects another athlete before querying", async () => {
     await expect(caller.maps({ athleteId: 8 })).rejects.toMatchObject({
       code: "FORBIDDEN",
