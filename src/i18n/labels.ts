@@ -1,6 +1,6 @@
 import type { FormZoneKey, WeeklyVerdict } from "~/lib/fitness";
 import { formatActivityType } from "~/utils/format";
-import type { SportCategory } from "~/utils/sportConfig";
+import type { SportCategory, WorkoutChoice } from "~/utils/sportConfig";
 
 import type { AppMessageKey, TFunction } from "./I18nProvider";
 
@@ -100,4 +100,19 @@ const SPORT_TYPE_LABEL_KEY: Record<string, AppMessageKey> = {
 export function sportTypeLabel(type: string, t: TFunction): string {
   const key = SPORT_TYPE_LABEL_KEY[type];
   return key ? t(key) : formatActivityType(type);
+}
+
+/** Translation keys for each Strava workout-type choice. */
+const WORKOUT_CHOICE_LABEL_KEY: Record<WorkoutChoice, AppMessageKey> = {
+  none: "activities.edit.workout.none",
+  race: "activities.edit.workout.race",
+  long_run: "activities.edit.workout.longRun",
+  workout: "activities.edit.workout.workout",
+};
+
+export function workoutChoiceLabel(
+  choice: WorkoutChoice,
+  t: TFunction,
+): string {
+  return t(WORKOUT_CHOICE_LABEL_KEY[choice]);
 }

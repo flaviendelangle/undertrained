@@ -1,6 +1,8 @@
 import { format } from "date-fns";
 import { z } from "zod";
 
+import { WORKOUT_CHOICES } from "./sportConfig";
+
 /**
  * The rules for a planned training that the client and the server both apply:
  * the shape of `plannedDate` and the limits on each field. The server validates
@@ -29,6 +31,7 @@ export const plannedTrainingFields = {
     .positive()
     .max(MAX_PLANNED_DURATION_SECONDS),
   sportType: z.string().min(1),
+  workoutChoice: z.enum(WORKOUT_CHOICES),
 };
 
 /** A `plannedDate` from a date input's and a time input's values. */

@@ -29,6 +29,9 @@ const db = drizzle(
   },
   { schema },
 );
+// The proxy driver refuses transactions; run their statements on the same wire.
+db.transaction = ((run: (tx: typeof db) => unknown) =>
+  run(db)) as typeof db.transaction;
 
 vi.mock("../../db", () => ({ db }));
 vi.mock("../../env", () => ({ env: { APP_URL: undefined } }));
@@ -216,4 +219,59 @@ describe("acknowledgeNewActivities", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(statements).toEqual([]);
   });
+});
+
+describe("markDone", () => {
+  const STRAVA_ID = 999;
+  const ACTIVITY_ID = 41;
+
+  /**
+   * A still-planned plan, positionally in `planned_trainings` column order, as
+   * `db.query` selects it.
+   */
+  const planRow = (sportType: string, workoutChoice: string) => [
+    12,
+    ATHLETE_ID,
+    "Tempo",
+    "2026-03-04T18:00:00",
+    3600,
+    sportType,
+    workoutChoice,
+    "planned",
+    null,
+    null,
+    1,
+    1,
+  ];
+
+  it.each([
+    { sportType: "Run", workoutChoice: "race", strava: 1, stored: 1 },
+    // "none" still resets the type on Strava, but is stored as null locally,
+    // like an edit to "none" in the activity editor.
+    { sportType: "Ride", workoutChoice: "none", strava: 10, stored: null },
+  ])(
+    "gives the activity the plan's $workoutChoice type ($sportType)",
+    async ({ sportType, workoutChoice, strava, stored }) => {
+      // The plan, the activity (only its id is read), then no plan claiming it.
+      replies = [[planRow(sportType, workoutChoice)], [[ACTIVITY_ID]], []];
+      const { updateActivityOnStrava } = await import("../../lib/strava");
+
+      await caller().markDone({
+        athleteId: ATHLETE_ID,
+        id: 12,
+        stravaId: STRAVA_ID,
+      });
+
+      expect(updateActivityOnStrava).toHaveBeenLastCalledWith(
+        undefined,
+        STRAVA_ID,
+        { name: "Tempo", workout_type: strava },
+      );
+      const activityUpdate = statements.find((s) =>
+        s.sql.startsWith('update "activities"'),
+      );
+      expect(activityUpdate?.sql).toContain('"workout_type" = $');
+      expect(activityUpdate?.params).toEqual(["Tempo", stored, ACTIVITY_ID]);
+    },
+  );
 });

@@ -5,6 +5,7 @@ import { format, isSameWeek } from "date-fns";
 import type { PlannedTraining } from "@server/db/types";
 
 import { SportPicker } from "~/components/SportPicker";
+import { WorkoutChoiceField } from "~/components/WorkoutChoiceField";
 import { Button } from "~/components/ui/button";
 import {
   Combobox,
@@ -55,7 +56,13 @@ import {
   plannedDay,
   plannedTime,
 } from "~/utils/plannedTraining";
-import { PLANNABLE_SPORT_TYPES, getSportConfig } from "~/utils/sportConfig";
+import {
+  PLANNABLE_SPORT_TYPES,
+  type WorkoutChoice,
+  coerceWorkoutChoice,
+  getSportConfig,
+  workoutChoicesForSport,
+} from "~/utils/sportConfig";
 
 import type { ActivityOptionData } from "./ActivityOption";
 import { ActivityOption } from "./ActivityOption";
@@ -82,6 +89,11 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
   const [sportType, setSportType] = React.useState(
     existing?.sportType ?? PLANNABLE_SPORT_TYPES[0],
   );
+  // Applied to the Strava activity when the plan is marked done. "workout" by
+  // default, which is what linking applied before the athlete could choose.
+  const [workoutChoice, setWorkoutChoice] = React.useState<WorkoutChoice>(
+    existing?.workoutChoice ?? "workout",
+  );
   const [durationMinutes, setDurationMinutes] = React.useState<number | null>(
     existing ? Math.round(existing.durationSeconds / 60) : 60,
   );
@@ -105,36 +117,60 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
   const updateMut = useUpdatePlannedTraining({ onSuccess: onClose });
   const deleteMut = useDeletePlannedTraining({ onSuccess: onClose });
   const markDoneMut = useMarkPlannedTrainingDone({ onSuccess: onClose });
+  // Saves pending edits before Mark done, without closing the dialog.
+  const saveBeforeLinkMut = useUpdatePlannedTraining();
 
   const pending =
     createMut.isPending || updateMut.isPending || deleteMut.isPending;
 
+  // Switching sport re-scopes the workout-type options; keep the choice if it's
+  // still valid, otherwise fall back to "none".
+  const handleSportChange = (next: string) => {
+    setSportType(next);
+    setWorkoutChoice((prev) => coerceWorkoutChoice(next, prev));
+  };
+
+  // The form's values as a plan, or null while they can't be saved.
+  const trimmedTitle = title.trim();
+  const fields =
+    trimmedTitle && durationMinutes != null && durationMinutes > 0
+      ? {
+          title: trimmedTitle,
+          plannedDate: plannedDateOf(dateStr, timeStr),
+          durationSeconds: Math.round(durationMinutes * 60),
+          sportType,
+          workoutChoice,
+        }
+      : null;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = title.trim();
-    if (!trimmed || durationMinutes == null || durationMinutes <= 0) {
+    if (fields == null) {
       return;
     }
-    const plannedDate = plannedDateOf(dateStr, timeStr);
-    const durationSeconds = Math.round(durationMinutes * 60);
     if (isEdit && existing) {
-      updateMut.mutate({
+      updateMut.mutate({ athleteId, id: existing.id, ...fields });
+    } else {
+      createMut.mutate({ athleteId, ...fields });
+    }
+  };
+
+  // Mark done applies the plan's saved title and type, so save what the dialog
+  // shows first. A failed save has already said so, and links nothing.
+  const handleMarkDone = async (stravaId: number) => {
+    if (existing == null || fields == null) {
+      return;
+    }
+    try {
+      await saveBeforeLinkMut.mutateAsync({
         athleteId,
         id: existing.id,
-        title: trimmed,
-        plannedDate,
-        durationSeconds,
-        sportType,
+        ...fields,
       });
-    } else {
-      createMut.mutate({
-        athleteId,
-        title: trimmed,
-        plannedDate,
-        durationSeconds,
-        sportType,
-      });
+    } catch {
+      return;
     }
+    markDoneMut.mutate({ athleteId, id: existing.id, stravaId });
   };
 
   return (
@@ -153,8 +189,15 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
 
       <div className="flex flex-col gap-1.5">
         <Label>{t("journal.dialog.sport")}</Label>
-        <SportPicker value={sportType} onChange={setSportType} />
+        <SportPicker value={sportType} onChange={handleSportChange} />
       </div>
+
+      <WorkoutChoiceField
+        label={t("journal.dialog.type")}
+        sportType={sportType}
+        value={workoutChoice}
+        onChange={setWorkoutChoice}
+      />
 
       <div className="flex gap-3">
         <Field name="plannedDate" className="flex-1">
@@ -192,8 +235,11 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
 
       {isEdit && existing && (
         <MarkDoneSection
-          athleteId={athleteId}
-          training={existing}
+          sportType={sportType}
+          plannedDate={plannedDateOf(dateStr, timeStr)}
+          canLink={fields != null}
+          linking={saveBeforeLinkMut.isPending || markDoneMut.isPending}
+          onMarkDone={(stravaId) => void handleMarkDone(stravaId)}
           markDoneMut={markDoneMut}
         />
       )}
@@ -238,12 +284,22 @@ interface ActivityGroup {
 }
 
 function MarkDoneSection({
-  athleteId,
-  training,
+  sportType,
+  plannedDate,
+  canLink,
+  linking,
+  onMarkDone,
   markDoneMut,
 }: {
-  athleteId: number;
-  training: PlannedTraining;
+  /**
+   * The sport and date picked in the form, which Mark done saves before
+   * linking, so candidates match them rather than the stored plan.
+   */
+  sportType: string;
+  plannedDate: string;
+  canLink: boolean;
+  linking: boolean;
+  onMarkDone: (stravaId: number) => void;
   markDoneMut: ReturnType<typeof useMarkPlannedTrainingDone>;
 }) {
   const t = useT();
@@ -252,7 +308,7 @@ function MarkDoneSection({
   const { data: activities } = useActivitiesQuery("planMatching");
   // Internal activity ids already linked to a (completed) plan — never offered.
   const { data: linkedActivityIds } = useLinkedActivityIds();
-  const [selectedStravaId, setSelectedStravaId] = React.useState<string>("");
+  const [pickedStravaId, setPickedStravaId] = React.useState<string>("");
 
   // Candidates share the plan's sport category and fall in its week, split into
   // "Perfect matches" (`isPerfectMatch` — same calendar day, and the same exact
@@ -262,8 +318,9 @@ function MarkDoneSection({
   // dropped.
   const { groups, byStravaId } = React.useMemo(() => {
     const linked = new Set(linkedActivityIds ?? []);
-    const plannedCategory = getSportConfig(training.sportType).category;
-    const plannedDate = parsePlannedDate(training.plannedDate);
+    const plan = { sportType, plannedDate };
+    const plannedCategory = getSportConfig(sportType).category;
+    const plannedStart = parsePlannedDate(plannedDate);
 
     const perfect: string[] = [];
     const other: string[] = [];
@@ -278,11 +335,11 @@ function MarkDoneSection({
       }
       const activityDay = dayKey(a.startDateLocal);
       const stravaId = String(a.stravaId);
-      if (isPerfectMatch(training, a)) {
+      if (isPerfectMatch(plan, a)) {
         perfect.push(stravaId);
         map.set(stravaId, a);
       } else if (
-        isSameWeek(new Date(`${activityDay}T00:00:00`), plannedDate, {
+        isSameWeek(new Date(`${activityDay}T00:00:00`), plannedStart, {
           locale: getActiveDateLocale(),
         })
       ) {
@@ -302,13 +359,18 @@ function MarkDoneSection({
       result.push({ value: t("journal.dialog.otherMatches"), items: other });
     }
     return { groups: result, byStravaId: map };
-  }, [activities, linkedActivityIds, training, t]);
+  }, [activities, linkedActivityIds, sportType, plannedDate, t]);
+  // A pick the edited sport or date no longer matches is dropped, so Mark done
+  // never links an activity the plan it saves wouldn't offer.
+  const selectedStravaId = byStravaId.has(pickedStravaId) ? pickedStravaId : "";
 
   return (
     <div className="border-border flex flex-col gap-2 border-t pt-4">
       <Label>{t("journal.dialog.markDoneLabel")}</Label>
       <p className="text-muted-foreground text-xs">
-        {t("journal.dialog.markDoneRenameHint")}
+        {workoutChoicesForSport(sportType)
+          ? t("journal.dialog.markDoneRenameTypeHint")
+          : t("journal.dialog.markDoneRenameHint")}
       </p>
       {groups.length === 0 ? (
         <p className="text-muted-foreground text-sm">
@@ -319,7 +381,7 @@ function MarkDoneSection({
           <Combobox
             items={groups}
             value={selectedStravaId || null}
-            onValueChange={(next) => setSelectedStravaId(next ?? "")}
+            onValueChange={(next) => setPickedStravaId(next ?? "")}
             itemToStringLabel={(id: string) => {
               const a = byStravaId.get(id);
               return a
@@ -371,16 +433,10 @@ function MarkDoneSection({
             type="button"
             variant="secondary"
             className="w-full sm:w-auto"
-            disabled={!selectedStravaId || markDoneMut.isPending}
-            onClick={() =>
-              markDoneMut.mutate({
-                athleteId,
-                id: training.id,
-                stravaId: Number(selectedStravaId),
-              })
-            }
+            disabled={!selectedStravaId || !canLink || linking}
+            onClick={() => onMarkDone(Number(selectedStravaId))}
           >
-            {markDoneMut.isPending
+            {linking
               ? t("journal.dialog.linking")
               : t("journal.dialog.markDone")}
           </Button>

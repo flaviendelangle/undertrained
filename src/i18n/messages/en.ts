@@ -155,6 +155,7 @@ const en = {
       title: "Title",
       titlePlaceholder: "e.g. Threshold intervals",
       sport: "Sport",
+      type: "Type",
       date: "Date",
       start: "Start",
       durationMinutes: "Duration (minutes)",
@@ -166,7 +167,9 @@ const en = {
       noSportFound: "No sport found.",
       markDoneLabel: "Mark done — link a Strava activity",
       markDoneRenameHint:
-        "This renames the activity on Strava to the plan's title and flags it as a workout.",
+        "This renames the activity on Strava to the plan's title.",
+      markDoneRenameTypeHint:
+        "This renames the activity on Strava to the plan's title and gives it the plan's type.",
       noMatchingActivity: "No matching activity found this week yet.",
       perfectMatches: "Perfect matches",
       otherMatches: "Other matches",

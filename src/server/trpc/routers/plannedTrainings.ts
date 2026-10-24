@@ -274,9 +274,9 @@ export const plannedTrainingsRouter = router({
 
   /**
    * Reconciles a planned training with a real Strava activity: renames the
-   * Strava activity to the plan's title and flags it as a workout (synced to
-   * Strava first — if that fails nothing local changes), then mirrors the change
-   * locally and marks the plan completed so it leaves the Journal.
+   * Strava activity to the plan's title and gives it the plan's workout type
+   * (synced to Strava first — if that fails nothing local changes), then mirrors
+   * the change locally and marks the plan completed so it leaves the Journal.
    */
   markDone: protectedProcedure
     .input(
@@ -329,9 +329,12 @@ export const plannedTrainingsRouter = router({
       }
 
       const accessToken = await getAccessToken(ctx.db, input.athleteId);
-      // Flag the activity as a structured workout; sports without a Strava
-      // workout type keep the field untouched.
-      const workoutType = workoutChoiceToValue(plan.sportType, "workout");
+      // Apply the plan's workout type (race, long run, …); sports without a
+      // Strava workout type keep the field untouched.
+      const workoutType = workoutChoiceToValue(
+        plan.sportType,
+        plan.workoutChoice,
+      );
 
       // Push to Strava first; on failure this throws and we change nothing local.
       await updateActivityOnStrava(accessToken, input.stravaId, {
@@ -345,7 +348,14 @@ export const plannedTrainingsRouter = router({
             .update(activities)
             .set({
               name: plan.title,
-              ...(workoutType != null ? { workoutType } : {}),
+              // Stored like `activities.update` does: null for "none", so the
+              // workout-type filter only lists activities with a real type.
+              ...(workoutType != null
+                ? {
+                    workoutType:
+                      plan.workoutChoice === "none" ? null : workoutType,
+                  }
+                : {}),
             })
             .where(eq(activities.id, activity.id));
           await tx

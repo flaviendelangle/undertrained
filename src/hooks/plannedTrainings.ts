@@ -139,6 +139,7 @@ export function useReschedulePlannedTraining() {
         title: training.title,
         durationSeconds: training.durationSeconds,
         sportType: training.sportType,
+        workoutChoice: training.workoutChoice,
       },
       { onSettled: options?.onSettled },
     );

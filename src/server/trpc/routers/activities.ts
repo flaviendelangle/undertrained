@@ -3,7 +3,10 @@ import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
-import { workoutChoiceToValue } from "../../../utils/sportConfig";
+import {
+  WORKOUT_CHOICES,
+  workoutChoiceToValue,
+} from "../../../utils/sportConfig";
 import { activities } from "../../db/schema";
 import {
   activityFilterInput,
@@ -164,7 +167,7 @@ export const activitiesRouter = router({
         name: z.string().trim().min(1).max(200),
         description: z.string().max(8000), // "" clears it
         type: z.string().min(1), // Strava sport_type
-        workoutChoice: z.enum(["none", "race", "long_run", "workout"]),
+        workoutChoice: z.enum(WORKOUT_CHOICES),
         commute: z.boolean(),
       }),
     )
