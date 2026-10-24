@@ -1,6 +1,6 @@
-import type { UseWorkoutPlayerResult } from "~/hooks/useWorkoutPlayer";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
+import type { WorkoutPlayer } from "~/liveTraining/rideEngine";
 
 /**
  * In-ride workout controls: intensity bias, ±1 min on the current step, skip,
@@ -15,7 +15,7 @@ const BUTTON =
   "border-border/50 bg-card/70 hover:bg-accent/70 text-muted-foreground hover:text-foreground flex h-9 min-w-9 items-center justify-center rounded-lg border px-2 text-xs backdrop-blur-sm transition-colors";
 
 interface HudWorkoutControlsProps {
-  player: UseWorkoutPlayerResult;
+  player: WorkoutPlayer;
   onFinishRide: () => void;
   className?: string;
 }
@@ -47,7 +47,7 @@ export function HudWorkoutControls({
   if (player.testMode)
     return (
       <div className={cn("flex items-center gap-2", className)}>
-        {player.finishTest && (
+        {player.canFinishTest && (
           <button type="button" onClick={player.finishTest} className={BUTTON}>
             {t("workouts.builtIn.finish")}
           </button>

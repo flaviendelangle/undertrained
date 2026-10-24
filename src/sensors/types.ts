@@ -44,6 +44,15 @@ export interface SensorConnectOptions {
  */
 export const MAX_TARGET_POWER_WATTS = 1000;
 
+/**
+ * How long a reading stands for a sensor's current value, in milliseconds.
+ * Past that the value is missing: shown as missing, recorded as missing, and
+ * never taken for a zero. A stalled stream must not become invented power in
+ * an FTP estimate.
+ */
+export const TRAINER_READING_TTL_MS = 2500;
+export const HEART_RATE_READING_TTL_MS = 5000;
+
 export interface RiderSettings {
   weightKg: number;
   ftp: number;
