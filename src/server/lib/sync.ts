@@ -2,11 +2,7 @@ import { and, asc, count, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 import strava from "strava-v3";
 import type { DetailedActivity } from "strava-v3";
 
-import { CYCLING_SPEED_DISTANCE_METERS } from "../../utils/cyclingRecordDistances";
-import {
-  getActivityTypesByCategory,
-  getSportConfig,
-} from "../../utils/sportConfig";
+import { getActivityTypesByCategory } from "../../utils/sportConfig";
 import type { Database } from "../db";
 import {
   activities,
@@ -17,19 +13,12 @@ import {
   riderSettings,
   syncJobs,
 } from "../db/schema";
-import {
-  calculateHRSS,
-  calculateRunningTSS,
-  calculateSwimmingTSS,
-  calculateTSS,
-  computeBiggestClimb,
-  computeHeartrateBests,
-  computePowerBests,
-  computeSpeedEfforts,
-  computeZoneSeconds,
-  resolveRiderSettings,
-} from "./computeScores";
-import type { ZoneSecondsByMetric } from "./computeScores";
+import { SCORING_STREAM_TYPES, scoreActivity } from "./activityScoring";
+import type {
+  ScoringActivity,
+  ScoringRiderSettings,
+  ScoringStreams,
+} from "./activityScoring";
 import { resetLastSeenActivityId } from "./linkPromptWatermark";
 import type { normalizeStreams } from "./strava";
 import {
@@ -51,16 +40,6 @@ const MAX_DETAIL_FETCH_ATTEMPTS = 3;
 
 /** Strava activity types treated as runs (which expose best efforts). */
 const RUN_TYPES = getActivityTypesByCategory("running");
-
-/** Stream types loaded for score/record computation. */
-const SCORING_STREAM_TYPES = [
-  "time",
-  "heartrate",
-  "watts",
-  "velocity_smooth",
-  "altitude",
-  "distance",
-];
 
 /**
  * True when a Strava request failed with HTTP 404. For the streams and
@@ -617,38 +596,8 @@ export async function storeActivityDetails(
     .where(eq(activities.id, activityId));
 }
 
-type ActivityForScoring = {
-  id: number;
-  athlete: number;
-  type: string;
-  startDateLocal: string;
-  weightedAverageWatts: number | null;
-  areStreamsLoaded: boolean;
-  movingTime: number;
-  distance: number;
-};
-
-type SettingsDocForScoring = {
-  initialValues: {
-    ftp?: number | null;
-    weightKg?: number | null;
-    restingHr?: number | null;
-    maxHr?: number | null;
-    lthr?: number | null;
-    runThresholdPace?: number | null;
-    swimThresholdPace?: number | null;
-  };
-  changes: {
-    date: string;
-    ftp?: number;
-    weightKg?: number;
-    restingHr?: number;
-    maxHr?: number;
-    lthr?: number;
-    runThresholdPace?: number;
-    swimThresholdPace?: number;
-  }[];
-};
+type ActivityForScoring = ScoringActivity &
+  Pick<typeof activities.$inferSelect, "id" | "areStreamsLoaded">;
 
 type StreamDoc = {
   activityId: number;
@@ -664,7 +613,7 @@ type StreamDoc = {
 async function computeActivityScoresBatch(
   db: Database,
   batch: ActivityForScoring[],
-  settingsDoc: SettingsDocForScoring | null,
+  settingsDoc: ScoringRiderSettings | null,
 ) {
   // Batch-load all streams for activities that have them
   const activitiesWithStreams = batch.filter((a) => a.areStreamsLoaded);
@@ -737,54 +686,27 @@ function streamData(
   return matched.length > 0 ? parseStreamDocs(matched, activityId) : undefined;
 }
 
+/** Parses the stored stream rows into samples per scoring stream type. */
+function scoringStreams(docs: StreamDoc[], activityId: number): ScoringStreams {
+  const streams: ScoringStreams = {};
+  for (const type of SCORING_STREAM_TYPES) {
+    const data = streamData(docs, type, activityId);
+    if (data) streams[type] = data;
+  }
+  return streams;
+}
+
+/**
+ * Scores an activity with {@link scoreActivity} and writes the result. Loads
+ * the activity's streams unless the caller preloaded them.
+ */
 export async function computeActivityScoresInternal(
   db: Database,
   activity: ActivityForScoring,
-  settingsDoc: SettingsDocForScoring | null,
+  settingsDoc: ScoringRiderSettings | null,
   preloadedStreams?: StreamDoc[],
 ) {
-  const settings = settingsDoc
-    ? resolveRiderSettings(settingsDoc, activity.startDateLocal.slice(0, 10))
-    : null;
-
-  const patch: {
-    tss?: number;
-    hrss?: number;
-    powerBests?: Record<number, number> | null;
-    speedEfforts?: Record<number, number> | null;
-    biggestClimb?: number | null;
-    heartrateBests?: Record<number, number> | null;
-    zoneSeconds?: ZoneSecondsByMetric | null;
-  } = {};
-
-  const sc = getSportConfig(activity.type);
-
-  if (settings && activity.weightedAverageWatts != null && sc.hasPowerMetrics) {
-    patch.tss = Math.round(
-      calculateTSS(
-        activity.weightedAverageWatts,
-        activity.movingTime,
-        settings.ftp,
-      ),
-    );
-  }
-
-  // Swimming sTSS (no stream needed — uses distance/movingTime)
-  if (
-    settings &&
-    sc.category === "swimming" &&
-    settings.swimThresholdPace > 0 &&
-    activity.distance > 0
-  ) {
-    patch.tss = Math.round(
-      calculateSwimmingTSS(
-        activity.distance,
-        activity.movingTime,
-        settings.swimThresholdPace,
-      ),
-    );
-  }
-
+  let streams: ScoringStreams | null = null;
   if (activity.areStreamsLoaded) {
     // Use pre-loaded streams if available, otherwise query (for standalone calls)
     const streamDocs =
@@ -798,88 +720,14 @@ export async function computeActivityScoresInternal(
             inArray(activityStreams.type, SCORING_STREAM_TYPES),
           ),
         ));
-
-    const timeData = streamData(streamDocs, "time", activity.id);
-    const wattsData = sc.hasPowerMetrics
-      ? streamData(streamDocs, "watts", activity.id)
-      : undefined;
-    const velocityData =
-      sc.category === "running"
-        ? streamData(streamDocs, "velocity_smooth", activity.id)
-        : undefined;
-
-    // HR powers both HRSS (needs settings) and HR bests (running & cycling,
-    // including indoor — HR is a real sensor metric).
-    const hrData = streamData(streamDocs, "heartrate", activity.id);
-    if (settings && hrData) {
-      patch.hrss = Math.round(calculateHRSS(hrData, settings, timeData));
-    }
-    if (hrData && (sc.category === "cycling" || sc.category === "running")) {
-      patch.heartrateBests = computeHeartrateBests(hrData, timeData);
-    } else {
-      patch.heartrateBests = null;
-    }
-
-    if (
-      settings &&
-      sc.category === "running" &&
-      settings.runThresholdPace > 0
-    ) {
-      if (velocityData && timeData) {
-        patch.tss = Math.round(
-          calculateRunningTSS(
-            velocityData,
-            timeData,
-            settings.runThresholdPace,
-          ),
-        );
-      }
-    }
-
-    if (sc.hasPowerMetrics) {
-      if (wattsData) {
-        patch.powerBests = computePowerBests(wattsData, timeData);
-      }
-    } else {
-      patch.powerBests = null;
-    }
-
-    // Cycling Speed (distance best efforts) & biggest climb, computed from
-    // existing streams. Excludes virtual rides — their distance/altitude are
-    // simulated, not real records.
-    if (sc.category === "cycling" && activity.type !== "VirtualRide") {
-      const distanceData = streamData(streamDocs, "distance", activity.id);
-      if (distanceData && timeData) {
-        patch.speedEfforts = computeSpeedEfforts(
-          distanceData,
-          timeData,
-          CYCLING_SPEED_DISTANCE_METERS,
-        );
-      }
-
-      const altitudeData = streamData(streamDocs, "altitude", activity.id);
-      if (altitudeData) {
-        patch.biggestClimb = computeBiggestClimb(altitudeData);
-      }
-    } else {
-      patch.speedEfforts = null;
-      patch.biggestClimb = null;
-    }
-
-    // Always set-or-null so stale zone data clears when settings or the
-    // sport classification change.
-    patch.zoneSeconds = settings
-      ? computeZoneSeconds({
-          isRunning: sc.category === "running",
-          hasPowerMetrics: sc.hasPowerMetrics,
-          settings,
-          timeData,
-          wattsData,
-          hrData,
-          velocityData,
-        })
-      : null;
+    streams = scoringStreams(streamDocs, activity.id);
   }
+
+  const patch = scoreActivity({
+    activity,
+    streams,
+    riderSettings: settingsDoc,
+  });
 
   if (Object.keys(patch).length > 0) {
     await db
