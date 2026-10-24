@@ -17,12 +17,13 @@ export const MIN_LAP_DURATION_S = 5;
  */
 export const MIN_POWER_LAP_FRACTION = 0.9;
 
-/** Map the Strava activity type to the structure metric, or null if unsupported. */
+/**
+ * Map the Strava activity type to the structure metric: its sport's zone
+ * model, or null when that is heart rate or there is none (unsupported).
+ */
 export function selectMetric(activityType: string): StructureMetric | null {
-  const category = getSportConfig(activityType).category;
-  if (category === "cycling") return "power";
-  if (category === "running") return "pace";
-  return null;
+  const zoneModel = getSportConfig(activityType).zoneModel;
+  return zoneModel === "hr" ? null : zoneModel;
 }
 
 /**

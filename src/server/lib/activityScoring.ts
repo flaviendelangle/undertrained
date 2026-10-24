@@ -7,8 +7,7 @@
  * `activityStore.ts` is the adapter that loads the streams and writes the
  * patch.
  */
-import { findRunningPaceZone } from "../../sensors/paceZones";
-import { findHeartRateZone, findPowerZone } from "../../sensors/types";
+import { ZONE_MODELS } from "../../sensors/zoneModels";
 import { CYCLING_POWER_DURATION_SECONDS } from "../../utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCE_METERS } from "../../utils/cyclingRecordDistances";
 import { resolveTimeline } from "../../utils/resolveTimeline";
@@ -463,10 +462,14 @@ function computeZoneSeconds(args: {
 
   const result: ZoneSecondsByMetric = {};
 
-  if (hasPowerMetrics && settings.ftp > 0 && args.wattsData) {
+  if (
+    hasPowerMetrics &&
+    ZONE_MODELS.power.threshold(settings) != null &&
+    args.wattsData
+  ) {
     result.power = accumulate(
       args.wattsData,
-      (w) => findPowerZone(w, settings.ftp).zone.ramp,
+      (w) => ZONE_MODELS.power.classify(w, settings).zone.ramp,
       (w) => w > 0,
     );
     result.powerCoastingSeconds = accumulate(
@@ -479,21 +482,22 @@ function computeZoneSeconds(args: {
   // Same guard as rTSS: pace zones need real time deltas to be meaningful.
   if (
     isRunning &&
-    settings.runThresholdPace > 0 &&
+    ZONE_MODELS.pace.threshold(settings) != null &&
     args.velocityData &&
     timeData
   ) {
     result.pace = accumulate(
       args.velocityData,
-      (v) => findRunningPaceZone(v, settings.runThresholdPace).ramp,
+      (v) => ZONE_MODELS.pace.classify(v, settings).zone.ramp,
     );
   }
 
+  // Stricter than the HR model's own threshold (a max HR): no zones unless the
+  // heart-rate reserve is positive.
   if (args.hrData && settings.maxHr > settings.restingHr) {
     result.hr = accumulate(
       args.hrData,
-      (hr) =>
-        findHeartRateZone(hr, settings.maxHr, settings.restingHr).zone.ramp,
+      (hr) => ZONE_MODELS.hr.classify(hr, settings).zone.ramp,
     );
   }
 

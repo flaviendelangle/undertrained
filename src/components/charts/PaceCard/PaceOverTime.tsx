@@ -289,7 +289,8 @@ function ZonePaceArea(props: {
             cy={yScale(Math.max(yMin, Math.min(yMax, smoothed[hoverIndex])))}
             color={
               tokens.zones[
-                findRunningPaceZone(smoothed[hoverIndex], thresholdSpeed).ramp
+                findRunningPaceZone(smoothed[hoverIndex], thresholdSpeed).zone
+                  .ramp
               ]
             }
             ringColor={tokens.cardBg}
@@ -322,7 +323,7 @@ function PaceTooltip({
 }) {
   const t = useT();
   const tokens = useChartTokens();
-  const zone = findRunningPaceZone(hover.speed, thresholdSpeed);
+  const { zone } = findRunningPaceZone(hover.speed, thresholdSpeed);
   const pace = paceFromSpeed(hover.speed);
   return (
     <div

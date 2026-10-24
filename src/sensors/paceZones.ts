@@ -38,10 +38,14 @@ export const RUNNING_PACE_ZONES: PaceZone[] = [
 export function findRunningPaceZone(
   speed: number,
   thresholdSpeed: number,
-): PaceZone {
+): { zone: PaceZone; index: number } {
   const ratio = thresholdSpeed > 0 ? speed / thresholdSpeed : 0;
-  for (const zone of RUNNING_PACE_ZONES) {
-    if (ratio <= zone.maxRatio) return zone;
+  for (let i = 0; i < RUNNING_PACE_ZONES.length; i++) {
+    if (ratio <= RUNNING_PACE_ZONES[i].maxRatio)
+      return { zone: RUNNING_PACE_ZONES[i], index: i };
   }
-  return RUNNING_PACE_ZONES[RUNNING_PACE_ZONES.length - 1];
+  return {
+    zone: RUNNING_PACE_ZONES[RUNNING_PACE_ZONES.length - 1],
+    index: RUNNING_PACE_ZONES.length - 1,
+  };
 }
