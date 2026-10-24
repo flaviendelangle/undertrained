@@ -45,6 +45,7 @@ const LABELS_PANE = "satellite-labels";
 function FitBounds(props: FitBoundsProps) {
   const { polylines, onFitted } = props;
   const map = useMap();
+  const notifyFitted = React.useEffectEvent(() => onFitted?.());
 
   React.useEffect(() => {
     const allPositions: [number, number][] = [];
@@ -64,8 +65,8 @@ function FitBounds(props: FitBoundsProps) {
         paddingBottomRight: [8, 24],
       });
     }
-    onFitted?.();
-  }, [polylines, map, onFitted]);
+    notifyFitted();
+  }, [polylines, map]);
 
   return null;
 }
