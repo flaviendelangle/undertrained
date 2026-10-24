@@ -625,7 +625,7 @@ const en = {
     loadAlgorithm: {
       title: "Load Algorithm",
       tooltip:
-        "TSS uses power data (most accurate for cycling with a power meter). HRSS uses heart rate (works for any sport with an HR monitor). rTSS/sTSS use pace (good for running/swimming without power).",
+        "TSS uses power data (most accurate for cycling with a power meter). HRSS uses heart rate (works for any sport with an HR monitor). rTSS/sTSS use pace (good for running/swimming without power). Activities none of these can score fall back to the RPE (perceived exertion) you entered on Strava.",
       description:
         "Choose which training load metric to display for each sport category.",
       option: {

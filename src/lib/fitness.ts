@@ -13,6 +13,8 @@ export interface FitnessActivity {
   type: string;
   hrss: number | null;
   tss: number | null;
+  perceivedExertion: number | null;
+  movingTime: number;
   /** Local wall-clock start, ISO-ish string. Only the `yyyy-MM-dd` head is used. */
   startDateLocal: string;
 }

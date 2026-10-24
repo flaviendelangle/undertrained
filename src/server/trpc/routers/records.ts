@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { CYCLING_POWER_DURATIONS } from "../../../utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCE_METERS } from "../../../utils/cyclingRecordDistances";
+import { estimateRpeLoad } from "../../../utils/getActivityLoad";
 import {
   activityTypesFor,
   getActivityTypesByCategory,
@@ -28,6 +29,26 @@ function typeList(types: readonly string[]): SQL {
     types.map((t) => sql`${t}`),
     sql`, `,
   );
+}
+
+/**
+ * SQL twin of `estimateRpeLoad`. NULL without an RPE: GREATEST only returns
+ * NULL when every argument is NULL, which both are then.
+ */
+const RPE_LOAD_SQL = sql`ROUND((GREATEST(
+  10 * a.perceived_exertion::float8 + 10,
+  20 * a.perceived_exertion::float8 - 60
+) * a.moving_time / 3600)::numeric)`;
+
+/**
+ * An activity's load in SQL, mirroring `getActivityLoad` for one sport: the
+ * preferred score (TSS/rTSS in `tss`, heart-rate score in `hrss`), then the
+ * other one, then the RPE estimate.
+ */
+function loadSql(algorithm: string | undefined): SQL {
+  return algorithm === "hrss"
+    ? sql`COALESCE(a.hrss, a.tss, ${RPE_LOAD_SQL})`
+    : sql`COALESCE(a.tss, a.hrss, ${RPE_LOAD_SQL})`;
 }
 
 interface LeaderboardRow {
@@ -365,6 +386,7 @@ export const recordsRouter = router({
           totalElevationGain: activities.totalElevationGain,
           tss: activities.tss,
           hrss: activities.hrss,
+          perceivedExertion: activities.perceivedExertion,
         })
         .from(activities)
         .where(
@@ -391,21 +413,22 @@ export const recordsRouter = router({
       const sportTypes = typeList(isCycling ? CYCLING_TYPES : RUNNING_TYPES);
 
       // `load` ranking mirrors getLongestActivityLeaderboard: rank by the
-      // athlete's preferred per-sport score, falling back to the other.
+      // athlete's preferred per-sport score, falling back to the other, then
+      // to the RPE estimate.
       const settings = await ctx.db.query.riderSettings.findFirst({
         where: eq(riderSettings.athlete, input.athleteId),
       });
       const algorithm = isCycling
         ? settings?.cyclingLoadAlgorithm
         : settings?.runningLoadAlgorithm;
-      const loadExpr =
-        algorithm === "hrss"
-          ? sql`COALESCE(a.hrss, a.tss)`
-          : sql`COALESCE(a.tss, a.hrss)`;
+      const loadExpr = loadSql(algorithm);
       const targetLoad =
-        algorithm === "hrss"
+        (algorithm === "hrss"
           ? (activity.hrss ?? activity.tss)
-          : (activity.tss ?? activity.hrss);
+          : (activity.tss ?? activity.hrss)) ??
+        (activity.perceivedExertion != null
+          ? estimateRpeLoad(activity.perceivedExertion, activity.movingTime)
+          : null);
 
       const tasks: Promise<ActivityRanking[]>[] = [];
 
@@ -704,10 +727,7 @@ export const recordsRouter = router({
    * their total distance (meters), moving time (seconds), or training load,
    * longest first. Includes indoor/virtual activities.
    *
-   * For `load`, the ranking mirrors {@link getActivityLoad}: it uses the
-   * athlete's preferred per-sport algorithm (the sport-specific score TSS/rTSS
-   * lives in `tss`, heart-rate score in `hrss`) and falls back to the other
-   * score when the preferred one is missing.
+   * For `load`, the ranking mirrors {@link getActivityLoad}: see {@link loadSql}.
    */
   getLongestActivityLeaderboard: protectedProcedure
     .input(
@@ -731,10 +751,7 @@ export const recordsRouter = router({
           input.sport === "cycling"
             ? settings?.cyclingLoadAlgorithm
             : settings?.runningLoadAlgorithm;
-        valueExpr =
-          algorithm === "hrss"
-            ? sql`COALESCE(a.hrss, a.tss)`
-            : sql`COALESCE(a.tss, a.hrss)`;
+        valueExpr = loadSql(algorithm);
       }
       return topActivities(ctx.db, {
         athleteId: input.athleteId,
