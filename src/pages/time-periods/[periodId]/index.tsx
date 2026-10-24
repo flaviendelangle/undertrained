@@ -27,6 +27,7 @@ import { useTypedParams } from "~/hooks/useTypedParams";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
+import { activityTypesFor } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 const TimePeriodMap = nextDynamic(
@@ -40,7 +41,7 @@ const PowerCurve = nextDynamic(
   { ssr: false },
 );
 
-const POWER_ACTIVITY_TYPES = ["Ride", "VirtualRide"];
+const POWER_ACTIVITY_TYPES = activityTypesFor("power");
 
 const routerSchema = { periodId: "string" as const };
 

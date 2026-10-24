@@ -21,6 +21,12 @@ import type {
 export type SportCategory =
   "cycling" | "running" | "swimming" | "strength" | "hiking" | "other";
 
+/**
+ * A training-zone model: power zones against FTP, pace zones against the run
+ * threshold pace, or heart-rate zones (Karvonen, from max and resting HR).
+ */
+export type ZoneModel = "power" | "pace" | "hr";
+
 /** Minimal activity shape needed to build the per-sport Journal stats line. */
 export interface JournalStatsActivity {
   distance: number;
@@ -145,6 +151,13 @@ export class SportConfig {
   /** Whether this sport has a sport-specific pace-based training stress score (rTSS, sTSS). */
   readonly hasPaceTSS: boolean = false;
 
+  /**
+   * The zone model this sport's intensity is measured in: power for cycling,
+   * pace for running, heart rate for everything else. `null` for swimming:
+   * its sTSS is pace-based but the app has no swim pace-zone model.
+   */
+  readonly zoneModel: ZoneModel | null = "hr";
+
   // ── Training load metadata ──────────────────────────────────
 
   /** Label for the sport-specific training stress score — `"TSS"`, `"rTSS"`, or `"sTSS"`. */
@@ -226,6 +239,7 @@ class CyclingSportConfig extends SportConfig {
   override readonly category = "cycling" as const;
   override readonly color = "var(--sport-cycling)";
   override readonly hasPowerMetrics = true;
+  override readonly zoneModel = "power";
   override readonly lapMetricStreamType = "watts";
 
   /** Cycling cards show distance + normalized power (falling back to average power, then speed). */
@@ -278,6 +292,7 @@ class RunSportConfig extends SportConfig {
   override readonly category = "running" as const;
   override readonly color = "var(--sport-running)";
   override readonly hasPaceTSS = true;
+  override readonly zoneModel = "pace";
 
   override readonly tssLabel = "rTSS";
   override readonly tssSettingsHint =
@@ -337,6 +352,7 @@ class SwimSportConfig extends SportConfig {
   override readonly category = "swimming" as const;
   override readonly color = "var(--sport-swimming)";
   override readonly hasPaceTSS = true;
+  override readonly zoneModel = null;
 
   override readonly tssLabel = "sTSS";
   override readonly tssSettingsHint =
@@ -410,6 +426,12 @@ const SPORT_CONFIGS: Record<string, SportConfig> = {
 
 const DEFAULT_CONFIG = new SportConfig();
 
+/** Types recorded indoors (trainer, treadmill), whose distance and altitude are simulated. */
+const VIRTUAL_TYPES: ReadonlySet<string> = new Set([
+  "VirtualRide",
+  "VirtualRun",
+]);
+
 /**
  * Per-category display metadata (label, theme colour, representative icon) for
  * grouped summaries — e.g. the per-sport breakdown in the Journal week card.
@@ -444,24 +466,125 @@ export function getSportConfig(activityType: string): SportConfig {
 }
 
 /**
- * Return all Strava activity-type strings that belong to a given sport category.
+ * Return all Strava activity-type strings that belong to a given sport category,
+ * leaving out virtual types (e.g. `VirtualRun`) when `includeVirtual` is false.
  *
  * Useful when a component needs the raw list (e.g. for a database query filter).
  */
-export function getActivityTypesByCategory(category: SportCategory): string[] {
+export function getActivityTypesByCategory(
+  category: SportCategory,
+  { includeVirtual = true }: { includeVirtual?: boolean } = {},
+): string[] {
   return Object.entries(SPORT_CONFIGS)
-    .filter(([, config]) => config.category === category)
+    .filter(
+      ([type, config]) =>
+        config.category === category &&
+        (includeVirtual || !VIRTUAL_TYPES.has(type)),
+    )
     .map(([type]) => type);
+}
+
+// ── Analyses ────────────────────────────────────────────────────
+
+/**
+ * An analysis only some activity types get:
+ * - `power`: the power curve, power cards and power bests (needs power data);
+ * - `pace`: the running pace card;
+ * - `bestEfforts`: Strava's run best efforts, stored when syncing;
+ * - `speedAndClimbing`: cycling speed bests and climbing records. They need a
+ *   real-world distance and altitude, so virtual rides don't count.
+ */
+export type Analysis = "power" | "pace" | "bestEfforts" | "speedAndClimbing";
+
+const ANALYSIS_RULES: Record<
+  Analysis,
+  (config: SportConfig, activityType: string) => boolean
+> = {
+  power: (config) => config.hasPowerMetrics,
+  pace: (config) => config.category === "running",
+  bestEfforts: (config) => config.category === "running",
+  speedAndClimbing: (config, activityType) =>
+    config.category === "cycling" && !VIRTUAL_TYPES.has(activityType),
+};
+
+/** Whether an activity of this Strava type gets the given analysis. */
+export function supportsAnalysis(
+  activityType: string,
+  analysis: Analysis,
+): boolean {
+  return ANALYSIS_RULES[analysis](getSportConfig(activityType), activityType);
+}
+
+/**
+ * Every Strava activity type that gets the given analysis, e.g. to scope a
+ * query to the activities that can feed it.
+ */
+export function activityTypesFor(analysis: Analysis): string[] {
+  return Object.keys(SPORT_CONFIGS).filter((type) =>
+    supportsAnalysis(type, analysis),
+  );
+}
+
+// ── Zone thresholds ─────────────────────────────────────────────
+
+/**
+ * Whether the rider settings hold the threshold a zone model is computed
+ * against: FTP for power, run threshold pace for pace, max HR for heart rate.
+ * (The server's `computeZoneSeconds` still asks for a max HR above resting HR.)
+ */
+export function hasZoneThreshold(
+  model: ZoneModel,
+  settings: Pick<RiderSettings, "ftp" | "runThresholdPace" | "maxHr">,
+): boolean {
+  switch (model) {
+    case "power":
+      return settings.ftp > 0;
+    case "pace":
+      return settings.runThresholdPace > 0;
+    case "hr":
+      return settings.maxHr > 0;
+  }
 }
 
 // ── Workout type (Strava `workout_type`) ────────────────────────
 
 /**
- * Strava's `workout_type` is sport-specific and only exists for runs and rides.
- * The edit form exposes it as a small, sport-dependent set of choices; this
- * sport-agnostic union is the key shared by the form and the update mutation.
+ * Strava's `workout_type` is sport-specific and can only be set on runs and
+ * rides. The edit form exposes it as a small, sport-dependent set of choices;
+ * this sport-agnostic union is the key shared by the form and the update
+ * mutation.
  */
 export type WorkoutChoice = "none" | "race" | "long_run" | "workout";
+
+/**
+ * What a stored `workout_type` means, whatever the sport: one of the
+ * {@link WorkoutChoice}s, or `weight_training` (30), which the activity filter
+ * lists for weight-training sessions and the edit form can't set.
+ */
+export type WorkoutKind = WorkoutChoice | "weight_training";
+
+const WORKOUT_CHOICES: readonly WorkoutChoice[] = [
+  "none",
+  "race",
+  "long_run",
+  "workout",
+];
+
+const RUN_WORKOUT_TYPES = { none: 0, race: 1, long_run: 2, workout: 3 };
+// Rides have no "long run".
+const RIDE_WORKOUT_TYPES = { none: 10, race: 11, workout: 12 };
+
+/**
+ * Strava's `workout_type` integers per activity type, keyed by what they mean:
+ * runs use 0–3, rides 10–12.
+ */
+const WORKOUT_TYPES: Record<string, Partial<Record<WorkoutKind, number>>> = {
+  Run: RUN_WORKOUT_TYPES,
+  VirtualRun: RUN_WORKOUT_TYPES,
+  Ride: RIDE_WORKOUT_TYPES,
+  VirtualRide: RIDE_WORKOUT_TYPES,
+  WeightTraining: { weight_training: 30 },
+};
 
 /**
  * The workout-type choices Strava offers for a sport, in display order, or
@@ -471,38 +594,23 @@ export type WorkoutChoice = "none" | "race" | "long_run" | "workout";
 export function workoutChoicesForSport(
   sportType: string,
 ): WorkoutChoice[] | null {
-  switch (sportType) {
-    case "Run":
-    case "VirtualRun":
-      return ["none", "race", "long_run", "workout"];
-    case "Ride":
-    case "VirtualRide":
-      return ["none", "race", "workout"];
-    default:
-      return null;
-  }
+  const values = WORKOUT_TYPES[sportType];
+  const choices = WORKOUT_CHOICES.filter((choice) => values?.[choice] != null);
+  return choices.length > 0 ? choices : null;
 }
 
 /**
  * Maps a sport + choice to Strava's integer `workout_type` (runs 0–3, rides
- * 10–12). Returns `undefined` for sports without a workout type, so callers omit
- * the field from the Strava payload and store `null` locally.
+ * 10–12). A choice the sport lacks (a ride's "long run") maps to the sport's
+ * default. Returns `undefined` for sports without a workout type, so callers
+ * omit the field from the Strava payload and store `null` locally.
  */
 export function workoutChoiceToValue(
   sportType: string,
   choice: WorkoutChoice,
 ): number | undefined {
-  switch (sportType) {
-    case "Run":
-    case "VirtualRun":
-      return { none: 0, race: 1, long_run: 2, workout: 3 }[choice];
-    case "Ride":
-    case "VirtualRide":
-      // Rides have no "long run"; treat it as unspecified.
-      return { none: 10, race: 11, long_run: 10, workout: 12 }[choice];
-    default:
-      return undefined;
-  }
+  const values = WORKOUT_TYPES[sportType];
+  return values?.[choice] ?? values?.none;
 }
 
 /**
@@ -513,22 +621,41 @@ export function workoutValueToChoice(
   sportType: string,
   value: number | null | undefined,
 ): WorkoutChoice {
-  switch (sportType) {
-    case "Run":
-    case "VirtualRun":
-      return value === 1
-        ? "race"
-        : value === 2
-          ? "long_run"
-          : value === 3
-            ? "workout"
-            : "none";
-    case "Ride":
-    case "VirtualRide":
-      return value === 11 ? "race" : value === 12 ? "workout" : "none";
-    default:
-      return "none";
+  const values = WORKOUT_TYPES[sportType];
+  return (
+    WORKOUT_CHOICES.find(
+      (choice) => value != null && values?.[choice] === value,
+    ) ?? "none"
+  );
+}
+
+/**
+ * What a stored `workout_type` integer means, e.g. `"race"` for both a run race
+ * (1) and a ride race (11). `null` when the value is unset or unknown.
+ */
+export function workoutKind(
+  value: number | null | undefined,
+): WorkoutKind | null {
+  if (value == null) return null;
+  for (const values of Object.values(WORKOUT_TYPES)) {
+    for (const [kind, kindValue] of Object.entries(values)) {
+      if (kindValue === value) return kind as WorkoutKind;
+    }
   }
+  return null;
+}
+
+/**
+ * Every `workout_type` integer that means `kind`, across sports, in ascending
+ * order. E.g. `[1, 11]` for `"race"`, to filter on races of any sport.
+ */
+export function workoutTypesOfKind(kind: WorkoutKind): number[] {
+  const values = new Set<number>();
+  for (const sportValues of Object.values(WORKOUT_TYPES)) {
+    const value = sportValues[kind];
+    if (value != null) values.add(value);
+  }
+  return [...values].sort((a, b) => a - b);
 }
 
 export interface LoadAlgorithmConfig {

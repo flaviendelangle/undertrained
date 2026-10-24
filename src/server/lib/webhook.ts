@@ -3,7 +3,7 @@ import strava from "strava-v3";
 
 import { TRPCError } from "@trpc/server";
 
-import { getSportConfig } from "../../utils/sportConfig";
+import { supportsAnalysis } from "../../utils/sportConfig";
 import { db } from "../db";
 import type { Database } from "../db";
 import { activities, athletes, riderSettings } from "../db/schema";
@@ -130,7 +130,7 @@ async function handleActivityCreate(
   }
 
   // Store run best efforts from the already-fetched detailed activity (no extra call)
-  if (getSportConfig(rawActivity.type).category === "running") {
+  if (supportsAnalysis(rawActivity.type, "bestEfforts")) {
     try {
       await storeBestEfforts(db, activityId, rawActivity);
     } catch (err) {
@@ -294,7 +294,7 @@ async function handleActivityUpdate(
 
   // Refresh run best efforts and the detail-only fields (description/RPE/private
   // note/laps) from the activity we already re-fetched.
-  if (getSportConfig(rawActivity.type).category === "running") {
+  if (supportsAnalysis(rawActivity.type, "bestEfforts")) {
     try {
       await storeBestEfforts(db, existing.id, rawActivity);
     } catch (err) {

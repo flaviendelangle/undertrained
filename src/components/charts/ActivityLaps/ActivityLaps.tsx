@@ -33,7 +33,12 @@ import {
   findPowerZone,
 } from "~/sensors/types";
 import { formatElapsed } from "~/utils/format";
-import { type SportConfig, getSportConfig } from "~/utils/sportConfig";
+import {
+  type SportConfig,
+  type ZoneModel,
+  getSportConfig,
+  hasZoneThreshold,
+} from "~/utils/sportConfig";
 import {
   type IntervalBlock,
   type StructureIntensity,
@@ -185,8 +190,7 @@ export default function ActivityLaps(props: ActivityLapsProps) {
     const zone = resolveLapZone(
       {
         value,
-        usePower,
-        isRunning,
+        zoneModel: sportConfig.zoneModel,
         settings,
         averageHeartrate: lap.averageHeartrate ?? null,
       },
@@ -505,31 +509,35 @@ function LapTooltip({ hover }: { hover: HoverState }) {
 }
 
 /**
- * Metric-matched zone for a lap, returning name + zone-ramp index:
- * - cycling → power zones (FTP),
- * - running → intervals.icu pace zones vs the run threshold pace (value is GAP),
- * - otherwise / when the primary metric is missing → heart-rate zones (Karvonen).
+ * Zone for a lap in the sport's zone model, returning name + zone-ramp index:
+ * - power → power zones (FTP),
+ * - pace → intervals.icu pace zones vs the run threshold pace (value is GAP),
+ * - otherwise / when the model's threshold or value is missing → heart-rate
+ *   zones (Karvonen).
  */
 function resolveLapZone(
   opts: {
     value: number;
-    usePower: boolean;
-    isRunning: boolean;
+    zoneModel: ZoneModel | null;
     settings: RiderSettings;
     averageHeartrate: number | null;
   },
   t: TFunction,
 ): { name: string; ramp: number } | null {
-  const { value, usePower, isRunning, settings, averageHeartrate } = opts;
+  const { value, zoneModel, settings, averageHeartrate } = opts;
 
-  if (usePower && settings.ftp > 0 && value > 0) {
+  if (
+    zoneModel === "power" &&
+    hasZoneThreshold("power", settings) &&
+    value > 0
+  ) {
     const { zone, index } = findPowerZone(value, settings.ftp);
     return { ...zone, name: powerZoneLabel(index, t) };
   }
-  if (isRunning && settings.runThresholdPace > 0 && value > 0) {
+  if (zoneModel === "pace" && hasZoneThreshold("pace", settings) && value > 0) {
     return findRunningPaceZone(value, settings.runThresholdPace);
   }
-  if (averageHeartrate != null && settings.maxHr > 0) {
+  if (averageHeartrate != null && hasZoneThreshold("hr", settings)) {
     return findHeartRateZone(
       averageHeartrate,
       settings.maxHr,
