@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { riderSettings } from "../../db/schema";
 import { activityIngestion } from "../../lib/sync";
-import { protectedProcedure, router, validateAthleteOwnership } from "../index";
+import { athleteProcedure, router } from "../index";
 
 const changePointSchema = z.object({
   id: z.string(),
@@ -29,21 +29,17 @@ const initialValuesSchema = z.object({
 });
 
 export const riderSettingsRouter = router({
-  get: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      return (
-        (await ctx.db.query.riderSettings.findFirst({
-          where: eq(riderSettings.athlete, input.athleteId),
-        })) ?? null
-      );
-    }),
+  get: athleteProcedure.query(async ({ ctx, input }) => {
+    return (
+      (await ctx.db.query.riderSettings.findFirst({
+        where: eq(riderSettings.athlete, input.athleteId),
+      })) ?? null
+    );
+  }),
 
-  save: protectedProcedure
+  save: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         cdA: z.number().positive().max(2),
         crr: z.number().positive().max(1),
         bikeWeightKg: z.number().positive().max(50),
@@ -54,7 +50,6 @@ export const riderSettingsRouter = router({
         changes: z.array(changePointSchema),
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const { athleteId, ...data } = input;
 

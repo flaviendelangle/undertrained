@@ -14,7 +14,7 @@ import {
 } from "../../../utils/sportConfig";
 import type { Database } from "../../db";
 import { activities, riderSettings } from "../../db/schema";
-import { protectedProcedure, router, validateAthleteOwnership } from "../index";
+import { athleteProcedure, router } from "../index";
 
 const DEFAULT_LIMIT = 25;
 const CYCLING_TYPES = getActivityTypesByCategory("cycling");
@@ -122,7 +122,6 @@ async function topActivities(
 }
 
 const leaderboardInput = z.object({
-  athleteId: z.number(),
   limit: z.number().int().positive().max(100).default(DEFAULT_LIMIT),
 });
 
@@ -240,13 +239,10 @@ export const recordsRouter = router({
    * - `runDistances`: the distinct Strava run best-effort distances (→ Running/Pace),
    *   ordered shortest → longest.
    */
-  getOptions: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      const cyclingTypes = typeList(CYCLING_TYPES);
-      const [cyclingRows, runRows] = await Promise.all([
-        ctx.db.execute<{ has_cycling: boolean; has_power: boolean }>(sql`
+  getOptions: athleteProcedure.query(async ({ ctx, input }) => {
+    const cyclingTypes = typeList(CYCLING_TYPES);
+    const [cyclingRows, runRows] = await Promise.all([
+      ctx.db.execute<{ has_cycling: boolean; has_power: boolean }>(sql`
           SELECT
             EXISTS (
               SELECT 1 FROM activities
@@ -259,7 +255,7 @@ export const recordsRouter = router({
                 AND power_bests IS NOT NULL
             ) AS has_power
         `),
-        ctx.db.execute<{ name: string; distance: string }>(sql`
+      ctx.db.execute<{ name: string; distance: string }>(sql`
           SELECT be.name, MIN(be.distance) AS distance
           FROM best_efforts be
           JOIN activities a ON a.id = be.activity_id
@@ -267,17 +263,17 @@ export const recordsRouter = router({
           GROUP BY be.name
           ORDER BY distance ASC
         `),
-      ]);
+    ]);
 
-      return {
-        hasCycling: Boolean(cyclingRows[0]?.has_cycling),
-        hasCyclingPower: Boolean(cyclingRows[0]?.has_power),
-        runDistances: runRows.map((r) => ({
-          name: String(r.name),
-          distance: Number(r.distance),
-        })),
-      };
-    }),
+    return {
+      hasCycling: Boolean(cyclingRows[0]?.has_cycling),
+      hasCyclingPower: Boolean(cyclingRows[0]?.has_power),
+      runDistances: runRows.map((r) => ({
+        name: String(r.name),
+        distance: Number(r.distance),
+      })),
+    };
+  }),
 
   /**
    * Activities that hold an all-time #1 record in a curated, headline set —
@@ -285,35 +281,32 @@ export const recordsRouter = router({
    * activity with the labels of every record it owns. Keeps the heavy `_bests`
    * jsonb on the server: `activities.list` deliberately omits those columns.
    */
-  getRecordHolders: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      const cycling = sql`AND a.type IN (${typeList(CYCLING_TYPES)})`;
-      const running = sql`AND a.type IN (${typeList(RUNNING_TYPES)})`;
-      const nonVirtualCycling = sql`AND a.type IN (${typeList(NON_VIRTUAL_CYCLING_TYPES)})`;
+  getRecordHolders: athleteProcedure.query(async ({ ctx, input }) => {
+    const cycling = sql`AND a.type IN (${typeList(CYCLING_TYPES)})`;
+    const running = sql`AND a.type IN (${typeList(RUNNING_TYPES)})`;
+    const nonVirtualCycling = sql`AND a.type IN (${typeList(NON_VIRTUAL_CYCLING_TYPES)})`;
 
-      // Each category's all-time leader (LIMIT 1), tagged with a display label.
-      const single = (valueExpr: SQL, order: SQL, label: string, extra?: SQL) =>
-        topActivities(ctx.db, {
-          athleteId: input.athleteId,
-          valueExpr,
-          order,
-          extra,
-          limit: 1,
-        }).then((rows) => ({ label, stravaId: rows[0]?.activityStravaId }));
+    // Each category's all-time leader (LIMIT 1), tagged with a display label.
+    const single = (valueExpr: SQL, order: SQL, label: string, extra?: SQL) =>
+      topActivities(ctx.db, {
+        athleteId: input.athleteId,
+        valueExpr,
+        order,
+        extra,
+        limit: 1,
+      }).then((rows) => ({ label, stravaId: rows[0]?.activityStravaId }));
 
-      // All-time #1 holder for each headline power duration, in a single query:
-      // unnest the power_bests jsonb once and rank by watts per duration (the
-      // windowed pattern from analytics.getPowerCurve) instead of firing one
-      // LIMIT-1 query per duration (16 round-trips → 1).
-      const powerDurationList = sql.join(
-        CYCLING_POWER_DURATION_SECONDS.map((seconds) => sql`${seconds}`),
-        sql`, `,
-      );
+    // All-time #1 holder for each headline power duration, in a single query:
+    // unnest the power_bests jsonb once and rank by watts per duration (the
+    // windowed pattern from analytics.getPowerCurve) instead of firing one
+    // LIMIT-1 query per duration (16 round-trips → 1).
+    const powerDurationList = sql.join(
+      CYCLING_POWER_DURATION_SECONDS.map((seconds) => sql`${seconds}`),
+      sql`, `,
+    );
 
-      const [powerLeaderRows, misc, runEffortRows] = await Promise.all([
-        ctx.db.execute<{ duration: string; strava_id: string }>(sql`
+    const [powerLeaderRows, misc, runEffortRows] = await Promise.all([
+      ctx.db.execute<{ duration: string; strava_id: string }>(sql`
           WITH unnested AS (
             SELECT
               a.strava_id,
@@ -337,60 +330,60 @@ export const recordsRouter = router({
           FROM ranked
           WHERE rn = 1
         `),
-        Promise.all([
-          single(sql`a.distance`, sql`DESC`, "Longest ride", cycling),
-          single(sql`a.distance`, sql`DESC`, "Longest run", running),
-          single(
-            sql`a.biggest_climb`,
-            sql`DESC`,
-            "Biggest climb",
-            sql`${nonVirtualCycling} AND a.biggest_climb > 0`,
-          ),
-        ]),
-        // Fastest run per Strava best-effort distance label (e.g. "5k").
-        ctx.db.execute<{ name: string; strava_id: string }>(sql`
+      Promise.all([
+        single(sql`a.distance`, sql`DESC`, "Longest ride", cycling),
+        single(sql`a.distance`, sql`DESC`, "Longest run", running),
+        single(
+          sql`a.biggest_climb`,
+          sql`DESC`,
+          "Biggest climb",
+          sql`${nonVirtualCycling} AND a.biggest_climb > 0`,
+        ),
+      ]),
+      // Fastest run per Strava best-effort distance label (e.g. "5k").
+      ctx.db.execute<{ name: string; strava_id: string }>(sql`
           SELECT DISTINCT ON (be.name) be.name, a.strava_id
           FROM best_efforts be
           JOIN activities a ON a.id = be.activity_id
           WHERE a.athlete = ${input.athleteId}
           ORDER BY be.name, be.elapsed_time ASC
         `),
-      ]);
+    ]);
 
-      // Accumulate every record onto its holding activity.
-      const byStravaId = new Map<number, string[]>();
-      const add = (stravaId: number | undefined, label: string) => {
-        if (stravaId == null) {
-          return;
-        }
-        const labels = byStravaId.get(stravaId);
-        if (labels) {
-          labels.push(label);
-        } else {
-          byStravaId.set(stravaId, [label]);
-        }
-      };
+    // Accumulate every record onto its holding activity.
+    const byStravaId = new Map<number, string[]>();
+    const add = (stravaId: number | undefined, label: string) => {
+      if (stravaId == null) {
+        return;
+      }
+      const labels = byStravaId.get(stravaId);
+      if (labels) {
+        labels.push(label);
+      } else {
+        byStravaId.set(stravaId, [label]);
+      }
+    };
 
-      const powerLeaderByDuration = new Map(
-        powerLeaderRows.map((r) => [Number(r.duration), Number(r.strava_id)]),
-      );
-      // Preserve the original ordering: power durations (ascending) first, then
-      // the misc records, then run efforts.
-      for (const d of CYCLING_POWER_DURATIONS) {
-        add(powerLeaderByDuration.get(d.seconds), `${d.label} power`);
-      }
-      for (const leader of misc) {
-        add(leader.stravaId, leader.label);
-      }
-      for (const row of runEffortRows) {
-        add(Number(row.strava_id), String(row.name));
-      }
+    const powerLeaderByDuration = new Map(
+      powerLeaderRows.map((r) => [Number(r.duration), Number(r.strava_id)]),
+    );
+    // Preserve the original ordering: power durations (ascending) first, then
+    // the misc records, then run efforts.
+    for (const d of CYCLING_POWER_DURATIONS) {
+      add(powerLeaderByDuration.get(d.seconds), `${d.label} power`);
+    }
+    for (const leader of misc) {
+      add(leader.stravaId, leader.label);
+    }
+    for (const row of runEffortRows) {
+      add(Number(row.strava_id), String(row.name));
+    }
 
-      return Array.from(byStravaId, ([stravaId, records]) => ({
-        stravaId,
-        records,
-      }));
-    }),
+    return Array.from(byStravaId, ([stravaId, records]) => ({
+      stravaId,
+      records,
+    }));
+  }),
 
   /**
    * Every leaderboard on which a single activity places in the all-time top
@@ -407,9 +400,8 @@ export const recordsRouter = router({
    * this can differ from the explorer's `ORDER BY … LIMIT` tie-break on the rare
    * tie, but matches the intuitive "are you top 25 by this value" question.
    */
-  getActivityRankings: protectedProcedure
-    .input(z.object({ athleteId: z.number(), stravaId: z.number() }))
-    .use(validateAthleteOwnership)
+  getActivityRankings: athleteProcedure
+    .input(z.object({ stravaId: z.number() }))
     .query(async ({ ctx, input }): Promise<ActivityRanking[]> => {
       const limit = DEFAULT_LIMIT;
 
@@ -626,9 +618,8 @@ export const recordsRouter = router({
    * Cycling power leaderboard: activities ranked by best average power over
    * `duration` seconds (from `power_bests`, watts), highest first.
    */
-  getCyclingPowerLeaderboard: protectedProcedure
+  getCyclingPowerLeaderboard: athleteProcedure
     .input(leaderboardInput.extend({ duration: z.number().int().positive() }))
-    .use(validateAthleteOwnership)
     .query(({ ctx, input }) =>
       topActivities(ctx.db, {
         athleteId: input.athleteId,
@@ -642,9 +633,8 @@ export const recordsRouter = router({
    * Cycling speed leaderboard: rides ranked by fastest time (seconds) to cover
    * `distance` meters (from `speed_efforts`), fastest first.
    */
-  getCyclingSpeedLeaderboard: protectedProcedure
+  getCyclingSpeedLeaderboard: athleteProcedure
     .input(leaderboardInput.extend({ distance: z.number().int().positive() }))
-    .use(validateAthleteOwnership)
     .query(({ ctx, input }) =>
       topActivities(ctx.db, {
         athleteId: input.athleteId,
@@ -659,14 +649,13 @@ export const recordsRouter = router({
    * average heart rate over `duration` seconds (from `heartrate_bests`, bpm),
    * highest first. Includes indoor/virtual — HR is a real sensor metric.
    */
-  getHeartrateLeaderboard: protectedProcedure
+  getHeartrateLeaderboard: athleteProcedure
     .input(
       leaderboardInput.extend({
         sport: z.enum(["cycling", "running"]),
         duration: z.number().int().positive(),
       }),
     )
-    .use(validateAthleteOwnership)
     .query(({ ctx, input }) =>
       topActivities(ctx.db, {
         athleteId: input.athleteId,
@@ -684,11 +673,10 @@ export const recordsRouter = router({
    * (`biggest_climb`) or total elevation gain (`total_elevation_gain`), highest
    * first. Both exclude virtual rides.
    */
-  getCyclingElevationLeaderboard: protectedProcedure
+  getCyclingElevationLeaderboard: athleteProcedure
     .input(
       leaderboardInput.extend({ kind: z.enum(["biggest_climb", "total"]) }),
     )
-    .use(validateAthleteOwnership)
     .query(({ ctx, input }) => {
       const valueExpr =
         input.kind === "biggest_climb"
@@ -707,9 +695,8 @@ export const recordsRouter = router({
    * Running best-effort leaderboard: every run ranked by its Strava best-effort
    * time for the given distance label (e.g. "5k"), fastest first.
    */
-  getRunEffortLeaderboard: protectedProcedure
+  getRunEffortLeaderboard: athleteProcedure
     .input(leaderboardInput.extend({ name: z.string().max(50) }))
-    .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
       const rows = await ctx.db.execute<{
         strava_id: string;
@@ -748,14 +735,13 @@ export const recordsRouter = router({
    *
    * For `load`, the ranking mirrors {@link getActivityLoad}: see {@link loadSql}.
    */
-  getLongestActivityLeaderboard: protectedProcedure
+  getLongestActivityLeaderboard: athleteProcedure
     .input(
       leaderboardInput.extend({
         sport: z.enum(["cycling", "running"]),
         measure: z.enum(["distance", "duration", "load"]),
       }),
     )
-    .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
       let valueExpr: SQL;
       if (input.measure === "distance") {

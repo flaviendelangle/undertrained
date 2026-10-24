@@ -14,12 +14,11 @@ import {
 } from "../../lib/activitySelection";
 import { getAccessToken, updateActivityOnStrava } from "../../lib/strava";
 import { activityIngestion } from "../../lib/sync";
-import { protectedProcedure, router, validateAthleteOwnership } from "../index";
+import { athleteProcedure, protectedProcedure, router } from "../index";
 
 export const activitiesRouter = router({
-  list: protectedProcedure
+  list: athleteProcedure
     .input(activityFilterInput.extend({ includeMap: z.boolean().optional() }))
-    .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
       const selected = await selectActivities(ctx.db, input);
 
@@ -64,9 +63,8 @@ export const activitiesRouter = router({
     }),
 
   // Routes and tooltip fields only; chart metrics stay in the shared list cache.
-  maps: protectedProcedure
+  maps: athleteProcedure
     .input(activityFilterInput)
-    .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
       const selected = await selectActivities(ctx.db, input);
       return ctx.db
@@ -94,31 +92,26 @@ export const activitiesRouter = router({
    * fetched once and reused across every filter change, instead of re-running
    * two full `SELECT DISTINCT` scans on every `list` call.
    */
-  filterOptions: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      const [allTypes, allWorkoutTypes] = await Promise.all([
-        ctx.db
-          .selectDistinct({ type: activities.type })
-          .from(activities)
-          .where(eq(activities.athlete, input.athleteId))
-          .then((rows) => rows.map((r) => r.type).sort()),
-        ctx.db
-          .selectDistinct({ workoutType: activities.workoutType })
-          .from(activities)
-          .where(
-            and(
-              eq(activities.athlete, input.athleteId),
-              isNotNull(activities.workoutType),
-            ),
-          )
-          .then((rows) =>
-            rows.map((r) => r.workoutType!).sort((a, b) => a - b),
+  filterOptions: athleteProcedure.query(async ({ ctx, input }) => {
+    const [allTypes, allWorkoutTypes] = await Promise.all([
+      ctx.db
+        .selectDistinct({ type: activities.type })
+        .from(activities)
+        .where(eq(activities.athlete, input.athleteId))
+        .then((rows) => rows.map((r) => r.type).sort()),
+      ctx.db
+        .selectDistinct({ workoutType: activities.workoutType })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.athlete, input.athleteId),
+            isNotNull(activities.workoutType),
           ),
-      ]);
-      return { allTypes, allWorkoutTypes };
-    }),
+        )
+        .then((rows) => rows.map((r) => r.workoutType!).sort((a, b) => a - b)),
+    ]);
+    return { allTypes, allWorkoutTypes };
+  }),
 
   get: protectedProcedure
     .input(z.object({ stravaId: z.number() }))
@@ -159,10 +152,9 @@ export const activitiesRouter = router({
    * `PUT /activities/{id}` accepts: title, description, sport, workout type and
    * commute. RPE and private notes are Strava-read-only, so they're not editable.
    */
-  update: protectedProcedure
+  update: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         stravaId: z.number(),
         name: z.string().trim().min(1).max(200),
         description: z.string().max(8000), // "" clears it
@@ -171,7 +163,6 @@ export const activitiesRouter = router({
         commute: z.boolean(),
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const activity = await ctx.db.query.activities.findFirst({
         where: and(
