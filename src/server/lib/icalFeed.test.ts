@@ -1,9 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { IcalFeedError, assertSafeUrl, eventsFromIcs } from "./icalFeed";
+import {
+  IcalFeedError,
+  assertSafeUrl,
+  busyEventsBetween,
+  parseFeed,
+} from "./icalFeed";
 
 const TZ = "Europe/Paris";
 const SUB = { subscriptionId: 7, color: "#64748b" };
+
+function eventsFromIcs(
+  feed: string,
+  sub: typeof SUB,
+  from: string,
+  to: string,
+  tz: string,
+) {
+  return busyEventsBetween(parseFeed(feed), sub, from, to, tz);
+}
 
 /** Wrap VEVENT bodies in a minimal valid VCALENDAR. */
 function ics(...vevents: string[]): string {
@@ -88,6 +103,58 @@ describe("eventsFromIcs — timed events", () => {
   });
 });
 
+describe("eventsFromIcs — TZID", () => {
+  const NEW_YORK = [
+    "BEGIN:VTIMEZONE",
+    "TZID:America/New_York",
+    "BEGIN:DAYLIGHT",
+    "TZOFFSETFROM:-0500",
+    "TZOFFSETTO:-0400",
+    "TZNAME:EDT",
+    "DTSTART:19700308T020000",
+    "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU",
+    "END:DAYLIGHT",
+    "BEGIN:STANDARD",
+    "TZOFFSETFROM:-0400",
+    "TZOFFSETTO:-0500",
+    "TZNAME:EST",
+    "DTSTART:19701101T020000",
+    "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
+    "END:STANDARD",
+    "END:VTIMEZONE",
+  ];
+
+  it.each([
+    ["defines it in a VTIMEZONE", NEW_YORK],
+    ["only names it", []],
+  ])("reads a TZID'd time in that zone when the feed %s", (_, vtimezone) => {
+    // 12:00 in New York (EDT, -4) is 18:00 in Paris (CEST, +2).
+    const feed = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//test//EN",
+      ...vtimezone,
+      "BEGIN:VEVENT",
+      "UID:nyc@test",
+      "DTSTART;TZID=America/New_York:20260801T120000",
+      "DTEND;TZID=America/New_York:20260801T130000",
+      "SUMMARY:Call",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-07-25T00:00:00",
+      "2026-08-10T00:00:00",
+      TZ,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].startLocal).toBe("2026-08-01T18:00:00");
+    expect(out[0].endLocal).toBe("2026-08-01T19:00:00");
+  });
+});
+
 describe("eventsFromIcs — all-day events", () => {
   it("flags a date-only event as all-day without shifting the date", () => {
     const feed = ics(
@@ -165,6 +232,51 @@ describe("eventsFromIcs — recurrence", () => {
     expect(days).toContain("2026-02-23");
     // Every instance keeps the 09:00Z → 10:00 Paris (winter, +1) wall-clock.
     expect(out.every((e) => e.startLocal.endsWith("T10:00:00"))).toBe(true);
+  });
+
+  it("shows a moved instance at its new time without touching other series", () => {
+    // Two weekly series share Monday 09:00Z; only the first moves its Feb 9
+    // instance to Tuesday.
+    const feed = ics(
+      [
+        "UID:sync@test",
+        "DTSTART:20260202T090000Z",
+        "DTEND:20260202T100000Z",
+        "RRULE:FREQ=WEEKLY;BYDAY=MO",
+        "SUMMARY:Team sync",
+      ].join("\r\n"),
+      [
+        "UID:sync@test",
+        "RECURRENCE-ID:20260209T090000Z",
+        "DTSTART:20260210T090000Z",
+        "DTEND:20260210T100000Z",
+        "SUMMARY:Team sync",
+      ].join("\r\n"),
+      [
+        "UID:one-on-one@test",
+        "DTSTART:20260202T090000Z",
+        "DTEND:20260202T100000Z",
+        "RRULE:FREQ=WEEKLY;BYDAY=MO",
+        "SUMMARY:1:1",
+      ].join("\r\n"),
+    );
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-02-01T00:00:00",
+      "2026-03-01T00:00:00",
+      TZ,
+    );
+    expect(out.map((e) => `${e.startLocal} ${e.title}`).sort()).toEqual([
+      "2026-02-02T10:00:00 1:1",
+      "2026-02-02T10:00:00 Team sync",
+      "2026-02-09T10:00:00 1:1",
+      "2026-02-10T10:00:00 Team sync",
+      "2026-02-16T10:00:00 1:1",
+      "2026-02-16T10:00:00 Team sync",
+      "2026-02-23T10:00:00 1:1",
+      "2026-02-23T10:00:00 Team sync",
+    ]);
   });
 
   it("drops cancelled events", () => {
