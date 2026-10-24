@@ -130,6 +130,32 @@ function activityDayKey(activity: JournalActivity): string {
 }
 
 /**
+ * Buckets planned trainings onto every local calendar day they cover, same key
+ * scheme as activities (the date portion of the stored floating-local
+ * datetime). A training whose duration crosses midnight lands in each day's
+ * bucket so its continuation renders past the first day.
+ */
+export function bucketPlannedTrainingsByDay(
+  plannedTrainings: readonly PlannedTraining[],
+): Map<string, PlannedTraining[]> {
+  const map = new Map<string, PlannedTraining[]>();
+  for (const planned of plannedTrainings) {
+    for (const key of coveredDayKeys(
+      planned.plannedDate,
+      planned.durationSeconds,
+    )) {
+      const bucket = map.get(key);
+      if (bucket) {
+        bucket.push(planned);
+      } else {
+        map.set(key, [planned]);
+      }
+    }
+  }
+  return map;
+}
+
+/**
  * 90th-percentile value of a numeric list (linear interpolation), used as a
  * heatmap reference that ignores the occasional outlier day.
  */
@@ -165,27 +191,10 @@ export function useJournalWeeks(
   plannedTrainings?: PlannedTraining[],
   busyEvents?: BusyEvent[],
 ): JournalWeeksResult {
-  // Bucket planned trainings onto every local calendar day they cover, same key
-  // scheme as activities (the date portion of the stored floating-local
-  // datetime). A training whose duration crosses midnight lands in each day's
-  // bucket so its continuation renders past the first day.
-  const plannedByDay = React.useMemo(() => {
-    const map = new Map<string, PlannedTraining[]>();
-    for (const planned of plannedTrainings ?? []) {
-      for (const key of coveredDayKeys(
-        planned.plannedDate,
-        planned.durationSeconds,
-      )) {
-        const bucket = map.get(key);
-        if (bucket) {
-          bucket.push(planned);
-        } else {
-          map.set(key, [planned]);
-        }
-      }
-    }
-    return map;
-  }, [plannedTrainings]);
+  const plannedByDay = React.useMemo(
+    () => bucketPlannedTrainingsByDay(plannedTrainings ?? []),
+    [plannedTrainings],
+  );
 
   // Bucket busy events onto their start day. They only ever land on days that
   // already exist in the grid — they never extend the week range (that stays
