@@ -20,44 +20,6 @@ function hasAnyField(point: RiderSettingsChangePoint): boolean {
 }
 
 /**
- * Insert or update a change point.
- * - matches by `id` first (edit in place),
- * - else merges into an existing point on the same date,
- * - else appends.
- * Always returns the timeline with `changes` sorted ascending by date.
- *
- * Extracted from the original `ChangePointsTimeline.handleSave`.
- */
-export function upsertChange(
-  timeline: RiderSettingsTimeline,
-  point: RiderSettingsChangePoint,
-): RiderSettingsTimeline {
-  const existingIndex = timeline.changes.findIndex((c) => c.id === point.id);
-  let newChanges: RiderSettingsChangePoint[];
-
-  if (existingIndex >= 0) {
-    newChanges = [...timeline.changes];
-    newChanges[existingIndex] = point;
-  } else {
-    const sameDateIndex = timeline.changes.findIndex(
-      (c) => c.date === point.date,
-    );
-    if (sameDateIndex >= 0) {
-      const merged = { ...timeline.changes[sameDateIndex] };
-      for (const field of TIME_VARYING_FIELDS) {
-        if (point[field] !== undefined) merged[field] = point[field];
-      }
-      newChanges = [...timeline.changes];
-      newChanges[sameDateIndex] = merged;
-    } else {
-      newChanges = [...timeline.changes, point];
-    }
-  }
-
-  return { ...timeline, changes: sortChanges(newChanges) };
-}
-
-/**
  * Set a single time-varying field on the change point at `date`.
  * - `value === null` removes that field (and drops the point if it becomes empty),
  * - creating the point on that date if none exists.
@@ -87,11 +49,13 @@ export function setField(
   }
 
   if (value == null) return timeline;
-  return upsertChange(timeline, {
-    id: crypto.randomUUID(),
-    date,
-    [field]: value,
-  });
+  return {
+    ...timeline,
+    changes: sortChanges([
+      ...timeline.changes,
+      { id: crypto.randomUUID(), date, [field]: value },
+    ]),
+  };
 }
 
 /** Remove a single field from the change point at `date` (reverts to inherited). */
@@ -113,29 +77,6 @@ export function setBaselineField(
     ...timeline,
     initialValues: { ...timeline.initialValues, [field]: value },
   };
-}
-
-/** Remove a whole change point by id. */
-export function deletePoint(
-  timeline: RiderSettingsTimeline,
-  id: string,
-): RiderSettingsTimeline {
-  return {
-    ...timeline,
-    changes: timeline.changes.filter((c) => c.id !== id),
-  };
-}
-
-/** Move a change point to a new date (merging if another point already sits there). */
-export function setPointDate(
-  timeline: RiderSettingsTimeline,
-  id: string,
-  date: string,
-): RiderSettingsTimeline {
-  const point = timeline.changes.find((c) => c.id === id);
-  if (!point || point.date === date) return timeline;
-  const without = deletePoint(timeline, id);
-  return upsertChange(without, { ...point, date });
 }
 
 export interface FieldHistoryEntry {

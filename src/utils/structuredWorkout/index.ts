@@ -40,11 +40,7 @@ export {
 
 export type { WorkoutMetrics } from "./metrics";
 export {
-  averageTargetPower,
   computeWorkoutMetrics,
-  estimateIntensityFactor,
-  estimateNormalizedPower,
-  estimateTss,
   sampleTargetWatts,
   workoutProfile,
   zoneDistribution,
@@ -71,12 +67,9 @@ export {
 } from "./compliance";
 
 export {
-  describeNode,
   describePowerTarget,
-  describeWorkout,
   describeWorkoutShort,
   formatStepDuration,
-  peakPct,
 } from "./summarize";
 
 export { structuredWorkoutSchema } from "./schema";

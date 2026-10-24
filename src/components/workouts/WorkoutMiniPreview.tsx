@@ -17,8 +17,6 @@ import { getPowerZoneIndex } from "~/sensors/types";
 interface WorkoutMiniPreviewProps {
   /** `[durationSeconds, %FTP]` per step; null %FTP where the workout is free. */
   profile: readonly (readonly [number, number | null])[];
-  /** Ceiling of the y axis in %FTP. Defaults to the profile's own peak. */
-  peak?: number;
   className?: string;
 }
 
@@ -32,7 +30,6 @@ const MIN_BAR_WIDTH = 0.25;
 
 export function WorkoutMiniPreview({
   profile,
-  peak,
   className,
 }: WorkoutMiniPreviewProps) {
   const tokens = useChartTokens();
@@ -45,8 +42,7 @@ export function WorkoutMiniPreview({
       (max, [, pct]) => (pct == null ? max : Math.max(max, pct)),
       0,
     );
-    const ceiling =
-      Math.max(peak ?? observedPeak, MIN_PEAK_PCT) * PEAK_HEADROOM;
+    const ceiling = Math.max(observedPeak, MIN_PEAK_PCT) * PEAK_HEADROOM;
 
     /**
      * Adjacent bars that would draw identically are merged. Abutting rects put
@@ -93,7 +89,7 @@ export function WorkoutMiniPreview({
     });
 
     return runs;
-  }, [profile, peak, tokens]);
+  }, [profile, tokens]);
 
   if (bars.length === 0) return null;
 

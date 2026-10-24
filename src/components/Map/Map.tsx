@@ -18,7 +18,7 @@ import { useExplorerTiles } from "~/hooks/useExplorerTiles";
 import { useExplorerTilesToggle } from "~/hooks/useExplorerTilesToggle";
 import { TILE_PROVIDERS, useTileStyle } from "~/hooks/useTileStyle";
 import { useChartTokens } from "~/lib/chartTokens";
-import { decode } from "~/utils/polyline";
+import { type LatLngTuple, decode } from "~/utils/polyline";
 
 import { ExplorerTilesLayer } from "./ExplorerTilesLayer";
 import { ExplorerTilesStats } from "./ExplorerTilesStats";
@@ -36,6 +36,8 @@ function DismissOnMapMove({ onDismiss }: { onDismiss: () => void }) {
   });
   return null;
 }
+
+const NO_POLYLINES: LatLngTuple[][] = [];
 
 // Leaflet draws all tile layers in `tilePane` (z-index 200), which sits below
 // the polylines in `overlayPane` (400). To render labels above the heatmap, we
@@ -166,9 +168,14 @@ export default function Map(props: MapProps) {
   // heatmap); with a single activity there's nothing to disambiguate.
   const enableActivityClick = (decodedActivityPolylines?.length ?? 0) > 1;
 
+  // Only walk the polylines into tiles once the layer is actually shown.
+  const explorerTilesShown = enableExplorerTiles && showExplorerTiles;
   const explorerPolylines = React.useMemo(
-    () => decodedActivityPolylines?.map((p) => p.polyline) ?? [],
-    [decodedActivityPolylines],
+    () =>
+      explorerTilesShown
+        ? (decodedActivityPolylines?.map((p) => p.polyline) ?? NO_POLYLINES)
+        : NO_POLYLINES,
+    [explorerTilesShown, decodedActivityPolylines],
   );
   const explorerTilesData = useExplorerTiles(explorerPolylines);
 

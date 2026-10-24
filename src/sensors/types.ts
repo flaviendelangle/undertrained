@@ -204,10 +204,6 @@ export function findPowerZone(
   };
 }
 
-export function getPowerZoneName(power: number, ftp: number): string {
-  return findPowerZone(power, ftp).zone.name;
-}
-
 export function getPowerZoneIndex(power: number, ftp: number): number {
   return findPowerZone(power, ftp).index;
 }

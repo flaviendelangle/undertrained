@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 
+import { DEFAULT_LOCALE, isLocale } from "~/i18n/locales";
 import en from "~/i18n/messages/en";
 import fr from "~/i18n/messages/fr";
 import { translate } from "~/i18n/t";
@@ -27,7 +28,7 @@ export function desktopBuiltInWorkouts(
   date = format(new Date(), "yyyy-MM-dd"),
 ) {
   const ftp = desktopReferenceFtp(settings, date);
-  const locale = language === "fr-FR" ? "fr-FR" : "en-GB";
+  const locale = isLocale(language) ? language : DEFAULT_LOCALE;
   return BUILT_IN_WORKOUT_IDS.map((id) => {
     const workout = builtInWorkout(id, ftp, (key, params) =>
       translate(locale === "fr-FR" ? fr : en, en, locale, key, params),

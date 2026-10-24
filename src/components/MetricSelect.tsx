@@ -52,11 +52,8 @@ export const METRICS: MetricConfig[] = [
     value: "load",
     label: "Load",
     unit: "",
-    getValue: (activity, context) => {
-      if (!context?.loadPreferences) return activity.hrss ?? activity.tss ?? 0;
-      const result = getActivityLoad(activity, context.loadPreferences);
-      return result.value ?? 0;
-    },
+    getValue: (activity, context) =>
+      getActivityLoad(activity, context.loadPreferences).value ?? 0,
   },
   {
     value: "activities",
@@ -85,6 +82,6 @@ export interface MetricConfig {
   unit: string;
   getValue: (
     activity: Omit<ListActivity, "mapPolyline">,
-    context?: MetricContext,
+    context: MetricContext,
   ) => number;
 }

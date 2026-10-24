@@ -68,13 +68,6 @@ export function findLocation(
   return walk(nodes, null, 0);
 }
 
-export function findParent(
-  nodes: readonly WorkoutNode[],
-  id: string,
-): WorkoutRepeat | null {
-  return findLocation(nodes, id)?.parent ?? null;
-}
-
 /** Depth of the deepest repeat nesting: 0 when there are no repeats at all. */
 export function maxDepth(nodes: readonly WorkoutNode[]): number {
   let deepest = 0;

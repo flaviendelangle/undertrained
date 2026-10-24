@@ -17,75 +17,64 @@ import { useT } from "~/i18n/useT";
 import type { RiderSettingsTimeline } from "~/sensors/types";
 import { getLoadAlgorithmConfigs } from "~/utils/sportConfig";
 
-export interface SettingsLayoutProps {
-  timeline: RiderSettingsTimeline;
-  setTimeline: (t: RiderSettingsTimeline) => void;
-  onDeleteAllData: () => Promise<void>;
-  deleting: boolean;
-  deleteDialogOpen: boolean;
-  setDeleteDialogOpen: (open: boolean) => void;
-}
+const EQUIPMENT_FIELDS = [
+  {
+    field: "bikeWeightKg",
+    labelKey: "settings.equipment.bikeWeight",
+    step: 0.5,
+    smallStep: 0.1,
+  },
+  {
+    field: "cdA",
+    labelKey: "settings.equipment.cda",
+    step: 0.01,
+    smallStep: 0.001,
+  },
+  {
+    field: "crr",
+    labelKey: "settings.equipment.crr",
+    step: 0.001,
+    smallStep: 0.0001,
+  },
+] as const satisfies readonly {
+  field: "cdA" | "crr" | "bikeWeightKg";
+  labelKey: AppMessageKey;
+  step: number;
+  smallStep: number;
+}[];
 
 export function EquipmentFields({
   timeline,
   setTimeline,
-  className,
-  showHeader = true,
 }: {
   timeline: RiderSettingsTimeline;
   setTimeline: (t: RiderSettingsTimeline) => void;
-  className?: string;
-  showHeader?: boolean;
 }) {
   const t = useT();
-  const updateStatic = (
-    field: "cdA" | "crr" | "bikeWeightKg",
-    value: number | null,
-  ) => {
-    setTimeline({ ...timeline, [field]: value ?? 0 });
-  };
 
   return (
     <div className="flex flex-col gap-5">
-      {showHeader && (
-        <CardTitle
-          tooltip={t("settings.equipment.tooltip")}
-          description={t("settings.equipment.description")}
-        >
-          {t("settings.equipment.title")}
-        </CardTitle>
-      )}
-      <div className={className ?? "grid grid-cols-1 gap-5 sm:grid-cols-3"}>
-        <div className="flex flex-col gap-2">
-          <Label>{t("settings.equipment.bikeWeight")}</Label>
-          <NumberField
-            value={timeline.bikeWeightKg}
-            onValueChange={(v) => updateStatic("bikeWeightKg", v)}
-            min={0}
-            step={0.5}
-            smallStep={0.1}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label>{t("settings.equipment.cda")}</Label>
-          <NumberField
-            value={timeline.cdA}
-            onValueChange={(v) => updateStatic("cdA", v)}
-            min={0}
-            step={0.01}
-            smallStep={0.001}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label>{t("settings.equipment.crr")}</Label>
-          <NumberField
-            value={timeline.crr}
-            onValueChange={(v) => updateStatic("crr", v)}
-            min={0}
-            step={0.001}
-            smallStep={0.0001}
-          />
-        </div>
+      <CardTitle
+        tooltip={t("settings.equipment.tooltip")}
+        description={t("settings.equipment.description")}
+      >
+        {t("settings.equipment.title")}
+      </CardTitle>
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        {EQUIPMENT_FIELDS.map(({ field, labelKey, step, smallStep }) => (
+          <div key={field} className="flex flex-col gap-2">
+            <Label>{t(labelKey)}</Label>
+            <NumberField
+              value={timeline[field]}
+              onValueChange={(v) =>
+                setTimeline({ ...timeline, [field]: v ?? 0 })
+              }
+              min={0}
+              step={step}
+              smallStep={smallStep}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -106,19 +95,14 @@ function renderLabel(
 export function LoadAlgorithmFields({
   timeline,
   setTimeline,
-  className,
 }: {
   timeline: RiderSettingsTimeline;
   setTimeline: (t: RiderSettingsTimeline) => void;
-  className?: string;
 }) {
   const t = useT();
   return (
     <div
-      className={
-        className ??
-        `grid grid-cols-1 gap-5 sm:grid-cols-${LOAD_ALGORITHM_CONFIGS.length}`
-      }
+      className={`grid grid-cols-1 gap-5 sm:grid-cols-${LOAD_ALGORITHM_CONFIGS.length}`}
     >
       {LOAD_ALGORITHM_CONFIGS.map((config) => {
         const currentValue = (timeline as unknown as Record<string, string>)[
@@ -156,20 +140,16 @@ export function DangerZone({
   deleting,
   deleteDialogOpen,
   setDeleteDialogOpen,
-  variant = "card",
 }: {
   onDeleteAllData: () => Promise<void>;
   deleting: boolean;
   deleteDialogOpen: boolean;
   setDeleteDialogOpen: (open: boolean) => void;
-  variant?: "card" | "inline";
 }) {
   const t = useT();
-  const content = (
-    <>
-      <h2
-        className={`text-destructive font-semibold ${variant === "card" ? "mb-2 text-lg" : "mb-1 text-base"}`}
-      >
+  return (
+    <section className="md:border-destructive/30 md:bg-card p-5 md:rounded-sm md:border">
+      <h2 className="text-destructive mb-2 text-lg font-semibold">
         {t("settings.dangerZone.title")}
       </h2>
       <p className="text-muted-foreground mb-4 text-sm">
@@ -189,16 +169,6 @@ export function DangerZone({
         pendingLabel={t("settings.dangerZone.deleting")}
         onConfirm={onDeleteAllData}
       />
-    </>
-  );
-
-  if (variant === "inline") {
-    return content;
-  }
-
-  return (
-    <section className="md:border-destructive/30 md:bg-card p-5 md:rounded-sm md:border">
-      {content}
     </section>
   );
 }

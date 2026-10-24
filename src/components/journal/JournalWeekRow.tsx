@@ -324,11 +324,14 @@ function WeekSummaryDisclosure({
 function JournalWeekRowImpl({
   week,
   dayLoadScale,
-  style,
+  start,
+  size,
 }: {
   week: JournalWeek;
   dayLoadScale: number;
-  style?: React.CSSProperties;
+  /** Virtualizer offset and height, as numbers so `React.memo` can hit. */
+  start: number;
+  size: number;
 }) {
   return (
     <div
@@ -337,7 +340,12 @@ function JournalWeekRowImpl({
         "border-border absolute grid w-full border-b",
         JOURNAL_GRID_COLS,
       )}
-      style={style}
+      style={{
+        top: 0,
+        left: 0,
+        height: `${size}px`,
+        transform: `translateY(${start}px)`,
+      }}
     >
       <div className="flex flex-col justify-center px-2">
         <div className="text-muted-foreground text-[11px] leading-none font-medium uppercase">

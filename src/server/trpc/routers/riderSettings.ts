@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 
 import { riderSettings } from "../../db/schema";
@@ -78,16 +79,17 @@ export const riderSettingsRouter = router({
         });
       }
 
-      // Fire-and-forget recomputation
-      activityIngestion(ctx.db)
-        .rescoreAll(athleteId)
-        .catch((err) => console.error("[rescoreAll] Error:", err));
-    }),
-
-  recomputeScores: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .mutation(async ({ ctx, input }) => {
-      await activityIngestion(ctx.db).rescoreAll(input.athleteId);
+      // Scores only read the timeline, so equipment and load-algorithm edits
+      // (saved on every keystroke) leave them as they are.
+      const timelineChanged =
+        !existing ||
+        !isDeepStrictEqual(existing.initialValues, data.initialValues) ||
+        !isDeepStrictEqual(existing.changes, data.changes);
+      if (timelineChanged) {
+        // Fire-and-forget recomputation
+        activityIngestion(ctx.db)
+          .rescoreAll(athleteId)
+          .catch((err) => console.error("[rescoreAll] Error:", err));
+      }
     }),
 });

@@ -6,11 +6,12 @@ import {
   groupActivityRankings,
 } from "./grouping";
 
+// Grouping only reads `category`, `rank` and `paramKey`, so any pairing will do.
 const r = (
   category: ActivityRanking["category"],
   rank: number,
   paramKey: ActivityRanking["paramKey"] = null,
-): ActivityRanking => ({ category, rank, paramKey, value: 0 });
+) => ({ category, rank, paramKey, value: 0 }) as ActivityRanking;
 
 describe("groupActivityRankings", () => {
   it("returns groups in the fixed render order, skipping empty ones", () => {

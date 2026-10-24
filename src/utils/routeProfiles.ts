@@ -4,7 +4,9 @@
  * (zod validation + ORS request). Profile strings must match ORS's directions
  * endpoint exactly — see https://openrouteservice.org/dev/#/api-docs/v2/directions.
  */
-export type RouteSport = "cycling" | "running";
+export const ROUTE_SPORTS = ["cycling", "running"] as const;
+
+export type RouteSport = (typeof ROUTE_SPORTS)[number];
 
 export interface RouteProfileOption {
   /** ORS profile string, used directly in the directions URL. */
@@ -25,10 +27,6 @@ export const ROUTE_PROFILE_VALUES = ROUTE_PROFILES.map((p) => p.value) as [
   string,
   ...string[],
 ];
-
-export function getRouteProfile(value: string): RouteProfileOption | undefined {
-  return ROUTE_PROFILES.find((p) => p.value === value);
-}
 
 export const DEFAULT_PROFILE_BY_SPORT: Record<RouteSport, string> = {
   cycling: "cycling-regular",

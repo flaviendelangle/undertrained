@@ -1,24 +1,9 @@
 import * as React from "react";
 
-import {
-  ActivityIcon,
-  BarChart3Icon,
-  LayersIcon,
-  SlidersHorizontalIcon,
-} from "lucide-react";
+import { ActivityIcon, BarChart3Icon, LayersIcon } from "lucide-react";
 
 import { FeatureHint } from "~/components/primitives/FeatureHint";
-import { Button } from "~/components/ui/button";
 import { ChartCard } from "~/components/ui/chart-card";
-import { Label } from "~/components/ui/label";
-import { NumberField } from "~/components/ui/number-field";
-import {
-  ResponsivePopover,
-  ResponsivePopoverContent,
-  ResponsivePopoverHeader,
-  ResponsivePopoverTitle,
-  ResponsivePopoverTrigger,
-} from "~/components/ui/responsive-popover";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
@@ -29,17 +14,25 @@ import {
 import { trpc } from "~/utils/trpc";
 
 import { ChartMessage } from "../ChartMessage";
+import {
+  ChartSettingsPopover,
+  SliceWidthSettings,
+  iconTabOption,
+} from "../shared/chartSettings";
+import { createSliceWidthStore } from "../shared/createSliceWidthStore";
 import { PaceOverTime } from "./PaceOverTime";
 import { PaceSliceDistribution } from "./PaceSliceDistribution";
 import { PaceZoneDistribution } from "./PaceZoneDistribution";
-import {
-  MAX_SLICE_WIDTH,
-  MIN_SLICE_WIDTH,
-  clampSliceWidth,
-  usePaceSliceWidth,
-} from "./usePaceSliceWidth";
 
 type PaceTab = "timeline" | "zones" | "distribution";
+
+/** Width (seconds per kilometre) of each bar in the Distribution histogram. */
+const paceSliceWidth = createSliceWidthStore({
+  storageKey: "undertrained:pace-slice-width",
+  defaultWidth: 15,
+  min: 5,
+  max: 60,
+});
 
 interface PaceCardProps {
   /** Strava id of the running activity to analyse. */
@@ -55,7 +48,7 @@ interface PaceCardProps {
 const PaceCard = React.memo(function PaceCard({ stravaId }: PaceCardProps) {
   const t = useT();
   const [tab, setTab] = React.useState<PaceTab>("timeline");
-  const [sliceWidth, setSliceWidth] = usePaceSliceWidth();
+  const [sliceWidth] = paceSliceWidth.useSliceWidth();
   const { resolveForDate } = useRiderSettingsTimeline();
 
   const { data: activity } = trpc.activities.get.useQuery({ stravaId });
@@ -82,77 +75,34 @@ const PaceCard = React.memo(function PaceCard({ stravaId }: PaceCardProps) {
     </FeatureHint>
   );
 
-  const tabOptions: {
-    value: PaceTab;
-    label: React.ReactNode;
-    tooltip: string;
-  }[] = [
-    {
-      value: "timeline",
-      tooltip: t("charts.pace.tab30sPace"),
-      label: (
-        <>
-          <ActivityIcon className="size-4" />
-          <span className="sr-only">{t("charts.pace.tab30sPace")}</span>
-        </>
-      ),
-    },
-    {
-      value: "zones",
-      tooltip: t("charts.pace.tabZones"),
-      label: (
-        <>
-          <LayersIcon className="size-4" />
-          <span className="sr-only">{t("charts.pace.tabZones")}</span>
-        </>
-      ),
-    },
-    {
-      value: "distribution",
-      tooltip: t("charts.pace.tabDistribution"),
-      label: (
-        <>
-          <BarChart3Icon className="size-4" />
-          <span className="sr-only">{t("charts.pace.tabDistribution")}</span>
-        </>
-      ),
-    },
+  const tabOptions = [
+    iconTabOption<PaceTab>(
+      "timeline",
+      ActivityIcon,
+      t("charts.pace.tab30sPace"),
+    ),
+    iconTabOption<PaceTab>("zones", LayersIcon, t("charts.pace.tabZones")),
+    iconTabOption<PaceTab>(
+      "distribution",
+      BarChart3Icon,
+      t("charts.pace.tabDistribution"),
+    ),
   ];
-
-  // Only the Distribution tab exposes a parameter (the histogram slice width).
-  const settings =
-    tab === "distribution" ? (
-      <DistributionSettings
-        sliceWidth={sliceWidth}
-        onSliceWidthChange={setSliceWidth}
-      />
-    ) : null;
 
   const actions = (
     <>
       {hint}
       <div className="flex-1" />
-      {settings && (
-        <ResponsivePopover>
-          <ResponsivePopoverTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground size-6"
-                aria-label={t("charts.pace.settings")}
-              >
-                <SlidersHorizontalIcon className="size-4" />
-              </Button>
-            }
+      {/* Only the Distribution tab exposes a parameter (the slice width). */}
+      {tab === "distribution" && (
+        <ChartSettingsPopover label={t("charts.pace.settings")}>
+          <SliceWidthSettings
+            store={paceSliceWidth}
+            title={t("charts.pace.distributionSettings")}
+            label={t("charts.pace.sliceWidth")}
+            hint={t("charts.pace.sliceWidthHint")}
           />
-          <ResponsivePopoverContent
-            align="end"
-            className="flex flex-col gap-4 sm:w-72"
-          >
-            {settings}
-          </ResponsivePopoverContent>
-        </ResponsivePopover>
+        </ChartSettingsPopover>
       )}
       <SegmentedToggle value={tab} onChange={setTab} options={tabOptions} />
     </>
@@ -184,7 +134,7 @@ const PaceCard = React.memo(function PaceCard({ stravaId }: PaceCardProps) {
           <PaceSliceDistribution
             speeds={speeds}
             thresholdSpeed={thresholdSpeed}
-            sliceWidth={clampSliceWidth(sliceWidth)}
+            sliceWidth={paceSliceWidth.clampSliceWidth(sliceWidth)}
             averageSpeed={averageSpeed}
           />
         ))}
@@ -198,41 +148,4 @@ export default PaceCard;
 function StreamLoading() {
   const t = useT();
   return <ChartMessage>{t("charts.pace.loading")}</ChartMessage>;
-}
-
-/** Distribution-tab parameter: the histogram slice width (seconds per km). */
-function DistributionSettings({
-  sliceWidth,
-  onSliceWidthChange,
-}: {
-  sliceWidth: number;
-  onSliceWidthChange: (width: number) => void;
-}) {
-  const t = useT();
-  return (
-    <>
-      <ResponsivePopoverHeader>
-        <ResponsivePopoverTitle>
-          {t("charts.pace.distributionSettings")}
-        </ResponsivePopoverTitle>
-      </ResponsivePopoverHeader>
-      <div className="flex flex-col gap-1.5">
-        <Label>{t("charts.pace.sliceWidth")}</Label>
-        <NumberField
-          className="w-full"
-          value={sliceWidth}
-          onValueChange={(value) => {
-            if (value != null) onSliceWidthChange(value);
-          }}
-          min={MIN_SLICE_WIDTH}
-          max={MAX_SLICE_WIDTH}
-          step={5}
-          smallStep={1}
-        />
-        <p className="text-muted-foreground text-xs">
-          {t("charts.pace.sliceWidthHint")}
-        </p>
-      </div>
-    </>
-  );
 }

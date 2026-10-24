@@ -3,27 +3,12 @@
  * free of i18n and React so it can be unit-tested; the component layers labels
  * and value formatting on top.
  */
+import type { ActivityRanking } from "@server/trpc/routers/records";
 
-/** Which leaderboard a ranking belongs to — mirrors the server `RankingCategory`. */
-export type RankingCategory =
-  | "power"
-  | "speed"
-  | "heartrate"
-  | "biggestClimb"
-  | "totalElevation"
-  | "distance"
-  | "duration"
-  | "load"
-  | "runEffort";
+export type { ActivityRanking };
 
-/** One leaderboard placing held by the activity (shape returned by `records.getActivityRankings`). */
-export interface ActivityRanking {
-  category: RankingCategory;
-  paramKey: number | string | null;
-  rank: number;
-  value: number;
-  distance?: number;
-}
+/** Which leaderboard a ranking belongs to. */
+type RankingCategory = ActivityRanking["category"];
 
 /** Display groups, in render order. Several categories fold into one group. */
 export type RecordGroupKey =

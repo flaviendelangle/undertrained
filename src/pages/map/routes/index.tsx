@@ -32,7 +32,7 @@ function RouteCard({
   route: {
     id: number;
     name: string;
-    sport: string;
+    sport: RouteSport;
     distance: number;
     elevationGain: number | null;
     mapPolyline: string;
@@ -73,7 +73,7 @@ function RouteCard({
           <SendToDeviceMenu
             iconOnly
             name={route.name}
-            sport={route.sport as RouteSport}
+            sport={route.sport}
             points={positions}
             elevation={[]}
             distance={route.distance}

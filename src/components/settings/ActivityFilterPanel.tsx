@@ -1,6 +1,10 @@
 import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 
+import {
+  CHIP_TOGGLE_CLASS,
+  SportTypeToggleGroup,
+} from "~/components/SportTypeToggleGroup";
 import { Button } from "~/components/ui/button";
 import {
   Select,
@@ -14,13 +18,8 @@ import { useActivityFilter } from "~/hooks/useActivityFilter";
 import { useActivityFilterOptions } from "~/hooks/useActivityFilterOptions";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import type { AppMessageKey } from "~/i18n/I18nProvider";
-import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import {
-  type WorkoutKind,
-  getSportConfig,
-  workoutTypesOfKind,
-} from "~/utils/sportConfig";
+import { type WorkoutKind, workoutTypesOfKind } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 const NONE_VALUE = "__none__";
@@ -122,27 +121,13 @@ export function ActivityFilterPanel({
             </button>
           )}
         </div>
-        <ToggleGroup
-          multiple
+        <SportTypeToggleGroup
           aria-label={t("settings.filter.sportTypes")}
+          types={activityTypes ?? []}
           value={filter.activityTypes}
           onValueChange={filter.setActivityTypes}
-          className="grid grid-cols-2 gap-1.5"
-        >
-          {activityTypes?.map((type) => {
-            const Icon = getSportConfig(type).icon;
-            return (
-              <Toggle
-                key={type}
-                value={type}
-                className="border-border text-muted-foreground hover:bg-accent hover:text-foreground data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:border-primary inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors"
-              >
-                <Icon className="size-3.5 shrink-0" />
-                <span className="truncate">{sportTypeLabel(type, t)}</span>
-              </Toggle>
-            );
-          })}
-        </ToggleGroup>
+          className="grid-cols-2"
+        />
       </div>
 
       {/* Workout types */}
@@ -196,7 +181,7 @@ export function ActivityFilterPanel({
               <Toggle
                 key={group.id}
                 value={group.id}
-                className="border-border text-muted-foreground hover:bg-accent hover:text-foreground data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:border-primary inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors"
+                className={CHIP_TOGGLE_CLASS}
               >
                 <span className="truncate">{t(group.labelKey)}</span>
               </Toggle>

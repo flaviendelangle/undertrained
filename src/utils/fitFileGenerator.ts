@@ -3,6 +3,7 @@ import { FitWriter } from "@markw65/fit-file-writer";
 import type { SessionDataPoint, SessionSummary } from "~/sensors/types";
 
 import { buildLaps } from "./fitLaps";
+import { downloadFile } from "./gpx";
 
 export function generateFitFile(
   dataPoints: SessionDataPoint[],
@@ -119,15 +120,10 @@ export function generateFitFile(
 }
 
 export function downloadFitFile(buffer: ArrayBuffer, name?: string): void {
-  const blob = new Blob([buffer], { type: "application/octet-stream" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download =
+  downloadFile(
     name ??
-    `training_${new Date().toISOString().slice(0, 16).replace(":", "-")}.fit`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+      `training_${new Date().toISOString().slice(0, 16).replace(":", "-")}.fit`,
+    buffer,
+    "application/octet-stream",
+  );
 }

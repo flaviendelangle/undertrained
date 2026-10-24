@@ -3,6 +3,9 @@ import * as React from "react";
 import { bisector } from "d3-array";
 import { scaleLinear, scaleLog } from "d3-scale";
 
+import { clamp } from "@base-ui/utils/clamp";
+import { useAnimationFrame } from "@base-ui/utils/useAnimationFrame";
+
 import {
   filterVisibleLabels,
   measureTickLabels,
@@ -86,7 +89,7 @@ export function PowerCurveWebGLChart({
   const [hoverIndex, setHoverIndex] = React.useState<number | null>(null);
   const [hoverClientX, setHoverClientX] = React.useState<number | null>(null);
   const [frozen, setFrozen] = React.useState(false);
-  const rafRef = React.useRef<number>(0);
+  const hoverFrame = useAnimationFrame();
   const [renderer, setRenderer] = React.useState<WebGLChartRenderer | null>(
     null,
   );
@@ -390,8 +393,7 @@ export function PowerCurveWebGLChart({
   const handleMouseMove = React.useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       if (frozen) return;
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
+      hoverFrame.request(() => {
         const svg = svgRef.current;
         if (!svg) return;
         const rect = svg.getBoundingClientRect();
@@ -404,8 +406,11 @@ export function PowerCurveWebGLChart({
         }
 
         const durationValue = xScale.invert(svgX);
-        let dataIndex = d3BisectorObj.left(xData, durationValue);
-        dataIndex = Math.max(0, Math.min(dataIndex, xData.length - 1));
+        let dataIndex = clamp(
+          d3BisectorObj.left(xData, durationValue),
+          0,
+          xData.length - 1,
+        );
 
         // Snap to closest point
         if (dataIndex > 0 && dataIndex < xData.length) {
@@ -418,15 +423,15 @@ export function PowerCurveWebGLChart({
         setHoverClientX(e.clientX);
       });
     },
-    [frozen, drawingWidth, xScale, xData],
+    [frozen, hoverFrame, drawingWidth, xScale, xData],
   );
 
   const handleMouseLeave = React.useCallback(() => {
     if (frozen) return;
-    cancelAnimationFrame(rafRef.current);
+    hoverFrame.cancel();
     setHoverIndex(null);
     setHoverClientX(null);
-  }, [frozen]);
+  }, [frozen, hoverFrame]);
 
   const handleClick = React.useCallback(() => {
     if (frozen) {
@@ -437,11 +442,6 @@ export function PowerCurveWebGLChart({
       setFrozen(true);
     }
   }, [frozen, hoverIndex]);
-
-  // Clean up rAF on unmount
-  React.useEffect(() => {
-    return () => cancelAnimationFrame(rafRef.current);
-  }, []);
 
   if (width === 0 || drawingHeight <= 0 || xData.length < 2) {
     return (

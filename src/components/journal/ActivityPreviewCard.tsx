@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { MedalIcon } from "lucide-react";
 
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
+import { useTimeout } from "@base-ui/utils/useTimeout";
 
 import { PreviewCardContent } from "~/components/ui/preview-card";
 import { type TFunction } from "~/i18n/I18nProvider";
@@ -60,26 +61,15 @@ export function ActivityPreviewHost({
  */
 export function useMapPrefetch(stravaId: number) {
   const utils = trpc.useUtils();
-  const prefetchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const prefetchTimeout = useTimeout();
 
   const onPointerEnter = React.useCallback(() => {
-    prefetchTimer.current = setTimeout(() => {
+    prefetchTimeout.start(PREFETCH_DELAY, () => {
       void utils.activities.getMapPolyline.prefetch({ stravaId });
-    }, PREFETCH_DELAY);
-  }, [utils, stravaId]);
+    });
+  }, [prefetchTimeout, utils, stravaId]);
 
-  const onPointerLeave = React.useCallback(() => {
-    if (prefetchTimer.current != null) {
-      clearTimeout(prefetchTimer.current);
-      prefetchTimer.current = null;
-    }
-  }, []);
-
-  React.useEffect(() => onPointerLeave, [onPointerLeave]);
-
-  return { onPointerEnter, onPointerLeave };
+  return { onPointerEnter, onPointerLeave: prefetchTimeout.clear };
 }
 
 function ActivityPreviewCardBody({

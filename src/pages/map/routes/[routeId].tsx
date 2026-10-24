@@ -9,7 +9,6 @@ import { useT } from "~/i18n/useT";
 import { isRoutesEnabled } from "~/lib/features";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { decode } from "~/utils/polyline";
-import type { RouteSport } from "~/utils/routeProfiles";
 import { trpc } from "~/utils/trpc";
 
 export const getServerSideProps: GetServerSideProps = async () => {
@@ -38,7 +37,7 @@ const EditRoutePage: NextPageWithLayout = () => {
             <SendToDeviceMenu
               inToolbar
               name={route.name}
-              sport={route.sport as RouteSport}
+              sport={route.sport}
               points={decode(route.mapPolyline)}
               elevation={[]}
               distance={route.distance}
