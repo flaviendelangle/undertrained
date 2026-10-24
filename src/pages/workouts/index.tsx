@@ -14,7 +14,6 @@ import {
   ResponsiveDialog,
   ResponsiveDialogTrigger,
 } from "~/components/ui/responsive-dialog";
-import { showErrorToast } from "~/components/ui/toast";
 import { BuiltInWorkouts } from "~/components/workouts/BuiltInWorkouts";
 import { WorkoutActionsMenu } from "~/components/workouts/WorkoutActionsMenu";
 import {
@@ -23,11 +22,16 @@ import {
 } from "~/components/workouts/WorkoutLibraryCard";
 import { WorkoutMiniPreview } from "~/components/workouts/WorkoutMiniPreview";
 import { WorkoutPreviewContent } from "~/components/workouts/WorkoutPreviewContent";
+import {
+  useDeleteStructuredWorkout,
+  useDuplicateStructuredWorkout,
+  useStructuredWorkout,
+  useStructuredWorkoutList,
+} from "~/hooks/structuredWorkouts";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { formatCompactDuration } from "~/utils/format";
-import { trpc } from "~/utils/trpc";
 
 export const getServerSideProps: GetServerSideProps = async () => {
   return { props: {} };
@@ -42,12 +46,8 @@ function WorkoutCard({
   onDuplicate: (workout: ListStructuredWorkout) => void;
   onDelete: (id: number) => void | Promise<void>;
 }) {
-  const athleteId = useAthleteId();
   const [open, setOpen] = React.useState(false);
-  const detail = trpc.structuredWorkouts.get.useQuery(
-    { athleteId: athleteId!, id: workout.id },
-    { enabled: open && !!athleteId },
-  );
+  const detail = useStructuredWorkout(workout.id, { enabled: open });
   return (
     <ResponsiveDialog open={open} onOpenChange={setOpen}>
       <WorkoutLibraryCard
@@ -106,7 +106,6 @@ function WorkoutCard({
 const WorkoutsPage: NextPageWithLayout = () => {
   const t = useT();
   const athleteId = useAthleteId();
-  const utils = trpc.useUtils();
   const [search, setSearch] = React.useState("");
 
   const {
@@ -114,20 +113,10 @@ const WorkoutsPage: NextPageWithLayout = () => {
     isPending,
     isError,
     refetch,
-  } = trpc.structuredWorkouts.list.useQuery(
-    { athleteId: athleteId! },
-    { enabled: !!athleteId },
-  );
+  } = useStructuredWorkoutList();
 
-  const invalidate = () => utils.structuredWorkouts.list.invalidate();
-  const deleteMutation = trpc.structuredWorkouts.delete.useMutation({
-    onSuccess: invalidate,
-    onError: () => showErrorToast(t("common.deleteError")),
-  });
-  const duplicateMutation = trpc.structuredWorkouts.duplicate.useMutation({
-    onSuccess: invalidate,
-    onError: () => showErrorToast(t("common.saveError")),
-  });
+  const deleteMutation = useDeleteStructuredWorkout();
+  const duplicateMutation = useDuplicateStructuredWorkout();
 
   const filtered = React.useMemo(() => {
     if (!workouts) return workouts;

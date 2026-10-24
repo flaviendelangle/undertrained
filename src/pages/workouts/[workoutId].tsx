@@ -2,10 +2,9 @@ import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 
 import { WorkoutBuilder } from "~/components/workouts/WorkoutBuilder";
-import { useAthleteId } from "~/hooks/useAthleteId";
+import { useStructuredWorkout } from "~/hooks/structuredWorkouts";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
-import { trpc } from "~/utils/trpc";
 
 export const getServerSideProps: GetServerSideProps = async () => {
   return { props: {} };
@@ -14,15 +13,12 @@ export const getServerSideProps: GetServerSideProps = async () => {
 const EditWorkoutPage: NextPageWithLayout = () => {
   const t = useT();
   const router = useRouter();
-  const athleteId = useAthleteId();
 
   const raw = router.query.workoutId;
   const workoutId = Number(Array.isArray(raw) ? raw[0] : raw);
-  const enabled = !!athleteId && Number.isFinite(workoutId);
 
-  const { data: workout, isError } = trpc.structuredWorkouts.get.useQuery(
-    { athleteId: athleteId!, id: workoutId },
-    { enabled },
+  const { data: workout, isError } = useStructuredWorkout(
+    Number.isFinite(workoutId) ? workoutId : null,
   );
 
   if (isError) {

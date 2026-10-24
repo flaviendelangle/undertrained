@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { createFakeCharacteristic } from "./fakeGatt";
 import { FtmsControlPoint } from "./ftmsControl";
 
 const OP_REQUEST_CONTROL = 0x00;
@@ -10,75 +11,6 @@ const OP_START_OR_RESUME = 0x07;
 const RESULT_SUCCESS = 0x01;
 const RESULT_OP_CODE_NOT_SUPPORTED = 0x02;
 const RESULT_CONTROL_NOT_PERMITTED = 0x05;
-
-/**
- * A stand-in for the FTMS Control Point characteristic.
- *
- * `replyWith` decides the result code per op code, and returning `null` means
- * the machine never answers at all — the case the response timeout exists for.
- */
-function createFakeCharacteristic(
-  initialReplyWith: (opCode: number) => number | null = () => RESULT_SUCCESS,
-) {
-  const listeners: ((event: Event) => void)[] = [];
-  const writes: number[][] = [];
-  let replyWith = initialReplyWith;
-
-  const stopNotifications = vi.fn((): Promise<void> => Promise.resolve());
-  const writeValueWithResponse = vi.fn((payload: Uint8Array): Promise<void> => {
-    writes.push([...payload]);
-    const result = replyWith(payload[0]);
-    if (result != null) {
-      // Real indications arrive after the write settles, never during it.
-      queueMicrotask(() => notify(payload[0], result));
-    }
-    return Promise.resolve();
-  });
-
-  const characteristic = {
-    value: null as DataView | null,
-    startNotifications: (): Promise<void> => Promise.resolve(),
-    stopNotifications,
-    addEventListener: (_type: string, listener: (event: Event) => void) => {
-      listeners.push(listener);
-    },
-    removeEventListener: (_type: string, listener: (event: Event) => void) => {
-      const index = listeners.indexOf(listener);
-      if (index >= 0) listeners.splice(index, 1);
-    },
-    writeValueWithResponse,
-  };
-
-  function notifyRaw(bytes: number[]) {
-    characteristic.value = new DataView(Uint8Array.from(bytes).buffer);
-    for (const listener of [...listeners]) {
-      listener({ target: characteristic } as unknown as Event);
-    }
-  }
-
-  function notify(opCode: number, result: number) {
-    notifyRaw([0x80, opCode, result]);
-  }
-
-  return {
-    characteristic:
-      characteristic as unknown as BluetoothRemoteGATTCharacteristic,
-    // Exposed directly rather than reached through `characteristic`, so tests
-    // never hold an unbound method reference.
-    writeValueWithResponse,
-    stopNotifications,
-    /** Op codes written, in order. */
-    opCodes: () => writes.map((write) => write[0]),
-    writes,
-    notify,
-    notifyRaw,
-    /** Changes how the machine answers from the next write onwards. */
-    setReplyWith: (next: (opCode: number) => number | null) => {
-      replyWith = next;
-    },
-    listenerCount: () => listeners.length,
-  };
-}
 
 /** Lets pending microtasks and the queued write settle. */
 function flush(): Promise<void> {
