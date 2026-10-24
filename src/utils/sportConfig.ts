@@ -11,7 +11,12 @@ import {
 
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import type { RiderSettings } from "~/sensors/types";
-import { formatElapsed, formatKm } from "~/utils/format";
+import {
+  formatElapsed,
+  formatKm,
+  formatKmh,
+  formatMeters,
+} from "~/utils/format";
 import type {
   LoadAlgorithm,
   LoadAlgorithmPreferences,
@@ -78,22 +83,22 @@ export class SportConfig {
    * - Swimming: `"1:45 /100m"`
    */
   formatSpeed(metersPerSecond: number): string {
-    return `${(metersPerSecond * 3.6).toFixed(1)} km/h`;
+    return formatKmh(metersPerSecond);
   }
 
   /**
-   * Format a distance (in meters) to a rounded display string.
+   * Format a distance (in meters) for display, with up to three decimals.
    *
-   * @example "42km", "1,500m"
+   * @example "42.195 km", "1,500 m"
    */
   formatDistance(meters: number): string {
-    return `${new Intl.NumberFormat().format(meters / 1000)}km`;
+    return formatKm(meters, 3, 0);
   }
 
   /**
    * Format a distance (in meters) with decimal precision.
    *
-   * @example "42.20 km", "1500 m"
+   * @example "42.20 km", "1,500 m"
    */
   formatPreciseDistance(meters: number): string {
     return formatKm(meters, 2);
@@ -338,11 +343,11 @@ class SwimSportConfig extends SportConfig {
   }
 
   override formatDistance(meters: number): string {
-    return `${new Intl.NumberFormat().format(meters)}m`;
+    return formatMeters(meters, 3, 0);
   }
 
   override formatPreciseDistance(meters: number): string {
-    return `${meters.toFixed(0)} m`;
+    return formatMeters(meters);
   }
 
   override readonly speedLabelKey: AppMessageKey = "stats.paceLabel";

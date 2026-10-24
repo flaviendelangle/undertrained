@@ -10,7 +10,7 @@ import {
 import { StatCard } from "~/components/primitives/StatCard";
 import { StatSection } from "~/components/primitives/StatSection";
 import { useT } from "~/i18n/useT";
-import { formatHumanDuration } from "~/utils/format";
+import { formatHumanDuration, formatKm, formatMeters } from "~/utils/format";
 
 interface TimePeriodStatsProps {
   activityCount: number;
@@ -30,8 +30,6 @@ export function TimePeriodStats(props: TimePeriodStatsProps) {
     totalElevation,
   } = props;
 
-  const avgDistance =
-    activityCount > 0 ? (totalDistance / 1000 / activityCount).toFixed(1) : "0";
   const avgDuration =
     activityCount > 0
       ? formatHumanDuration(Math.round(totalMovingTime / activityCount))
@@ -56,13 +54,13 @@ export function TimePeriodStats(props: TimePeriodStatsProps) {
         <StatCard
           icon={Route}
           label={t("periods.stats.distance")}
-          value={`${(totalDistance / 1000).toFixed(1)} km`}
+          value={formatKm(totalDistance)}
           variant="hero"
         />
         <StatCard
           icon={Mountain}
           label={t("periods.stats.elevation")}
-          value={`${Math.round(totalElevation)} m`}
+          value={formatMeters(totalElevation)}
           variant="hero"
         />
       </div>
@@ -83,7 +81,7 @@ export function TimePeriodStats(props: TimePeriodStatsProps) {
           >
             <StatCard
               label={t("periods.stats.avgDistance")}
-              value={`${avgDistance} km`}
+              value={formatKm(totalDistance / activityCount)}
             />
             <StatCard
               label={t("periods.stats.avgDuration")}
@@ -91,7 +89,7 @@ export function TimePeriodStats(props: TimePeriodStatsProps) {
             />
             <StatCard
               label={t("periods.stats.avgElevation")}
-              value={`${activityCount > 0 ? Math.round(totalElevation / activityCount) : 0} m`}
+              value={formatMeters(totalElevation / activityCount)}
             />
           </StatSection>
         )}

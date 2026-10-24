@@ -5,9 +5,8 @@ import { PowerHrChart } from "~/components/liveTraining/PowerHrChart";
 import { StatCard } from "~/components/primitives/StatCard";
 import { Button } from "~/components/ui/button";
 import { useT } from "~/i18n/useT";
-import { msToKmh } from "~/sensors/speedFromPower";
 import type { SessionDataPoint, SessionSummary } from "~/sensors/types";
-import { formatHumanDuration } from "~/utils/format";
+import { formatHumanDuration, formatKm, formatKmh } from "~/utils/format";
 import type { ResolvedSegment } from "~/utils/structuredWorkout";
 
 import { HudWorkoutCompliance } from "./HudWorkoutCompliance";
@@ -108,7 +107,7 @@ export function HudPostTraining({
           />
           <StatCard
             label={t("liveTraining.stat.distance")}
-            value={`${(summary.totalDistance / 1000).toFixed(2)} km`}
+            value={formatKm(summary.totalDistance, 2)}
           />
           <StatCard
             label={t("liveTraining.stat.avgCadence")}
@@ -119,9 +118,7 @@ export function HudPostTraining({
           <StatCard
             label={t("liveTraining.stat.avgSpeed")}
             value={
-              summary.avgSpeed != null
-                ? `${msToKmh(summary.avgSpeed).toFixed(1)} km/h`
-                : null
+              summary.avgSpeed != null ? formatKmh(summary.avgSpeed) : null
             }
           />
         </div>

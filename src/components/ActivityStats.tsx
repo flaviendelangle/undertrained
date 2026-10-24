@@ -25,7 +25,7 @@ import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
 import { activitySettingsDay } from "~/lib/activityRecording";
 import { cn } from "~/lib/utils";
-import { formatHumanDuration } from "~/utils/format";
+import { formatHumanDuration, formatMeters } from "~/utils/format";
 import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
 import { getSportConfig } from "~/utils/sportConfig";
 
@@ -118,7 +118,7 @@ export const ActivityStats = React.memo(function ActivityStats({
             {
               icon: Mountain,
               label: t("stats.elevation"),
-              value: `${activity.totalElevationGain} m`,
+              value: formatMeters(activity.totalElevationGain, 1, 0),
             },
           ]
         : []),

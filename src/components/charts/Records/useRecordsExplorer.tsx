@@ -7,7 +7,7 @@ import { type TFunction } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
 import { CYCLING_POWER_DURATIONS as DURATIONS } from "~/utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCES } from "~/utils/cyclingRecordDistances";
-import { formatElapsed } from "~/utils/format";
+import { formatElapsed, formatMeters } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
@@ -359,7 +359,7 @@ export function useRecordsExplorer(): RecordsExplorer {
   } else if (elevationActive) {
     active = elevationQuery;
     freshEntries = (elevationQuery.data ?? []).map((r) =>
-      toEntry(r, `${Math.round(r.value)} m`),
+      toEntry(r, formatMeters(r.value)),
     );
   } else {
     // Power (the default cycling metric).

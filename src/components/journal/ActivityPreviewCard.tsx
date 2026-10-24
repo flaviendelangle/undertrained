@@ -11,7 +11,7 @@ import { type TFunction } from "~/i18n/I18nProvider";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import { formatHumanDuration } from "~/utils/format";
+import { formatHumanDuration, formatMeters } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
@@ -188,7 +188,7 @@ function buildStats(
   if (activity.totalElevationGain > 0) {
     stats.push({
       label: t("journal.stat.elevation"),
-      value: `${Math.round(activity.totalElevationGain)} m`,
+      value: formatMeters(activity.totalElevationGain),
     });
   }
 

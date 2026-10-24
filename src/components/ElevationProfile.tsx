@@ -2,6 +2,8 @@ import * as React from "react";
 
 import { bisector } from "d3-array";
 
+import { formatKm, formatMeters } from "~/utils/format";
+
 const TOTAL_HEIGHT = 96;
 const X_AXIS_HEIGHT = 16;
 const CHART_HEIGHT = TOTAL_HEIGHT - X_AXIS_HEIGHT;
@@ -126,8 +128,8 @@ export function ElevationProfile({
 
     // Y labels — only max at top, min at bottom-left above X labels
     const yLbls = [
-      { label: `${Math.round(yMax)} m`, y: PADDING_TOP + 4 },
-      { label: `${Math.round(yMin)} m`, y: CHART_HEIGHT - 2 },
+      { label: formatMeters(yMax), y: PADDING_TOP + 4 },
+      { label: formatMeters(yMin), y: CHART_HEIGHT - 2 },
     ];
 
     // X labels — start after LABEL_MARGIN to avoid Y label overlap
@@ -145,7 +147,7 @@ export function ElevationProfile({
       for (let km = nice; km <= totalKm; km += nice) {
         const px = LABEL_MARGIN + ((km * 1000) / xRange) * chartWidth;
         if (px >= LABEL_MARGIN + 30 && px <= width - 20) {
-          xLbls.push({ label: `${km.toFixed(0)} km`, x: px });
+          xLbls.push({ label: formatKm(km * 1000, 0), x: px });
         }
       }
     }
@@ -271,7 +273,7 @@ export function ElevationProfile({
                 className="fill-foreground text-[10px] font-medium"
                 pointerEvents="none"
               >
-                {Math.round(hoverPoint.value)} m
+                {formatMeters(hoverPoint.value)}
               </text>
             </>
           )}
