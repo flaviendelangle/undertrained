@@ -1,9 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, getTableName, is } from "drizzle-orm";
+import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TRPCError } from "@trpc/server";
 
 import type { Database } from "../db";
+import * as schema from "../db/schema";
 import {
   activities,
   athletes,
@@ -31,7 +33,12 @@ vi.mock("./sync", () => ({
 const ATHLETE_ID = 7;
 const STRAVA_ATHLETE_ID = 12345;
 
-type Op = { verb: "delete" | "update"; table: unknown; where: unknown };
+type Op = {
+  verb: "delete" | "update";
+  table: unknown;
+  where: unknown;
+  values?: unknown;
+};
 
 /** Every write the handler attempted, in order. */
 let ops: Op[] = [];
@@ -70,13 +77,14 @@ const dbMock = {
     },
   }),
   update: (table: unknown) => ({
-    set: () => ({
+    set: (values: unknown) => ({
       where: (where: unknown) => {
-        ops.push({ verb: "update", table, where });
+        ops.push({ verb: "update", table, where, values });
         return thenable([]);
       },
     }),
   }),
+  transaction: (run: (tx: unknown) => Promise<unknown>) => run(dbMock),
 };
 
 const { deleteAllAthleteData, processWebhookEvent, resetDeauthCheckThrottle } =
@@ -234,21 +242,51 @@ describe("deauthorization events", () => {
 });
 
 describe("account data deletion", () => {
-  it("revokes pending desktop codes and sessions for only this athlete", async () => {
+  /**
+   * Every table with a foreign key to `athletes.id`, and the column holding it.
+   * Read off the schema so a table added later can't be left out of the erasure
+   * without this failing.
+   */
+  const athleteOwned = Object.values(schema)
+    .filter((value) => is(value, PgTable))
+    .flatMap((table) =>
+      getTableConfig(table).foreignKeys.flatMap((fk) => {
+        const { columns, foreignColumns } = fk.reference();
+        return foreignColumns[0] === athletes.id
+          ? [{ table, column: columns[0] }]
+          : [];
+      }),
+    );
+
+  it("deletes every athlete-owned table for only this athlete", async () => {
+    // Guards the schema walk itself: an empty list would pass vacuously.
+    expect(athleteOwned.map(({ table }) => table)).toContain(activities);
+
     await deleteAllAthleteData(dbMock as unknown as Database, ATHLETE_ID);
-    expect(ops).toContainEqual({
-      verb: "delete",
-      table: desktopCodes,
-      where: eq(desktopCodes.athlete, ATHLETE_ID),
-    });
-    expect(ops).toContainEqual({
-      verb: "delete",
-      table: desktopSessions,
-      where: eq(desktopSessions.athlete, ATHLETE_ID),
-    });
+    for (const { table, column } of athleteOwned) {
+      expect(ops, getTableName(table)).toContainEqual({
+        verb: "delete",
+        table,
+        where: eq(column, ATHLETE_ID),
+      });
+    }
     expect(
       ops.some((op) => op.verb === "delete" && op.table === athletes),
     ).toBe(false);
+  });
+
+  it("clears the tokens, calendar feed token and name on the kept athlete row", async () => {
+    await deleteAllAthleteData(dbMock as unknown as Database, ATHLETE_ID);
+    const update = ops.find(
+      (op) => op.verb === "update" && op.table === athletes,
+    );
+    expect(update?.where).toEqual(eq(athletes.id, ATHLETE_ID));
+    expect(update?.values).toMatchObject({
+      accessToken: "",
+      refreshToken: "",
+      calendarToken: null,
+      name: null,
+    });
   });
 });
 

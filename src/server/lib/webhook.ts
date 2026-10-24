@@ -8,10 +8,15 @@ import { db } from "../db";
 import type { Database } from "../db";
 import {
   activities,
+  athleteStats,
   athletes,
+  calendarSubscriptions,
   desktopCodes,
   desktopSessions,
+  plannedTrainings,
   riderSettings,
+  routes,
+  structuredWorkouts,
   syncJobs,
   timePeriods,
 } from "../db/schema";
@@ -499,44 +504,59 @@ async function handleAthleteDeauthorization(
 // ── Shared deletion helper ──────────────────────────────────────────────
 
 /**
- * Deletes all data for an athlete: activities (streams cascade via FK),
- * rider settings, sync jobs, and clears OAuth tokens.
+ * Deletes everything an athlete owns (every table keyed on `athletes.id`) in
+ * one transaction, and clears the OAuth tokens, calendar feed token and name.
  * Keeps the athlete row for NextAuth session reference.
  */
 export async function deleteAllAthleteData(
   db: Database,
   athleteId: number,
 ): Promise<void> {
-  // The athlete row is retained, so its foreign-key cascades never run.
-  // Remove pending grants before sessions to prevent their later exchange.
-  await db.delete(desktopCodes).where(eq(desktopCodes.athlete, athleteId));
-  await db
-    .delete(desktopSessions)
-    .where(eq(desktopSessions.athlete, athleteId));
+  await db.transaction(async (tx) => {
+    // The athlete row is retained, so its foreign-key cascades never run.
+    // Remove pending grants before sessions to prevent their later exchange.
+    await tx.delete(desktopCodes).where(eq(desktopCodes.athlete, athleteId));
+    await tx
+      .delete(desktopSessions)
+      .where(eq(desktopSessions.athlete, athleteId));
 
-  // Delete all activities (streams cascade via FK)
-  await db.delete(activities).where(eq(activities.athlete, athleteId));
+    // Plans go before the activities and workouts they link to, so the
+    // `set null` cascades on those links have nothing left to rewrite.
+    await tx
+      .delete(plannedTrainings)
+      .where(eq(plannedTrainings.athlete, athleteId));
 
-  // Delete rider settings
-  await db.delete(riderSettings).where(eq(riderSettings.athlete, athleteId));
+    // Delete all activities (streams and best efforts cascade via FK)
+    await tx.delete(activities).where(eq(activities.athlete, athleteId));
 
-  // Delete time periods
-  await db.delete(timePeriods).where(eq(timePeriods.athlete, athleteId));
+    await tx
+      .delete(structuredWorkouts)
+      .where(eq(structuredWorkouts.athlete, athleteId));
+    await tx.delete(routes).where(eq(routes.athlete, athleteId));
+    await tx
+      .delete(calendarSubscriptions)
+      .where(eq(calendarSubscriptions.athlete, athleteId));
+    await tx.delete(athleteStats).where(eq(athleteStats.athlete, athleteId));
+    await tx.delete(riderSettings).where(eq(riderSettings.athlete, athleteId));
+    await tx.delete(timePeriods).where(eq(timePeriods.athlete, athleteId));
+    await tx.delete(syncJobs).where(eq(syncJobs.athlete, athleteId));
 
-  // Delete sync jobs
-  await db.delete(syncJobs).where(eq(syncJobs.athlete, athleteId));
-
-  // Clear tokens but keep athlete row (NextAuth session reference).
-  // `lastSeenActivityId` goes back to 0 alongside the activities it indexes: if
-  // the athlete ever reconnects, the re-import mints ids above any stale
-  // watermark and the link prompt would offer their entire history.
-  await db
-    .update(athletes)
-    .set({
-      accessToken: "",
-      refreshToken: "",
-      tokenExpiresAt: 0,
-      lastSeenActivityId: 0,
-    })
-    .where(eq(athletes.id, athleteId));
+    // Clear tokens but keep athlete row (NextAuth session reference). Nulling
+    // `calendarToken` takes the iCal feed URL offline; `name` is restored from
+    // the Strava profile on the next sign-in.
+    // `lastSeenActivityId` goes back to 0 alongside the activities it indexes: if
+    // the athlete ever reconnects, the re-import mints ids above any stale
+    // watermark and the link prompt would offer their entire history.
+    await tx
+      .update(athletes)
+      .set({
+        accessToken: "",
+        refreshToken: "",
+        tokenExpiresAt: 0,
+        calendarToken: null,
+        name: null,
+        lastSeenActivityId: 0,
+      })
+      .where(eq(athletes.id, athleteId));
+  });
 }
