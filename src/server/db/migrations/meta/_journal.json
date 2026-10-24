@@ -176,6 +176,13 @@
       "when": 1790150857083,
       "tag": "0024_desktop_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792846021961,
+      "tag": "0025_planned_workout_choice",
+      "breakpoints": true
     }
   ]
 }

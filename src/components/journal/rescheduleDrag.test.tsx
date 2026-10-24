@@ -74,6 +74,7 @@ function plan(
     plannedDate,
     durationSeconds,
     sportType: "Run",
+    workoutChoice: "workout",
     status: "planned",
     structuredWorkoutId: null,
     linkedActivityId: null,

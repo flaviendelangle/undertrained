@@ -1,0 +1,1 @@
+ALTER TABLE "planned_trainings" ADD COLUMN "workout_choice" text DEFAULT 'workout' NOT NULL;

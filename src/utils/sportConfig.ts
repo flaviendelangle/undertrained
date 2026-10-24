@@ -550,11 +550,13 @@ export function hasZoneThreshold(
 
 /**
  * Strava's `workout_type` is sport-specific and can only be set on runs and
- * rides. The edit form exposes it as a small, sport-dependent set of choices;
- * this sport-agnostic union is the key shared by the form and the update
- * mutation.
+ * rides. The activity editor and the planner expose it as a small,
+ * sport-dependent set of choices; this sport-agnostic union, in display order,
+ * is the key shared by the forms, the mutations and `planned_trainings`.
  */
-export type WorkoutChoice = "none" | "race" | "long_run" | "workout";
+export const WORKOUT_CHOICES = ["none", "race", "long_run", "workout"] as const;
+
+export type WorkoutChoice = (typeof WORKOUT_CHOICES)[number];
 
 /**
  * What a stored `workout_type` means, whatever the sport: one of the
@@ -562,13 +564,6 @@ export type WorkoutChoice = "none" | "race" | "long_run" | "workout";
  * lists for weight-training sessions and the edit form can't set.
  */
 export type WorkoutKind = WorkoutChoice | "weight_training";
-
-const WORKOUT_CHOICES: readonly WorkoutChoice[] = [
-  "none",
-  "race",
-  "long_run",
-  "workout",
-];
 
 const RUN_WORKOUT_TYPES = { none: 0, race: 1, long_run: 2, workout: 3 };
 // Rides have no "long run".
@@ -597,6 +592,17 @@ export function workoutChoicesForSport(
   const values = WORKOUT_TYPES[sportType];
   const choices = WORKOUT_CHOICES.filter((choice) => values?.[choice] != null);
   return choices.length > 0 ? choices : null;
+}
+
+/**
+ * The choice to keep once a form switches sport: `choice` if the new sport
+ * offers it, otherwise "none".
+ */
+export function coerceWorkoutChoice(
+  sportType: string,
+  choice: WorkoutChoice,
+): WorkoutChoice {
+  return workoutChoicesForSport(sportType)?.includes(choice) ? choice : "none";
 }
 
 /**

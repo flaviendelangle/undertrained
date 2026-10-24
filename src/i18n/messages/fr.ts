@@ -156,6 +156,7 @@ const fr: Messages = {
       title: "Titre",
       titlePlaceholder: "ex. Intervalles au seuil",
       sport: "Sport",
+      type: "Type",
       date: "Date",
       start: "Début",
       durationMinutes: "Durée (minutes)",
@@ -167,7 +168,9 @@ const fr: Messages = {
       noSportFound: "Aucun sport trouvé.",
       markDoneLabel: "Marquer comme faite — lier une activité Strava",
       markDoneRenameHint:
-        "L'activité sera renommée sur Strava avec le titre du plan et marquée comme entraînement.",
+        "L'activité sera renommée sur Strava avec le titre du plan.",
+      markDoneRenameTypeHint:
+        "L'activité sera renommée sur Strava avec le titre du plan et prendra son type.",
       noMatchingActivity:
         "Aucune activité correspondante trouvée cette semaine.",
       perfectMatches: "Correspondances parfaites",

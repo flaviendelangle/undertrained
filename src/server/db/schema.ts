@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { ActivityStats } from "strava-v3";
 
+import type { WorkoutChoice } from "~/utils/sportConfig";
 import type { StructuredWorkout } from "~/utils/structuredWorkout";
 
 import type { ZoneSecondsByMetric } from "../lib/activityScoring";
@@ -336,6 +337,15 @@ export const plannedTrainings = pgTable(
     // Strava activity-type string (e.g. "Ride", "Run", "Swim"), understood by
     // `getSportConfig`. Plain text (no enum) to stay open for new sports.
     sportType: text("sport_type").notNull(),
+    // Strava workout type ("race", "long_run", …) given to the activity this
+    // plan gets linked to. Sport-agnostic: `markDone` turns it into Strava's
+    // per-sport integer, and ignores it for sports without a workout type.
+    // Defaults to "workout", what every link applied before the planner let
+    // the athlete choose.
+    workoutChoice: text("workout_choice")
+      .$type<WorkoutChoice>()
+      .notNull()
+      .default("workout"),
     status: plannedTrainingStatusEnum("status").notNull().default("planned"),
     // The authored interval workout this session is meant to follow, if any.
     // Nullable because most planned sessions are just "90 min endurance".

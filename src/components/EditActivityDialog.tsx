@@ -6,6 +6,7 @@ import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
 import type { Activity } from "@server/db/types";
 
 import { SportPicker } from "~/components/SportPicker";
+import { WorkoutChoiceField } from "~/components/WorkoutChoiceField";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import {
@@ -15,30 +16,20 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "~/components/ui/responsive-dialog";
-import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { Switch } from "~/components/ui/switch";
 import { useAthleteId } from "~/hooks/useAthleteId";
-import type { AppMessageKey } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import {
   PLANNABLE_SPORT_TYPES,
   type WorkoutChoice,
-  workoutChoicesForSport,
+  coerceWorkoutChoice,
   workoutValueToChoice,
 } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 const NATIVE_INPUT_CLASS =
   "border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none";
-
-/** i18n key for each workout-type choice's label. */
-const WORKOUT_CHOICE_LABEL_KEY: Record<WorkoutChoice, AppMessageKey> = {
-  none: "activities.edit.workout.none",
-  race: "activities.edit.workout.race",
-  long_run: "activities.edit.workout.longRun",
-  workout: "activities.edit.workout.workout",
-};
 
 /** Header button that opens the edit-activity dialog. */
 export function EditActivityButton({ activity }: { activity: Activity }) {
@@ -106,8 +97,7 @@ function EditActivityForm({
   // still valid, otherwise fall back to "none".
   const handleSportChange = (next: string) => {
     setType(next);
-    const choices = workoutChoicesForSport(next);
-    setWorkoutChoice((prev) => (choices?.includes(prev) ? prev : "none"));
+    setWorkoutChoice((prev) => coerceWorkoutChoice(next, prev));
   };
 
   const updateMut = trpc.activities.update.useMutation({
@@ -138,8 +128,6 @@ function EditActivityForm({
     });
   };
 
-  const workoutChoices = workoutChoicesForSport(type);
-
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
@@ -168,20 +156,12 @@ function EditActivityForm({
         />
       </div>
 
-      {workoutChoices && (
-        <div className="flex flex-col gap-1.5">
-          <Label>{t("activities.edit.type")}</Label>
-          <SegmentedToggle
-            size="default"
-            value={workoutChoice}
-            onChange={setWorkoutChoice}
-            options={workoutChoices.map((choice) => ({
-              value: choice,
-              label: t(WORKOUT_CHOICE_LABEL_KEY[choice]),
-            }))}
-          />
-        </div>
-      )}
+      <WorkoutChoiceField
+        label={t("activities.edit.type")}
+        sportType={type}
+        value={workoutChoice}
+        onChange={setWorkoutChoice}
+      />
 
       <div className="flex items-center justify-between gap-3">
         <Label htmlFor="edit-activity-commute">{t("activities.commute")}</Label>

@@ -5,6 +5,7 @@ import { format, isSameWeek } from "date-fns";
 import type { PlannedTraining } from "@server/db/types";
 
 import { SportPicker } from "~/components/SportPicker";
+import { WorkoutChoiceField } from "~/components/WorkoutChoiceField";
 import { Button } from "~/components/ui/button";
 import {
   Combobox,
@@ -55,7 +56,13 @@ import {
   plannedDay,
   plannedTime,
 } from "~/utils/plannedTraining";
-import { PLANNABLE_SPORT_TYPES, getSportConfig } from "~/utils/sportConfig";
+import {
+  PLANNABLE_SPORT_TYPES,
+  type WorkoutChoice,
+  coerceWorkoutChoice,
+  getSportConfig,
+  workoutChoicesForSport,
+} from "~/utils/sportConfig";
 
 import type { ActivityOptionData } from "./ActivityOption";
 import { ActivityOption } from "./ActivityOption";
@@ -81,6 +88,11 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
   const [title, setTitle] = React.useState(existing?.title ?? "");
   const [sportType, setSportType] = React.useState(
     existing?.sportType ?? PLANNABLE_SPORT_TYPES[0],
+  );
+  // Applied to the Strava activity when the plan is marked done. "workout" by
+  // default, which is what linking applied before the athlete could choose.
+  const [workoutChoice, setWorkoutChoice] = React.useState<WorkoutChoice>(
+    existing?.workoutChoice ?? "workout",
   );
   const [durationMinutes, setDurationMinutes] = React.useState<number | null>(
     existing ? Math.round(existing.durationSeconds / 60) : 60,
@@ -109,6 +121,13 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
   const pending =
     createMut.isPending || updateMut.isPending || deleteMut.isPending;
 
+  // Switching sport re-scopes the workout-type options; keep the choice if it's
+  // still valid, otherwise fall back to "none".
+  const handleSportChange = (next: string) => {
+    setSportType(next);
+    setWorkoutChoice((prev) => coerceWorkoutChoice(next, prev));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = title.trim();
@@ -125,6 +144,7 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
         plannedDate,
         durationSeconds,
         sportType,
+        workoutChoice,
       });
     } else {
       createMut.mutate({
@@ -133,6 +153,7 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
         plannedDate,
         durationSeconds,
         sportType,
+        workoutChoice,
       });
     }
   };
@@ -153,8 +174,15 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
 
       <div className="flex flex-col gap-1.5">
         <Label>{t("journal.dialog.sport")}</Label>
-        <SportPicker value={sportType} onChange={setSportType} />
+        <SportPicker value={sportType} onChange={handleSportChange} />
       </div>
+
+      <WorkoutChoiceField
+        label={t("journal.dialog.type")}
+        sportType={sportType}
+        value={workoutChoice}
+        onChange={setWorkoutChoice}
+      />
 
       <div className="flex gap-3">
         <Field name="plannedDate" className="flex-1">
@@ -308,7 +336,9 @@ function MarkDoneSection({
     <div className="border-border flex flex-col gap-2 border-t pt-4">
       <Label>{t("journal.dialog.markDoneLabel")}</Label>
       <p className="text-muted-foreground text-xs">
-        {t("journal.dialog.markDoneRenameHint")}
+        {workoutChoicesForSport(training.sportType)
+          ? t("journal.dialog.markDoneRenameTypeHint")
+          : t("journal.dialog.markDoneRenameHint")}
       </p>
       {groups.length === 0 ? (
         <p className="text-muted-foreground text-sm">

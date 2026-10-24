@@ -45,6 +45,7 @@ const plan = {
   plannedDate: "2026-08-10T18:00:00",
   durationSeconds: 90 * 60,
   sportType: "Ride",
+  workoutChoice: "workout",
   status: "planned",
   structuredWorkoutId: null,
   linkedActivityId: null,
@@ -192,6 +193,7 @@ it("lists a created plan and drops a deleted one", async () => {
       plannedDate: plan.plannedDate,
       durationSeconds: plan.durationSeconds,
       sportType: plan.sportType,
+      workoutChoice: plan.workoutChoice,
     }),
   );
   await waitFor(() => expect(result.current.list.data).toEqual([plan]));

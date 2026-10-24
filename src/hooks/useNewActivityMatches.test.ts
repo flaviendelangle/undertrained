@@ -31,6 +31,7 @@ const plan = (id: number, plannedDate: string, sportType: string) =>
     plannedDate,
     durationSeconds: 3600,
     sportType,
+    workoutChoice: "workout",
     status: "planned",
     structuredWorkoutId: null,
     linkedActivityId: null,
