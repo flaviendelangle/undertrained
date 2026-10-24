@@ -1,5 +1,5 @@
 import { useT } from "~/i18n/useT";
-import { formatElapsed } from "~/utils/format";
+import { formatElapsed, formatNumber } from "~/utils/format";
 
 interface HudTopBarProps {
   elapsedSeconds: number;
@@ -20,7 +20,7 @@ export function HudTopBar({
           {t("liveTraining.dist")}
         </span>
         <span className="text-foreground font-mono text-lg">
-          {distanceKm.toFixed(2)}
+          {formatNumber(distanceKm, 2)}
         </span>
         <span className="text-muted-foreground text-xs">km</span>
       </div>
@@ -36,7 +36,7 @@ export function HudTopBar({
           {t("liveTraining.speed")}
         </span>
         <span className="text-foreground font-mono text-lg">
-          {speedKmh != null ? speedKmh.toFixed(1) : "--"}
+          {speedKmh != null ? formatNumber(speedKmh, 1) : "--"}
         </span>
         <span className="text-muted-foreground text-xs">km/h</span>
       </div>

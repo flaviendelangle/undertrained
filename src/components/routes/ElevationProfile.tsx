@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import { useT } from "~/i18n/useT";
+import { formatMeters, formatNumber } from "~/utils/format";
 
 /**
  * Lightweight inline-SVG elevation profile. Self-contained (no chart lib) since
@@ -66,7 +67,7 @@ export function ElevationProfile({
       <div className="text-muted-foreground flex justify-between text-xs">
         <span>{t("routes.elevation")}</span>
         <span>
-          {Math.round(path.min)}–{Math.round(path.max)} m
+          {formatNumber(path.min, 0)}–{formatMeters(path.max)}
         </span>
       </div>
       <div
