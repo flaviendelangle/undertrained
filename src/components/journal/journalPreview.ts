@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { PreviewCard } from "@base-ui/react/preview-card";
 
-import type { JournalActivity, JournalWeek } from "./useJournalWeeks";
+import type { JournalActivity } from "./useJournalWeeks";
 
 /** Payload carried by an activity chip's detached preview trigger. */
 export interface ActivityPreviewPayload {
@@ -12,15 +12,14 @@ export interface ActivityPreviewPayload {
 }
 
 /**
- * The two Base UI {@link PreviewCard} handles the Journal shares across all of
- * its hover cards. Rather than mounting a `PreviewCard.Root` per activity chip
- * and per week summary (hundreds of floating-ui contexts on a busy calendar),
- * one card of each kind is mounted once and every chip / summary is a cheap
- * detached `PreviewCard.Trigger` that opens it with its own payload.
+ * The Base UI {@link PreviewCard} handle the Journal shares across its activity
+ * hover cards. Rather than mounting a `PreviewCard.Root` per activity chip
+ * (hundreds of floating-ui contexts on a busy calendar), one card is mounted
+ * once and every chip is a cheap detached `PreviewCard.Trigger` that opens it
+ * with its own payload.
  */
 export interface JournalPreviewHandles {
   activity: PreviewCard.Handle<ActivityPreviewPayload>;
-  summary: PreviewCard.Handle<JournalWeek>;
 }
 
 const JournalPreviewContext = React.createContext<JournalPreviewHandles | null>(

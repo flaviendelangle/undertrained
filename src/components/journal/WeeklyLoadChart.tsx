@@ -28,7 +28,7 @@ function cumulative(daily: (number | null)[]): (number | null)[] {
  * Compact cumulative training-load line for one week: this week's load builds up
  * Monday → Sunday in the primary colour, with the previous week drawn in grey for
  * comparison (Strava-style, no suggested range). Meant to live inside the Journal
- * week summary hover card, so it only mounts on hover.
+ * week summary card, so it only mounts once that card is opened.
  */
 export function WeeklyLoadChart({
   thisWeek,

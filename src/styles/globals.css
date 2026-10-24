@@ -105,7 +105,7 @@
 
 /* ── Preview card trigger-change animation ──
    The Journal shares one Base UI preview card across many detached triggers
-   (every activity chip and week summary). When the active trigger changes while
+   (every activity chip). When the active trigger changes while
    the card is open, animate the swap: the positioner glides to the new anchor,
    the popup resizes to the new content's height, and the Viewport cross-fades +
    slides the content in the direction the new trigger sits. Mirrors the Base UI

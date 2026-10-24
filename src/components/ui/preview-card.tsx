@@ -65,7 +65,7 @@ function PreviewCardContent({
         >
           {/*
            * The Journal shares one popup across many detached triggers (one per
-           * activity chip / week summary). The Viewport cross-fades and slides
+           * activity chip). The Viewport cross-fades and slides
            * the content as the active trigger changes, while the popup resizes
            * and the positioner glides to the new anchor. See globals.css for the
            * transition rules keyed off this slot.
