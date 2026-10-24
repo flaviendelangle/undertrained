@@ -186,10 +186,7 @@ export function useRecordsExplorer(): RecordsExplorer {
     [t],
   );
   const athleteId = useAthleteId();
-  const { data: options } = trpc.records.getOptions.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  const { data: options } = trpc.records.getOptions.useQuery({ athleteId });
 
   const sportItems = React.useMemo(() => {
     const opts: { key: Sport; label: React.ReactNode }[] = [];
@@ -265,44 +262,44 @@ export function useRecordsExplorer(): RecordsExplorer {
   // never blanks the table. Switching metric/sport activates a *different* query
   // hook, which keepPreviousData can't bridge — the display guard below handles that.
   const powerQuery = trpc.records.getCyclingPowerLeaderboard.useQuery(
-    { athleteId: athleteId!, duration },
+    { athleteId, duration },
     {
-      enabled: athleteId != null && isCycling && metric === "power",
+      enabled: isCycling && metric === "power",
       placeholderData: keepPreviousData,
     },
   );
   const speedQuery = trpc.records.getCyclingSpeedLeaderboard.useQuery(
-    { athleteId: athleteId!, distance: speedDistance },
+    { athleteId, distance: speedDistance },
     {
-      enabled: athleteId != null && isCycling && metric === "speed",
+      enabled: isCycling && metric === "speed",
       placeholderData: keepPreviousData,
     },
   );
   const elevationQuery = trpc.records.getCyclingElevationLeaderboard.useQuery(
-    { athleteId: athleteId!, kind: elevationKind },
+    { athleteId, kind: elevationKind },
     {
-      enabled: athleteId != null && elevationActive,
+      enabled: elevationActive,
       placeholderData: keepPreviousData,
     },
   );
   const runningQuery = trpc.records.getRunEffortLeaderboard.useQuery(
-    { athleteId: athleteId!, name: distanceName! },
+    { athleteId, name: distanceName! },
     {
-      enabled: athleteId != null && paceActive && distanceName != null,
+      enabled: paceActive && distanceName != null,
       placeholderData: keepPreviousData,
     },
   );
   const heartrateQuery = trpc.records.getHeartrateLeaderboard.useQuery(
-    { athleteId: athleteId!, sport, duration },
+    { athleteId, sport, duration },
     {
-      enabled: athleteId != null && heartrateActive,
+      enabled: heartrateActive,
       placeholderData: keepPreviousData,
     },
   );
   const longestQuery = trpc.records.getLongestActivityLeaderboard.useQuery(
-    { athleteId: athleteId!, sport, measure: longestMeasure ?? "distance" },
+    { athleteId, sport, measure: longestMeasure ?? "distance" },
     {
-      enabled: athleteId != null && longestActive,
+      enabled: longestActive,
       placeholderData: keepPreviousData,
     },
   );

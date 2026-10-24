@@ -35,8 +35,8 @@ export function CalendarFeedDialog({
 
   // Only fetch (and lazily mint the token) once the dialog is opened.
   const { data } = trpc.plannedTrainings.getCalendarToken.useQuery(
-    { athleteId: athleteId! },
-    { enabled: open && athleteId != null },
+    { athleteId },
+    { enabled: open },
   );
 
   // Prefer the server-built absolute URL (APP_URL); fall back to this origin.

@@ -128,12 +128,10 @@ const WorkoutsPage: NextPageWithLayout = () => {
   }, [workouts, search]);
 
   const onDelete = async (id: number) => {
-    if (!athleteId) return;
     await deleteMutation.mutateAsync({ athleteId, id });
   };
 
   const onDuplicate = (workout: ListStructuredWorkout) => {
-    if (!athleteId) return;
     duplicateMutation.mutate({
       athleteId,
       id: workout.id,

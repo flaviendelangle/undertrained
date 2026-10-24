@@ -115,11 +115,10 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
     () => structuredWorkoutSchema.safeParse(editor.workout),
     [editor.workout],
   );
-  const canSave =
-    !!athleteId && name.trim() !== "" && validation.success && !isSaving;
+  const canSave = name.trim() !== "" && validation.success && !isSaving;
 
   const save = () => {
-    if (!athleteId || !validation.success) return;
+    if (!validation.success) return;
     const payload = {
       athleteId,
       name: name.trim(),

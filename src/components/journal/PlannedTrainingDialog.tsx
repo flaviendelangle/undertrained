@@ -461,7 +461,7 @@ export function PlannedTrainingDialog({
 }) {
   const t = useT();
   const athleteId = useAthleteId();
-  const open = state != null && athleteId != null;
+  const open = state != null;
 
   return (
     <ResponsiveDialog open={open} onOpenChange={(next) => !next && onClose()}>

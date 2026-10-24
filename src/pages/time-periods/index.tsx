@@ -22,10 +22,7 @@ const PeriodsPage: NextPageWithLayout = () => {
     isPending,
     isError,
     refetch,
-  } = trpc.timePeriods.getStats.useQuery(
-    { athleteId: athleteId! },
-    { enabled: !!athleteId },
-  );
+  } = trpc.timePeriods.getStats.useQuery({ athleteId });
 
   const deleteMutation = trpc.timePeriods.delete.useMutation({
     onSuccess: () => utils.timePeriods.invalidate(),
@@ -33,7 +30,6 @@ const PeriodsPage: NextPageWithLayout = () => {
   });
 
   const onDelete = async (id: number) => {
-    if (!athleteId) return;
     await deleteMutation.mutateAsync({ athleteId, id });
   };
 

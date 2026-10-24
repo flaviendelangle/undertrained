@@ -86,7 +86,7 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!athleteId || !form.name || !form.startDate || !form.endDate) return;
+    if (!form.name || !form.startDate || !form.endDate) return;
     const payload = {
       athleteId,
       name: form.name,

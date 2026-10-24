@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, expect, it, onTestFinished } from "vitest";
 
 import type {
   ListStructuredWorkout,
@@ -12,6 +12,7 @@ import {
   structuredWorkoutSchema,
 } from "~/utils/structuredWorkout";
 import {
+  TEST_ATHLETE_ID,
   type TestProcedures,
   createTestBackend,
 } from "~/utils/trpcTestBackend";
@@ -32,12 +33,9 @@ import {
  * what the editor seeds its undo history from.
  */
 
-const ATHLETE_ID = 7;
-vi.mock("./useAthleteId", () => ({ useAthleteId: () => ATHLETE_ID }));
-
 const workout = {
   id: 3,
-  athlete: ATHLETE_ID,
+  athlete: TEST_ATHLETE_ID,
   name: "Sweet spot",
   description: null,
   sport: "bike",
@@ -158,7 +156,7 @@ it("hands the saved version to the library and to a reader that mounts later", a
 
   act(() =>
     page.result.current.update.mutate({
-      athleteId: ATHLETE_ID,
+      athleteId: TEST_ATHLETE_ID,
       id: workout.id,
       name: "Sweet spot, longer",
       sport: "bike",
@@ -197,7 +195,7 @@ it("keeps the saved version when a read sent before the save answers after it", 
 
   act(() =>
     page.result.current.update.mutate({
-      athleteId: ATHLETE_ID,
+      athleteId: TEST_ATHLETE_ID,
       id: workout.id,
       name: "Sweet spot, longer",
       sport: "bike",
@@ -226,7 +224,7 @@ it("leaves no cached copy of a deleted workout for a reader that mounts later", 
   await waitFor(() => expect(page.result.current.list.data).toHaveLength(1));
   act(() =>
     page.result.current.remove.mutate({
-      athleteId: ATHLETE_ID,
+      athleteId: TEST_ATHLETE_ID,
       id: workout.id,
     }),
   );
@@ -249,7 +247,7 @@ it("lists a created and a duplicated workout", async () => {
 
   act(() =>
     page.result.current.create.mutate({
-      athleteId: ATHLETE_ID,
+      athleteId: TEST_ATHLETE_ID,
       name: workout.name,
       sport: "bike",
       structure: workout.structure,
@@ -259,7 +257,7 @@ it("lists a created and a duplicated workout", async () => {
 
   act(() =>
     page.result.current.duplicate.mutate({
-      athleteId: ATHLETE_ID,
+      athleteId: TEST_ATHLETE_ID,
       id: page.result.current.list.data![0].id,
       name: `${workout.name} (2)`,
     }),

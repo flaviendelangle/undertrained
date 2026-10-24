@@ -114,7 +114,7 @@ function EditActivityForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed || athleteId == null) {
+    if (!trimmed) {
       return;
     }
     updateMut.mutate({

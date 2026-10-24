@@ -28,10 +28,7 @@ interface WriteOptions {
  */
 export function usePlannedTrainingList() {
   const athleteId = useAthleteId();
-  return trpc.plannedTrainings.list.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  return trpc.plannedTrainings.list.useQuery({ athleteId });
 }
 
 /**
@@ -40,19 +37,13 @@ export function usePlannedTrainingList() {
  */
 export function useLinkedActivityIds() {
   const athleteId = useAthleteId();
-  return trpc.plannedTrainings.linkedActivityIds.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  return trpc.plannedTrainings.linkedActivityIds.useQuery({ athleteId });
 }
 
 /** Activities imported since the link prompt last ran: its candidate set. */
 export function useNewActivities() {
   const athleteId = useAthleteId();
-  return trpc.plannedTrainings.newActivities.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  return trpc.plannedTrainings.newActivities.useQuery({ athleteId });
 }
 
 export function useCreatePlannedTraining(options?: WriteOptions) {
@@ -128,7 +119,7 @@ export function useReschedulePlannedTraining() {
     plannedDate: string,
     options?: { onSettled?: () => void },
   ) => {
-    if (athleteId == null || plannedDate === training.plannedDate) {
+    if (plannedDate === training.plannedDate) {
       return false;
     }
     update.mutate(

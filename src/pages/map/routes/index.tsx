@@ -111,10 +111,7 @@ const RoutesPage: NextPageWithLayout = () => {
     isPending,
     isError,
     refetch,
-  } = trpc.routes.list.useQuery(
-    { athleteId: athleteId! },
-    { enabled: !!athleteId },
-  );
+  } = trpc.routes.list.useQuery({ athleteId });
 
   const deleteMutation = trpc.routes.delete.useMutation({
     onSuccess: () => utils.routes.list.invalidate(),
@@ -122,7 +119,6 @@ const RoutesPage: NextPageWithLayout = () => {
   });
 
   const onDelete = async (id: number) => {
-    if (!athleteId) return;
     await deleteMutation.mutateAsync({ athleteId, id });
   };
 

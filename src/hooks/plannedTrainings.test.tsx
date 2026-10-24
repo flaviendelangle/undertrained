@@ -15,6 +15,7 @@ import {
 import { ToastProvider } from "~/components/ui/toast";
 import { trpc } from "~/utils/trpc";
 import {
+  TEST_ATHLETE_ID,
   type TestProcedures,
   createTestBackend,
 } from "~/utils/trpcTestBackend";
@@ -35,12 +36,9 @@ import {
  * component would see: the reads, after a write.
  */
 
-const ATHLETE_ID = 7;
-vi.mock("./useAthleteId", () => ({ useAthleteId: () => ATHLETE_ID }));
-
 const plan = {
   id: 17,
-  athlete: ATHLETE_ID,
+  athlete: TEST_ATHLETE_ID,
   title: "Threshold intervals",
   plannedDate: "2026-08-10T18:00:00",
   durationSeconds: 90 * 60,
@@ -188,7 +186,7 @@ it("lists a created plan and drops a deleted one", async () => {
 
   act(() =>
     result.current.create.mutate({
-      athleteId: ATHLETE_ID,
+      athleteId: TEST_ATHLETE_ID,
       title: plan.title,
       plannedDate: plan.plannedDate,
       durationSeconds: plan.durationSeconds,
@@ -199,7 +197,7 @@ it("lists a created plan and drops a deleted one", async () => {
   await waitFor(() => expect(result.current.list.data).toEqual([plan]));
 
   act(() =>
-    result.current.remove.mutate({ athleteId: ATHLETE_ID, id: plan.id }),
+    result.current.remove.mutate({ athleteId: TEST_ATHLETE_ID, id: plan.id }),
   );
   await waitFor(() => expect(result.current.list.data).toEqual([]));
 });
@@ -218,8 +216,8 @@ it("refreshes the plans, the activities and both pickers' candidates once a plan
       plans: usePlannedTrainingList(),
       linked: useLinkedActivityIds(),
       newActivities: useNewActivities(),
-      activities: trpc.activities.list.useQuery({ athleteId: ATHLETE_ID }),
-      maps: trpc.activities.maps.useQuery({ athleteId: ATHLETE_ID }),
+      activities: trpc.activities.list.useQuery({ athleteId: TEST_ATHLETE_ID }),
+      maps: trpc.activities.maps.useQuery({ athleteId: TEST_ATHLETE_ID }),
       markDone: useMarkPlannedTrainingDone(),
     }),
     {
@@ -269,7 +267,7 @@ it("refreshes the plans, the activities and both pickers' candidates once a plan
 
   act(() =>
     result.current.markDone.mutate({
-      athleteId: ATHLETE_ID,
+      athleteId: TEST_ATHLETE_ID,
       id: plan.id,
       stravaId: ride.stravaId,
     }),
