@@ -2,6 +2,8 @@ import * as React from "react";
 
 import type { ListActivity } from "@server/db/types";
 
+import { activityLocalDay } from "~/utils/dateUtils";
+
 export interface EddingtonDataPoint {
   n: number;
   daysAbove: number;
@@ -28,7 +30,7 @@ export function useEddingtonData(
     // Group by local date, summing distances per day
     const dailyDistances = new Map<string, number>();
     for (const activity of activities) {
-      const dateKey = activity.startDateLocal.slice(0, 10);
+      const dateKey = activityLocalDay(activity);
       dailyDistances.set(
         dateKey,
         (dailyDistances.get(dateKey) ?? 0) + activity.distance,

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDurationInput, parseDuration } from "./parseDuration";
+import { formatStepDuration } from "~/utils/structuredWorkout";
+
+import { parseDuration } from "./parseDuration";
 
 describe("parseDuration", () => {
   it("reads a bare number as minutes", () => {
@@ -49,16 +51,16 @@ describe("parseDuration", () => {
   });
 });
 
-describe("formatDurationInput", () => {
+describe("formatStepDuration", () => {
   it("round-trips through parseDuration", () => {
     for (const seconds of [45, 90, 300, 720, 3930]) {
-      expect(parseDuration(formatDurationInput(seconds))).toBe(seconds);
+      expect(parseDuration(formatStepDuration(seconds))).toBe(seconds);
     }
   });
 
   it("pads and drops the hour when unused", () => {
-    expect(formatDurationInput(90)).toBe("1:30");
-    expect(formatDurationInput(3600)).toBe("1:00:00");
-    expect(formatDurationInput(-5)).toBe("0:00");
+    expect(formatStepDuration(90)).toBe("1:30");
+    expect(formatStepDuration(3600)).toBe("1:00:00");
+    expect(formatStepDuration(-5)).toBe("0:00");
   });
 });

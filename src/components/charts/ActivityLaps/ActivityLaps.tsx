@@ -97,7 +97,11 @@ const X_AXIS_ID = "time";
 const Y_AXIS_ID = "value";
 const BAR_GAP_PX = 1;
 
-export default function ActivityLaps(props: ActivityLapsProps) {
+// Memoized: the activity page re-renders on every hover frame of its streams
+// chart, and none of these props change with it.
+const ActivityLaps = React.memo(function ActivityLaps(
+  props: ActivityLapsProps,
+) {
   const { activityType, startDateLocal, laps } = props;
   const t = useT();
   const tokens = useChartTokens();
@@ -288,7 +292,9 @@ export default function ActivityLaps(props: ActivityLapsProps) {
       </ChartCard>
     </ChartThemeProvider>
   );
-}
+});
+
+export default ActivityLaps;
 
 function LapsChart(props: {
   bars: LapBar[];

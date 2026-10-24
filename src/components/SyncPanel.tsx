@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
+import type { SyncJob } from "@server/db/types";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -39,7 +40,7 @@ import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import { trpc } from "~/utils/trpc";
 
-type SyncMode = "load_new" | "load_missing" | "reload_all" | "recompute_scores";
+type SyncMode = NonNullable<SyncJob["mode"]>;
 
 // ── Progress bar ─────────────────────────────────────────────────────
 
@@ -86,24 +87,21 @@ function SyncProgress(props: {
           ? t("sync.status.computingScores")
           : t("sync.status.scanningAll");
 
+  const header = (
+    <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
+      <Loader2 className="size-3 animate-spin" />
+      {phaseLabel}
+    </div>
+  );
+
   // For recompute_scores, skip activity/stream phases
   if (mode === "recompute_scores") {
-    return (
-      <div className="flex flex-col gap-2">
-        <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
-          <Loader2 className="size-3 animate-spin" />
-          {phaseLabel}
-        </div>
-      </div>
-    );
+    return <div className="flex flex-col gap-2">{header}</div>;
   }
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
-        <Loader2 className="size-3 animate-spin" />
-        {phaseLabel}
-      </div>
+      {header}
 
       {/* Activities phase */}
       <div className="flex items-center gap-2">
@@ -395,24 +393,21 @@ export function SyncPanel() {
     }
   }, [syncJob, isInProgress, utils]);
 
-  const handleAction = (mode: SyncMode) => {
+  const start = (mode: SyncMode) => {
     if (!athleteId) return;
-    if (mode === "reload_all") {
-      setConfirmReloadOpen(true);
-      return;
-    }
     startSync.mutate(
       { athleteId, mode },
       { onSuccess: () => utils.sync.getJob.invalidate() },
     );
   };
 
-  const handleConfirmReload = () => {
+  const handleAction = (mode: SyncMode) => {
     if (!athleteId) return;
-    startSync.mutate(
-      { athleteId, mode: "reload_all" },
-      { onSuccess: () => utils.sync.getJob.invalidate() },
-    );
+    if (mode === "reload_all") {
+      setConfirmReloadOpen(true);
+      return;
+    }
+    start(mode);
   };
 
   return (
@@ -474,7 +469,7 @@ export function SyncPanel() {
       <ReloadAllConfirmDialog
         open={confirmReloadOpen}
         onOpenChange={setConfirmReloadOpen}
-        onConfirm={handleConfirmReload}
+        onConfirm={() => start("reload_all")}
       />
     </>
   );

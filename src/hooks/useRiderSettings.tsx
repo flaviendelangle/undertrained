@@ -63,6 +63,9 @@ export function RiderSettingsProvider({
       void utils.analytics.getPowerCurveYears.invalidate();
     },
   });
+  // The mutation result is a new object every render; `mutate` is stable, so
+  // depending on it keeps the context value from changing on every render.
+  const { mutate: save, status: saveStatus } = saveSettings;
 
   const timeline: RiderSettingsTimeline = React.useMemo(
     () =>
@@ -102,7 +105,7 @@ export function RiderSettingsProvider({
     (newTimeline: RiderSettingsTimeline) => {
       if (athleteId == null) return;
       setDraft(newTimeline);
-      saveSettings.mutate(
+      save(
         {
           athleteId,
           cdA: newTimeline.cdA,
@@ -117,7 +120,7 @@ export function RiderSettingsProvider({
         { onSuccess: () => setDraft(null) },
       );
     },
-    [athleteId, saveSettings],
+    [athleteId, save],
   );
 
   const retrySave = React.useCallback(() => {
@@ -148,7 +151,7 @@ export function RiderSettingsProvider({
       currentSettings,
       hasSettings,
       configuredFtp,
-      saveStatus: saveSettings.status,
+      saveStatus,
       retrySave,
     }),
     [
@@ -158,7 +161,7 @@ export function RiderSettingsProvider({
       currentSettings,
       hasSettings,
       configuredFtp,
-      saveSettings.status,
+      saveStatus,
       retrySave,
     ],
   );

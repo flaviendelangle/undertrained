@@ -4,9 +4,12 @@ import { MinusIcon, PlusIcon } from "lucide-react";
 
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
-import { MIN_STEP_SECONDS } from "~/utils/structuredWorkout";
+import {
+  MIN_STEP_SECONDS,
+  formatStepDuration,
+} from "~/utils/structuredWorkout";
 
-import { formatDurationInput, parseDuration } from "./parseDuration";
+import { parseDuration } from "./parseDuration";
 
 /** How much a stepper tap moves the duration. */
 const STEP_SECONDS = 15;
@@ -62,7 +65,7 @@ export function DurationField({
         inputMode="numeric"
         aria-label={t("workouts.step.duration")}
         placeholder={t("workouts.step.durationHint")}
-        value={draft ?? formatDurationInput(seconds)}
+        value={draft ?? formatStepDuration(seconds)}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={(event) => commit(event.target.value)}
         onKeyDown={(event) => {

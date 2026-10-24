@@ -3,7 +3,10 @@ import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
-import { ROUTE_PROFILE_VALUES } from "../../../utils/routeProfiles";
+import {
+  ROUTE_PROFILE_VALUES,
+  ROUTE_SPORTS,
+} from "../../../utils/routeProfiles";
 import { routes } from "../../db/schema";
 import { getDirections } from "../../lib/openRouteService";
 import {
@@ -20,7 +23,17 @@ const waypointSchema = z.tuple([
 ]);
 
 const profileSchema = z.enum(ROUTE_PROFILE_VALUES);
-const sportSchema = z.enum(["cycling", "running"]);
+
+/** Shared validators for create/update, so the two can never drift apart. */
+const routeFields = {
+  name: z.string().min(1).max(200),
+  sport: z.enum(ROUTE_SPORTS),
+  profile: profileSchema,
+  waypoints: z.array(waypointSchema).min(2).max(50),
+  mapPolyline: z.string().min(1),
+  distance: z.number().nonnegative(),
+  elevationGain: z.number().nonnegative().nullable().optional(),
+};
 
 export const routesRouter = router({
   /**
@@ -78,32 +91,17 @@ export const routesRouter = router({
     }),
 
   create: protectedProcedure
-    .input(
-      z.object({
-        athleteId: z.number(),
-        name: z.string().min(1).max(200),
-        sport: sportSchema,
-        profile: profileSchema,
-        waypoints: z.array(waypointSchema).min(2).max(50),
-        mapPolyline: z.string().min(1),
-        distance: z.number().nonnegative(),
-        elevationGain: z.number().nonnegative().nullable().optional(),
-      }),
-    )
+    .input(z.object({ athleteId: z.number(), ...routeFields }))
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
+      const { athleteId, ...data } = input;
       const now = Date.now();
       const [row] = await ctx.db
         .insert(routes)
         .values({
-          athlete: input.athleteId,
-          name: input.name,
-          sport: input.sport,
-          profile: input.profile,
-          waypoints: input.waypoints,
-          mapPolyline: input.mapPolyline,
-          distance: input.distance,
-          elevationGain: input.elevationGain ?? null,
+          athlete: athleteId,
+          ...data,
+          elevationGain: data.elevationGain ?? null,
           createdAt: now,
           updatedAt: now,
         })
@@ -112,36 +110,18 @@ export const routesRouter = router({
     }),
 
   update: protectedProcedure
-    .input(
-      z.object({
-        athleteId: z.number(),
-        id: z.number(),
-        name: z.string().min(1).max(200),
-        sport: sportSchema,
-        profile: profileSchema,
-        waypoints: z.array(waypointSchema).min(2).max(50),
-        mapPolyline: z.string().min(1),
-        distance: z.number().nonnegative(),
-        elevationGain: z.number().nonnegative().nullable().optional(),
-      }),
-    )
+    .input(z.object({ athleteId: z.number(), id: z.number(), ...routeFields }))
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
+      const { athleteId, id, ...data } = input;
       await ctx.db
         .update(routes)
         .set({
-          name: input.name,
-          sport: input.sport,
-          profile: input.profile,
-          waypoints: input.waypoints,
-          mapPolyline: input.mapPolyline,
-          distance: input.distance,
-          elevationGain: input.elevationGain ?? null,
+          ...data,
+          elevationGain: data.elevationGain ?? null,
           updatedAt: Date.now(),
         })
-        .where(
-          and(eq(routes.id, input.id), eq(routes.athlete, input.athleteId)),
-        );
+        .where(and(eq(routes.id, id), eq(routes.athlete, athleteId)));
     }),
 
   delete: protectedProcedure

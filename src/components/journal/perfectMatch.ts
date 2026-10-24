@@ -1,3 +1,4 @@
+import { activityLocalDay } from "~/utils/dateUtils";
 import { plannedDay } from "~/utils/plannedTraining";
 import { getSportConfig } from "~/utils/sportConfig";
 
@@ -13,11 +14,6 @@ import { getSportConfig } from "~/utils/sportConfig";
  * for and the configured-but-uncategorised ones (the three ski types, all of
  * them plannable). Sharing it therefore says nothing about two activities.
  */
-
-/** Local day key (yyyy-MM-dd) of an activity's floating-local start. */
-export function dayKey(isoLocal: string): string {
-  return isoLocal.slice(0, 10);
-}
 
 /** The plan fields the match rule reads. */
 export interface MatchablePlan {
@@ -36,7 +32,7 @@ export function isPerfectMatch(
   plan: MatchablePlan,
   activity: MatchableActivity,
 ): boolean {
-  if (plannedDay(plan.plannedDate) !== dayKey(activity.startDateLocal)) {
+  if (plannedDay(plan.plannedDate) !== activityLocalDay(activity)) {
     return false;
   }
   const planCategory = getSportConfig(plan.sportType).category;

@@ -23,3 +23,8 @@ export const CYCLING_POWER_DURATIONS: { seconds: number; label: string }[] = [
   { seconds: 7200, label: "2 h" },
   { seconds: 10800, label: "3 h" },
 ];
+
+/** Just the duration keys (seconds), e.g. for the server-side bests computation. */
+export const CYCLING_POWER_DURATION_SECONDS = CYCLING_POWER_DURATIONS.map(
+  (d) => d.seconds,
+);

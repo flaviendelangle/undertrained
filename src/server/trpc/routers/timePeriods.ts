@@ -13,6 +13,47 @@ import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 const a = alias(activities, "a");
 const p = alias(timePeriods, "p");
 
+/** Shared validators for create/update, so the two can never drift apart. */
+const periodFields = {
+  name: z.string().min(1),
+  startDate: z.string().date(),
+  endDate: z.string().date(),
+  sportTypes: z.array(z.string()).nullable().optional(),
+};
+
+const startsBeforeEnd = [
+  (d: { startDate: string; endDate: string }) => d.startDate <= d.endDate,
+  { message: "startDate must be before or equal to endDate" },
+] as const;
+
+/** The totals both stats queries select over the matched activities `a`. */
+const totalsColumns = sql`
+  COUNT(a.id)::text AS activity_count,
+  COALESCE(SUM(a.moving_time), 0)::text AS total_moving_time,
+  COALESCE(SUM(a.elapsed_time), 0)::text AS total_elapsed_time,
+  COALESCE(SUM(a.distance), 0)::text AS total_distance,
+  COALESCE(SUM(a.total_elevation_gain), 0)::text AS total_elevation
+`;
+
+type TotalsRow = {
+  activity_count: string;
+  total_moving_time: string;
+  total_elapsed_time: string;
+  total_distance: string;
+  total_elevation: string;
+};
+
+/** Parses a {@link totalsColumns} row; a missing row means no activities. */
+function toTotals(row: TotalsRow | undefined) {
+  return {
+    activityCount: Number(row?.activity_count ?? 0),
+    totalMovingTime: Number(row?.total_moving_time ?? 0),
+    totalElapsedTime: Number(row?.total_elapsed_time ?? 0),
+    totalDistance: Number(row?.total_distance ?? 0),
+    totalElevation: Number(row?.total_elevation ?? 0),
+  };
+}
+
 export const timePeriodsRouter = router({
   getById: protectedProcedure
     .input(z.object({ athleteId: z.number(), id: z.number() }))
@@ -40,31 +81,13 @@ export const timePeriodsRouter = router({
         { athleteId: input.athleteId, timePeriod: period },
         a,
       );
-      const [stats] = await ctx.db.execute<{
-        activity_count: string;
-        total_moving_time: string;
-        total_elapsed_time: string;
-        total_distance: string;
-        total_elevation: string;
-      }>(sql`
-        SELECT
-          COUNT(a.id)::text AS activity_count,
-          COALESCE(SUM(a.moving_time), 0)::text AS total_moving_time,
-          COALESCE(SUM(a.elapsed_time), 0)::text AS total_elapsed_time,
-          COALESCE(SUM(a.distance), 0)::text AS total_distance,
-          COALESCE(SUM(a.total_elevation_gain), 0)::text AS total_elevation
+      const [stats] = await ctx.db.execute<TotalsRow>(sql`
+        SELECT ${totalsColumns}
         FROM ${activities} a
         WHERE ${selected}
       `);
 
-      return {
-        period,
-        activityCount: Number(stats?.activity_count ?? 0),
-        totalMovingTime: Number(stats?.total_moving_time ?? 0),
-        totalElapsedTime: Number(stats?.total_elapsed_time ?? 0),
-        totalDistance: Number(stats?.total_distance ?? 0),
-        totalElevation: Number(stats?.total_elevation ?? 0),
-      };
+      return { period, ...toTotals(stats) };
     }),
 
   list: protectedProcedure
@@ -81,16 +104,8 @@ export const timePeriodsRouter = router({
   create: protectedProcedure
     .input(
       z
-        .object({
-          athleteId: z.number(),
-          name: z.string().min(1),
-          startDate: z.string().date(),
-          endDate: z.string().date(),
-          sportTypes: z.array(z.string()).nullable().optional(),
-        })
-        .refine((d) => d.startDate <= d.endDate, {
-          message: "startDate must be before or equal to endDate",
-        }),
+        .object({ athleteId: z.number(), ...periodFields })
+        .refine(...startsBeforeEnd),
     )
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
@@ -110,17 +125,8 @@ export const timePeriodsRouter = router({
   update: protectedProcedure
     .input(
       z
-        .object({
-          athleteId: z.number(),
-          id: z.number(),
-          name: z.string().min(1),
-          startDate: z.string().date(),
-          endDate: z.string().date(),
-          sportTypes: z.array(z.string()).nullable().optional(),
-        })
-        .refine((d) => d.startDate <= d.endDate, {
-          message: "startDate must be before or equal to endDate",
-        }),
+        .object({ athleteId: z.number(), id: z.number(), ...periodFields })
+        .refine(...startsBeforeEnd),
     )
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
@@ -172,21 +178,8 @@ export const timePeriodsRouter = router({
         { athleteId: input.athleteId, timePeriod: p },
         a,
       );
-      const rows = await ctx.db.execute<{
-        period_id: string;
-        activity_count: string;
-        total_moving_time: string;
-        total_elapsed_time: string;
-        total_distance: string;
-        total_elevation: string;
-      }>(sql`
-        SELECT
-          p.id::text AS period_id,
-          COUNT(a.id)::text AS activity_count,
-          COALESCE(SUM(a.moving_time), 0)::text AS total_moving_time,
-          COALESCE(SUM(a.elapsed_time), 0)::text AS total_elapsed_time,
-          COALESCE(SUM(a.distance), 0)::text AS total_distance,
-          COALESCE(SUM(a.total_elevation_gain), 0)::text AS total_elevation
+      const rows = await ctx.db.execute<TotalsRow & { period_id: string }>(sql`
+        SELECT p.id::text AS period_id, ${totalsColumns}
         FROM ${timePeriods} p
         LEFT JOIN ${activities} a ON ${selected}
         WHERE p.athlete = ${input.athleteId}
@@ -195,16 +188,9 @@ export const timePeriodsRouter = router({
 
       const statsMap = new Map(rows.map((row) => [Number(row.period_id), row]));
 
-      return periods.map((period) => {
-        const row = statsMap.get(period.id);
-        return {
-          period,
-          activityCount: Number(row?.activity_count ?? 0),
-          totalMovingTime: Number(row?.total_moving_time ?? 0),
-          totalElapsedTime: Number(row?.total_elapsed_time ?? 0),
-          totalDistance: Number(row?.total_distance ?? 0),
-          totalElevation: Number(row?.total_elevation ?? 0),
-        };
-      });
+      return periods.map((period) => ({
+        period,
+        ...toTotals(statsMap.get(period.id)),
+      }));
     }),
 });

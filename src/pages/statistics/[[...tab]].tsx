@@ -1,5 +1,3 @@
-import * as React from "react";
-
 import { BarChart3Icon } from "lucide-react";
 import nextDynamic from "next/dynamic";
 
@@ -9,6 +7,7 @@ import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useInitialLoadComplete } from "~/hooks/useInitialLoadComplete";
+import { useModuleLoaded } from "~/hooks/useModuleLoaded";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { activityTypesFor } from "~/utils/sportConfig";
@@ -33,14 +32,15 @@ const loadEddingtonChart = () =>
 const loadTimeInZones = () =>
   import("~/components/charts/TimeInZones").then((m) => m.TimeInZones);
 
-const CHART_LOADERS = [
-  loadFitnessChart,
-  loadActivitiesTimeline,
-  loadTimeInZones,
-  loadActivitiesCumulativeTimeline,
-  loadPowerCurve,
-  loadEddingtonChart,
-];
+const loadCharts = () =>
+  Promise.all([
+    loadFitnessChart(),
+    loadActivitiesTimeline(),
+    loadTimeInZones(),
+    loadActivitiesCumulativeTimeline(),
+    loadPowerCurve(),
+    loadEddingtonChart(),
+  ]);
 
 const FitnessChart = nextDynamic(loadFitnessChart, { ssr: false });
 const ActivitiesTimeline = nextDynamic(loadActivitiesTimeline, { ssr: false });
@@ -64,18 +64,7 @@ const StatisticsPage: NextPageWithLayout = () => {
 
   // Overlap module loading with data, then reveal without waiting for optional
   // analytics, record badges, or calendar feeds.
-  const [modulesReady, setModulesReady] = React.useState(false);
-  React.useEffect(() => {
-    let cancelled = false;
-    void Promise.all(CHART_LOADERS.map((load) => load())).finally(() => {
-      if (!cancelled) {
-        setModulesReady(true);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const modulesReady = useModuleLoaded(loadCharts);
 
   const ready = useInitialLoadComplete(modulesReady, 10000, [
     "activities.list",

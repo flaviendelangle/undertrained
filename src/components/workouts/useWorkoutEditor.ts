@@ -56,7 +56,6 @@ export interface WorkoutEditor {
   selectedId: string | null;
   isSelected: (id: string) => boolean;
   select: (id: string | null) => void;
-  clearSelection: () => void;
   /** Moves the selection through the tree in visual order. */
   selectRelative: (delta: -1 | 1) => void;
 
@@ -65,7 +64,7 @@ export interface WorkoutEditor {
   undo: () => void;
   redo: () => void;
 
-  addStep: (preset?: Partial<Omit<WorkoutStep, "type" | "id">>) => void;
+  addStep: () => void;
   addRepeat: () => void;
 
   updateStep: (
@@ -165,35 +164,31 @@ export function useWorkoutEditor(
     [selectOnly, selectedId, workout.nodes],
   );
 
-  const addStep = React.useCallback<WorkoutEditor["addStep"]>(
-    (preset) => {
-      const anchor = selectedId;
-      const anchorNode = anchor ? findNode(workout.nodes, anchor) : null;
+  const addStep = React.useCallback<WorkoutEditor["addStep"]>(() => {
+    const anchor = selectedId;
+    const anchorNode = anchor ? findNode(workout.nodes, anchor) : null;
 
-      // Selecting a group and adding a step means "add one in here" — that is
-      // the only way to grow a group without dragging, and adding a sibling
-      // after it is never what someone who just clicked the group wanted.
-      const intoRepeat = anchorNode != null && isRepeat(anchorNode);
-      const previous = intoRepeat
-        ? lastStep(anchorNode.children)
-        : anchorNode != null && isStep(anchorNode)
-          ? anchorNode
-          : null;
+    // Selecting a group and adding a step means "add one in here" — that is
+    // the only way to grow a group without dragging, and adding a sibling
+    // after it is never what someone who just clicked the group wanted.
+    const intoRepeat = anchorNode != null && isRepeat(anchorNode);
+    const previous = intoRepeat
+      ? lastStep(anchorNode.children)
+      : anchorNode != null && isStep(anchorNode)
+        ? anchorNode
+        : null;
 
-      const step: WorkoutStep = {
-        ...nextStepFrom(previous),
-        ...preset,
-        id: createId(),
-      };
-      commitNodes(
-        intoRepeat
-          ? insertInto(workout.nodes, anchorNode.id, step)
-          : insertAfter(workout.nodes, anchor, step),
-      );
-      selectOnly(step.id);
-    },
-    [commitNodes, selectOnly, selectedId, workout.nodes],
-  );
+    const step: WorkoutStep = {
+      ...nextStepFrom(previous),
+      id: createId(),
+    };
+    commitNodes(
+      intoRepeat
+        ? insertInto(workout.nodes, anchorNode.id, step)
+        : insertAfter(workout.nodes, anchor, step),
+    );
+    selectOnly(step.id);
+  }, [commitNodes, selectOnly, selectedId, workout.nodes]);
 
   const addRepeat = React.useCallback(() => {
     const anchor = selectedId;
@@ -279,7 +274,6 @@ export function useWorkoutEditor(
     selectedId,
     isSelected: (id) => selectedId === id,
     select: selectOnly,
-    clearSelection: () => selectOnly(null),
     selectRelative,
 
     canUndo: cursor > 0,
@@ -340,5 +334,3 @@ export function useWorkoutEditor(
     isDirty: cursor > 0,
   };
 }
-
-export { isRepeat, isStep };

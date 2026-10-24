@@ -34,7 +34,7 @@ import { startOf } from "~/utils/dateUtils";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
 import { ActivityPreviewHost } from "./ActivityPreviewCard";
-import { CalendarFeedDialog } from "./CalendarFeedButton";
+import { CalendarFeedDialog } from "./CalendarFeedDialog";
 import { JournalRecordsContext } from "./JournalDayCell";
 import { JournalMonthView } from "./JournalMonthView";
 import { JournalWeekView } from "./JournalWeekView";

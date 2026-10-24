@@ -223,12 +223,8 @@ function JournalMonthViewImpl({
                   key={week.weekStart.toISOString()}
                   week={week}
                   dayLoadScale={dayLoadScale}
-                  style={{
-                    top: 0,
-                    left: 0,
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
+                  start={virtualRow.start}
+                  size={virtualRow.size}
                 />
               );
             })}

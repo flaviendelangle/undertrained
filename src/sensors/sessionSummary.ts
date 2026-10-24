@@ -3,7 +3,8 @@ import type { SessionDataPoint, SessionSummary } from "./types";
 /** Window used for the Normalized Power rolling average, in samples (~1 Hz). */
 const NP_WINDOW = 30;
 
-function average(values: number[]): number | null {
+/** Arithmetic mean, or null for an empty series. */
+export function average(values: number[]): number | null {
   if (values.length === 0) return null;
   let sum = 0;
   for (const value of values) sum += value;

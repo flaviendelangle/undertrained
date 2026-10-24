@@ -1,5 +1,7 @@
 import * as React from "react";
 
+import { useControlled } from "@base-ui/utils/useControlled";
+
 import {
   AlertDialog,
   AlertDialogClose,
@@ -36,13 +38,16 @@ export function ConfirmDialog({
   onOpenChange,
 }: ConfirmDialogProps) {
   const t = useT();
-  const [internalOpen, setInternalOpen] = React.useState(false);
+  const [currentOpen, setOpenState] = useControlled({
+    controlled: open,
+    default: false,
+    name: "ConfirmDialog",
+    state: "open",
+  });
   const [pending, setPending] = React.useState(false);
-  const isControlled = open !== undefined;
-  const currentOpen = isControlled ? open : internalOpen;
 
   const setOpen = (nextOpen: boolean) => {
-    if (!isControlled) setInternalOpen(nextOpen);
+    setOpenState(nextOpen);
     onOpenChange?.(nextOpen);
   };
 

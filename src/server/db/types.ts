@@ -6,7 +6,6 @@ import type {
   athletes,
   calendarSubscriptions,
   plannedTrainings,
-  riderSettings,
   routes,
   structuredWorkouts,
   syncJobs,
@@ -45,7 +44,6 @@ export type MapActivity = Pick<
   | "mapPolyline"
 >;
 export type ActivityStream = InferSelectModel<typeof activityStreams>;
-export type RiderSettingsRow = InferSelectModel<typeof riderSettings>;
 export type SyncJob = InferSelectModel<typeof syncJobs>;
 export type PlannedTraining = InferSelectModel<typeof plannedTrainings>;
 export type Route = InferSelectModel<typeof routes>;

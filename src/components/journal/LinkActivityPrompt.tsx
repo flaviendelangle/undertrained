@@ -131,11 +131,6 @@ function wouldInterrupt(): boolean {
  */
 let promptResolvedThisLoad = false;
 
-/** Test seam: the module-level latch has to be clearable between cases. */
-export function resetLinkPromptLatch() {
-  promptResolvedThisLoad = false;
-}
-
 /**
  * Offers to reconcile planned trainings with activities imported since the last
  * visit, on load, anywhere in the app — the Journal's Mark done picker only

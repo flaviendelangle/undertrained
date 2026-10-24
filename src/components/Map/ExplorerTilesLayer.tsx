@@ -3,6 +3,8 @@ import * as React from "react";
 import * as L from "leaflet";
 import { useMap } from "react-leaflet";
 
+import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
+
 import {
   type ClassifiedTile,
   type ExplorerTilesResult,
@@ -249,10 +251,7 @@ export function ExplorerTilesLayer({
 }: ExplorerTilesLayerProps) {
   const map = useMap();
   const layerRef = React.useRef<ExplorerTilesCanvas | null>(null);
-  const tilesDataRef = React.useRef(tilesData);
-  React.useEffect(() => {
-    tilesDataRef.current = tilesData;
-  });
+  const tilesDataRef = useValueAsRef(tilesData);
 
   // Create the layer once per map, seeded with the latest data.
   React.useEffect(() => {
@@ -262,7 +261,7 @@ export function ExplorerTilesLayer({
       layer.remove();
       layerRef.current = null;
     };
-  }, [map]);
+  }, [map, tilesDataRef]);
 
   // Push tile data into the layer when it changes.
   React.useEffect(() => {
