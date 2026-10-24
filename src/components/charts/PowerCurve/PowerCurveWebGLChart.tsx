@@ -6,6 +6,7 @@ import { scaleLinear, scaleLog } from "d3-scale";
 import { clamp } from "@base-ui/utils/clamp";
 import { useAnimationFrame } from "@base-ui/utils/useAnimationFrame";
 
+import { useElementSize } from "~/hooks/useElementSize";
 import {
   filterVisibleLabels,
   measureTickLabels,
@@ -13,10 +14,10 @@ import {
 import { CHART_FONT, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import {
   type PanelRenderData,
-  WebGLChartRenderer,
   buildLineStripMesh,
   colorToGLColor,
 } from "~/lib/webgl";
+import { useWebGLChartRenderer } from "~/lib/webgl/useWebGLChartRenderer";
 
 import { CrosshairDot, CrosshairLine } from "../shared/Crosshair";
 import { PowerCurveTooltip } from "./PowerCurveTooltip";
@@ -84,31 +85,19 @@ export function PowerCurveWebGLChart({
   const svgRef = React.useRef<SVGSVGElement>(null);
   const gridCtxRef = React.useRef<CanvasRenderingContext2D | null>(null);
   const gridCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
-  const [width, setWidth] = React.useState(0);
-  const [height, setHeight] = React.useState(0);
+  // Track container size — the chart fills the available space (like the MUI
+  // charts on the page) rather than using a fixed height, so the bottom margin
+  // reserves a consistent gap below the x-axis labels.
+  const { width, height } = useElementSize(containerRef);
   const [hoverIndex, setHoverIndex] = React.useState<number | null>(null);
   const [hoverClientX, setHoverClientX] = React.useState<number | null>(null);
   const [frozen, setFrozen] = React.useState(false);
   const hoverFrame = useAnimationFrame();
-  const [renderer, setRenderer] = React.useState<WebGLChartRenderer | null>(
-    null,
-  );
-
-  // Track container size — the chart fills the available space (like the MUI
-  // charts on the page) rather than using a fixed height, so the bottom margin
-  // reserves a consistent gap below the x-axis labels.
-  React.useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setWidth(entry.contentRect.width);
-        setHeight(entry.contentRect.height);
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+  const { canvasRef, renderer } = useWebGLChartRenderer({
+    width,
+    height,
+    tokens,
+  });
 
   // Initialize 2D grid canvas
   const initGridCanvas = React.useCallback(
@@ -119,25 +108,6 @@ export function PowerCurveWebGLChart({
     },
     [],
   );
-
-  // Initialize WebGL renderer
-  const canvasRef = React.useCallback((canvas: HTMLCanvasElement | null) => {
-    if (!canvas) return;
-    const r = new WebGLChartRenderer(canvas);
-    const ok = r.init();
-    if (!ok) {
-      console.warn("WebGL2 not available for power curve chart");
-      return;
-    }
-    setRenderer(r);
-  }, []);
-
-  // Dispose renderer on unmount
-  React.useEffect(() => {
-    return () => {
-      renderer?.dispose();
-    };
-  }, [renderer]);
 
   // Dimensions — fill the container; derive the plot height so the top/bottom
   // margins (axis labels + padding) sit inside the card the same way the MUI
@@ -229,13 +199,6 @@ export function PowerCurveWebGLChart({
     });
   }, [xTickLabels]);
 
-  // Resize WebGL canvas
-  React.useEffect(() => {
-    if (width > 0 && totalHeight > 0) {
-      renderer?.resize(width, totalHeight);
-    }
-  }, [renderer, width, totalHeight]);
-
   // Resize 2D grid canvas (separate from WebGL to avoid clearing grid on renderer change)
   const [gridCanvasSize, setGridCanvasSize] = React.useState<[number, number]>([
     0, 0,
@@ -250,11 +213,6 @@ export function PowerCurveWebGLChart({
     canvas.height = h;
     setGridCanvasSize([w, h]);
   }, [width, totalHeight]);
-
-  // Sync theme colors
-  React.useEffect(() => {
-    renderer?.setThemeColors(tokens.grid.gl, tokens.gridStrong.gl);
-  }, [renderer, tokens]);
 
   // Draw 2D grid
   React.useEffect(() => {
