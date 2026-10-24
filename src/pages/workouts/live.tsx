@@ -14,7 +14,7 @@ import { HudWaitingScreen } from "~/components/liveTraining/hud/HudWaitingScreen
 import { QueryState } from "~/components/primitives/QueryState";
 import { SettingsCallout } from "~/components/primitives/SettingsCallout";
 import { Button } from "~/components/ui/button";
-import { useAthleteId } from "~/hooks/useAthleteId";
+import { useStructuredWorkout } from "~/hooks/structuredWorkouts";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import type { TrainingPageControllerOptions } from "~/hooks/useTrainingPageController";
 import { useTrainingPageController } from "~/hooks/useTrainingPageController";
@@ -27,7 +27,6 @@ import {
   isBuiltInWorkoutId,
 } from "~/utils/structuredWorkout/builtIn";
 import { hasPowerTarget } from "~/utils/structuredWorkout/types";
-import { trpc } from "~/utils/trpc";
 
 interface LiveTrainingPageProps {
   /**
@@ -88,15 +87,11 @@ export default function LiveTrainingPage({
   initialBuiltInId,
 }: LiveTrainingPageProps) {
   const t = useT();
-  const athleteId = useAthleteId();
   const builtIn = useMemo(
     () => (initialBuiltInId ? builtInWorkout(initialBuiltInId, 200, t) : null),
     [initialBuiltInId, t],
   );
-  const detail = trpc.structuredWorkouts.get.useQuery(
-    { athleteId: athleteId!, id: initialWorkoutId! },
-    { enabled: !!athleteId && initialWorkoutId != null && !builtIn },
-  );
+  const detail = useStructuredWorkout(initialWorkoutId, { enabled: !builtIn });
   const workout =
     builtIn ?? (detail.data?.id === initialWorkoutId ? detail.data : null);
   if (!workout)

@@ -21,11 +21,11 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
+import { usePlannedTrainingList } from "~/hooks/plannedTrainings";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useBusyEvents } from "~/hooks/useBusyEvents";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { usePersonalRecords } from "~/hooks/usePersonalRecords";
-import { usePlannedTrainings } from "~/hooks/usePlannedTrainings";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { formZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
@@ -67,7 +67,7 @@ function journalHref(view: JournalView, weekParam: string | null): string {
 export function Journal() {
   const t = useT();
   const { data: activities, isError } = useActivitiesQuery();
-  const { data: plannedTrainings } = usePlannedTrainings();
+  const { data: plannedTrainings } = usePlannedTrainingList();
   const { data: busyEvents, showAllDayRow } = useBusyEvents();
   const { timeline } = useRiderSettingsTimeline();
   const records = usePersonalRecords();

@@ -4,7 +4,12 @@
 // suites here are pure functions that have no reason to pay for a DOM.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { renderHook } from "@testing-library/react";
+import type { PlannedTraining } from "@server/db/types";
+import { renderHook, waitFor } from "@testing-library/react";
+
+import { createTestBackend } from "~/utils/trpcTestBackend";
+
+import { useNewActivityMatches } from "./useNewActivityMatches";
 
 /**
  * The pairing rule itself is covered by `perfectMatch.test.ts`. What this file
@@ -16,32 +21,22 @@ import { renderHook } from "@testing-library/react";
  * has not done yet, so plans are held back until their day has started.
  */
 
-const plansQuery = { data: [] as unknown[], isSuccess: true, isError: false };
-const newActivitiesQuery = {
-  data: { watermark: 0, activities: [] as unknown[] },
-  isSuccess: true,
-  isError: false,
-};
-
 vi.mock("./useAthleteId", () => ({ useAthleteId: () => 7 }));
-vi.mock("./usePlannedTrainings", () => ({
-  usePlannedTrainings: () => plansQuery,
-}));
-vi.mock("~/utils/trpc", () => ({
-  trpc: {
-    plannedTrainings: {
-      newActivities: { useQuery: () => newActivitiesQuery },
-    },
-  },
-}));
 
-const { useNewActivityMatches } = await import("./useNewActivityMatches");
-
-const plan = (id: number, plannedDate: string, sportType: string) => ({
-  id,
-  plannedDate,
-  sportType,
-});
+const plan = (id: number, plannedDate: string, sportType: string) =>
+  ({
+    id,
+    athlete: 7,
+    title: "Session",
+    plannedDate,
+    durationSeconds: 3600,
+    sportType,
+    status: "planned",
+    structuredWorkoutId: null,
+    linkedActivityId: null,
+    createdAt: 1,
+    updatedAt: 1,
+  }) satisfies PlannedTraining;
 const activity = (startDateLocal: string, type: string) => ({
   stravaId: 1,
   startDateLocal,
@@ -49,16 +44,36 @@ const activity = (startDateLocal: string, type: string) => ({
   name: "Ride",
 });
 
+/** The hook once both of its reads have answered (or one has failed). */
+async function matches(
+  plans: PlannedTraining[] | Error,
+  activities: ReturnType<typeof activity>[],
+) {
+  const { Wrapper } = createTestBackend({
+    plannedTrainings: {
+      list: () => {
+        if (plans instanceof Error) {
+          throw plans;
+        }
+        return plans;
+      },
+      newActivities: () => ({ watermark: 9, activities }),
+    },
+  });
+  const { result } = renderHook(() => useNewActivityMatches(), {
+    wrapper: Wrapper,
+  });
+  await waitFor(() =>
+    expect(result.current.isReady || result.current.isError).toBe(true),
+  );
+  return result.current;
+}
+
 beforeEach(() => {
-  vi.useFakeTimers();
+  // Only `Date`: React Query schedules its updates on real timers.
+  vi.useFakeTimers({ toFake: ["Date"] });
   // Local noon, so "today" is unambiguous whatever the runner's timezone.
   vi.setSystemTime(new Date(2026, 2, 4, 12, 0, 0));
-  plansQuery.data = [];
-  plansQuery.isSuccess = true;
-  plansQuery.isError = false;
-  newActivitiesQuery.data = { watermark: 0, activities: [] };
-  newActivitiesQuery.isSuccess = true;
-  newActivitiesQuery.isError = false;
 });
 
 afterEach(() => {
@@ -66,55 +81,44 @@ afterEach(() => {
 });
 
 describe("useNewActivityMatches", () => {
-  it("pairs a plan whose day has started", () => {
-    plansQuery.data = [plan(1, "2026-03-04T07:00:00", "Ride")];
-    newActivitiesQuery.data = {
-      watermark: 9,
-      activities: [activity("2026-03-04T08:00:00", "Ride")],
-    };
+  it("pairs a plan whose day has started", async () => {
+    const result = await matches(
+      [plan(1, "2026-03-04T07:00:00", "Ride")],
+      [activity("2026-03-04T08:00:00", "Ride")],
+    );
 
-    const { result } = renderHook(() => useNewActivityMatches());
-
-    expect(result.current.pairs).toHaveLength(1);
-    expect(result.current.watermark).toBe(9);
-    expect(result.current.isReady).toBe(true);
+    expect(result.pairs).toHaveLength(1);
+    expect(result.watermark).toBe(9);
+    expect(result.isReady).toBe(true);
   });
 
-  it("holds back a plan later the same day", () => {
+  it("holds back a plan later the same day", async () => {
     // 18:00 intervals, and this morning's ride just imported. Same calendar day,
     // same sport — a pairing the rule cannot tell apart from a completed one.
-    plansQuery.data = [plan(1, "2026-03-04T18:00:00", "Ride")];
-    newActivitiesQuery.data = {
-      watermark: 9,
-      activities: [activity("2026-03-04T08:00:00", "Ride")],
-    };
+    const result = await matches(
+      [plan(1, "2026-03-04T18:00:00", "Ride")],
+      [activity("2026-03-04T08:00:00", "Ride")],
+    );
 
-    const { result } = renderHook(() => useNewActivityMatches());
-
-    expect(result.current.pairs).toEqual([]);
+    expect(result.pairs).toEqual([]);
+    expect(result.hasDeferred).toBe(true);
   });
 
-  it("holds back a plan on a future day", () => {
-    plansQuery.data = [plan(1, "2026-03-05T07:00:00", "Ride")];
-    newActivitiesQuery.data = {
-      watermark: 9,
-      activities: [activity("2026-03-05T08:00:00", "Ride")],
-    };
+  it("holds back a plan on a future day", async () => {
+    const result = await matches(
+      [plan(1, "2026-03-05T07:00:00", "Ride")],
+      [activity("2026-03-05T08:00:00", "Ride")],
+    );
 
-    const { result } = renderHook(() => useNewActivityMatches());
-
-    expect(result.current.pairs).toEqual([]);
+    expect(result.pairs).toEqual([]);
   });
 
-  it("is not ready, and reports the error, when a query fails", () => {
+  it("is not ready, and reports the error, when a query fails", async () => {
     // A failed query must not read as "you have no matches": the prompt would
     // silently never appear and nothing would say why.
-    plansQuery.isSuccess = false;
-    plansQuery.isError = true;
+    const result = await matches(new Error("offline"), []);
 
-    const { result } = renderHook(() => useNewActivityMatches());
-
-    expect(result.current.isReady).toBe(false);
-    expect(result.current.isError).toBe(true);
+    expect(result.isReady).toBe(false);
+    expect(result.isError).toBe(true);
   });
 });

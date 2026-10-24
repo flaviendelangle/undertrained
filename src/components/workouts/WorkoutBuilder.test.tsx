@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   cleanup,
   fireEvent,
@@ -14,10 +13,10 @@ import {
 
 import { ToastProvider } from "~/components/ui/toast";
 import { STRUCTURED_WORKOUT_SCHEMA_VERSION } from "~/utils/structuredWorkout";
+import { createTestBackend } from "~/utils/trpcTestBackend";
 
 import { WorkoutBuilder, type WorkoutBuilderProps } from "./WorkoutBuilder";
 
-const backend = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn() }));
 vi.mock("next/router", () => ({
   useRouter: () => ({
     push: vi.fn(),
@@ -32,26 +31,6 @@ vi.mock("~/hooks/useRiderSettings", () => ({
     configuredFtp: 200,
   }),
 }));
-vi.mock("~/utils/trpc", async () => {
-  const { useMutation } = await import("@tanstack/react-query");
-  return {
-    trpc: {
-      useUtils: () => ({
-        structuredWorkouts: { list: { invalidate: vi.fn() } },
-      }),
-      structuredWorkouts: {
-        create: {
-          useMutation: (options: object) =>
-            useMutation({ ...options, mutationFn: backend.create }),
-        },
-        update: {
-          useMutation: (options: object) =>
-            useMutation({ ...options, mutationFn: backend.update }),
-        },
-      },
-    },
-  };
-});
 vi.mock("./WorkoutPreviewChart", () => ({ WorkoutPreviewChart: () => null }));
 vi.mock("./WorkoutSummaryPanel", () => ({ WorkoutSummaryPanel: () => null }));
 
@@ -72,24 +51,22 @@ const workout: NonNullable<WorkoutBuilderProps["workout"]> = {
   },
 };
 
-let client: QueryClient;
+const update = vi.fn();
+let server: ReturnType<typeof createTestBackend>;
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <QueryClientProvider client={client}>
+    <server.Wrapper>
       <ToastProvider>{children}</ToastProvider>
-    </QueryClientProvider>
+    </server.Wrapper>
   );
 }
 beforeEach(() => {
-  backend.create.mockReset();
-  backend.update.mockReset();
-  client = new QueryClient({
-    defaultOptions: { mutations: { retry: false } },
-  });
+  update.mockReset();
+  server = createTestBackend({ structuredWorkouts: { update } });
 });
 afterEach(() => {
   cleanup();
-  client.clear();
+  server.queryClient.clear();
 });
 
 it.each(["Up", "Down"] as const)(
@@ -125,7 +102,7 @@ it.each(["Up", "Down"] as const)(
 );
 
 it("tells the athlete when a save fails", async () => {
-  backend.update.mockRejectedValue(new Error("offline"));
+  update.mockRejectedValue(new Error("offline"));
   render(<WorkoutBuilder workout={workout} />, { wrapper });
 
   fireEvent.click(
@@ -134,5 +111,5 @@ it("tells the athlete when a save fails", async () => {
 
   // `All`: the toast's text is mirrored into a screen-reader announcement.
   expect(await screen.findAllByText("common.saveError")).not.toHaveLength(0);
-  expect(backend.update).toHaveBeenCalledOnce();
+  expect(update).toHaveBeenCalledOnce();
 });

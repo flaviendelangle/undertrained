@@ -1,3 +1,4 @@
+import { plannedDay } from "~/utils/plannedTraining";
 import { getSportConfig } from "~/utils/sportConfig";
 
 /**
@@ -13,7 +14,7 @@ import { getSportConfig } from "~/utils/sportConfig";
  * them plannable). Sharing it therefore says nothing about two activities.
  */
 
-/** Local day key (yyyy-MM-dd) of a floating-local ISO datetime string. */
+/** Local day key (yyyy-MM-dd) of an activity's floating-local start. */
 export function dayKey(isoLocal: string): string {
   return isoLocal.slice(0, 10);
 }
@@ -35,7 +36,7 @@ export function isPerfectMatch(
   plan: MatchablePlan,
   activity: MatchableActivity,
 ): boolean {
-  if (dayKey(plan.plannedDate) !== dayKey(activity.startDateLocal)) {
+  if (plannedDay(plan.plannedDate) !== dayKey(activity.startDateLocal)) {
     return false;
   }
   const planCategory = getSportConfig(plan.sportType).category;
