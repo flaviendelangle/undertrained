@@ -18,7 +18,7 @@ import {
   REFERENCE_LINE,
   useChartTokens,
 } from "~/lib/chartTokens";
-import { formatElapsed, formatMinutesSeconds } from "~/utils/format";
+import { formatElapsed } from "~/utils/format";
 
 import { ChartMessage } from "../ChartMessage";
 import { ChartThemeProvider } from "../ChartThemeProvider";
@@ -27,47 +27,48 @@ import {
   ChartTooltipRow,
   ChartTooltipSurface,
 } from "../ChartTooltipSurface";
-import {
-  type PaceSliceBucket,
-  computePaceSliceDistribution,
-} from "./paceDistribution";
-import { paceFromSpeed } from "./paceOverTime";
+import type { MetricDescriptor, MetricSlice } from "./types";
 
-const PACE_AXIS_ID = "pace";
+const VALUE_AXIS_ID = "value";
 const TIME_AXIS_ID = "time";
 const BAR_GAP_PX = 1;
 
-interface PaceSliceDistributionProps {
-  /** Per-second speed samples (m/s) for the activity. */
-  speeds: number[];
-  /** Run threshold pace as a speed (m/s) — colours each slice by its zone. */
-  thresholdSpeed: number;
-  /** Histogram bar width, in seconds per kilometre. */
+interface MetricSliceDistributionProps<TFrequency> {
+  metric: MetricDescriptor<TFrequency>;
+  /** Per-second samples for the activity, in the recorded unit. */
+  values: readonly number[];
+  /** Pre-aggregated counts for a date range, binned instead of `values`. */
+  frequency?: readonly TFrequency[];
+  /** Threshold in effect on the activity's date — colours each slice by its zone. */
+  threshold: number;
+  /** Histogram bar width, in the metric's display unit. */
   sliceWidth: number;
-  /** The activity's average speed (m/s), drawn as a reference line at its pace. */
-  averageSpeed: number | null;
+  /** Value drawn as a dashed reference line, in the recorded unit. */
+  reference: number | null;
 }
 
 interface HoverState {
-  slice: PaceSliceBucket;
+  slice: MetricSlice;
   pct: number;
   x: number;
   y: number;
 }
 
 /**
- * Histogram of time spent in each fixed-width pace slice, each bar coloured by
- * the pace zone it sits in. A dashed reference line marks the activity's average
- * pace. Built on the same MUI X composition as the Power distribution so the bar
- * geometry stays under our control. The x-axis runs fast (left) → slow (right),
- * formatted as pace.
+ * Histogram of time spent in each fixed-width slice of the metric's display
+ * unit, each bar coloured by the zone it sits in. A dashed reference line marks
+ * an average (weighted average power, average pace). Built on the same MUI X
+ * composition as the Laps chart so the bar geometry stays under our control.
+ * Pace slices run fast (left) → slow (right).
  */
-export function PaceSliceDistribution({
-  speeds,
-  thresholdSpeed,
+export function MetricSliceDistribution<TFrequency = never>({
+  metric,
+  values,
+  frequency,
+  threshold,
   sliceWidth,
-  averageSpeed,
-}: PaceSliceDistributionProps) {
+  reference,
+}: MetricSliceDistributionProps<TFrequency>) {
   const t = useT();
   const isMobile = useIsMobile();
   const tokens = useChartTokens();
@@ -79,31 +80,34 @@ export function PaceSliceDistribution({
   const deferredSliceWidth = React.useDeferredValue(sliceWidth);
 
   // Fold the totals into the same memo so they aren't recomputed on every
-  // hover-driven re-render (only when the underlying data/width change).
-  const { slices, total, minPace, maxPace, maxSeconds } = React.useMemo(() => {
-    const buckets = computePaceSliceDistribution(
-      speeds,
-      deferredSliceWidth,
-      thresholdSpeed,
-    );
+  // hover-driven re-render (only when the underlying data/width/threshold change).
+  const { slices, total, min, max, maxSeconds } = React.useMemo(() => {
+    const buckets =
+      frequency && metric.slicesFromFrequency
+        ? metric.slicesFromFrequency(frequency, deferredSliceWidth, threshold)
+        : metric.slices(values, deferredSliceWidth, threshold);
     let total = 0;
     let maxSeconds = 0;
     for (const s of buckets) {
       total += s.seconds;
       if (s.seconds > maxSeconds) maxSeconds = s.seconds;
     }
-    const minPace = buckets.length > 0 ? buckets[0].fastPaceSeconds : 0;
-    const maxPace =
-      buckets.length > 0 ? buckets[buckets.length - 1].slowPaceSeconds : 0;
-    return { slices: buckets, total, minPace, maxPace, maxSeconds };
-  }, [speeds, deferredSliceWidth, thresholdSpeed]);
+    const min = buckets.length > 0 ? buckets[0].lower : 0;
+    const max = buckets.length > 0 ? buckets[buckets.length - 1].upper : 0;
+    return { slices: buckets, total, min, max, maxSeconds };
+  }, [metric, values, frequency, deferredSliceWidth, threshold]);
 
-  if (speeds.length === 0 || total === 0 || maxSeconds <= 0) {
-    return <ChartMessage>{t("charts.pace.empty")}</ChartMessage>;
+  if (
+    (values.length === 0 && frequency == null) ||
+    total === 0 ||
+    maxSeconds <= 0
+  ) {
+    return <ChartMessage>{t(metric.messages.empty)}</ChartMessage>;
   }
 
   const yMax = maxSeconds * 1.1;
-  const avgPace = averageSpeed != null ? paceFromSpeed(averageSpeed) : Infinity;
+  const referenceValue =
+    reference != null ? metric.toDisplay(reference) : Infinity;
 
   return (
     <ChartThemeProvider>
@@ -115,11 +119,11 @@ export function PaceSliceDistribution({
           }
           xAxis={[
             {
-              id: PACE_AXIS_ID,
+              id: VALUE_AXIS_ID,
               scaleType: "linear",
-              min: minPace,
-              max: maxPace,
-              valueFormatter: (v: number) => formatMinutesSeconds(v),
+              min,
+              max,
+              valueFormatter: (v: number) => metric.formatTick(v),
               height: isMobile
                 ? AXIS_SIZE.mobile.height
                 : AXIS_SIZE.desktop.height,
@@ -140,45 +144,44 @@ export function PaceSliceDistribution({
         >
           <ChartsGrid horizontal />
           <SliceBars slices={slices} total={total} onHover={setHover} />
-          {Number.isFinite(avgPace) &&
-            avgPace >= minPace &&
-            avgPace <= maxPace && (
-              <AvgPaceLine
-                pace={avgPace}
+          {Number.isFinite(referenceValue) &&
+            referenceValue > 0 &&
+            referenceValue >= min &&
+            referenceValue <= max && (
+              <ReferenceLine
+                value={referenceValue}
                 color={tokens.palette[2]}
                 label={
                   isMobile
-                    ? `${formatMinutesSeconds(avgPace)} /km`
-                    : t("charts.pace.avgPace", {
-                        pace: formatMinutesSeconds(avgPace),
-                      })
+                    ? metric.formatValue(referenceValue, t)
+                    : metric.formatReference(referenceValue, t)
                 }
               />
             )}
           <ChartsXAxis
-            axisId={PACE_AXIS_ID}
-            label={isMobile ? undefined : t("charts.pace.paceAxis")}
+            axisId={VALUE_AXIS_ID}
+            label={isMobile ? undefined : t(metric.messages.valueAxis)}
           />
           <ChartsYAxis
             axisId={TIME_AXIS_ID}
-            label={isMobile ? undefined : t("charts.pace.timeAxis")}
+            label={isMobile ? undefined : t(metric.messages.timeAxis)}
           />
         </ChartsContainerPro>
-        {hover && <SliceTooltip hover={hover} />}
+        {hover && <SliceTooltip metric={metric} hover={hover} />}
       </div>
     </ChartThemeProvider>
   );
 }
 
-/** The histogram bars, positioned on the linear pace/time scales. */
+/** The histogram bars, positioned on the linear value/time scales. */
 function SliceBars(props: {
-  slices: PaceSliceBucket[];
+  slices: MetricSlice[];
   total: number;
   onHover: (hover: HoverState | null) => void;
 }) {
   const { slices, total, onHover } = props;
   const tokens = useChartTokens();
-  const xScale = useXScale<"linear">(PACE_AXIS_ID);
+  const xScale = useXScale<"linear">(VALUE_AXIS_ID);
   const yScale = useYScale<"linear">(TIME_AXIS_ID);
   const baseY = yScale(0);
 
@@ -186,8 +189,8 @@ function SliceBars(props: {
     <g>
       {slices.map((slice) => {
         if (slice.seconds <= 0) return null;
-        const x1 = xScale(slice.fastPaceSeconds);
-        const x2 = xScale(slice.slowPaceSeconds);
+        const x1 = xScale(slice.lower);
+        const x2 = xScale(slice.upper);
         const y = yScale(slice.seconds);
         const width = Math.max(0, x2 - x1 - BAR_GAP_PX);
         const height = Math.max(0, baseY - y);
@@ -195,7 +198,7 @@ function SliceBars(props: {
         const pct = total > 0 ? (slice.seconds / total) * 100 : 0;
         return (
           <rect
-            key={slice.fastPaceSeconds}
+            key={slice.lower}
             x={x1}
             y={y}
             width={width}
@@ -213,13 +216,13 @@ function SliceBars(props: {
   );
 }
 
-/** Dashed vertical line + label at the activity's average pace. */
-function AvgPaceLine(props: { pace: number; color: string; label: string }) {
-  const { pace, color, label } = props;
-  const xScale = useXScale<"linear">(PACE_AXIS_ID);
+/** Dashed vertical line + label at the reference value. */
+function ReferenceLine(props: { value: number; color: string; label: string }) {
+  const { value, color, label } = props;
+  const xScale = useXScale<"linear">(VALUE_AXIS_ID);
   const yScale = useYScale<"linear">(TIME_AXIS_ID);
 
-  const x = xScale(pace);
+  const x = xScale(value);
   const [yBottom, yTop] = yScale.range();
   const [xStart, xEnd] = xScale.range();
   const drawWidth = xEnd - xStart;
@@ -254,8 +257,14 @@ function AvgPaceLine(props: { pace: number; color: string; label: string }) {
   );
 }
 
-/** Fixed-position tooltip following the cursor, styled like the Power one. */
-function SliceTooltip({ hover }: { hover: HoverState }) {
+/** Fixed-position tooltip following the cursor, styled like the Laps one. */
+function SliceTooltip({
+  metric,
+  hover,
+}: {
+  metric: MetricDescriptor;
+  hover: HoverState;
+}) {
   const { slice, pct } = hover;
   const t = useT();
   const tokens = useChartTokens();
@@ -266,10 +275,7 @@ function SliceTooltip({ hover }: { hover: HoverState }) {
     >
       <ChartTooltipSurface className="whitespace-nowrap">
         <ChartTooltipHeader>
-          {formatMinutesSeconds(slice.fastPaceSeconds)}–
-          {t("charts.pace.perKm", {
-            pace: formatMinutesSeconds(slice.slowPaceSeconds),
-          })}
+          {metric.formatRange(slice.lower, slice.upper, t)}
         </ChartTooltipHeader>
         <ChartTooltipRow
           color={tokens.zones[slice.ramp]}

@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { clamp } from "@base-ui/utils/clamp";
 import {
   ChartsContainerPro,
   ChartsGrid,
@@ -13,10 +14,8 @@ import {
 } from "@mui/x-charts-pro";
 
 import { useIsMobile } from "~/hooks/useIsMobile";
-import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
-import { findPowerZone } from "~/sensors/types";
 import { formatElapsed } from "~/utils/format";
 
 import { ChartMessage } from "../ChartMessage";
@@ -27,10 +26,11 @@ import {
   ChartTooltipSurface,
 } from "../ChartTooltipSurface";
 import { CrosshairDot, CrosshairLine } from "../shared/Crosshair";
-import { buildZoneGradientStops, smoothPowerStream } from "./powerOverTime";
+import { buildZoneGradientStops, smoothStream } from "./metricOverTime";
+import type { MetricDescriptor } from "./types";
 
 const TIME_AXIS_ID = "time";
-const WATTS_AXIS_ID = "watts";
+const VALUE_AXIS_ID = "value";
 const SMOOTHING_SECONDS = 30;
 // ~2 drawn points per horizontal pixel — denser is sub-pixel and invisible.
 const POINTS_PER_PIXEL = 2;
@@ -41,46 +41,49 @@ const FULL_ZOOM: ZoomData[] = [{ axisId: TIME_AXIS_ID, start: 0, end: 100 }];
 // Smallest visible window, in seconds — caps how far the zoom can go in.
 const MIN_VISIBLE_SECONDS = 20;
 
-interface PowerOverTimeProps {
-  /** Per-second watts samples for the activity. */
-  watts: number[];
-  /** FTP in effect on the activity's date — colours the curve by zone. */
-  ftp: number;
+interface MetricOverTimeProps {
+  metric: MetricDescriptor;
+  /** Per-second samples for the activity, in the recorded unit. */
+  values: readonly number[];
+  /** Threshold in effect on the activity's date — colours the curve by zone. */
+  threshold: number;
 }
 
 interface HoverState {
   /** Sample index (seconds from the start). */
   index: number;
-  /** Smoothed power at the hovered sample. */
-  watts: number;
+  /** Smoothed value at the hovered sample. */
+  value: number;
   /** Cursor position for the fixed tooltip. */
   x: number;
   y: number;
 }
 
 /**
- * Time-series of the activity's 30-second power, with the area and line shaded
- * by FTP power zone via a vertical gradient — green near the bottom, climbing to
- * red/purple at the peaks. Uses the same zone colours as the Laps and
- * distribution views, and the same MUI X composition as the slice histogram so
- * the axes and grid stay consistent across the Power card. The x-axis carries
- * the built-in MUI zoom (drag/scroll + a slider below) used by the Statistics
+ * Time-series of the activity's 30-second rolling value, with the area and
+ * line shaded by zone via a vertical gradient — easy/green near the bottom,
+ * climbing to red/purple at the hardest stretches. Uses the same zone colours
+ * as the Laps and distribution views, and the same MUI X composition as the
+ * slice histogram so the axes and grid stay consistent across the card. Pace
+ * plots **speed** (faster = higher, like watts) and formats its ticks and
+ * tooltip as pace, so the axis stays monotonic. Zoomable metrics carry the
+ * built-in MUI zoom (drag/scroll + a slider below) used by the Statistics
  * charts.
  */
-export function PowerOverTime({ watts, ftp }: PowerOverTimeProps) {
+export function MetricOverTime({
+  metric,
+  values,
+  threshold,
+}: MetricOverTimeProps) {
   const t = useT();
   const isMobile = useIsMobile();
   const [hover, setHover] = React.useState<HoverState | null>(null);
 
-  const { smoothed, yMax } = React.useMemo(() => {
-    const series = smoothPowerStream(watts, SMOOTHING_SECONDS);
-    let max = 0;
-    for (const v of series) if (v > max) max = v;
-    // Round up to the next 50 W with a little headroom so peaks don't touch the
-    // top edge.
-    const niceMax = Math.max(50, Math.ceil((max * 1.05) / 50) * 50);
-    return { smoothed: series, yMax: niceMax };
-  }, [watts]);
+  const { smoothed, yMin, yMax } = React.useMemo(() => {
+    const series = smoothStream(values, SMOOTHING_SECONDS);
+    const { min, max } = metric.valueDomain(series);
+    return { smoothed: series, yMin: min, yMax: max };
+  }, [metric, values]);
 
   // Controlled x-axis zoom (start/end percentages), reset to the full window
   // whenever a different activity loads (its stream length changes).
@@ -99,7 +102,7 @@ export function PowerOverTime({ watts, ftp }: PowerOverTimeProps) {
   );
 
   if (smoothed.length === 0) {
-    return <ChartMessage>{t("charts.power.empty")}</ChartMessage>;
+    return <ChartMessage>{t(metric.messages.empty)}</ChartMessage>;
   }
 
   return (
@@ -110,8 +113,8 @@ export function PowerOverTime({ watts, ftp }: PowerOverTimeProps) {
           margin={
             isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
           }
-          zoomData={zoomData}
-          onZoomChange={setZoomData}
+          zoomData={metric.zoomable ? zoomData : undefined}
+          onZoomChange={metric.zoomable ? setZoomData : undefined}
           xAxis={[
             {
               id: TIME_AXIS_ID,
@@ -122,20 +125,23 @@ export function PowerOverTime({ watts, ftp }: PowerOverTimeProps) {
               height: isMobile
                 ? AXIS_SIZE.mobile.height
                 : AXIS_SIZE.desktop.height,
-              zoom: {
-                filterMode: "keep",
-                minSpan: minZoomSpan,
-                slider: { enabled: true },
-              },
+              zoom: metric.zoomable
+                ? {
+                    filterMode: "keep",
+                    minSpan: minZoomSpan,
+                    slider: { enabled: true },
+                  }
+                : undefined,
             },
           ]}
           yAxis={[
             {
-              id: WATTS_AXIS_ID,
+              id: VALUE_AXIS_ID,
               scaleType: "linear",
-              min: 0,
+              min: yMin,
               max: yMax,
-              valueFormatter: (v: number) => `${Math.round(v)} W`,
+              valueFormatter: (v: number) =>
+                metric.formatTick(metric.toDisplay(v)),
               width: isMobile
                 ? AXIS_SIZE.mobile.width
                 : AXIS_SIZE.desktop.width,
@@ -143,23 +149,27 @@ export function PowerOverTime({ watts, ftp }: PowerOverTimeProps) {
           ]}
         >
           <ChartsGrid horizontal />
-          <ZonePowerArea
+          <ZoneArea
+            metric={metric}
             smoothed={smoothed}
+            yMin={yMin}
             yMax={yMax}
-            ftp={ftp}
+            threshold={threshold}
             onHover={setHover}
           />
           <ChartsXAxis
             axisId={TIME_AXIS_ID}
-            label={isMobile ? undefined : t("charts.power.timeAxis")}
+            label={isMobile ? undefined : t(metric.messages.timeAxis)}
           />
           <ChartsYAxis
-            axisId={WATTS_AXIS_ID}
-            label={isMobile ? undefined : t("charts.power.wattsAxis")}
+            axisId={VALUE_AXIS_ID}
+            label={isMobile ? undefined : t(metric.messages.valueAxis)}
           />
-          <ChartsZoomSlider />
+          {metric.zoomable && <ChartsZoomSlider />}
         </ChartsContainerPro>
-        {hover && <PowerTooltip hover={hover} ftp={ftp} />}
+        {hover && (
+          <MetricTooltip metric={metric} hover={hover} threshold={threshold} />
+        )}
       </div>
     </ChartThemeProvider>
   );
@@ -169,24 +179,26 @@ export function PowerOverTime({ watts, ftp }: PowerOverTimeProps) {
  * The zone-shaded area + line, plus the hover crosshair. Rendered inside the
  * chart's SVG so it can read the MUI scales and the drawing area directly.
  */
-function ZonePowerArea(props: {
+function ZoneArea(props: {
+  metric: MetricDescriptor;
   smoothed: number[];
+  yMin: number;
   yMax: number;
-  ftp: number;
+  threshold: number;
   onHover: (hover: HoverState | null) => void;
 }) {
-  const { smoothed, yMax, ftp, onHover } = props;
+  const { metric, smoothed, yMin, yMax, threshold, onHover } = props;
   const tokens = useChartTokens();
   const drawingArea = useDrawingArea();
   const xScale = useXScale<"linear">(TIME_AXIS_ID);
-  const yScale = useYScale<"linear">(WATTS_AXIS_ID);
+  const yScale = useYScale<"linear">(VALUE_AXIS_ID);
   const reactId = React.useId();
-  const baseId = `power3s-${reactId.replace(/:/g, "")}`;
+  const baseId = `zone-area-${reactId.replace(/:/g, "")}`;
   const gradientId = `${baseId}-grad`;
   const clipId = `${baseId}-clip`;
   const [hoverIndex, setHoverIndex] = React.useState<number | null>(null);
 
-  const baseY = yScale(0);
+  const baseY = yScale(yMin);
   const topY = yScale(yMax);
 
   // Build only the currently-visible window (the x domain shrinks with the
@@ -194,6 +206,8 @@ function ZonePowerArea(props: {
   // multi-hour 1 Hz stream has tens of thousands of samples — most sub-pixel —
   // so decimating per-window keeps it cheap while still revealing detail as you
   // zoom in. The vertical zone gradient is unaffected by horizontal decimation.
+  // Drawn values are clamped to the visible band so stops (which dip toward 0,
+  // below the pace chart's band) don't invert the area path.
   const { areaPath, linePath } = React.useMemo(() => {
     const n = smoothed.length;
     if (n === 0) return { areaPath: "", linePath: "" };
@@ -219,7 +233,7 @@ function ZonePowerArea(props: {
     for (let k = 0; k < indices.length; k++) {
       const i = indices[k];
       const x = xScale(i);
-      const y = yScale(smoothed[i]);
+      const y = yScale(clamp(smoothed[i], yMin, yMax));
       line.push(`${k === 0 ? "M" : "L"}${x},${y}`);
       area.push(`L${x},${y}`);
     }
@@ -229,11 +243,11 @@ function ZonePowerArea(props: {
     const areaStr = `M${firstX},${baseY}${area.join("")}L${lastX},${baseY}Z`;
 
     return { areaPath: areaStr, linePath: line.join("") };
-  }, [smoothed, xScale, yScale, drawingArea.width, baseY]);
+  }, [smoothed, xScale, yScale, drawingArea.width, baseY, yMin, yMax]);
 
   const stops = React.useMemo(
-    () => buildZoneGradientStops(ftp, yMax),
-    [ftp, yMax],
+    () => buildZoneGradientStops(metric.zoneBands, threshold, yMin, yMax),
+    [metric.zoneBands, threshold, yMin, yMax],
   );
 
   const handleMove = React.useCallback(
@@ -245,7 +259,7 @@ function ZonePowerArea(props: {
       let index = Math.round(xScale.invert(svgX));
       index = Math.max(0, Math.min(index, smoothed.length - 1));
       setHoverIndex(index);
-      onHover({ index, watts: smoothed[index], x: e.clientX, y: e.clientY });
+      onHover({ index, value: smoothed[index], x: e.clientX, y: e.clientY });
     },
     [xScale, smoothed, onHover],
   );
@@ -257,10 +271,29 @@ function ZonePowerArea(props: {
 
   const crosshairX = hoverIndex !== null ? xScale(hoverIndex) : null;
 
+  const paths = (
+    <>
+      <path
+        d={areaPath}
+        fill={`url(#${gradientId})`}
+        fillOpacity={AREA_OPACITY}
+        pointerEvents="none"
+      />
+      <path
+        d={linePath}
+        fill="none"
+        stroke={`url(#${gradientId})`}
+        strokeWidth={LINE_WIDTH}
+        strokeLinejoin="round"
+        pointerEvents="none"
+      />
+    </>
+  );
+
   return (
     <>
       <defs>
-        {/* Bottom-to-top gradient: offset 0 = 0 W (baseline), offset 1 = yMax. */}
+        {/* Bottom-to-top gradient: offset 0 = yMin (baseline), offset 1 = yMax. */}
         <linearGradient
           id={gradientId}
           gradientUnits="userSpaceOnUse"
@@ -279,32 +312,19 @@ function ZonePowerArea(props: {
         </linearGradient>
         {/* Clip the custom area/line to the plot so zoomed-out samples don't
             spill past the axes (MUI clips its own series, but not ours). */}
-        <clipPath id={clipId}>
-          <rect
-            x={drawingArea.left}
-            y={drawingArea.top}
-            width={drawingArea.width}
-            height={drawingArea.height}
-          />
-        </clipPath>
+        {metric.zoomable && (
+          <clipPath id={clipId}>
+            <rect
+              x={drawingArea.left}
+              y={drawingArea.top}
+              width={drawingArea.width}
+              height={drawingArea.height}
+            />
+          </clipPath>
+        )}
       </defs>
 
-      <g clipPath={`url(#${clipId})`}>
-        <path
-          d={areaPath}
-          fill={`url(#${gradientId})`}
-          fillOpacity={AREA_OPACITY}
-          pointerEvents="none"
-        />
-        <path
-          d={linePath}
-          fill="none"
-          stroke={`url(#${gradientId})`}
-          strokeWidth={LINE_WIDTH}
-          strokeLinejoin="round"
-          pointerEvents="none"
-        />
-      </g>
+      {metric.zoomable ? <g clipPath={`url(#${clipId})`}>{paths}</g> : paths}
 
       {crosshairX !== null && hoverIndex !== null && (
         <g pointerEvents="none">
@@ -318,9 +338,9 @@ function ZonePowerArea(props: {
           </g>
           <CrosshairDot
             cx={crosshairX}
-            cy={yScale(smoothed[hoverIndex])}
+            cy={yScale(clamp(smoothed[hoverIndex], yMin, yMax))}
             color={
-              tokens.zones[findPowerZone(smoothed[hoverIndex], ftp).zone.ramp]
+              tokens.zones[metric.zoneRamp(smoothed[hoverIndex], threshold)]
             }
             ringColor={tokens.cardBg}
           />
@@ -343,10 +363,17 @@ function ZonePowerArea(props: {
 }
 
 /** Fixed-position tooltip following the cursor, styled like the slice one. */
-function PowerTooltip({ hover, ftp }: { hover: HoverState; ftp: number }) {
+function MetricTooltip({
+  metric,
+  hover,
+  threshold,
+}: {
+  metric: MetricDescriptor;
+  hover: HoverState;
+  threshold: number;
+}) {
   const t = useT();
   const tokens = useChartTokens();
-  const { zone, index } = findPowerZone(hover.watts, ftp);
   return (
     <div
       style={{ position: "fixed", left: hover.x, top: hover.y - 12 }}
@@ -355,11 +382,11 @@ function PowerTooltip({ hover, ftp }: { hover: HoverState; ftp: number }) {
       <ChartTooltipSurface className="whitespace-nowrap">
         <ChartTooltipHeader>{formatElapsed(hover.index)}</ChartTooltipHeader>
         <ChartTooltipRow
-          color={tokens.zones[zone.ramp]}
-          value={`${Math.round(hover.watts)} W`}
+          color={tokens.zones[metric.zoneRamp(hover.value, threshold)]}
+          value={metric.formatValue(metric.toDisplay(hover.value), t)}
           trailing={
             <span className="text-muted-foreground">
-              {powerZoneLabel(index, t)}
+              {metric.zoneLabel(hover.value, threshold, t)}
             </span>
           }
         />

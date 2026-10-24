@@ -42,6 +42,9 @@ import { activityTypesFor } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 import { ChartMessage } from "../ChartMessage";
+import { MetricOverTime } from "../MetricAnalysis/MetricOverTime";
+import { MetricSliceDistribution } from "../MetricAnalysis/MetricSliceDistribution";
+import { MetricZoneDistribution } from "../MetricAnalysis/MetricZoneDistribution";
 import {
   ChartSettingsPopover,
   SliceWidthSettings,
@@ -52,9 +55,6 @@ import {
   type PowerCurveMode,
   PowerCurveWebGLChart,
 } from "./PowerCurveWebGLChart";
-import { PowerOverTime } from "./PowerOverTime";
-import { PowerSliceDistribution } from "./PowerSliceDistribution";
-import { PowerZoneDistribution } from "./PowerZoneDistribution";
 import {
   type DateRange,
   createPresetOptions,
@@ -63,6 +63,7 @@ import {
   makeYearRange,
   presetToRange,
 } from "./dateRanges";
+import { POWER_METRIC } from "./powerMetric";
 import type { ActivityInfo, PowerCurveSeriesData } from "./types";
 
 // --- Types & constants ---
@@ -359,25 +360,34 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
         (recording == null ? (
           <StreamLoading />
         ) : (
-          <PowerOverTime watts={watts} ftp={ftp} />
+          <MetricOverTime
+            metric={POWER_METRIC}
+            values={watts}
+            threshold={ftp}
+          />
         ))}
 
       {tab === "zones" &&
         (recording == null ? (
           <StreamLoading />
         ) : (
-          <PowerZoneDistribution watts={watts} ftp={ftp} />
+          <MetricZoneDistribution
+            metric={POWER_METRIC}
+            values={watts}
+            threshold={ftp}
+          />
         ))}
 
       {tab === "distribution" &&
         (recording == null ? (
           <StreamLoading />
         ) : (
-          <PowerSliceDistribution
-            watts={watts}
-            ftp={ftp}
+          <MetricSliceDistribution
+            metric={POWER_METRIC}
+            values={watts}
+            threshold={ftp}
             sliceWidth={powerSliceWidth.clampSliceWidth(sliceWidth)}
-            weightedAverageWatts={weightedAverageWatts}
+            reference={weightedAverageWatts}
           />
         ))}
     </ChartCard>
@@ -764,11 +774,12 @@ function AggregatedPowerCurve({
         (periodActivities.isLoading ? (
           <StreamLoading />
         ) : (
-          <PowerZoneDistribution
-            watts={[]}
-            ftp={periodFtp}
+          <MetricZoneDistribution
+            metric={POWER_METRIC}
+            values={[]}
+            threshold={periodFtp}
             zoneSeconds={periodZones.seconds}
-            coastingSeconds={periodZones.coastingSeconds}
+            zeroSeconds={periodZones.coastingSeconds}
             aggregate
           />
         ))}
@@ -777,12 +788,13 @@ function AggregatedPowerCurve({
         (periodDistribution.isLoading ? (
           <StreamLoading />
         ) : (
-          <PowerSliceDistribution
-            watts={[]}
+          <MetricSliceDistribution
+            metric={POWER_METRIC}
+            values={[]}
             frequency={periodDistribution.data ?? []}
-            ftp={periodFtp}
+            threshold={periodFtp}
             sliceWidth={powerSliceWidth.clampSliceWidth(sliceWidth)}
-            weightedAverageWatts={null}
+            reference={null}
           />
         ))}
     </ChartCard>

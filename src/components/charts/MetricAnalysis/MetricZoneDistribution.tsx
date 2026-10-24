@@ -1,49 +1,50 @@
 import * as React from "react";
 
-import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
 import { formatElapsed } from "~/utils/format";
 
 import { ChartMessage } from "../ChartMessage";
-import { computePowerZoneDistribution } from "./powerDistribution";
+import type { MetricDescriptor } from "./types";
 
-interface PowerZoneDistributionProps {
-  /** Per-second watts samples for the activity. */
-  watts: number[];
-  /** FTP in effect on the activity's date — drives the zone boundaries. */
-  ftp: number;
-  /** Pre-aggregated Z1-Z7 seconds, used by date-range cards. */
+interface MetricZoneDistributionProps {
+  metric: MetricDescriptor;
+  /** Per-second samples for the activity, in the recorded unit. */
+  values: readonly number[];
+  /** Threshold in effect on the activity's date — drives the zone boundaries. */
+  threshold: number;
+  /** Pre-aggregated seconds per zone, used by date-range cards. */
   zoneSeconds?: readonly number[];
-  /** Pre-aggregated zero-watt seconds, used by date-range cards. */
-  coastingSeconds?: number;
-  /** Zone totals were computed with each activity's date-specific FTP. */
+  /** Pre-aggregated seconds of the zero bucket (power's coasting), likewise. */
+  zeroSeconds?: number;
+  /** Zone totals were computed with each activity's date-specific threshold. */
   aggregate?: boolean;
 }
 
 /**
- * Time spent in each power zone, as a Z7→Z1 list of rows carrying the zone's
- * watt range, time, share, and a bar scaled to the busiest zone. Zones (names,
+ * Time spent in each zone, as a hardest-first list of rows carrying the zone's
+ * range, time, share, and a bar scaled to the busiest zone. Zones (names,
  * colours, boundaries) are identical to the Laps card.
  */
-export function PowerZoneDistribution({
-  watts,
-  ftp,
+export function MetricZoneDistribution({
+  metric,
+  values,
+  threshold,
   zoneSeconds,
-  coastingSeconds = 0,
+  zeroSeconds = 0,
   aggregate = false,
-}: PowerZoneDistributionProps) {
+}: MetricZoneDistributionProps) {
   const t = useT();
   const tokens = useChartTokens();
 
   const { rows, total, maxSeconds } = React.useMemo(() => {
-    const buckets = computePowerZoneDistribution(watts, ftp).map((bucket) => ({
+    const buckets = metric.zoneBuckets(values, threshold, t).map((bucket) => ({
       ...bucket,
       seconds:
         zoneSeconds == null
           ? bucket.seconds
           : bucket.index == null
-            ? coastingSeconds
+            ? zeroSeconds
             : (zoneSeconds[bucket.index] ?? 0),
     }));
     let total = 0;
@@ -54,10 +55,14 @@ export function PowerZoneDistribution({
     }
     // Highest zone first, mirroring the reference layout.
     return { rows: [...buckets].reverse(), total, maxSeconds };
-  }, [watts, ftp, zoneSeconds, coastingSeconds]);
+  }, [metric, values, threshold, t, zoneSeconds, zeroSeconds]);
 
-  if ((watts.length === 0 && zoneSeconds == null) || total === 0) {
-    return <ChartMessage>{t("charts.power.empty")}</ChartMessage>;
+  if (metric.messages.noThreshold && threshold <= 0) {
+    return <ChartMessage>{t(metric.messages.noThreshold)}</ChartMessage>;
+  }
+
+  if ((values.length === 0 && zoneSeconds == null) || total === 0) {
+    return <ChartMessage>{t(metric.messages.empty)}</ChartMessage>;
   }
 
   return (
@@ -66,12 +71,6 @@ export function PowerZoneDistribution({
         {rows.map((bucket) => {
           const pct = total > 0 ? (bucket.seconds / total) * 100 : 0;
           const barPct = (bucket.seconds / maxSeconds) * 100;
-          const range =
-            bucket.code === "Z0"
-              ? "0 W"
-              : bucket.upperWatts == null
-                ? `${bucket.lowerWatts}+ W`
-                : `${bucket.lowerWatts}–${bucket.upperWatts} W`;
 
           return (
             <div
@@ -82,13 +81,11 @@ export function PowerZoneDistribution({
                 {bucket.code}
               </span>
               <div className="flex min-w-0 shrink-0 basis-28 flex-col leading-tight sm:basis-40">
-                <span className="truncate font-medium">
-                  {bucket.index == null
-                    ? t("charts.power.coasting")
-                    : powerZoneLabel(bucket.index, t)}
-                </span>
+                <span className="truncate font-medium">{bucket.label}</span>
                 {!aggregate && (
-                  <span className="text-muted-foreground text-xs">{range}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {bucket.range}
+                  </span>
                 )}
               </div>
               <span className="w-14 shrink-0 text-right font-mono text-sm font-semibold tabular-nums">
@@ -114,9 +111,7 @@ export function PowerZoneDistribution({
         })}
       </div>
       <div className="border-border text-muted-foreground shrink-0 border-t px-4 py-2 text-xs md:border-t-0">
-        {aggregate
-          ? t("charts.power.basedOnHistoricalFtp")
-          : t("charts.power.basedOnFtp", { ftp: Math.round(ftp) })}
+        {metric.formatThresholdNote(threshold, aggregate, t)}
       </div>
     </div>
   );
