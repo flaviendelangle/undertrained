@@ -117,6 +117,8 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
   const updateMut = useUpdatePlannedTraining({ onSuccess: onClose });
   const deleteMut = useDeletePlannedTraining({ onSuccess: onClose });
   const markDoneMut = useMarkPlannedTrainingDone({ onSuccess: onClose });
+  // Saves pending edits before Mark done, without closing the dialog.
+  const saveBeforeLinkMut = useUpdatePlannedTraining();
 
   const pending =
     createMut.isPending || updateMut.isPending || deleteMut.isPending;
@@ -128,34 +130,47 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
     setWorkoutChoice((prev) => coerceWorkoutChoice(next, prev));
   };
 
+  // The form's values as a plan, or null while they can't be saved.
+  const trimmedTitle = title.trim();
+  const fields =
+    trimmedTitle && durationMinutes != null && durationMinutes > 0
+      ? {
+          title: trimmedTitle,
+          plannedDate: plannedDateOf(dateStr, timeStr),
+          durationSeconds: Math.round(durationMinutes * 60),
+          sportType,
+          workoutChoice,
+        }
+      : null;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = title.trim();
-    if (!trimmed || durationMinutes == null || durationMinutes <= 0) {
+    if (fields == null) {
       return;
     }
-    const plannedDate = plannedDateOf(dateStr, timeStr);
-    const durationSeconds = Math.round(durationMinutes * 60);
     if (isEdit && existing) {
-      updateMut.mutate({
+      updateMut.mutate({ athleteId, id: existing.id, ...fields });
+    } else {
+      createMut.mutate({ athleteId, ...fields });
+    }
+  };
+
+  // Mark done applies the plan's saved title and type, so save what the dialog
+  // shows first. A failed save has already said so, and links nothing.
+  const handleMarkDone = async (stravaId: number) => {
+    if (existing == null || fields == null) {
+      return;
+    }
+    try {
+      await saveBeforeLinkMut.mutateAsync({
         athleteId,
         id: existing.id,
-        title: trimmed,
-        plannedDate,
-        durationSeconds,
-        sportType,
-        workoutChoice,
+        ...fields,
       });
-    } else {
-      createMut.mutate({
-        athleteId,
-        title: trimmed,
-        plannedDate,
-        durationSeconds,
-        sportType,
-        workoutChoice,
-      });
+    } catch {
+      return;
     }
+    markDoneMut.mutate({ athleteId, id: existing.id, stravaId });
   };
 
   return (
@@ -220,8 +235,11 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
 
       {isEdit && existing && (
         <MarkDoneSection
-          athleteId={athleteId}
           training={existing}
+          sportType={sportType}
+          canLink={fields != null}
+          linking={saveBeforeLinkMut.isPending || markDoneMut.isPending}
+          onMarkDone={(stravaId) => void handleMarkDone(stravaId)}
           markDoneMut={markDoneMut}
         />
       )}
@@ -266,12 +284,19 @@ interface ActivityGroup {
 }
 
 function MarkDoneSection({
-  athleteId,
   training,
+  sportType,
+  canLink,
+  linking,
+  onMarkDone,
   markDoneMut,
 }: {
-  athleteId: number;
   training: PlannedTraining;
+  /** The sport picked in the form, which Mark done saves before linking. */
+  sportType: string;
+  canLink: boolean;
+  linking: boolean;
+  onMarkDone: (stravaId: number) => void;
   markDoneMut: ReturnType<typeof useMarkPlannedTrainingDone>;
 }) {
   const t = useT();
@@ -336,7 +361,7 @@ function MarkDoneSection({
     <div className="border-border flex flex-col gap-2 border-t pt-4">
       <Label>{t("journal.dialog.markDoneLabel")}</Label>
       <p className="text-muted-foreground text-xs">
-        {workoutChoicesForSport(training.sportType)
+        {workoutChoicesForSport(sportType)
           ? t("journal.dialog.markDoneRenameTypeHint")
           : t("journal.dialog.markDoneRenameHint")}
       </p>
@@ -401,16 +426,10 @@ function MarkDoneSection({
             type="button"
             variant="secondary"
             className="w-full sm:w-auto"
-            disabled={!selectedStravaId || markDoneMut.isPending}
-            onClick={() =>
-              markDoneMut.mutate({
-                athleteId,
-                id: training.id,
-                stravaId: Number(selectedStravaId),
-              })
-            }
+            disabled={!selectedStravaId || !canLink || linking}
+            onClick={() => onMarkDone(Number(selectedStravaId))}
           >
-            {markDoneMut.isPending
+            {linking
               ? t("journal.dialog.linking")
               : t("journal.dialog.markDone")}
           </Button>
