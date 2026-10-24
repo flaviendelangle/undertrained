@@ -25,6 +25,7 @@ import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import type { TFunction } from "~/i18n/I18nProvider";
 import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
+import { activitySettingsDay } from "~/lib/activityRecording";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { findRunningPaceZone } from "~/sensors/paceZones";
 import {
@@ -87,8 +88,8 @@ interface HoverState {
 
 interface ActivityLapsProps {
   activityType: string;
-  /** Activity start date — used to resolve the rider settings in effect then. */
-  startDate: string;
+  /** Activity local start date — picks the rider settings in effect that day. */
+  startDateLocal: string;
   laps: readonly LapDatum[] | null;
 }
 
@@ -97,7 +98,7 @@ const Y_AXIS_ID = "value";
 const BAR_GAP_PX = 1;
 
 export default function ActivityLaps(props: ActivityLapsProps) {
-  const { activityType, startDate, laps } = props;
+  const { activityType, startDateLocal, laps } = props;
   const t = useT();
   const tokens = useChartTokens();
   const { resolveForDate } = useRiderSettingsTimeline();
@@ -108,7 +109,7 @@ export default function ActivityLaps(props: ActivityLapsProps) {
   // Only meaningful for interval workouts — i.e. more than a single lap.
   if (!laps || laps.length <= 1) return null;
 
-  const settings = resolveForDate(startDate);
+  const settings = resolveForDate(activitySettingsDay({ startDateLocal }));
   const usePower = sportConfig.lapMetricStreamType === "watts";
   const isRunning = sportConfig.category === "running";
 

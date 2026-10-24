@@ -23,6 +23,7 @@ import { useTypedParams } from "~/hooks/useTypedParams";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
+import { useActivityRecording } from "~/lib/activityRecording";
 import { NextPageWithLayout } from "~/pages/_app";
 import {
   getSportConfig,
@@ -82,42 +83,13 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   }, [mapExpanded]);
 
   const [activity] = trpc.activities.get.useSuspenseQuery({ stravaId });
-  const [streamsData] = trpc.activityStreams.getStreams.useSuspenseQuery({
-    stravaId,
-  });
+  const { recording } = useActivityRecording(stravaId);
 
-  const latlngRoute = React.useMemo(() => {
-    if (!streamsData) return null;
-    const stream = streamsData.find((s) => s.type === "latlng");
-    if (!stream) return null;
-    try {
-      return JSON.parse(stream.data) as [number, number][];
-    } catch {
-      return null;
-    }
-  }, [streamsData]);
-
-  const altitudeData = React.useMemo(() => {
-    if (!streamsData) return null;
-    const stream = streamsData.find((s) => s.type === "altitude");
-    if (!stream) return null;
-    try {
-      return JSON.parse(stream.data) as number[];
-    } catch {
-      return null;
-    }
-  }, [streamsData]);
-
-  const distanceData = React.useMemo(() => {
-    if (!streamsData) return null;
-    const stream = streamsData.find((s) => s.type === "distance");
-    if (!stream) return null;
-    try {
-      return JSON.parse(stream.data) as number[];
-    } catch {
-      return null;
-    }
-  }, [streamsData]);
+  // The map and the elevation profile are drawn against position and distance,
+  // so they take the samples as recorded rather than per second.
+  const latlngRoute = recording?.samples.latlng ?? null;
+  const altitudeData = recording?.samples.altitude ?? null;
+  const distanceData = recording?.samples.distance ?? null;
 
   const hiddenStreams = React.useMemo(() => {
     if (!activity) return [];
@@ -310,7 +282,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             />
             <ActivityLaps
               activityType={activity.type}
-              startDate={activity.startDate}
+              startDateLocal={activity.startDateLocal}
               laps={activity.laps}
             />
             {hasPower && <PowerCurve stravaId={activity.stravaId} />}
