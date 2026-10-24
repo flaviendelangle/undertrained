@@ -22,11 +22,11 @@ export type SensorSource = "ble" | "ant+";
 /** Why a sensor connection failed, for a useful message on the device card. */
 export type SensorErrorReason = "unsupported-device" | "failed";
 
-/** Options accepted by every sensor hook's `connect`. */
+/** Options accepted by every sensor adapter's `connect`. */
 export interface SensorConnectOptions {
   /**
-   * List every nearby Bluetooth device instead of filtering on the service.
-   * Ignored by ANT+, which has no chooser.
+   * List every nearby device instead of filtering on the service. Only means
+   * something to an adapter with a device chooser.
    */
   acceptAllDevices?: boolean;
 }
@@ -167,14 +167,6 @@ export interface SessionSummary {
   maxCadence: number | null;
   avgSpeed: number | null;
   maxSpeed: number | null;
-}
-
-export interface SensorConnection<T> {
-  state: ConnectionState;
-  data: T | null;
-  deviceName: string | null;
-  connect: () => Promise<void>;
-  disconnect: () => Promise<void>;
 }
 
 // `ramp` indexes the theme-aware cool→hot zone ramp in chartTokens.ts

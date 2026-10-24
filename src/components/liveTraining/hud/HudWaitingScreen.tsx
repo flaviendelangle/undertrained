@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import type { UseWorkoutPlayerResult } from "~/hooks/useWorkoutPlayer";
 import { useT } from "~/i18n/useT";
+import type { TrainerTargetStatus } from "~/sensors/adapter";
 import { formatCompactDuration } from "~/utils/format";
 
 import { HudWorkoutBar } from "./HudWorkoutBar";
@@ -16,8 +17,8 @@ interface HudWaitingScreenProps {
   supportsControl: boolean;
   /** Whether the trainer rejected or ignored the last ERG command. */
   ergError: boolean;
-  /** FE-C target status: the trainer can't hold the target at this speed. */
-  ergTargetStatus: "OnTarget" | "LowSpeed" | "HighSpeed" | null;
+  /** The trainer can't hold the target at this speed (FE-C only). */
+  ergTargetStatus: TrainerTargetStatus;
   /** The selected workout is always loaded before training setup. */
   workout: { name: string; player: UseWorkoutPlayerResult };
 }
