@@ -91,3 +91,35 @@ it("saves the type picked in the dialog before Mark done links the activity", as
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
   expect(calls).toEqual(["update", "markDone:race"]);
 });
+
+it("drops a picked activity the edited sport no longer matches", async () => {
+  const { Wrapper, queryClient } = createTestBackend({
+    plannedTrainings: {
+      list: () => [plan],
+      linkedActivityIds: () => [],
+    },
+  });
+  onTestFinished(() => queryClient.clear());
+  render(
+    <Wrapper>
+      <ToastProvider>
+        <PlannedTrainingDialog
+          state={{ mode: "edit", training: plan }}
+          onClose={vi.fn()}
+        />
+      </ToastProvider>
+    </Wrapper>,
+  );
+
+  fireEvent.click((await screen.findAllByRole("combobox"))[1]);
+  fireEvent.click(await screen.findByRole("option", { name: /Morning Run/ }));
+  fireEvent.click(screen.getAllByRole("combobox")[0]);
+  fireEvent.click(
+    await screen.findByRole("option", { name: /^sportType\.Ride$/ }),
+  );
+
+  // The Ride plan Mark done would save can't take a run.
+  expect(
+    await screen.findByText("journal.dialog.noMatchingActivity"),
+  ).toBeDefined();
+});

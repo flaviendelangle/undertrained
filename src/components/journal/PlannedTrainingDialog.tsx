@@ -235,8 +235,8 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
 
       {isEdit && existing && (
         <MarkDoneSection
-          training={existing}
           sportType={sportType}
+          plannedDate={plannedDateOf(dateStr, timeStr)}
           canLink={fields != null}
           linking={saveBeforeLinkMut.isPending || markDoneMut.isPending}
           onMarkDone={(stravaId) => void handleMarkDone(stravaId)}
@@ -284,16 +284,19 @@ interface ActivityGroup {
 }
 
 function MarkDoneSection({
-  training,
   sportType,
+  plannedDate,
   canLink,
   linking,
   onMarkDone,
   markDoneMut,
 }: {
-  training: PlannedTraining;
-  /** The sport picked in the form, which Mark done saves before linking. */
+  /**
+   * The sport and date picked in the form, which Mark done saves before
+   * linking, so candidates match them rather than the stored plan.
+   */
   sportType: string;
+  plannedDate: string;
   canLink: boolean;
   linking: boolean;
   onMarkDone: (stravaId: number) => void;
@@ -305,7 +308,7 @@ function MarkDoneSection({
   const { data: activities } = useActivitiesQuery("planMatching");
   // Internal activity ids already linked to a (completed) plan — never offered.
   const { data: linkedActivityIds } = useLinkedActivityIds();
-  const [selectedStravaId, setSelectedStravaId] = React.useState<string>("");
+  const [pickedStravaId, setPickedStravaId] = React.useState<string>("");
 
   // Candidates share the plan's sport category and fall in its week, split into
   // "Perfect matches" (`isPerfectMatch` — same calendar day, and the same exact
@@ -315,8 +318,9 @@ function MarkDoneSection({
   // dropped.
   const { groups, byStravaId } = React.useMemo(() => {
     const linked = new Set(linkedActivityIds ?? []);
-    const plannedCategory = getSportConfig(training.sportType).category;
-    const plannedDate = parsePlannedDate(training.plannedDate);
+    const plan = { sportType, plannedDate };
+    const plannedCategory = getSportConfig(sportType).category;
+    const plannedStart = parsePlannedDate(plannedDate);
 
     const perfect: string[] = [];
     const other: string[] = [];
@@ -331,11 +335,11 @@ function MarkDoneSection({
       }
       const activityDay = dayKey(a.startDateLocal);
       const stravaId = String(a.stravaId);
-      if (isPerfectMatch(training, a)) {
+      if (isPerfectMatch(plan, a)) {
         perfect.push(stravaId);
         map.set(stravaId, a);
       } else if (
-        isSameWeek(new Date(`${activityDay}T00:00:00`), plannedDate, {
+        isSameWeek(new Date(`${activityDay}T00:00:00`), plannedStart, {
           locale: getActiveDateLocale(),
         })
       ) {
@@ -355,7 +359,10 @@ function MarkDoneSection({
       result.push({ value: t("journal.dialog.otherMatches"), items: other });
     }
     return { groups: result, byStravaId: map };
-  }, [activities, linkedActivityIds, training, t]);
+  }, [activities, linkedActivityIds, sportType, plannedDate, t]);
+  // A pick the edited sport or date no longer matches is dropped, so Mark done
+  // never links an activity the plan it saves wouldn't offer.
+  const selectedStravaId = byStravaId.has(pickedStravaId) ? pickedStravaId : "";
 
   return (
     <div className="border-border flex flex-col gap-2 border-t pt-4">
@@ -374,7 +381,7 @@ function MarkDoneSection({
           <Combobox
             items={groups}
             value={selectedStravaId || null}
-            onValueChange={(next) => setSelectedStravaId(next ?? "")}
+            onValueChange={(next) => setPickedStravaId(next ?? "")}
             itemToStringLabel={(id: string) => {
               const a = byStravaId.get(id);
               return a
