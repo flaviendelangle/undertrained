@@ -329,7 +329,7 @@ function MarkDoneSection({
                 : "";
             }}
           >
-            <ComboboxTrigger className="w-full">
+            <ComboboxTrigger className="w-full min-w-0">
               <ComboboxValue>
                 {(selected: string) => {
                   const a = selected ? byStravaId.get(selected) : null;
