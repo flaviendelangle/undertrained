@@ -40,7 +40,7 @@ it("gives the Journal the whole global filter", () => {
 it("keeps the global parts a view honours when it sets others itself", () => {
   const { result } = renderHook(
     () =>
-      useActivitySelection("periodPowerCurve", {
+      useActivitySelection("statisticsPowerCurve", {
         activityTypes: ["VirtualRide"],
       }),
     { wrapper: CookiesProvider },
@@ -51,4 +51,17 @@ it("keeps the global parts a view honours when it sets others itself", () => {
     timePeriodId: undefined,
     hideCommutes: false,
   });
+});
+
+it("plots a period's whole power curve whatever the global filter", () => {
+  // The period's rides have no workout type, so honouring the global one
+  // emptied the curve while the table above it listed every ride.
+  const { result } = renderHook(
+    () =>
+      useActivitySelection("periodPowerCurve", {
+        activityTypes: ["Ride"],
+      }),
+    { wrapper: CookiesProvider },
+  );
+  expect(result.current.workoutTypes).toEqual([]);
 });
