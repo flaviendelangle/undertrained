@@ -3,11 +3,7 @@ import { describe, expect, it } from "vitest";
 import { makeStep, makeWorkout, nestedWorkout } from "./fixtures";
 import { flattenWorkout } from "./flatten";
 import {
-  averageTargetPower,
   computeWorkoutMetrics,
-  estimateIntensityFactor,
-  estimateNormalizedPower,
-  estimateTss,
   sampleTargetWatts,
   zoneDistribution,
 } from "./metrics";
@@ -41,68 +37,6 @@ describe("sampleTargetWatts", () => {
       ]),
     );
     expect(sampleTargetWatts(segments, FTP)).toHaveLength(60);
-  });
-});
-
-describe("averageTargetPower", () => {
-  it("averages over the targeted seconds only", () => {
-    const segments = flattenWorkout(
-      makeWorkout([makeStep("a", 60, 1.0), makeStep("b", 60, 0.5)]),
-    );
-    expect(averageTargetPower(segments, FTP)).toBe(188);
-  });
-
-  it("is null when nothing has a target", () => {
-    const segments = flattenWorkout(
-      makeWorkout([makeStep("free", 600, { kind: "free" })]),
-    );
-    expect(averageTargetPower(segments, FTP)).toBeNull();
-  });
-});
-
-describe("estimateNormalizedPower", () => {
-  it("equals the steady target for a constant workout", () => {
-    const segments = flattenWorkout(makeWorkout([makeStep("a", 600, 0.8)]));
-    expect(estimateNormalizedPower(segments, FTP)).toBe(200);
-  });
-
-  it("exceeds average power for a variable workout", () => {
-    const segments = flattenWorkout(nestedWorkout());
-    const np = estimateNormalizedPower(segments, FTP)!;
-    const avg = averageTargetPower(segments, FTP)!;
-    expect(np).toBeGreaterThan(avg);
-  });
-
-  it("is null below the 30 s NP window", () => {
-    const segments = flattenWorkout(makeWorkout([makeStep("a", 20, 0.8)]));
-    expect(estimateNormalizedPower(segments, FTP)).toBeNull();
-  });
-});
-
-describe("estimateIntensityFactor", () => {
-  it("is independent of the FTP passed in", () => {
-    const segments = flattenWorkout(nestedWorkout());
-    expect(estimateIntensityFactor(segments, 200)).toBeCloseTo(
-      estimateIntensityFactor(segments, 400)!,
-      2,
-    );
-  });
-
-  it("is 1 for an hour at FTP", () => {
-    const segments = flattenWorkout(makeWorkout([makeStep("a", 3600, 1)]));
-    expect(estimateIntensityFactor(segments, FTP)).toBeCloseTo(1, 3);
-  });
-});
-
-describe("estimateTss", () => {
-  it("gives 100 for an hour at FTP", () => {
-    const segments = flattenWorkout(makeWorkout([makeStep("a", 3600, 1)]));
-    expect(estimateTss(segments, FTP)).toBe(100);
-  });
-
-  it("gives 25 for an hour at half FTP", () => {
-    const segments = flattenWorkout(makeWorkout([makeStep("a", 3600, 0.5)]));
-    expect(estimateTss(segments, FTP)).toBe(25);
   });
 });
 
@@ -149,14 +83,54 @@ describe("computeWorkoutMetrics", () => {
     expect(metrics.averagePower).toBe(200);
   });
 
-  it("agrees with the standalone estimators", () => {
+  it("averages power over the targeted seconds only", () => {
+    const segments = flattenWorkout(
+      makeWorkout([makeStep("a", 60, 1.0), makeStep("b", 60, 0.5)]),
+    );
+    expect(computeWorkoutMetrics(segments, FTP).averagePower).toBe(188);
+  });
+
+  it("has no average power when nothing has a target", () => {
+    const segments = flattenWorkout(
+      makeWorkout([makeStep("free", 600, { kind: "free" })]),
+    );
+    expect(computeWorkoutMetrics(segments, FTP).averagePower).toBeNull();
+  });
+
+  it("gives the steady target as NP for a constant workout", () => {
+    const segments = flattenWorkout(makeWorkout([makeStep("a", 600, 0.8)]));
+    expect(computeWorkoutMetrics(segments, FTP).normalizedPower).toBe(200);
+  });
+
+  it("gives an NP above average power for a variable workout", () => {
     const segments = flattenWorkout(nestedWorkout());
     const metrics = computeWorkoutMetrics(segments, FTP);
+    expect(metrics.normalizedPower!).toBeGreaterThan(metrics.averagePower!);
+  });
 
-    expect(metrics.normalizedPower).toBe(
-      estimateNormalizedPower(segments, FTP),
+  it("has no NP below the 30 s NP window", () => {
+    const segments = flattenWorkout(makeWorkout([makeStep("a", 20, 0.8)]));
+    expect(computeWorkoutMetrics(segments, FTP).normalizedPower).toBeNull();
+  });
+
+  it("gives an IF independent of the FTP passed in", () => {
+    const segments = flattenWorkout(nestedWorkout());
+    expect(computeWorkoutMetrics(segments, 200).intensityFactor).toBeCloseTo(
+      computeWorkoutMetrics(segments, 400).intensityFactor!,
+      2,
     );
-    expect(metrics.tss).toBe(estimateTss(segments, FTP));
+  });
+
+  it("gives IF 1 and TSS 100 for an hour at FTP", () => {
+    const segments = flattenWorkout(makeWorkout([makeStep("a", 3600, 1)]));
+    const metrics = computeWorkoutMetrics(segments, FTP);
+    expect(metrics.intensityFactor).toBeCloseTo(1, 3);
+    expect(metrics.tss).toBe(100);
+  });
+
+  it("gives TSS 25 for an hour at half FTP", () => {
+    const segments = flattenWorkout(makeWorkout([makeStep("a", 3600, 0.5)]));
+    expect(computeWorkoutMetrics(segments, FTP).tss).toBe(25);
   });
 
   it("degrades gracefully on an empty workout", () => {

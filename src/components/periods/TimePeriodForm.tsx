@@ -2,9 +2,7 @@ import * as React from "react";
 
 import { PlusIcon } from "lucide-react";
 
-import { Toggle } from "@base-ui/react/toggle";
-import { ToggleGroup } from "@base-ui/react/toggle-group";
-
+import { SportTypeToggleGroup } from "~/components/SportTypeToggleGroup";
 import { Button } from "~/components/ui/button";
 import {
   Field,
@@ -16,9 +14,7 @@ import { Label } from "~/components/ui/label";
 import { showErrorToast } from "~/components/ui/toast";
 import { useActivityFilterOptions } from "~/hooks/useActivityFilterOptions";
 import { useAthleteId } from "~/hooks/useAthleteId";
-import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 interface TimePeriodFormData {
@@ -153,29 +149,15 @@ export function TimePeriodForm({ period, onSuccess }: TimePeriodFormProps) {
               {t("periods.sportTypesHint")}
             </span>
           </Label>
-          <ToggleGroup
-            multiple
+          <SportTypeToggleGroup
             aria-label={t("periods.sportTypes")}
+            types={activityTypes}
             value={form.sportTypes}
             onValueChange={(sportTypes) =>
               setForm((prev) => ({ ...prev, sportTypes }))
             }
-            className="grid grid-cols-2 gap-1.5 sm:grid-cols-3"
-          >
-            {activityTypes.map((type) => {
-              const Icon = getSportConfig(type).icon;
-              return (
-                <Toggle
-                  key={type}
-                  value={type}
-                  className="border-border text-muted-foreground hover:bg-accent hover:text-foreground data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:border-primary inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors"
-                >
-                  <Icon className="size-3.5 shrink-0" />
-                  <span className="truncate">{sportTypeLabel(type, t)}</span>
-                </Toggle>
-              );
-            })}
-          </ToggleGroup>
+            className="grid-cols-2 sm:grid-cols-3"
+          />
         </div>
       )}
       <div className="flex justify-end">

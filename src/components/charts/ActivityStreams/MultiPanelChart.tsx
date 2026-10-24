@@ -3,6 +3,9 @@ import * as React from "react";
 import { bisector } from "d3-array";
 import { scaleLinear } from "d3-scale";
 
+import { clamp } from "@base-ui/utils/clamp";
+import { useAnimationFrame } from "@base-ui/utils/useAnimationFrame";
+
 import { useIsMobile } from "~/hooks/useIsMobile";
 import {
   filterVisibleLabels,
@@ -36,9 +39,6 @@ const LINE_HALF_WIDTH = 0.75; // 1.5px total line width
 // Minimum horizontal drag (px) that counts as a zoom selection rather than a
 // click. Doubles as the guard against degenerate (zero-width) zoom ranges.
 const MIN_DRAG_PX = 6;
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.max(min, Math.min(value, max));
 
 /** Format a stream value with its unit. Speed (m/s) is delegated to the sport
  * config so each sport picks its own unit (km/h for cycling, pace for running). */
@@ -145,7 +145,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   // Drag selection, in pixel-x within the drawing area.
   const [dragStart, setDragStart] = React.useState<number | null>(null);
   const [dragCurrent, setDragCurrent] = React.useState<number | null>(null);
-  const rafRef = React.useRef<number>(0);
+  const hoverFrame = useAnimationFrame();
   const [webglAvailable, setWebglAvailable] = React.useState(true);
   const [renderer, setRenderer] = React.useState<WebGLChartRenderer | null>(
     null,
@@ -334,7 +334,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     (e: React.MouseEvent<SVGSVGElement>) => {
       const svgX = getSvgX(e);
       if (svgX === null) return;
-      cancelAnimationFrame(rafRef.current);
+      hoverFrame.cancel();
       const x = clamp(svgX, 0, drawingWidth);
       setDragStart(x);
       setDragCurrent(x);
@@ -342,7 +342,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
       setHoverIndex(null);
       onHoverIndexChange?.(null);
     },
-    [getSvgX, drawingWidth, onHoverIndexChange],
+    [getSvgX, drawingWidth, onHoverIndexChange, hoverFrame],
   );
 
   const handleMouseMove = React.useCallback(
@@ -355,8 +355,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
         return;
       }
 
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
+      hoverFrame.request(() => {
         const svg = svgRef.current;
         if (!svg) return;
         const rect = svg.getBoundingClientRect();
@@ -370,11 +369,17 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
         let dataIndex: number;
         if (xAxisMode === "distance" && distanceData) {
           const distanceValue = xScale.invert(svgX);
-          dataIndex = d3Bisector(distanceData, distanceValue);
-          dataIndex = Math.max(0, Math.min(dataIndex, distanceData.length - 1));
+          dataIndex = clamp(
+            d3Bisector(distanceData, distanceValue),
+            0,
+            distanceData.length - 1,
+          );
         } else {
-          dataIndex = Math.round(xScale.invert(svgX));
-          dataIndex = Math.max(0, Math.min(dataIndex, xData.length - 1));
+          dataIndex = clamp(
+            Math.round(xScale.invert(svgX)),
+            0,
+            xData.length - 1,
+          );
         }
 
         setHoverIndex(dataIndex);
@@ -385,6 +390,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
       dragStart,
       getSvgX,
       drawingWidth,
+      hoverFrame,
       xScale,
       xAxisMode,
       distanceData,
@@ -407,21 +413,16 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   }, [dragStart, dragCurrent, xScale]);
 
   const handleMouseLeave = React.useCallback(() => {
-    cancelAnimationFrame(rafRef.current);
+    hoverFrame.cancel();
     // Cancel any in-progress selection and clear the crosshair.
     setDragStart(null);
     setDragCurrent(null);
     setHoverIndex(null);
     onHoverIndexChange?.(null);
-  }, [onHoverIndexChange]);
+  }, [hoverFrame, onHoverIndexChange]);
 
   const handleDoubleClick = React.useCallback(() => {
     setZoomDomain(null);
-  }, []);
-
-  // Clean up rAF on unmount
-  React.useEffect(() => {
-    return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
   // Format x-axis value
@@ -845,28 +846,17 @@ const SVGFallbackPanel = React.memo(function SVGFallbackPanel(
   const areaPath = React.useMemo(() => {
     if (!stream.config.area) return null;
     if (indices.length === 0) return null;
-    const parts: string[] = [];
-    for (let k = 0; k < indices.length; k++) {
-      const i = indices[k];
-      const x = xScale(activeXData[i] ?? i);
-      const y = yScale(stream.yData[i]);
-      parts.push(k === 0 ? `M${x},${y}` : `L${x},${y}`);
-    }
-    // Close area to baseline
+    // Close the line down to the baseline.
     const lastI = indices[indices.length - 1];
     const firstI = indices[0];
     const lastX = xScale(activeXData[lastI] ?? lastI);
     const firstX = xScale(activeXData[firstI] ?? firstI);
-    parts.push(`L${lastX},${panel.height}`);
-    parts.push(`L${firstX},${panel.height}`);
-    parts.push("Z");
-    return parts.join("");
+    return `${linePath}L${lastX},${panel.height}L${firstX},${panel.height}Z`;
   }, [
+    linePath,
     indices,
-    stream.yData,
     stream.config.area,
     xScale,
-    yScale,
     activeXData,
     panel.height,
   ]);

@@ -105,100 +105,27 @@ export function ZoneCalculator() {
   );
 }
 
+interface InitialRiderValues {
+  ftp: number | null;
+  weightKg: number | null;
+  maxHr: number | null;
+  restingHr: number | null;
+}
+
+const ANONYMOUS_INITIAL_VALUES: InitialRiderValues = {
+  ftp: 200,
+  weightKg: 75,
+  maxHr: 185,
+  restingHr: 50,
+};
+
 function ZoneCalculatorLoggedIn() {
   const [settings] = useRiderSettings();
-  const [tab, setTab] = React.useState<Tab>("heart-rate");
-  const [ftp, setFtp] = React.useState<number | null>(settings.ftp);
-  const [weightKg, setWeightKg] = React.useState<number | null>(
-    settings.weightKg,
-  );
-  const [maxHr, setMaxHr] = React.useState<number | null>(settings.maxHr);
-  const [restingHr, setRestingHr] = React.useState<number | null>(
-    settings.restingHr,
-  );
-
-  // Running pace state
-  const [ref1, setRef1] = React.useState<RaceRef>({
-    type: "10k",
-    hours: 0,
-    minutes: 45,
-    seconds: 0,
-    vma: 15,
-  });
-  const [useSecondRef, setUseSecondRef] = React.useState(false);
-  const [ref2, setRef2] = React.useState<RaceRef>({
-    type: "half-marathon",
-    hours: 1,
-    minutes: 40,
-    seconds: 0,
-    vma: null,
-  });
-
-  return (
-    <ZoneCalculatorInner
-      tab={tab}
-      setTab={setTab}
-      ftp={ftp}
-      setFtp={setFtp}
-      weightKg={weightKg}
-      setWeightKg={setWeightKg}
-      maxHr={maxHr}
-      setMaxHr={setMaxHr}
-      restingHr={restingHr}
-      setRestingHr={setRestingHr}
-      ref1={ref1}
-      setRef1={setRef1}
-      useSecondRef={useSecondRef}
-      setUseSecondRef={setUseSecondRef}
-      ref2={ref2}
-      setRef2={setRef2}
-    />
-  );
+  return <ZoneCalculatorInner initial={settings} />;
 }
 
 function ZoneCalculatorAnonymous() {
-  const [tab, setTab] = React.useState<Tab>("heart-rate");
-  const [ftp, setFtp] = React.useState<number | null>(200);
-  const [weightKg, setWeightKg] = React.useState<number | null>(75);
-  const [maxHr, setMaxHr] = React.useState<number | null>(185);
-  const [restingHr, setRestingHr] = React.useState<number | null>(50);
-
-  const [ref1, setRef1] = React.useState<RaceRef>({
-    type: "10k",
-    hours: 0,
-    minutes: 45,
-    seconds: 0,
-    vma: 15,
-  });
-  const [useSecondRef, setUseSecondRef] = React.useState(false);
-  const [ref2, setRef2] = React.useState<RaceRef>({
-    type: "half-marathon",
-    hours: 1,
-    minutes: 40,
-    seconds: 0,
-    vma: null,
-  });
-
-  return (
-    <ZoneCalculatorInner
-      tab={tab}
-      setTab={setTab}
-      ftp={ftp}
-      setFtp={setFtp}
-      weightKg={weightKg}
-      setWeightKg={setWeightKg}
-      maxHr={maxHr}
-      setMaxHr={setMaxHr}
-      restingHr={restingHr}
-      setRestingHr={setRestingHr}
-      ref1={ref1}
-      setRef1={setRef1}
-      useSecondRef={useSecondRef}
-      setUseSecondRef={setUseSecondRef}
-      ref2={ref2}
-      setRef2={setRef2}
-    />
-  );
+  return <ZoneCalculatorInner initial={ANONYMOUS_INITIAL_VALUES} />;
 }
 
 function RaceRefInputFields({
@@ -300,41 +227,30 @@ function RaceRefInputFields({
   );
 }
 
-function ZoneCalculatorInner({
-  tab,
-  setTab,
-  ftp,
-  setFtp,
-  weightKg,
-  setWeightKg,
-  maxHr,
-  setMaxHr,
-  restingHr,
-  setRestingHr,
-  ref1,
-  setRef1,
-  useSecondRef,
-  setUseSecondRef,
-  ref2,
-  setRef2,
-}: {
-  tab: Tab;
-  setTab: (t: Tab) => void;
-  ftp: number | null;
-  setFtp: (v: number | null) => void;
-  weightKg: number | null;
-  setWeightKg: (v: number | null) => void;
-  maxHr: number | null;
-  setMaxHr: (v: number | null) => void;
-  restingHr: number | null;
-  setRestingHr: (v: number | null) => void;
-  ref1: RaceRef;
-  setRef1: (v: RaceRef) => void;
-  useSecondRef: boolean;
-  setUseSecondRef: (v: boolean) => void;
-  ref2: RaceRef;
-  setRef2: (v: RaceRef) => void;
-}) {
+function ZoneCalculatorInner({ initial }: { initial: InitialRiderValues }) {
+  const [tab, setTab] = React.useState<Tab>("heart-rate");
+  const [ftp, setFtp] = React.useState(initial.ftp);
+  const [weightKg, setWeightKg] = React.useState(initial.weightKg);
+  const [maxHr, setMaxHr] = React.useState(initial.maxHr);
+  const [restingHr, setRestingHr] = React.useState(initial.restingHr);
+
+  // Running pace state
+  const [ref1, setRef1] = React.useState<RaceRef>({
+    type: "10k",
+    hours: 0,
+    minutes: 45,
+    seconds: 0,
+    vma: 15,
+  });
+  const [useSecondRef, setUseSecondRef] = React.useState(false);
+  const [ref2, setRef2] = React.useState<RaceRef>({
+    type: "half-marathon",
+    hours: 1,
+    minutes: 40,
+    seconds: 0,
+    vma: null,
+  });
+
   const t = useT();
   const vdot1 = React.useMemo(() => getVdotFromRef(ref1), [ref1]);
   const vdot2 = React.useMemo(

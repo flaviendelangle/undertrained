@@ -1,7 +1,7 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { activities, syncJobs } from "../../db/schema";
+import { activities, syncJobModeEnum, syncJobs } from "../../db/schema";
 import { activityIngestion } from "../../lib/sync";
 import {
   protectedProcedure,
@@ -10,12 +10,7 @@ import {
   validateAthleteOwnership,
 } from "../index";
 
-const syncModeSchema = z.enum([
-  "load_new",
-  "load_missing",
-  "reload_all",
-  "recompute_scores",
-]);
+const syncModeSchema = z.enum(syncJobModeEnum.enumValues);
 
 export const syncRouter = router({
   getJob: protectedProcedure

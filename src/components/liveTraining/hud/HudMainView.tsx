@@ -63,6 +63,75 @@ export function HudMainView({
       className="border-border/50 bg-card/70 max-w-xs rounded-2xl border px-3 py-1 text-center backdrop-blur-sm"
     />
   );
+  // Both layouts are always mounted (CSS picks one), so the pieces they share
+  // are built once here.
+  const segmentPanel = player && (
+    <HudSegmentPanel
+      player={player}
+      currentPower={currentPower}
+      currentCadence={currentCadence}
+    />
+  );
+  const powerGauge = (
+    <HudPowerGauge
+      power={currentPower}
+      ftp={ftp}
+      weightKg={weightKg}
+      targetPower={targetPower}
+      toleranceWatts={tolerance}
+    />
+  );
+  const metricTiles = (
+    <>
+      <HudMetricTile
+        label={t("liveTraining.heartRate")}
+        value={currentHr}
+        unit="bpm"
+        color="#f87171"
+      />
+      <HudMetricTile
+        label={t("liveTraining.cadence")}
+        value={currentCadence != null ? Math.round(currentCadence) : null}
+        unit="rpm"
+        color="#f472b6"
+      />
+    </>
+  );
+  const sessionButtons = (
+    <>
+      <button
+        type="button"
+        onClick={onPause}
+        aria-label={t("liveTraining.pause")}
+        className="border-border/50 bg-card/70 hover:bg-accent/70 flex h-12 w-12 items-center justify-center rounded-xl border text-yellow-400 backdrop-blur-sm transition-colors"
+      >
+        <svg
+          aria-hidden="true"
+          className="h-5 w-5"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <rect x="6" y="4" width="4" height="16" rx="1" />
+          <rect x="14" y="4" width="4" height="16" rx="1" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={onStop}
+        aria-label={t("liveTraining.stop")}
+        className="border-border/50 bg-card/70 hover:bg-accent/70 flex h-12 w-12 items-center justify-center rounded-xl border text-red-400 backdrop-blur-sm transition-colors"
+      >
+        <svg
+          aria-hidden="true"
+          className="h-5 w-5"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+        </svg>
+      </button>
+    </>
+  );
   return (
     <div className="from-background to-background absolute inset-0 flex flex-col bg-linear-to-br">
       {/* Top bar */}
@@ -75,41 +144,14 @@ export function HudMainView({
       {/* Main area — mobile: stacked, desktop: absolute positioned */}
       {/* Mobile layout */}
       <div className="flex min-h-0 flex-1 flex-col md:hidden">
-        {player && (
-          <div className="px-4 pt-2">
-            <HudSegmentPanel
-              player={player}
-              currentPower={currentPower}
-              currentCadence={currentCadence}
-            />
-          </div>
-        )}
+        {player && <div className="px-4 pt-2">{segmentPanel}</div>}
 
         {/* Metrics row — HR and Cadence side by side */}
-        <div className="flex justify-center gap-3 px-4 pt-2">
-          <HudMetricTile
-            label={t("liveTraining.heartRate")}
-            value={currentHr}
-            unit="bpm"
-            color="#f87171"
-          />
-          <HudMetricTile
-            label={t("liveTraining.cadence")}
-            value={currentCadence != null ? Math.round(currentCadence) : null}
-            unit="rpm"
-            color="#f472b6"
-          />
-        </div>
+        <div className="flex justify-center gap-3 px-4 pt-2">{metricTiles}</div>
 
         {/* Power gauge — centered below */}
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
-          <HudPowerGauge
-            power={currentPower}
-            ftp={ftp}
-            weightKg={weightKg}
-            targetPower={targetPower}
-            toleranceWatts={tolerance}
-          />
+          {powerGauge}
           {ergStatus}
           {player && <HudNextSegmentChip player={player} />}
         </div>
@@ -121,39 +163,7 @@ export function HudMainView({
         )}
 
         {/* Session controls */}
-        <div className="flex justify-end gap-2 px-6 pb-4">
-          <button
-            type="button"
-            onClick={onPause}
-            aria-label={t("liveTraining.pause")}
-            className="border-border/50 bg-card/70 hover:bg-accent/70 flex h-12 w-12 items-center justify-center rounded-xl border text-yellow-400 backdrop-blur-sm transition-colors"
-          >
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <rect x="6" y="4" width="4" height="16" rx="1" />
-              <rect x="14" y="4" width="4" height="16" rx="1" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={onStop}
-            aria-label={t("liveTraining.stop")}
-            className="border-border/50 bg-card/70 hover:bg-accent/70 flex h-12 w-12 items-center justify-center rounded-xl border text-red-400 backdrop-blur-sm transition-colors"
-          >
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <rect x="6" y="6" width="12" height="12" rx="2" />
-            </svg>
-          </button>
-        </div>
+        <div className="flex justify-end gap-2 px-6 pb-4">{sessionButtons}</div>
       </div>
 
       {/* Desktop layout */}
@@ -162,42 +172,19 @@ export function HudMainView({
         <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 items-center justify-center gap-8 px-8">
           {player && (
             <div className="flex w-64 shrink-0 flex-col gap-2">
-              <HudSegmentPanel
-                player={player}
-                currentPower={currentPower}
-                currentCadence={currentCadence}
-              />
+              {segmentPanel}
               <HudNextSegmentChip player={player} />
             </div>
           )}
 
           {/* Power gauge */}
           <div className="flex shrink-0 flex-col items-center gap-2">
-            <HudPowerGauge
-              power={currentPower}
-              ftp={ftp}
-              weightKg={weightKg}
-              targetPower={targetPower}
-              toleranceWatts={tolerance}
-            />
+            {powerGauge}
             {ergStatus}
           </div>
 
           {/* Right metrics stack */}
-          <div className="flex flex-col gap-3">
-            <HudMetricTile
-              label={t("liveTraining.heartRate")}
-              value={currentHr}
-              unit="bpm"
-              color="#f87171"
-            />
-            <HudMetricTile
-              label={t("liveTraining.cadence")}
-              value={currentCadence != null ? Math.round(currentCadence) : null}
-              unit="rpm"
-              color="#f472b6"
-            />
-          </div>
+          <div className="flex flex-col gap-3">{metricTiles}</div>
         </div>
 
         {/* Session controls — bottom right */}
@@ -209,37 +196,7 @@ export function HudMainView({
               className="mr-auto"
             />
           )}
-          <button
-            type="button"
-            onClick={onPause}
-            aria-label={t("liveTraining.pause")}
-            className="border-border/50 bg-card/70 hover:bg-accent/70 flex h-12 w-12 items-center justify-center rounded-xl border text-yellow-400 backdrop-blur-sm transition-colors"
-          >
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <rect x="6" y="4" width="4" height="16" rx="1" />
-              <rect x="14" y="4" width="4" height="16" rx="1" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={onStop}
-            aria-label={t("liveTraining.stop")}
-            className="border-border/50 bg-card/70 hover:bg-accent/70 flex h-12 w-12 items-center justify-center rounded-xl border text-red-400 backdrop-blur-sm transition-colors"
-          >
-            <svg
-              aria-hidden="true"
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <rect x="6" y="6" width="12" height="12" rx="2" />
-            </svg>
-          </button>
+          {sessionButtons}
         </div>
       </div>
 

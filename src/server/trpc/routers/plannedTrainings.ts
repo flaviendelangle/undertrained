@@ -403,17 +403,4 @@ export const plannedTrainingsRouter = router({
       }
       return { token, url: buildFeedUrl(token) };
     }),
-
-  /** Rotates the iCal token, revoking any previously shared subscription URL. */
-  regenerateCalendarToken: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .mutation(async ({ ctx, input }) => {
-      const token = randomBytes(24).toString("base64url");
-      await ctx.db
-        .update(athletes)
-        .set({ calendarToken: token })
-        .where(eq(athletes.id, input.athleteId));
-      return { token, url: buildFeedUrl(token) };
-    }),
 });

@@ -27,8 +27,7 @@ import type { StoredLap, StravaActivity } from "./stravaTypes";
 
 // ── Interface ─────────────────────────────────────────────────────────
 
-export type SyncMode =
-  "load_new" | "load_missing" | "reload_all" | "recompute_scores";
+export type SyncMode = NonNullable<SyncJobRow["mode"]>;
 
 export interface ActivityIngestion {
   /**

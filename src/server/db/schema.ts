@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { ActivityStats } from "strava-v3";
 
+import type { RouteSport } from "~/utils/routeProfiles";
 import type { WorkoutChoice } from "~/utils/sportConfig";
 import type { StructuredWorkout } from "~/utils/structuredWorkout";
 
@@ -390,7 +391,7 @@ export const routes = pgTable(
       .references(() => athletes.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     // High-level sport ("cycling" | "running"); drives the default ORS profile.
-    sport: text("sport").notNull(),
+    sport: text("sport").$type<RouteSport>().notNull(),
     // Concrete OpenRouteService profile, e.g. "cycling-regular", "foot-walking".
     profile: text("profile").notNull(),
     // Ordered anchor points [[lat, lng], ...] the user dropped — the editable

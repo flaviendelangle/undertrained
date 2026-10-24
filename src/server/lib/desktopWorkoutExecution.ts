@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 
 import { DEFAULT_RIDER_SETTINGS_TIMELINE } from "~/sensors/types";
+import { resolveConfiguredFtp } from "~/utils/resolveRiderSettings";
 import { resolveTimeline } from "~/utils/resolveTimeline";
 import {
   flattenWorkout,
@@ -18,15 +19,10 @@ export function desktopReferenceFtp(
   settings: Settings | null | undefined,
   date = format(new Date(), "yyyy-MM-dd"),
 ) {
-  const timeline = settings ?? DEFAULT_RIDER_SETTINGS_TIMELINE;
-  const ftp = resolveTimeline(
-    timeline.initialValues,
-    timeline.changes,
-    date,
-  ).ftp;
-  return ftp != null && Number.isFinite(ftp) && ftp > 0
-    ? ftp
-    : DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.ftp!;
+  return (
+    resolveConfiguredFtp(settings ?? DEFAULT_RIDER_SETTINGS_TIMELINE, date) ??
+    DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.ftp!
+  );
 }
 
 /**

@@ -26,10 +26,8 @@ import {
   HEADER_HEIGHT_PX,
   HOURS,
   HOUR_HEIGHT,
-  MINUTES_PER_DAY,
+  TOTAL_HEIGHT,
 } from "./weekGrid";
-
-const TOTAL_HEIGHT = (MINUTES_PER_DAY / 60) * HOUR_HEIGHT;
 
 /** Hour the grid scrolls to when the week has no events to anchor on. */
 const DEFAULT_SCROLL_HOUR = 6;

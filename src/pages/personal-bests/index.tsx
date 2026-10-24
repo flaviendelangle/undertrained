@@ -1,5 +1,3 @@
-import * as React from "react";
-
 import { TrophyIcon } from "lucide-react";
 import nextDynamic from "next/dynamic";
 
@@ -8,6 +6,7 @@ import { LoadingOverlay } from "~/components/primitives/LoadingOverlay";
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useInitialLoadComplete } from "~/hooks/useInitialLoadComplete";
+import { useModuleLoaded } from "~/hooks/useModuleLoaded";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { trpc } from "~/utils/trpc";
@@ -25,18 +24,7 @@ const RecordsPage: NextPageWithLayout = () => {
     { enabled: athleteId != null },
   );
 
-  const [moduleReady, setModuleReady] = React.useState(false);
-  React.useEffect(() => {
-    let cancelled = false;
-    void loadRecords().finally(() => {
-      if (!cancelled) {
-        setModuleReady(true);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const moduleReady = useModuleLoaded(loadRecords);
 
   const ready = useInitialLoadComplete(moduleReady, 10000, [
     "records.getOptions",

@@ -1,5 +1,3 @@
-import * as React from "react";
-
 import { CalendarDaysIcon } from "lucide-react";
 import nextDynamic from "next/dynamic";
 
@@ -9,6 +7,7 @@ import { ActivityFilterPopover } from "~/components/settings/ActivityFilterPopov
 import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useInitialLoadComplete } from "~/hooks/useInitialLoadComplete";
+import { useModuleLoaded } from "~/hooks/useModuleLoaded";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 
@@ -29,18 +28,7 @@ const JournalPage: NextPageWithLayout = () => {
 
   // Overlap module loading with data, then reveal without waiting for optional
   // analytics, record badges, or calendar feeds.
-  const [moduleReady, setModuleReady] = React.useState(false);
-  React.useEffect(() => {
-    let cancelled = false;
-    void loadJournal().finally(() => {
-      if (!cancelled) {
-        setModuleReady(true);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const moduleReady = useModuleLoaded(loadJournal);
 
   const ready = useInitialLoadComplete(moduleReady, 10000, [
     "activities.list",

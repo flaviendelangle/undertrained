@@ -9,9 +9,10 @@
  */
 import { findRunningPaceZone } from "../../sensors/paceZones";
 import { findHeartRateZone, findPowerZone } from "../../sensors/types";
+import { CYCLING_POWER_DURATION_SECONDS } from "../../utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCE_METERS } from "../../utils/cyclingRecordDistances";
 import { resolveTimeline } from "../../utils/resolveTimeline";
-import { getSportConfig } from "../../utils/sportConfig";
+import { getSportConfig, supportsAnalysis } from "../../utils/sportConfig";
 import { expandToPerSecond } from "../../utils/streamTimeBase";
 import type { activities, riderSettings } from "../db/schema";
 
@@ -131,7 +132,7 @@ export function scoreActivity({
     patch.hrss = Math.round(calculateHRSS(hrData, settings, timeData));
   }
   if (hrData && (sc.category === "cycling" || sc.category === "running")) {
-    patch.heartrateBests = computeHeartrateBests(hrData, timeData);
+    patch.heartrateBests = computeWindowBests(hrData, timeData);
   } else {
     patch.heartrateBests = null;
   }
@@ -146,7 +147,7 @@ export function scoreActivity({
 
   if (sc.hasPowerMetrics) {
     if (wattsData) {
-      patch.powerBests = computePowerBests(wattsData, timeData);
+      patch.powerBests = computeWindowBests(wattsData, timeData);
     }
   } else {
     patch.powerBests = null;
@@ -155,7 +156,7 @@ export function scoreActivity({
   // Cycling Speed (distance best efforts) & biggest climb, computed from
   // existing streams. Excludes virtual rides — their distance/altitude are
   // simulated, not real records.
-  if (sc.category === "cycling" && activity.type !== "VirtualRide") {
+  if (supportsAnalysis(activity.type, "speedAndClimbing")) {
     if (streams.distance && timeData) {
       patch.speedEfforts = computeSpeedEfforts(
         streams.distance,
@@ -500,16 +501,6 @@ function computeZoneSeconds(args: {
 }
 
 /**
- * Headline power-curve durations (seconds) that the UI surfaces as chips
- * (mirroring Strava's power best-effort list). Always included when within
- * range, even if the regular stepping would skip them (e.g. 45 min).
- */
-const HEADLINE_POWER_DURATIONS = [
-  5, 15, 30, 60, 120, 180, 300, 480, 600, 900, 1200, 1800, 2700, 3600, 7200,
-  10800,
-];
-
-/**
  * Generates power curve duration points (in seconds) up to maxDuration.
  *
  * - Every second from 1s to 30s
@@ -517,7 +508,9 @@ const HEADLINE_POWER_DURATIONS = [
  * - Every 30s from 330s to 1200s (20 min)
  * - Every 120s from 1320s to 3600s (1 h)
  * - Every 300s from 3900s onwards
- * - Plus the headline durations above (so UI chips always have a data point)
+ * - Plus the headline durations the UI surfaces as chips
+ *   ({@link CYCLING_POWER_DURATION_SECONDS}), so each always has a data point
+ *   even where the stepping above skips it (e.g. 45 min)
  */
 function generatePowerCurveDurations(maxDuration: number): number[] {
   const durations = new Set<number>();
@@ -528,7 +521,7 @@ function generatePowerCurveDurations(maxDuration: number): number[] {
   for (let d = 1320; d <= Math.min(3600, maxDuration); d += 120)
     durations.add(d);
   for (let d = 3900; d <= maxDuration; d += 300) durations.add(d);
-  for (const d of HEADLINE_POWER_DURATIONS) {
+  for (const d of CYCLING_POWER_DURATION_SECONDS) {
     if (d <= maxDuration) durations.add(d);
   }
 
@@ -536,39 +529,23 @@ function generatePowerCurveDurations(maxDuration: number): number[] {
 }
 
 /**
- * Computes the maximum average power for each target duration
- * using a sliding window over a per-second watts stream.
- * Durations are generated dynamically based on stream length.
+ * Computes the maximum average value sustained over each target duration,
+ * rounded: the power curve from a `watts` stream (W) and its HR equivalent
+ * from a `heartrate` stream (bpm). Durations are generated dynamically based
+ * on stream length.
  *
- * @param wattsStream  Watts samples aligned with the time stream.
- * @param timeStream   Optional per-sample time offsets (seconds). When
- *                     provided, the stream is expanded to true per-second
- *                     data before applying the sliding window.
+ * @param stream      Samples aligned with the time stream.
+ * @param timeStream  Optional per-sample time offsets (seconds). When
+ *                    provided, the stream is expanded to true per-second
+ *                    data before applying the sliding window.
  */
-function computePowerBests(
-  wattsStream: number[],
+function computeWindowBests(
+  stream: number[],
   timeStream?: number[],
 ): Record<number, number> {
-  const watts = toPerSecond(wattsStream, timeStream);
+  const values = toPerSecond(stream, timeStream);
   const result: Record<number, number> = {};
-  for (const [duration, avg] of maxWindowAverages(watts)) {
-    result[duration] = Math.round(avg);
-  }
-  return result;
-}
-
-/**
- * Computes the maximum average heart rate (bpm) sustained over each target
- * duration, from a `heartrate` stream — the HR equivalent of the power curve.
- * Same durations as {@link computePowerBests}.
- */
-function computeHeartrateBests(
-  hrStream: number[],
-  timeStream?: number[],
-): Record<number, number> {
-  const hr = toPerSecond(hrStream, timeStream);
-  const result: Record<number, number> = {};
-  for (const [duration, avg] of maxWindowAverages(hr)) {
+  for (const [duration, avg] of maxWindowAverages(values)) {
     result[duration] = Math.round(avg);
   }
   return result;

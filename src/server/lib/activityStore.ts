@@ -176,22 +176,20 @@ export function drizzleActivityStore(db: Database): ActivityStore {
     },
 
     async rescoreActivity(athleteId, activityId) {
-      const settingsDoc =
-        (await db.query.riderSettings.findFirst({
-          where: eq(riderSettings.athlete, athleteId),
-        })) ?? null;
-      const activity = await db.query.activities.findFirst({
-        where: eq(activities.id, activityId),
-      });
+      const [settingsDoc, [activity]] = await Promise.all([
+        findScoringSettings(db, athleteId),
+        db
+          .select(scoringColumns)
+          .from(activities)
+          .where(eq(activities.id, activityId)),
+      ]);
       if (activity) {
-        await computeActivityScoresInternal(db, activity, settingsDoc);
+        await computeActivityScoresInternal(db, activity, settingsDoc ?? null);
       }
     },
 
     async rescoreAll(athleteId) {
-      const settingsDoc = await db.query.riderSettings.findFirst({
-        where: eq(riderSettings.athlete, athleteId),
-      });
+      const settingsDoc = await findScoringSettings(db, athleteId);
 
       if (!settingsDoc) {
         console.warn(
@@ -205,7 +203,7 @@ export function drizzleActivityStore(db: Database): ActivityStore {
 
       for (;;) {
         const batch = await db
-          .select()
+          .select({ ...scoringColumns, startDate: activities.startDate })
           .from(activities)
           .where(
             cursorDate != null
@@ -315,6 +313,28 @@ function pendingFetch(maxAttempts: number) {
 type ActivityForScoring = ScoringActivity &
   Pick<typeof activities.$inferSelect, "id" | "areStreamsLoaded">;
 
+/** The columns {@link ActivityForScoring} needs, leaving the heavy jsonb ones out. */
+const scoringColumns = {
+  id: activities.id,
+  areStreamsLoaded: activities.areStreamsLoaded,
+  type: activities.type,
+  startDateLocal: activities.startDateLocal,
+  movingTime: activities.movingTime,
+  distance: activities.distance,
+  weightedAverageWatts: activities.weightedAverageWatts,
+} satisfies Record<keyof ActivityForScoring, unknown>;
+
+/** The athlete's rider settings timeline, the only part scoring reads. */
+function findScoringSettings(
+  db: Database,
+  athleteId: number,
+): Promise<ScoringRiderSettings | undefined> {
+  return db.query.riderSettings.findFirst({
+    where: eq(riderSettings.athlete, athleteId),
+    columns: { initialValues: true, changes: true },
+  });
+}
+
 type StreamDoc = {
   activityId: number;
   type: string;
@@ -376,11 +396,8 @@ function parseStreamDocs(
   activityId: number,
 ): number[] | undefined {
   try {
-    const result: number[] = [];
-    for (const doc of docs) {
-      result.push(...(JSON.parse(doc.data) as number[]));
-    }
-    return result;
+    const chunks = docs.map((doc) => JSON.parse(doc.data) as number[]);
+    return chunks.length === 1 ? chunks[0] : chunks.flat();
   } catch (e) {
     console.warn(
       `[sync] Skipping corrupted ${docs[0]?.type ?? "unknown"} stream for activity ${activityId}:`,
