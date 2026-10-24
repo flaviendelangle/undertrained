@@ -4,6 +4,7 @@ import type { RiderSettings, RiderSettingsTimeline } from "~/sensors/types";
 import { DEFAULT_RIDER_SETTINGS_TIMELINE } from "~/sensors/types";
 
 import { resolveTimeline } from "./resolveTimeline";
+import { mapTimeVaryingFields } from "./riderSettingsSchema";
 
 /**
  * Resolves the rider settings in effect on the given date.
@@ -28,14 +29,7 @@ export function resolveRiderSettings(
     cdA: timeline.cdA,
     crr: timeline.crr,
     bikeWeightKg: timeline.bikeWeightKg,
-    ftp: resolved.ftp ?? defaults.ftp!,
-    weightKg: resolved.weightKg ?? defaults.weightKg!,
-    restingHr: resolved.restingHr ?? defaults.restingHr!,
-    maxHr: resolved.maxHr ?? defaults.maxHr!,
-    lthr: resolved.lthr ?? defaults.lthr!,
-    runThresholdPace: resolved.runThresholdPace ?? defaults.runThresholdPace!,
-    swimThresholdPace:
-      resolved.swimThresholdPace ?? defaults.swimThresholdPace!,
+    ...mapTimeVaryingFields((field) => resolved[field] ?? defaults[field]),
   };
 }
 

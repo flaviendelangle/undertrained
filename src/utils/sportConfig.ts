@@ -22,6 +22,7 @@ import type {
   LoadAlgorithm,
   LoadAlgorithmPreferences,
 } from "~/utils/getActivityLoad";
+import { LOAD_ALGORITHM_CHOICES } from "~/utils/riderSettingsSchema";
 
 /** Broad sport category used to drive load-algorithm selection, TSS labels, and settings UI. */
 export type SportCategory =
@@ -50,6 +51,16 @@ interface LoadAlgorithmOption {
    * rendering boundary (e.g. the Load Algorithm settings dropdown).
    */
   readonly labelKey: AppMessageKey;
+}
+
+/** The settings dropdown's options for one sport's {@link LOAD_ALGORITHM_CHOICES}. */
+function loadAlgorithmOptions(
+  key: keyof LoadAlgorithmPreferences,
+): readonly LoadAlgorithmOption[] {
+  return LOAD_ALGORITHM_CHOICES[key].map((value) => ({
+    value,
+    labelKey: `settings.loadAlgorithm.option.${value}` as const,
+  }));
 }
 
 /**
@@ -263,10 +274,9 @@ class CyclingSportConfig extends SportConfig {
     "Set your FTP and HR thresholds in Settings to calculate TSS, HRSS, and Intensity Factor.";
 
   override readonly loadAlgorithmLabelKey = "sport.cycling.label";
-  override readonly loadAlgorithmOptions = [
-    { value: "tss", labelKey: "settings.loadAlgorithm.option.tss" },
-    { value: "hrss", labelKey: "settings.loadAlgorithm.option.hrss" },
-  ] as const;
+  override readonly loadAlgorithmOptions = loadAlgorithmOptions(
+    "cyclingLoadAlgorithm",
+  );
   override readonly loadAlgorithmKey = "cyclingLoadAlgorithm";
   override readonly defaultLoadAlgorithm = "tss";
 }
@@ -300,10 +310,9 @@ class RunSportConfig extends SportConfig {
     "Set your run threshold pace in Settings to calculate rTSS.";
 
   override readonly loadAlgorithmLabelKey = "sport.running.label";
-  override readonly loadAlgorithmOptions = [
-    { value: "rtss", labelKey: "settings.loadAlgorithm.option.rtss" },
-    { value: "hrss", labelKey: "settings.loadAlgorithm.option.hrss" },
-  ] as const;
+  override readonly loadAlgorithmOptions = loadAlgorithmOptions(
+    "runningLoadAlgorithm",
+  );
   override readonly loadAlgorithmKey = "runningLoadAlgorithm";
   override readonly defaultLoadAlgorithm = "rtss";
 
@@ -360,10 +369,9 @@ class SwimSportConfig extends SportConfig {
     "Set your swim threshold pace in Settings to calculate sTSS.";
 
   override readonly loadAlgorithmLabelKey = "sport.swimming.label";
-  override readonly loadAlgorithmOptions = [
-    { value: "stss", labelKey: "settings.loadAlgorithm.option.stss" },
-    { value: "hrss", labelKey: "settings.loadAlgorithm.option.hrss" },
-  ] as const;
+  override readonly loadAlgorithmOptions = loadAlgorithmOptions(
+    "swimmingLoadAlgorithm",
+  );
   override readonly loadAlgorithmKey = "swimmingLoadAlgorithm";
   override readonly defaultLoadAlgorithm = "stss";
 

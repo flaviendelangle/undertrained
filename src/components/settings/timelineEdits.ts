@@ -4,8 +4,7 @@ import {
   type RiderSettingsTimeline,
   type TimeVaryingField,
 } from "~/sensors/types";
-
-import { TIME_VARYING_FIELDS } from "./fieldConfig";
+import { TIME_VARYING_FIELDS } from "~/utils/riderSettingsSchema";
 
 const DEFAULTS = DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues;
 
@@ -126,7 +125,7 @@ export function currentFieldValue(
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i].value != null) return history[i].value!;
   }
-  return DEFAULTS[field]!;
+  return DEFAULTS[field];
 }
 
 /** The baseline ("Start") value of a field, falling back to defaults. */
@@ -134,5 +133,5 @@ export function startFieldValue(
   timeline: RiderSettingsTimeline,
   field: TimeVaryingField,
 ): number {
-  return timeline.initialValues[field] ?? DEFAULTS[field]!;
+  return timeline.initialValues[field] ?? DEFAULTS[field];
 }

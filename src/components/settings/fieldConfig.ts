@@ -78,10 +78,6 @@ export const RIDER_FIELD_CONFIG: RiderFieldConfig[] = [
   },
 ];
 
-export const TIME_VARYING_FIELDS: TimeVaryingField[] = RIDER_FIELD_CONFIG.map(
-  (c) => c.field,
-);
-
 /**
  * Convert speed (m/s) to pace components (minutes + seconds).
  * paceUnit "/km" → seconds per km, "/100m" → seconds per 100m.

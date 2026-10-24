@@ -14,6 +14,11 @@ import {
 } from "drizzle-orm/pg-core";
 import type { ActivityStats } from "strava-v3";
 
+import type {
+  LoadAlgorithmPreferences,
+  RiderSettingsChangePoint,
+  RiderSettingsTimeline,
+} from "~/utils/riderSettingsSchema";
 import type { RouteSport } from "~/utils/routeProfiles";
 import type { WorkoutChoice } from "~/utils/sportConfig";
 import type { StructuredWorkout } from "~/utils/structuredWorkout";
@@ -247,36 +252,22 @@ export const riderSettings = pgTable(
     crr: real("crr").notNull(),
     bikeWeightKg: real("bike_weight_kg"),
     cyclingLoadAlgorithm: text("cycling_load_algorithm")
+      .$type<LoadAlgorithmPreferences["cyclingLoadAlgorithm"]>()
       .notNull()
       .default("tss"),
     runningLoadAlgorithm: text("running_load_algorithm")
+      .$type<LoadAlgorithmPreferences["runningLoadAlgorithm"]>()
       .notNull()
       .default("rtss"),
     swimmingLoadAlgorithm: text("swimming_load_algorithm")
+      .$type<LoadAlgorithmPreferences["swimmingLoadAlgorithm"]>()
       .notNull()
       .default("stss"),
-    initialValues: jsonb("initial_values").notNull().$type<{
-      ftp?: number | null;
-      weightKg?: number | null;
-      restingHr?: number | null;
-      maxHr?: number | null;
-      lthr?: number | null;
-      runThresholdPace?: number | null;
-      swimThresholdPace?: number | null;
-    }>(),
-    changes: jsonb("changes").notNull().$type<
-      {
-        id: string;
-        date: string;
-        ftp?: number;
-        weightKg?: number;
-        restingHr?: number;
-        maxHr?: number;
-        lthr?: number;
-        runThresholdPace?: number;
-        swimThresholdPace?: number;
-      }[]
-    >(),
+    // Rows saved before a field was added lack its key.
+    initialValues: jsonb("initial_values")
+      .notNull()
+      .$type<Partial<RiderSettingsTimeline["initialValues"]>>(),
+    changes: jsonb("changes").notNull().$type<RiderSettingsChangePoint[]>(),
   },
   (t) => [uniqueIndex("rider_settings_athlete_idx").on(t.athlete)],
 );

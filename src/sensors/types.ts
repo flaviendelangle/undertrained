@@ -1,3 +1,8 @@
+import type {
+  RiderSettingsTimeline,
+  TimeVaryingSettings,
+} from "~/utils/riderSettingsSchema";
+
 export interface HeartRateData {
   heartRate: number;
   rrIntervals?: number[];
@@ -53,63 +58,19 @@ export const MAX_TARGET_POWER_WATTS = 1000;
 export const TRAINER_READING_TTL_MS = 2500;
 export const HEART_RATE_READING_TTL_MS = 5000;
 
-export interface RiderSettings {
-  weightKg: number;
-  ftp: number;
+export interface RiderSettings extends TimeVaryingSettings {
   cdA: number;
   crr: number;
   bikeWeightKg: number;
-  restingHr: number;
-  maxHr: number;
-  lthr: number;
-  runThresholdPace: number;
-  swimThresholdPace: number;
 }
 
-/** Fields that can vary over time */
-export type TimeVaryingField =
-  | "ftp"
-  | "weightKg"
-  | "restingHr"
-  | "maxHr"
-  | "lthr"
-  | "runThresholdPace"
-  | "swimThresholdPace";
+export type {
+  RiderSettingsChangePoint,
+  RiderSettingsTimeline,
+  TimeVaryingField,
+} from "~/utils/riderSettingsSchema";
 
-/** A change point recording which fields changed on a given date */
-export interface RiderSettingsChangePoint {
-  id: string;
-  date: string; // "YYYY-MM-DD"
-  ftp?: number;
-  weightKg?: number;
-  restingHr?: number;
-  maxHr?: number;
-  lthr?: number;
-  runThresholdPace?: number;
-  swimThresholdPace?: number;
-}
-
-/** Full timeline of rider settings persisted to localStorage */
-export interface RiderSettingsTimeline {
-  cdA: number;
-  crr: number;
-  bikeWeightKg: number;
-  cyclingLoadAlgorithm: "tss" | "hrss";
-  runningLoadAlgorithm: "rtss" | "hrss";
-  swimmingLoadAlgorithm: "stss" | "hrss";
-  initialValues: {
-    ftp: number | null;
-    weightKg: number | null;
-    restingHr: number | null;
-    maxHr: number | null;
-    lthr: number | null;
-    runThresholdPace: number | null;
-    swimThresholdPace: number | null;
-  };
-  changes: RiderSettingsChangePoint[];
-}
-
-export const DEFAULT_RIDER_SETTINGS_TIMELINE: RiderSettingsTimeline = {
+export const DEFAULT_RIDER_SETTINGS_TIMELINE = {
   cdA: 0.35,
   crr: 0.004,
   bikeWeightKg: 8,
@@ -126,22 +87,14 @@ export const DEFAULT_RIDER_SETTINGS_TIMELINE: RiderSettingsTimeline = {
     swimThresholdPace: 0.952, // ~1:45/100m
   },
   changes: [],
-};
+} satisfies RiderSettingsTimeline;
 
 // Derived from DEFAULT_RIDER_SETTINGS_TIMELINE — single source of truth
 export const DEFAULT_RIDER_SETTINGS: RiderSettings = {
   cdA: DEFAULT_RIDER_SETTINGS_TIMELINE.cdA,
   crr: DEFAULT_RIDER_SETTINGS_TIMELINE.crr,
   bikeWeightKg: DEFAULT_RIDER_SETTINGS_TIMELINE.bikeWeightKg,
-  ftp: DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.ftp!,
-  weightKg: DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.weightKg!,
-  restingHr: DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.restingHr!,
-  maxHr: DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.maxHr!,
-  lthr: DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.lthr!,
-  runThresholdPace:
-    DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.runThresholdPace!,
-  swimThresholdPace:
-    DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.swimThresholdPace!,
+  ...DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues,
 };
 
 export interface SessionDataPoint {
