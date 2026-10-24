@@ -45,7 +45,11 @@ import { type AppMessageKey, type TFunction } from "~/i18n/I18nProvider";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import { formatActivityType, formatDuration } from "~/utils/format";
+import {
+  formatActivityType,
+  formatDuration,
+  formatMeters,
+} from "~/utils/format";
 import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
 import { getSportConfig } from "~/utils/sportConfig";
 
@@ -169,7 +173,7 @@ const createColumns = (t: TFunction) =>
     columnHelper.accessor("totalElevationGain", {
       cell: (info) => {
         const value = info.getValue();
-        return value === 0 ? "" : `${Math.round(value)} m`;
+        return value === 0 ? "" : formatMeters(value);
       },
       header: () => <span>{t("activities.columns.elevation")}</span>,
       sortFn: "basic",

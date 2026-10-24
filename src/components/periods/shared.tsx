@@ -28,7 +28,7 @@ import {
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
-import { formatHumanDuration } from "~/utils/format";
+import { formatHumanDuration, formatKm, formatMeters } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 /** A single row from `timePeriods.getStats` — one period plus its aggregated totals. */
@@ -56,16 +56,6 @@ export function formatPeriodRange(startDate: string, endDate: string): string {
   return sameYear
     ? `${monthDay(start)} – ${withYear(end)}`
     : `${withYear(start)} – ${withYear(end)}`;
-}
-
-/** Distance in km with one decimal, e.g. `792.4 km`. */
-export function formatKm(meters: number): string {
-  return `${(meters / 1000).toFixed(1)} km`;
-}
-
-/** Elevation in metres, rounded, e.g. `19437 m`. */
-export function formatElevation(meters: number): string {
-  return `${Math.round(meters)} m`;
 }
 
 /** A small row of sport-type icons (or an "All sports" hint when unfiltered). */
@@ -235,7 +225,7 @@ export function PeriodSummaryCard({
         <StatCard
           icon={MountainIcon}
           label={t("periods.stats.elevation")}
-          value={formatElevation(row.totalElevation)}
+          value={formatMeters(row.totalElevation)}
         />
       </div>
     </div>

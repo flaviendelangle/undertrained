@@ -4,6 +4,7 @@ import { Button } from "~/components/ui/button";
 import { NumberField } from "~/components/ui/number-field";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
+import { formatNumber } from "~/utils/format";
 
 import {
   ToolboxTable,
@@ -351,15 +352,15 @@ export function GearCalculator() {
                     const ratio = ring / cog;
                     let cellValue: string;
                     if (viewTab === "ratio") {
-                      cellValue = ratio.toFixed(2);
+                      cellValue = formatNumber(ratio, 2);
                     } else if (viewTab === "speed") {
                       const rpm = cadence ?? 90;
                       const speedKmh =
                         (ratio * circumference * rpm * 60) / 1000;
-                      cellValue = speedKmh.toFixed(1);
+                      cellValue = formatNumber(speedKmh, 1);
                     } else {
                       const dev = ratio * circumference;
-                      cellValue = dev.toFixed(2);
+                      cellValue = formatNumber(dev, 2);
                     }
 
                     return (
@@ -400,13 +401,13 @@ export function GearCalculator() {
             })}{" "}
             —{" "}
             {t("toolbox.gear.summaryRatioRange", {
-              min: minRatio.toFixed(2),
-              max: maxRatio.toFixed(2),
+              min: formatNumber(minRatio, 2),
+              max: formatNumber(maxRatio, 2),
             })}{" "}
             —{" "}
             {t("toolbox.gear.summaryWheel", {
               wheel: wheel.label,
-              circumference: (circumference * 1000).toFixed(0),
+              circumference: formatNumber(circumference * 1000, 0),
             })}
           </div>
         </div>
