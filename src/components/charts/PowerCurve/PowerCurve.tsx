@@ -1,6 +1,5 @@
 import * as React from "react";
 
-import { format, subDays } from "date-fns";
 import {
   ActivityIcon,
   BarChart3Icon,
@@ -30,10 +29,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { useActivityFilter } from "~/hooks/useActivityFilter";
+import { useActivitySelection } from "~/hooks/useActivitySelection";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
-import { type TFunction } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
 import {
   activitySettingsDay,
@@ -41,6 +39,7 @@ import {
 } from "~/lib/activityRecording";
 import { useChartTokens } from "~/lib/chartTokens";
 import { cn } from "~/lib/utils";
+import { activityTypesFor } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 import { ChartMessage } from "../ChartMessage";
@@ -51,6 +50,14 @@ import {
 import { PowerOverTime } from "./PowerOverTime";
 import { PowerSliceDistribution } from "./PowerSliceDistribution";
 import { PowerZoneDistribution } from "./PowerZoneDistribution";
+import {
+  type DateRange,
+  createPresetOptions,
+  formatDateOnly,
+  makeCustomRange,
+  makeYearRange,
+  presetToRange,
+} from "./dateRanges";
 import type { ActivityInfo, PowerCurveSeriesData } from "./types";
 import {
   MAX_SLICE_WIDTH,
@@ -61,69 +68,12 @@ import {
 
 // --- Types & constants ---
 
-interface DateRange {
-  id: string;
-  label: string;
-  dateFrom?: string;
-  dateTo?: string;
-}
-
 // seriesId → (ActivityInfo | null)[] indexed by dataIndex
 type ActivityMetadataMap = Record<string, (ActivityInfo | null)[]>;
 
-function formatDateOnly(date: Date): string {
-  return format(date, "yyyy-MM-dd");
-}
-
-function makeRollingRange(days: number, label: string): DateRange {
-  const now = new Date();
-  return {
-    id: `preset-${days}d`,
-    label,
-    dateFrom: formatDateOnly(subDays(now, days)),
-    dateTo: formatDateOnly(now),
-  };
-}
-
-const createPresetOptions = (t: TFunction) => [
-  { value: "90d", label: t("charts.powerCurve.preset.last90Days") },
-  { value: "1y", label: t("charts.powerCurve.preset.lastYear") },
-  { value: "2y", label: t("charts.powerCurve.preset.last2Years") },
-  { value: "all", label: t("charts.powerCurve.preset.allTime") },
-];
-
-function makeYearRange(year: number): DateRange {
-  return {
-    id: `year-${year}`,
-    label: String(year),
-    dateFrom: formatDateOnly(new Date(year, 0, 1)),
-    dateTo: formatDateOnly(new Date(year + 1, 0, 1)),
-  };
-}
-
-function presetToRange(preset: string, t: TFunction): DateRange {
-  switch (preset) {
-    case "90d":
-      return makeRollingRange(90, t("charts.powerCurve.preset.last90Days"));
-    case "1y":
-      return makeRollingRange(365, t("charts.powerCurve.preset.lastYear"));
-    case "2y":
-      return makeRollingRange(730, t("charts.powerCurve.preset.last2Years"));
-    case "all":
-      return { id: "preset-all", label: t("charts.powerCurve.preset.allTime") };
-    default:
-      return makeRollingRange(365, t("charts.powerCurve.preset.lastYear"));
-  }
-}
-
 // --- Props ---
 
-export interface PowerCurveDateRange {
-  id: string;
-  label: string;
-  dateFrom?: string;
-  dateTo?: string;
-}
+export type PowerCurveDateRange = DateRange;
 
 interface PowerCurveProps {
   activityTypes?: string[];
@@ -161,7 +111,7 @@ export default PowerCurve;
 // --- Single activity mode ---
 
 const ACTIVITY_RANGE_ID = "activity";
-const SINGLE_ACTIVITY_TYPES = ["Ride", "VirtualRide"];
+const SINGLE_ACTIVITY_TYPES = activityTypesFor("power");
 const SINGLE_ACTIVITY_LOCKED_IDS = new Set([ACTIVITY_RANGE_ID]);
 
 type PowerTab = "curve" | "timeline" | "zones" | "distribution";
@@ -703,10 +653,21 @@ function AggregatedPowerCurve({
   const t = useT();
   const tokens = useChartTokens();
   const athleteId = useAthleteId();
-  const filter = useActivityFilter();
-  const workoutTypes =
-    workoutTypesProp ??
-    (filter.workoutTypes.length > 0 ? filter.workoutTypes : undefined);
+  // Which parts of the global filter each tab honours is decided per view in
+  // `useActivitySelection`. The curve and its year list only forward sports
+  // and workout types.
+  const { workoutTypes } = useActivitySelection(
+    timePeriodId != null ? "periodPowerCurve" : "statisticsPowerCurve",
+    { activityTypes, workoutTypes: workoutTypesProp },
+  );
+  const zonesSelection = useActivitySelection("periodPowerZones", {
+    activityTypes,
+    timePeriodId,
+  });
+  const distributionSelection = useActivitySelection(
+    "periodPowerDistribution",
+    { activityTypes, timePeriodId },
+  );
   const [ranges, setRanges] = React.useState<DateRange[]>(
     () => defaultRanges ?? [presetToRange("1y", t)],
   );
@@ -720,17 +681,13 @@ function AggregatedPowerCurve({
   const { resolveForDate } = useRiderSettingsTimeline();
 
   const periodActivities = trpc.activities.list.useQuery(
-    {
-      athleteId: athleteId!,
-      activityTypes: activityTypes ?? [],
-      timePeriodId: timePeriodId!,
-    },
+    { athleteId: athleteId!, ...zonesSelection },
     { enabled: athleteId != null && timePeriodId != null && tab === "zones" },
   );
   const periodDistribution = trpc.analytics.getPowerDistribution.useQuery(
     {
       athleteId: athleteId!,
-      activityTypes,
+      ...distributionSelection,
       timePeriodId: timePeriodId!,
     },
     {
@@ -1265,13 +1222,7 @@ function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
   const [to, setTo] = React.useState("");
   const handleAdd = () => {
     if (!from || !to) return;
-    const label = `${format(new Date(from), "MMM yyyy")} – ${format(new Date(to), "MMM yyyy")}`;
-    onAdd({
-      id: `custom-${crypto.randomUUID()}`,
-      label,
-      dateFrom: formatDateOnly(new Date(from)),
-      dateTo: formatDateOnly(new Date(to)),
-    });
+    onAdd(makeCustomRange(from, to));
     setFrom("");
     setTo("");
     setOpen(false);

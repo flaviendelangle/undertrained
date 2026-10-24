@@ -240,9 +240,8 @@ export function ActivitiesTable(props: {
   const isMobile = useIsMobile();
   const filters = useActivityFilter();
   const activitiesQuery = useActivitiesQuery(
-    props.timePeriodId != null
-      ? { timePeriodId: props.timePeriodId }
-      : undefined,
+    props.timePeriodId != null ? "period" : "activities",
+    { timePeriodId: props.timePeriodId },
   );
   const { timeline } = useRiderSettingsTimeline();
   const tableContainerRef = React.useRef<HTMLDivElement>(null);

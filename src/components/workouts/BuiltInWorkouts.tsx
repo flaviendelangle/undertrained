@@ -4,7 +4,7 @@ import {
   ResponsiveDialog,
   ResponsiveDialogTrigger,
 } from "~/components/ui/responsive-dialog";
-import { showErrorToast } from "~/components/ui/toast";
+import { useCreateStructuredWorkout } from "~/hooks/structuredWorkouts";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
@@ -12,7 +12,6 @@ import {
   BUILT_IN_WORKOUT_IDS,
   builtInWorkout,
 } from "~/utils/structuredWorkout/builtIn";
-import { trpc } from "~/utils/trpc";
 
 import { WorkoutActionsMenu } from "./WorkoutActionsMenu";
 import { WorkoutLibraryCard, WorkoutLibraryGrid } from "./WorkoutLibraryCard";
@@ -22,12 +21,8 @@ import { WorkoutPreviewContent } from "./WorkoutPreviewContent";
 export function BuiltInWorkouts({ search }: { search: string }) {
   const t = useT();
   const athleteId = useAthleteId();
-  const utils = trpc.useUtils();
   const { currentSettings } = useRiderSettingsTimeline();
-  const duplicate = trpc.structuredWorkouts.create.useMutation({
-    onSuccess: () => utils.structuredWorkouts.list.invalidate(),
-    onError: () => showErrorToast(t("common.saveError")),
-  });
+  const duplicate = useCreateStructuredWorkout();
   const workouts = useMemo(
     () =>
       BUILT_IN_WORKOUT_IDS.map((id) =>

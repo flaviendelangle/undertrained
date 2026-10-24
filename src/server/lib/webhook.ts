@@ -3,18 +3,11 @@ import strava from "strava-v3";
 
 import { TRPCError } from "@trpc/server";
 
-import { getSportConfig } from "../../utils/sportConfig";
+import { supportsAnalysis } from "../../utils/sportConfig";
 import { db } from "../db";
 import type { Database } from "../db";
-import {
-  activities,
-  athletes,
-  desktopCodes,
-  desktopSessions,
-  riderSettings,
-  syncJobs,
-  timePeriods,
-} from "../db/schema";
+import { activities, athletes, riderSettings } from "../db/schema";
+import { eraseAthleteData } from "./athleteErasure";
 import {
   fetchStreamsFromStrava,
   getAccessToken,
@@ -137,7 +130,7 @@ async function handleActivityCreate(
   }
 
   // Store run best efforts from the already-fetched detailed activity (no extra call)
-  if (getSportConfig(rawActivity.type).category === "running") {
+  if (supportsAnalysis(rawActivity.type, "bestEfforts")) {
     try {
       await storeBestEfforts(db, activityId, rawActivity);
     } catch (err) {
@@ -301,7 +294,7 @@ async function handleActivityUpdate(
 
   // Refresh run best efforts and the detail-only fields (description/RPE/private
   // note/laps) from the activity we already re-fetched.
-  if (getSportConfig(rawActivity.type).category === "running") {
+  if (supportsAnalysis(rawActivity.type, "bestEfforts")) {
     try {
       await storeBestEfforts(db, existing.id, rawActivity);
     } catch (err) {
@@ -492,51 +485,6 @@ async function handleAthleteDeauthorization(
     return;
   }
   console.log(`[webhook] Athlete ${athleteId} deauthorized, cleaning up`);
-  await deleteAllAthleteData(db, athleteId);
+  await eraseAthleteData(db, athleteId);
   console.log(`[webhook] Cleanup complete for athlete ${athleteId}`);
-}
-
-// ── Shared deletion helper ──────────────────────────────────────────────
-
-/**
- * Deletes all data for an athlete: activities (streams cascade via FK),
- * rider settings, sync jobs, and clears OAuth tokens.
- * Keeps the athlete row for NextAuth session reference.
- */
-export async function deleteAllAthleteData(
-  db: Database,
-  athleteId: number,
-): Promise<void> {
-  // The athlete row is retained, so its foreign-key cascades never run.
-  // Remove pending grants before sessions to prevent their later exchange.
-  await db.delete(desktopCodes).where(eq(desktopCodes.athlete, athleteId));
-  await db
-    .delete(desktopSessions)
-    .where(eq(desktopSessions.athlete, athleteId));
-
-  // Delete all activities (streams cascade via FK)
-  await db.delete(activities).where(eq(activities.athlete, athleteId));
-
-  // Delete rider settings
-  await db.delete(riderSettings).where(eq(riderSettings.athlete, athleteId));
-
-  // Delete time periods
-  await db.delete(timePeriods).where(eq(timePeriods.athlete, athleteId));
-
-  // Delete sync jobs
-  await db.delete(syncJobs).where(eq(syncJobs.athlete, athleteId));
-
-  // Clear tokens but keep athlete row (NextAuth session reference).
-  // `lastSeenActivityId` goes back to 0 alongside the activities it indexes: if
-  // the athlete ever reconnects, the re-import mints ids above any stale
-  // watermark and the link prompt would offer their entire history.
-  await db
-    .update(athletes)
-    .set({
-      accessToken: "",
-      refreshToken: "",
-      tokenExpiresAt: 0,
-      lastSeenActivityId: 0,
-    })
-    .where(eq(athletes.id, athleteId));
 }

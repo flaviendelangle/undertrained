@@ -35,18 +35,27 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "~/components/ui/responsive-dialog";
-import { showErrorToast } from "~/components/ui/toast";
-import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
-import { useAthleteId } from "~/hooks/useAthleteId";
 import {
   markDoneErrorKey,
+  useCreatePlannedTraining,
+  useDeletePlannedTraining,
+  useLinkedActivityIds,
   useMarkPlannedTrainingDone,
-} from "~/hooks/useMarkPlannedTrainingDone";
+  useUpdatePlannedTraining,
+} from "~/hooks/plannedTrainings";
+import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
+import { useAthleteId } from "~/hooks/useAthleteId";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
+import {
+  MAX_PLANNED_DURATION_SECONDS,
+  parsePlannedDate,
+  plannedDateOf,
+  plannedDay,
+  plannedTime,
+} from "~/utils/plannedTraining";
 import { PLANNABLE_SPORT_TYPES, getSportConfig } from "~/utils/sportConfig";
-import { trpc } from "~/utils/trpc";
 
 import type { ActivityOptionData } from "./ActivityOption";
 import { ActivityOption } from "./ActivityOption";
@@ -78,7 +87,7 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
   );
   const [dateStr, setDateStr] = React.useState(
     existing
-      ? dayKey(existing.plannedDate)
+      ? plannedDay(existing.plannedDate)
       : format(state.mode === "create" ? state.date : new Date(), "yyyy-MM-dd"),
   );
   // The week view passes a date carrying the double-clicked time; the month view
@@ -89,33 +98,12 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
       ? format(state.date, "HH:mm")
       : "07:00";
   const [timeStr, setTimeStr] = React.useState(
-    existing ? existing.plannedDate.slice(11, 16) : createTime,
+    existing ? plannedTime(existing.plannedDate) : createTime,
   );
 
-  const utils = trpc.useUtils();
-  const invalidateList = () => utils.plannedTrainings.list.invalidate();
-
-  const createMut = trpc.plannedTrainings.create.useMutation({
-    onSuccess: () => {
-      void invalidateList();
-      onClose();
-    },
-    onError: () => showErrorToast(t("common.saveError")),
-  });
-  const updateMut = trpc.plannedTrainings.update.useMutation({
-    onSuccess: () => {
-      void invalidateList();
-      onClose();
-    },
-    onError: () => showErrorToast(t("common.saveError")),
-  });
-  const deleteMut = trpc.plannedTrainings.delete.useMutation({
-    onSuccess: () => {
-      void invalidateList();
-      onClose();
-    },
-    onError: () => showErrorToast(t("common.deleteError")),
-  });
+  const createMut = useCreatePlannedTraining({ onSuccess: onClose });
+  const updateMut = useUpdatePlannedTraining({ onSuccess: onClose });
+  const deleteMut = useDeletePlannedTraining({ onSuccess: onClose });
   const markDoneMut = useMarkPlannedTrainingDone({ onSuccess: onClose });
 
   const pending =
@@ -127,7 +115,7 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
     if (!trimmed || durationMinutes == null || durationMinutes <= 0) {
       return;
     }
-    const plannedDate = `${dateStr}T${timeStr}:00`;
+    const plannedDate = plannedDateOf(dateStr, timeStr);
     const durationSeconds = Math.round(durationMinutes * 60);
     if (isEdit && existing) {
       updateMut.mutate({
@@ -197,6 +185,7 @@ function PlannedTrainingForm({ athleteId, state, onClose }: FormProps) {
           value={durationMinutes}
           onValueChange={setDurationMinutes}
           min={5}
+          max={MAX_PLANNED_DURATION_SECONDS / 60}
           step={5}
         />
       </div>
@@ -255,15 +244,14 @@ function MarkDoneSection({
 }: {
   athleteId: number;
   training: PlannedTraining;
-  markDoneMut: ReturnType<typeof trpc.plannedTrainings.markDone.useMutation>;
+  markDoneMut: ReturnType<typeof useMarkPlannedTrainingDone>;
 }) {
   const t = useT();
-  // Empty options => unfiltered, all-time history, so the global Journal filter
-  // can't hide an activity that's a valid match for this plan.
-  const { data: activities } = useActivitiesQuery({});
+  // Unfiltered, all-time history, so the global Journal filter can't hide an
+  // activity that's a valid match for this plan.
+  const { data: activities } = useActivitiesQuery("planMatching");
   // Internal activity ids already linked to a (completed) plan — never offered.
-  const { data: linkedActivityIds } =
-    trpc.plannedTrainings.linkedActivityIds.useQuery({ athleteId });
+  const { data: linkedActivityIds } = useLinkedActivityIds();
   const [selectedStravaId, setSelectedStravaId] = React.useState<string>("");
 
   // Candidates share the plan's sport category and fall in its week, split into
@@ -275,7 +263,7 @@ function MarkDoneSection({
   const { groups, byStravaId } = React.useMemo(() => {
     const linked = new Set(linkedActivityIds ?? []);
     const plannedCategory = getSportConfig(training.sportType).category;
-    const plannedDate = new Date(`${dayKey(training.plannedDate)}T00:00:00`);
+    const plannedDate = parsePlannedDate(training.plannedDate);
 
     const perfect: string[] = [];
     const other: string[] = [];

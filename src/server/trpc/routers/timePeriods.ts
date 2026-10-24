@@ -1,10 +1,17 @@
 import { and, desc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
 import { activities, timePeriods } from "../../db/schema";
+import { selectActivities } from "../../lib/activitySelection";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
+
+// The raw queries below name the tables `a` and `p`, so their selection has to
+// as well.
+const a = alias(activities, "a");
+const p = alias(timePeriods, "p");
 
 export const timePeriodsRouter = router({
   getById: protectedProcedure
@@ -28,14 +35,11 @@ export const timePeriodsRouter = router({
         });
       }
 
-      const sportTypeCondition =
-        period.sportTypes && period.sportTypes.length > 0
-          ? sql`AND a.type IN (${sql.join(
-              period.sportTypes.map((t) => sql`${t}`),
-              sql`, `,
-            )})`
-          : sql``;
-
+      const selected = await selectActivities(
+        ctx.db,
+        { athleteId: input.athleteId, timePeriod: period },
+        a,
+      );
       const [stats] = await ctx.db.execute<{
         activity_count: string;
         total_moving_time: string;
@@ -50,10 +54,7 @@ export const timePeriodsRouter = router({
           COALESCE(SUM(a.distance), 0)::text AS total_distance,
           COALESCE(SUM(a.total_elevation_gain), 0)::text AS total_elevation
         FROM ${activities} a
-        WHERE a.athlete = ${input.athleteId}
-          AND a.start_date >= ${period.startDate}
-          AND a.start_date <= ${period.endDate + "T23:59:59Z"}
-          ${sportTypeCondition}
+        WHERE ${selected}
       `);
 
       return {
@@ -165,7 +166,12 @@ export const timePeriodsRouter = router({
 
       if (periods.length === 0) return [];
 
-      // Single query using LATERAL join to compute stats for all periods at once
+      // Single query joining every period to the activities it selects
+      const selected = await selectActivities(
+        ctx.db,
+        { athleteId: input.athleteId, timePeriod: p },
+        a,
+      );
       const rows = await ctx.db.execute<{
         period_id: string;
         activity_count: string;
@@ -182,15 +188,7 @@ export const timePeriodsRouter = router({
           COALESCE(SUM(a.distance), 0)::text AS total_distance,
           COALESCE(SUM(a.total_elevation_gain), 0)::text AS total_elevation
         FROM ${timePeriods} p
-        LEFT JOIN ${activities} a
-          ON a.athlete = ${input.athleteId}
-          AND a.start_date >= p.start_date
-          AND a.start_date <= p.end_date || 'T23:59:59Z'
-          AND (
-            p.sport_types IS NULL
-            OR p.sport_types = '[]'::jsonb
-            OR a.type IN (SELECT jsonb_array_elements_text(p.sport_types))
-          )
+        LEFT JOIN ${activities} a ON ${selected}
         WHERE p.athlete = ${input.athleteId}
         GROUP BY p.id
       `);

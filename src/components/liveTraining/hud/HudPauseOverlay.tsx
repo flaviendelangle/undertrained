@@ -1,11 +1,11 @@
 import { Button } from "~/components/ui/button";
-import type { UseWorkoutPlayerResult } from "~/hooks/useWorkoutPlayer";
 import { useT } from "~/i18n/useT";
+import type { WorkoutPlayer } from "~/liveTraining/rideEngine";
 import { formatElapsed } from "~/utils/format";
 
 interface HudPauseOverlayProps {
   pausedSeconds: number;
-  workout?: { name: string; player: UseWorkoutPlayerResult } | null;
+  workout?: { name: string; player: WorkoutPlayer } | null;
   onResume: () => void;
   onStop: () => void;
 }

@@ -13,7 +13,7 @@ import { useActivitiesQuery } from "./useActivitiesQuery";
  * underlying query (for `allTypes` etc.) plus the filtered `activities`.
  */
 export function useActivitiesFilteredByType(types: readonly string[]) {
-  const query = useActivitiesQuery({ activityTypes: [] });
+  const query = useActivitiesQuery("statistics");
 
   const activities = React.useMemo(() => {
     if (types.length === 0) {

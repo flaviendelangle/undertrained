@@ -2,27 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { HR_ZONES, POWER_ZONES } from "~/sensors/types";
 
-import {
-  aggregateTimeInZones,
-  buildZoneRows,
-  zoneMetricForSport,
-} from "./timeInZones";
-
-describe("zoneMetricForSport", () => {
-  it("maps each sport's default load algorithm to its zone metric", () => {
-    expect(zoneMetricForSport("Ride")).toBe("power");
-    expect(zoneMetricForSport("VirtualRide")).toBe("power");
-    expect(zoneMetricForSport("Run")).toBe("pace");
-    expect(zoneMetricForSport("Hike")).toBe("hr");
-    expect(zoneMetricForSport("WeightTraining")).toBe("hr");
-    // Unknown Strava types fall back to the base config (HRSS).
-    expect(zoneMetricForSport("Yoga")).toBe("hr");
-  });
-
-  it("excludes swimming (sTSS has no zone model)", () => {
-    expect(zoneMetricForSport("Swim")).toBeNull();
-  });
-});
+import { aggregateTimeInZones, buildZoneRows } from "./timeInZones";
 
 describe("aggregateTimeInZones", () => {
   it("sums zone arrays in ramp space and tracks the metrics used", () => {

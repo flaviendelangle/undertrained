@@ -2,6 +2,7 @@ import { signOut } from "next-auth/react";
 import superjson from "superjson";
 
 import type { AppRouter } from "@server/trpc/root";
+import { MutationCache } from "@tanstack/react-query";
 import {
   TRPCClientError,
   httpBatchLink,
@@ -51,6 +52,16 @@ export const trpc = createTRPCNext<AppRouter>({
         }),
       ],
       queryClientConfig: {
+        // On the cache, not in `defaultOptions.mutations`: a mutation's own
+        // `onError` (an error toast, say) would replace a default one and skip
+        // the sign-out.
+        mutationCache: new MutationCache({
+          onError: (error) => {
+            if (isUnauthorized(error)) {
+              handleUnauthorized();
+            }
+          },
+        }),
         defaultOptions: {
           queries: {
             staleTime: 5 * 60 * 1000, // 5 minutes
@@ -64,13 +75,6 @@ export const trpc = createTRPCNext<AppRouter>({
                 return false;
               }
               return failureCount < 3;
-            },
-          },
-          mutations: {
-            onError: (error) => {
-              if (isUnauthorized(error)) {
-                handleUnauthorized();
-              }
             },
           },
         },

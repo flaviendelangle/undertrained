@@ -25,7 +25,7 @@ const JournalPage: NextPageWithLayout = () => {
   // the request overlaps with the Journal module loading; the component then
   // mounts already populated. Harmless on SPA navigation — the cache is warm,
   // so this resolves instantly without a network call.
-  useActivitiesQuery();
+  useActivitiesQuery("journal");
 
   // Overlap module loading with data, then reveal without waiting for optional
   // analytics, record badges, or calendar feeds.

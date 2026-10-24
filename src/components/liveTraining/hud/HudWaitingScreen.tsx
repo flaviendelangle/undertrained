@@ -1,9 +1,11 @@
 import Link from "next/link";
 
-import type { UseWorkoutPlayerResult } from "~/hooks/useWorkoutPlayer";
 import { useT } from "~/i18n/useT";
+import type { WorkoutPlayer } from "~/liveTraining/rideEngine";
+import type { TrainerTargetStatus } from "~/sensors/adapter";
 import { formatCompactDuration } from "~/utils/format";
 
+import { HudErgStatus } from "./HudErgStatus";
 import { HudWorkoutBar } from "./HudWorkoutBar";
 
 interface HudWaitingScreenProps {
@@ -16,10 +18,10 @@ interface HudWaitingScreenProps {
   supportsControl: boolean;
   /** Whether the trainer rejected or ignored the last ERG command. */
   ergError: boolean;
-  /** FE-C target status: the trainer can't hold the target at this speed. */
-  ergTargetStatus: "OnTarget" | "LowSpeed" | "HighSpeed" | null;
+  /** The trainer can't hold the target at this speed (FE-C only). */
+  ergTargetStatus: TrainerTargetStatus;
   /** The selected workout is always loaded before training setup. */
-  workout: { name: string; player: UseWorkoutPlayerResult };
+  workout: { name: string; player: WorkoutPlayer };
 }
 
 export function HudWaitingScreen({
@@ -184,29 +186,11 @@ export function HudWaitingScreen({
                   </div>
                 )}
 
-                {ergError && (
-                  <p role="alert" className="text-center text-xs text-red-400">
-                    {t("liveTraining.ergFailed")}
-                  </p>
-                )}
-
-                {/* The trainer reports it cannot reach the target in this gear. */}
-                {!ergError && ergTargetStatus === "LowSpeed" && (
-                  <p
-                    role="status"
-                    className="text-center text-xs text-yellow-500"
-                  >
-                    {t("liveTraining.ergShiftUp")}
-                  </p>
-                )}
-                {!ergError && ergTargetStatus === "HighSpeed" && (
-                  <p
-                    role="status"
-                    className="text-center text-xs text-yellow-500"
-                  >
-                    {t("liveTraining.ergShiftDown")}
-                  </p>
-                )}
+                <HudErgStatus
+                  error={ergError}
+                  targetStatus={ergTargetStatus}
+                  className="text-center"
+                />
               </>
             )}
           </div>

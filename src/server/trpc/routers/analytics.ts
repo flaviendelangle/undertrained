@@ -1,50 +1,32 @@
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { activities, activityStreams } from "../../db/schema";
 import {
-  protectedProcedure,
-  resolveTimePeriod,
-  router,
-  validateAthleteOwnership,
-} from "../index";
+  activityFilterInput,
+  selectActivities,
+} from "../../lib/activitySelection";
+import { protectedProcedure, router, validateAthleteOwnership } from "../index";
+
+// The raw queries below name the table `a`, so their selection has to as well.
+const a = alias(activities, "a");
 
 export const analyticsRouter = router({
   getPowerDistribution: protectedProcedure
     .input(
-      z.object({
-        athleteId: z.number(),
+      activityFilterInput.extend({
         timePeriodId: z.number().int().positive(),
-        activityTypes: z.array(z.string().max(50)).optional(),
       }),
     )
     .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
-      const { periodDateFrom, periodDateTo, periodSportTypes } =
-        await resolveTimePeriod(ctx.db, input.timePeriodId, input.athleteId);
-      const conditions = [
-        eq(activities.athlete, input.athleteId),
-        eq(activityStreams.type, "watts"),
-      ];
-
-      if (input.activityTypes?.length) {
-        conditions.push(inArray(activities.type, input.activityTypes));
-      }
-      if (periodSportTypes?.length) {
-        conditions.push(inArray(activities.type, periodSportTypes));
-      }
-      if (periodDateFrom) {
-        conditions.push(gte(activities.startDate, periodDateFrom));
-      }
-      if (periodDateTo) {
-        conditions.push(lte(activities.startDate, periodDateTo + "T23:59:59Z"));
-      }
-
+      const selected = await selectActivities(ctx.db, input);
       const rows = await ctx.db
         .select({ data: activityStreams.data })
         .from(activityStreams)
         .innerJoin(activities, eq(activityStreams.activityId, activities.id))
-        .where(and(...conditions));
+        .where(and(selected, eq(activityStreams.type, "watts")));
 
       const secondsByWatts = new Map<number, number>();
       for (const row of rows) {
@@ -68,62 +50,10 @@ export const analyticsRouter = router({
     }),
 
   getPowerCurve: protectedProcedure
-    .input(
-      z.object({
-        athleteId: z.number(),
-        activityTypes: z.array(z.string().max(50)).optional(),
-        workoutTypes: z.array(z.number().int()).optional(),
-        timePeriodId: z.number().int().positive().optional(),
-        dateFrom: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format")
-          .optional(),
-        dateTo: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format")
-          .optional(),
-      }),
-    )
+    .input(activityFilterInput)
     .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
-      const { periodDateFrom, periodDateTo, periodSportTypes } =
-        await resolveTimePeriod(ctx.db, input.timePeriodId, input.athleteId);
-
-      const typeFilter =
-        input.activityTypes && input.activityTypes.length > 0
-          ? sql`AND a.type IN (${sql.join(
-              input.activityTypes.map((t) => sql`${t}`),
-              sql`, `,
-            )})`
-          : sql``;
-
-      const periodSportFilter = periodSportTypes
-        ? sql`AND a.type IN (${sql.join(
-            periodSportTypes.map((t) => sql`${t}`),
-            sql`, `,
-          )})`
-        : sql``;
-
-      const workoutTypeFilter =
-        input.workoutTypes && input.workoutTypes.length > 0
-          ? sql`AND a.workout_type IN (${sql.join(
-              input.workoutTypes.map((t) => sql`${t}`),
-              sql`, `,
-            )})`
-          : sql``;
-
-      const dateFromFilter = input.dateFrom
-        ? sql`AND a.start_date >= ${input.dateFrom}`
-        : periodDateFrom
-          ? sql`AND a.start_date >= ${periodDateFrom}`
-          : sql``;
-
-      const dateToFilter = input.dateTo
-        ? sql`AND a.start_date <= ${input.dateTo + "T23:59:59Z"}`
-        : periodDateTo
-          ? sql`AND a.start_date <= ${periodDateTo + "T23:59:59Z"}`
-          : sql``;
-
+      const selected = await selectActivities(ctx.db, input, a);
       const rows = await ctx.db.execute<{
         duration: string;
         watts: string;
@@ -138,13 +68,8 @@ export const analyticsRouter = router({
             (kv.value)::int AS watts
           FROM activities a,
           LATERAL jsonb_each_text(a.power_bests) AS kv(key, value)
-          WHERE a.athlete = ${input.athleteId}
+          WHERE ${selected}
             AND a.power_bests IS NOT NULL
-            ${typeFilter}
-            ${periodSportFilter}
-            ${workoutTypeFilter}
-            ${dateFromFilter}
-            ${dateToFilter}
         ),
         ranked AS (
           SELECT
@@ -176,38 +101,15 @@ export const analyticsRouter = router({
     }),
 
   getPowerCurveYears: protectedProcedure
-    .input(
-      z.object({
-        athleteId: z.number(),
-        activityTypes: z.array(z.string().max(50)).optional(),
-        workoutTypes: z.array(z.number().int()).optional(),
-      }),
-    )
+    .input(activityFilterInput)
     .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
-      const typeFilter =
-        input.activityTypes && input.activityTypes.length > 0
-          ? sql`AND a.type IN (${sql.join(
-              input.activityTypes.map((t) => sql`${t}`),
-              sql`, `,
-            )})`
-          : sql``;
-
-      const workoutTypeFilter =
-        input.workoutTypes && input.workoutTypes.length > 0
-          ? sql`AND a.workout_type IN (${sql.join(
-              input.workoutTypes.map((t) => sql`${t}`),
-              sql`, `,
-            )})`
-          : sql``;
-
+      const selected = await selectActivities(ctx.db, input, a);
       const rows = await ctx.db.execute<{ year: string }>(sql`
         SELECT DISTINCT EXTRACT(YEAR FROM a.start_date::timestamp)::int AS year
         FROM activities a
-        WHERE a.athlete = ${input.athleteId}
+        WHERE ${selected}
           AND a.power_bests IS NOT NULL
-          ${typeFilter}
-          ${workoutTypeFilter}
         ORDER BY year DESC
       `);
 

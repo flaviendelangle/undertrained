@@ -14,6 +14,7 @@ import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
 
 import { ActivitiesTable } from "~/components/ActivitiesTable";
 import { PageTitle } from "~/components/PageTitle";
+import { makePeriodRange } from "~/components/charts/PowerCurve/dateRanges";
 import { TimePeriodForm } from "~/components/periods/TimePeriodForm";
 import { TimePeriodStats } from "~/components/periods/TimePeriodStats";
 import { CardTitle } from "~/components/primitives/CardTitle";
@@ -27,6 +28,7 @@ import { useTypedParams } from "~/hooks/useTypedParams";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
+import { activityTypesFor } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 const TimePeriodMap = nextDynamic(
@@ -40,7 +42,7 @@ const PowerCurve = nextDynamic(
   { ssr: false },
 );
 
-const POWER_ACTIVITY_TYPES = ["Ride", "VirtualRide"];
+const POWER_ACTIVITY_TYPES = activityTypesFor("power");
 
 const routerSchema = { periodId: "string" as const };
 
@@ -160,14 +162,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
               <PowerCurve
                 activityTypes={powerActivityTypes}
                 timePeriodId={periodId}
-                defaultRanges={[
-                  {
-                    id: `period-${period.id}`,
-                    label: period.name,
-                    dateFrom: period.startDate,
-                    dateTo: period.endDate,
-                  },
-                ]}
+                defaultRanges={[makePeriodRange(period)]}
               />
             )}
             <section className="md:border-border md:bg-card p-5 md:rounded-xl md:border">

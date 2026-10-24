@@ -16,7 +16,7 @@ import type { ActivityStats } from "strava-v3";
 
 import type { StructuredWorkout } from "~/utils/structuredWorkout";
 
-import type { ZoneSecondsByMetric } from "../lib/computeScores";
+import type { ZoneSecondsByMetric } from "../lib/activityScoring";
 import type { StoredLap } from "../lib/stravaTypes";
 
 // ── Enums ──────────────────────────────────────────────────────────────

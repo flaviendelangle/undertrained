@@ -2,10 +2,16 @@ import superjson from "superjson";
 import { afterEach, expect, it, vi } from "vitest";
 
 import type { AppRouter } from "@server/trpc/root";
-import { type TRPCLink, createTRPCClient } from "@trpc/client";
+import { QueryClient, type QueryClientConfig } from "@tanstack/react-query";
+import { TRPCClientError, type TRPCLink, createTRPCClient } from "@trpc/client";
 
 const captured = vi.hoisted(() => ({
-  config: undefined as undefined | (() => { links: TRPCLink<AppRouter>[] }),
+  config: undefined as
+    | undefined
+    | (() => {
+        links: TRPCLink<AppRouter>[];
+        queryClientConfig: QueryClientConfig;
+      }),
 }));
 vi.mock("@trpc/next", () => ({
   createTRPCNext: (options: { config: typeof captured.config }) => {
@@ -15,6 +21,7 @@ vi.mock("@trpc/next", () => ({
 }));
 vi.mock("next-auth/react", () => ({ signOut: vi.fn() }));
 await import("./trpc");
+const { signOut } = await import("next-auth/react");
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -76,4 +83,26 @@ it("delivers essential batches while analytics, badges and calendar feeds are pe
   expect(releases).toHaveLength(3);
   releases.forEach((release) => release());
   await secondary;
+});
+
+it("signs out on an unauthorized mutation even when it reports its own error", async () => {
+  vi.stubGlobal("window", {});
+  const queryClient = new QueryClient(captured.config!().queryClientConfig);
+  const onError = vi.fn();
+  const mutation = queryClient.getMutationCache().build(queryClient, {
+    mutationFn: () =>
+      Promise.reject(
+        TRPCClientError.from({
+          error: {
+            message: "UNAUTHORIZED",
+            code: -32001,
+            data: { code: "UNAUTHORIZED" },
+          },
+        }),
+      ),
+    onError,
+  });
+  await expect(mutation.execute(undefined)).rejects.toThrow("UNAUTHORIZED");
+  expect(onError).toHaveBeenCalledOnce();
+  expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/login" });
 });

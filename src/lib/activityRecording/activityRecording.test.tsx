@@ -9,7 +9,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { computePaceZoneDistribution } from "~/components/charts/PaceCard/paceDistribution";
 import { computePowerZoneDistribution } from "~/components/charts/PowerCurve/powerDistribution";
 import { DEFAULT_RIDER_SETTINGS_TIMELINE } from "~/sensors/types";
-import { computeZoneSeconds } from "~/server/lib/computeScores";
+import { scoreActivity } from "~/server/lib/activityScoring";
 import { resolveRiderSettings } from "~/utils/resolveRiderSettings";
 
 import { activitySettingsDay, useActivityRecording } from ".";
@@ -183,28 +183,33 @@ describe("time base", () => {
       watts,
       velocity_smooth: speeds,
     });
-    const server = computeZoneSeconds({
-      isRunning: true,
-      hasPowerMetrics: true,
-      settings: {
-        ftp,
-        maxHr: 0,
-        restingHr: 0,
-        runThresholdPace: thresholdSpeed,
-      },
-      timeData: time,
-      wattsData: watts,
-      velocityData: speeds,
-    });
+    // Power zones apply to rides and pace zones to runs.
+    const serverZones = (type: string) =>
+      scoreActivity({
+        activity: {
+          type,
+          startDateLocal: "2026-01-01T08:00:00Z",
+          movingTime: 31,
+          distance: 0,
+          weightedAverageWatts: null,
+        },
+        streams: { time, watts, velocity_smooth: speeds },
+        riderSettings: {
+          initialValues: { ftp, runThresholdPace: thresholdSpeed },
+          changes: [],
+        },
+      }).zoneSeconds;
+    const ride = serverZones("Ride");
+    const run = serverZones("Run");
 
     const power = computePowerZoneDistribution(recording.perSecond.watts!, ftp);
-    expect(power[0].seconds).toBe(server?.powerCoastingSeconds);
-    expect(power.slice(1).map((zone) => zone.seconds)).toEqual(server?.power);
+    expect(power[0].seconds).toBe(ride?.powerCoastingSeconds);
+    expect(power.slice(1).map((zone) => zone.seconds)).toEqual(ride?.power);
     const pace = computePaceZoneDistribution(
       recording.perSecond.velocity_smooth!,
       thresholdSpeed,
     );
-    expect(pace.map((zone) => zone.seconds)).toEqual(server?.pace);
+    expect(pace.map((zone) => zone.seconds)).toEqual(run?.pace);
     // Each sample counted as one second would put 12 s in the zones, not 32.
     expect(power.reduce((sum, zone) => sum + zone.seconds, 0)).toBe(32);
   });
