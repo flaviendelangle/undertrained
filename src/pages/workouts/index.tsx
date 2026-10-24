@@ -5,6 +5,8 @@ import type { GetServerSideProps } from "next";
 import Link from "next/link";
 
 import type { ListStructuredWorkout } from "@server/db/types";
+import { useQueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 
 import { QueryState } from "~/components/primitives/QueryState";
 import { SearchInput } from "~/components/primitives/SearchInput";
@@ -107,6 +109,7 @@ const WorkoutsPage: NextPageWithLayout = () => {
   const t = useT();
   const athleteId = useAthleteId();
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const [search, setSearch] = React.useState("");
 
   const {
@@ -121,7 +124,18 @@ const WorkoutsPage: NextPageWithLayout = () => {
 
   const invalidate = () => utils.structuredWorkouts.list.invalidate();
   const deleteMutation = trpc.structuredWorkouts.delete.useMutation({
-    onSuccess: invalidate,
+    onSuccess: (_data, input) => {
+      // So that going back to its editor or ride page reports it gone instead
+      // of opening the deleted workout from the cache.
+      queryClient.removeQueries({
+        queryKey: getQueryKey(
+          trpc.structuredWorkouts.get,
+          { athleteId: input.athleteId, id: input.id },
+          "query",
+        ),
+      });
+      return invalidate();
+    },
     onError: () => showErrorToast(t("common.deleteError")),
   });
   const duplicateMutation = trpc.structuredWorkouts.duplicate.useMutation({
