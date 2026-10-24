@@ -174,8 +174,7 @@ export function LinkActivityPrompt() {
       promptResolvedThisLoad ||
       batch != null ||
       !isReady ||
-      watermark == null ||
-      athleteId == null
+      watermark == null
     ) {
       return;
     }
@@ -221,14 +220,10 @@ export function LinkActivityPrompt() {
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
-    if (!next && athleteId != null && batch != null) {
+    if (!next && batch != null) {
       acknowledgeMut.mutate({ athleteId, watermark: batch.watermark });
     }
   };
-
-  if (athleteId == null) {
-    return null;
-  }
 
   return (
     <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>

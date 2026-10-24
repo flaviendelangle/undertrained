@@ -11,10 +11,7 @@ interface TimePeriodMapProps {
 export function TimePeriodMap({ periodId }: TimePeriodMapProps) {
   const athleteId = useAthleteId();
   const selection = useActivitySelection("period", { timePeriodId: periodId });
-  const { data } = trpc.activities.maps.useQuery(
-    { athleteId: athleteId!, ...selection },
-    { enabled: !!athleteId },
-  );
+  const { data } = trpc.activities.maps.useQuery({ athleteId, ...selection });
 
   return <Map activities={data ?? null} boldRoutes />;
 }

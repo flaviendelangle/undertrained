@@ -56,10 +56,7 @@ export function ActivityFilterPanel({
     useActivityFilterOptions();
   const filter = useActivityFilter();
   const athleteId = useAthleteId();
-  const { data: periods } = trpc.timePeriods.list.useQuery(
-    { athleteId: athleteId! },
-    { enabled: !!athleteId },
-  );
+  const { data: periods } = trpc.timePeriods.list.useQuery({ athleteId });
   const availableWorkoutGroups = WORKOUT_TYPE_GROUPS.map((group) => ({
     ...group,
     presentTypes: group.types.filter((type) => workoutTypes?.includes(type)),

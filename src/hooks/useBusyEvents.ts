@@ -27,10 +27,9 @@ export function useBusyEvents() {
   const { masterEnabled, hiddenIds } = useBusyCalendars();
 
   // Gate the (outbound-fetching) events query on there being a calendar to fetch.
-  const { data: subscriptions } = trpc.calendarSubscriptions.list.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  const { data: subscriptions } = trpc.calendarSubscriptions.list.useQuery({
+    athleteId,
+  });
   const hasSubscriptions = (subscriptions?.length ?? 0) > 0;
 
   const window = React.useMemo(() => {
@@ -42,9 +41,9 @@ export function useBusyEvents() {
   }, []);
 
   const result = trpc.calendarSubscriptions.events.useQuery(
-    { athleteId: athleteId!, from: window.from, to: window.to },
+    { athleteId, from: window.from, to: window.to },
     {
-      enabled: athleteId != null && masterEnabled && hasSubscriptions,
+      enabled: masterEnabled && hasSubscriptions,
       staleTime: 10 * 60_000,
       refetchOnWindowFocus: false,
       // Parsing external feeds can be slow; never let it block the journal's

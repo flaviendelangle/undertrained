@@ -108,7 +108,7 @@ function CalendarForm({
     const finalName = name.trim() || parsed.hostname;
     if (existing) {
       updateMut.mutate({
-        athleteId: athleteId!,
+        athleteId,
         id: existing.id,
         name: finalName,
         icalUrl: parsed.toString(),
@@ -116,7 +116,7 @@ function CalendarForm({
       });
     } else {
       createMut.mutate({
-        athleteId: athleteId!,
+        athleteId,
         name: finalName,
         icalUrl: parsed.toString(),
         color,
@@ -273,10 +273,9 @@ export function CalendarOverlayPanel() {
   const utils = trpc.useUtils();
   const { masterEnabled, setMasterEnabled } = useBusyCalendars();
 
-  const { data: calendars } = trpc.calendarSubscriptions.list.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  const { data: calendars } = trpc.calendarSubscriptions.list.useQuery({
+    athleteId,
+  });
 
   // `null` = list view; "new" = add form; a row = edit form for that calendar.
   const [editing, setEditing] = React.useState<
@@ -330,10 +329,7 @@ export function CalendarOverlayPanel() {
                   confirmLabel={t("journal.calendars.remove")}
                   pendingLabel={t("common.deleting")}
                   onConfirm={() =>
-                    removeMut.mutateAsync({
-                      athleteId: athleteId!,
-                      id: calendar.id,
-                    })
+                    removeMut.mutateAsync({ athleteId, id: calendar.id })
                   }
                 />
               </div>

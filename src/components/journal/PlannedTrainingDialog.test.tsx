@@ -13,12 +13,9 @@ import {
 } from "@testing-library/react";
 
 import { ToastProvider } from "~/components/ui/toast";
-import { createTestBackend } from "~/utils/trpcTestBackend";
+import { TEST_ATHLETE_ID, createTestBackend } from "~/utils/trpcTestBackend";
 
 import { PlannedTrainingDialog } from "./PlannedTrainingDialog";
-
-const ATHLETE_ID = 7;
-vi.mock("~/hooks/useAthleteId", () => ({ useAthleteId: () => ATHLETE_ID }));
 
 const activity = {
   id: 3,
@@ -33,7 +30,7 @@ vi.mock("~/hooks/useActivitiesQuery", () => ({
 
 const plan = {
   id: 17,
-  athlete: ATHLETE_ID,
+  athlete: TEST_ATHLETE_ID,
   title: "Tempo",
   plannedDate: "2026-08-10T07:00:00",
   durationSeconds: 60 * 60,

@@ -30,7 +30,6 @@ const SettingsPage: NextPageWithLayout = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
 
   const handleDeleteAllData = React.useCallback(async () => {
-    if (!athleteId) return;
     setDeleting(true);
     try {
       await deleteAllData.mutateAsync({ athleteId });

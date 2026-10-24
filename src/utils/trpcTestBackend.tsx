@@ -7,6 +7,8 @@ import { createTRPCReact } from "@trpc/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 
+import { AthleteIdContext } from "~/hooks/useAthleteId";
+
 type Inputs = inferRouterInputs<AppRouter>;
 type Outputs = inferRouterOutputs<AppRouter>;
 
@@ -69,6 +71,9 @@ function memoryLink(procedures: TestProcedures): TRPCLink<AppRouter> {
 
 const testHooks = createTRPCReact<AppRouter>();
 
+/** The athlete id the backend's wrapper provides, as `LoggedInLayout` does. */
+export const TEST_ATHLETE_ID = 7;
+
 /**
  * A provider for rendering the app's hooks against `procedures` instead of the
  * server. The hooks keep using the real `trpc` proxy, which reads its client
@@ -85,7 +90,9 @@ export function createTestBackend(procedures: TestProcedures) {
     return (
       <testHooks.Provider client={client} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          {children}
+          <AthleteIdContext value={TEST_ATHLETE_ID}>
+            {children}
+          </AthleteIdContext>
         </QueryClientProvider>
       </testHooks.Provider>
     );

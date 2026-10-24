@@ -40,8 +40,6 @@ export function ExportPanel(props: ExportPanelProps) {
   };
 
   const handleUploadToStrava = async () => {
-    if (!athleteId) return;
-
     setUploadState("uploading");
     setErrorMsg(null);
 
@@ -114,11 +112,7 @@ export function ExportPanel(props: ExportPanelProps) {
 
       <button
         onClick={handleUploadToStrava}
-        disabled={
-          uploadState === "uploading" ||
-          uploadState === "processing" ||
-          !athleteId
-        }
+        disabled={uploadState === "uploading" || uploadState === "processing"}
         className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500 disabled:opacity-50"
       >
         {uploadState === "uploading"

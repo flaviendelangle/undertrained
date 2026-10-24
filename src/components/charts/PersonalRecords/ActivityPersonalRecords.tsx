@@ -66,10 +66,10 @@ function ActivityPersonalRecordsImpl({
 }) {
   const t = useT();
   const athleteId = useAthleteId();
-  const { data } = trpc.records.getActivityRankings.useQuery(
-    { athleteId: athleteId!, stravaId },
-    { enabled: athleteId != null },
-  );
+  const { data } = trpc.records.getActivityRankings.useQuery({
+    athleteId,
+    stravaId,
+  });
 
   const groups = React.useMemo(() => groupActivityRankings(data ?? []), [data]);
 
