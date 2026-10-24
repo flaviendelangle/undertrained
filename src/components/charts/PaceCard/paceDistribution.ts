@@ -19,8 +19,6 @@
  */
 import { RUNNING_PACE_ZONES, findRunningPaceZone } from "~/sensors/paceZones";
 
-import { paceFromSpeed } from "./paceOverTime";
-
 /**
  * Slowest pace (s/km) kept in the slice histogram. Samples slower than this
  * (≈ standing still or a long stop) are dropped so a handful of near-zero speed
@@ -153,6 +151,14 @@ export function computePaceSliceDistribution(
   }
 
   return slices;
+}
+
+/**
+ * Convert a running speed (m/s) to pace in seconds per kilometre. Non-positive
+ * or non-finite speeds (a stop) have no finite pace and return `Infinity`.
+ */
+export function paceFromSpeed(speed: number): number {
+  return speed > 0 && Number.isFinite(speed) ? 1000 / speed : Infinity;
 }
 
 /** Convert a pace (s/km) back to speed (m/s) for zone classification. */

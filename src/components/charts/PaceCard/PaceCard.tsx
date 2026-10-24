@@ -14,15 +14,16 @@ import {
 import { trpc } from "~/utils/trpc";
 
 import { ChartMessage } from "../ChartMessage";
+import { MetricOverTime } from "../MetricAnalysis/MetricOverTime";
+import { MetricSliceDistribution } from "../MetricAnalysis/MetricSliceDistribution";
+import { MetricZoneDistribution } from "../MetricAnalysis/MetricZoneDistribution";
 import {
   ChartSettingsPopover,
   SliceWidthSettings,
   iconTabOption,
 } from "../shared/chartSettings";
 import { createSliceWidthStore } from "../shared/createSliceWidthStore";
-import { PaceOverTime } from "./PaceOverTime";
-import { PaceSliceDistribution } from "./PaceSliceDistribution";
-import { PaceZoneDistribution } from "./PaceZoneDistribution";
+import { PACE_METRIC } from "./paceMetric";
 
 type PaceTab = "timeline" | "zones" | "distribution";
 
@@ -114,16 +115,21 @@ const PaceCard = React.memo(function PaceCard({ stravaId }: PaceCardProps) {
         (recording == null ? (
           <StreamLoading />
         ) : (
-          <PaceOverTime speeds={speeds} thresholdSpeed={thresholdSpeed} />
+          <MetricOverTime
+            metric={PACE_METRIC}
+            values={speeds}
+            threshold={thresholdSpeed}
+          />
         ))}
 
       {tab === "zones" &&
         (recording == null ? (
           <StreamLoading />
         ) : (
-          <PaceZoneDistribution
-            speeds={speeds}
-            thresholdSpeed={thresholdSpeed}
+          <MetricZoneDistribution
+            metric={PACE_METRIC}
+            values={speeds}
+            threshold={thresholdSpeed}
           />
         ))}
 
@@ -131,11 +137,12 @@ const PaceCard = React.memo(function PaceCard({ stravaId }: PaceCardProps) {
         (recording == null ? (
           <StreamLoading />
         ) : (
-          <PaceSliceDistribution
-            speeds={speeds}
-            thresholdSpeed={thresholdSpeed}
+          <MetricSliceDistribution
+            metric={PACE_METRIC}
+            values={speeds}
+            threshold={thresholdSpeed}
             sliceWidth={paceSliceWidth.clampSliceWidth(sliceWidth)}
-            averageSpeed={averageSpeed}
+            reference={averageSpeed}
           />
         ))}
     </ChartCard>

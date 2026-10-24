@@ -5,7 +5,21 @@ import { RUNNING_PACE_ZONES } from "~/sensors/paceZones";
 import {
   computePaceSliceDistribution,
   computePaceZoneDistribution,
+  paceFromSpeed,
 } from "./paceDistribution";
+
+describe("paceFromSpeed", () => {
+  it("converts m/s to seconds per km", () => {
+    expect(paceFromSpeed(4)).toBe(250); // 4 m/s → 4:10 /km
+    expect(paceFromSpeed(5)).toBe(200); // 5 m/s → 3:20 /km
+  });
+
+  it("has no finite pace for a stop", () => {
+    expect(paceFromSpeed(0)).toBe(Infinity);
+    expect(paceFromSpeed(-3)).toBe(Infinity);
+    expect(paceFromSpeed(NaN)).toBe(Infinity);
+  });
+});
 
 describe("computePaceZoneDistribution", () => {
   it("returns every zone (Z1→Z5c) even when empty", () => {
