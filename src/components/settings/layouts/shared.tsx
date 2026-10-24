@@ -105,9 +105,7 @@ export function LoadAlgorithmFields({
       className={`grid grid-cols-1 gap-5 sm:grid-cols-${LOAD_ALGORITHM_CONFIGS.length}`}
     >
       {LOAD_ALGORITHM_CONFIGS.map((config) => {
-        const currentValue = (timeline as unknown as Record<string, string>)[
-          config.key
-        ];
+        const currentValue = timeline[config.key];
         return (
           <div key={config.key} className="flex flex-col gap-2">
             <Label>{t(config.labelKey)}</Label>

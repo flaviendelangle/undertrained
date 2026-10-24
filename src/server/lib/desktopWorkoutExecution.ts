@@ -21,7 +21,7 @@ export function desktopReferenceFtp(
 ) {
   return (
     resolveConfiguredFtp(settings ?? DEFAULT_RIDER_SETTINGS_TIMELINE, date) ??
-    DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.ftp!
+    DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues.ftp
   );
 }
 
@@ -46,7 +46,7 @@ export function desktopRider(
     weightKg:
       weightKg != null && Number.isFinite(weightKg) && weightKg > 0
         ? weightKg
-        : defaults.initialValues.weightKg!,
+        : defaults.initialValues.weightKg,
     bikeWeightKg: settings?.bikeWeightKg ?? defaults.bikeWeightKg,
     cdA: settings?.cdA ?? defaults.cdA,
     crr: settings?.crr ?? defaults.crr,

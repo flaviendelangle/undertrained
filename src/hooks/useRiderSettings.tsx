@@ -14,6 +14,7 @@ import {
   resolveCurrentRiderSettings,
   resolveRiderSettings,
 } from "~/utils/resolveRiderSettings";
+import { mapTimeVaryingFields } from "~/utils/riderSettingsSchema";
 import { trpc } from "~/utils/trpc";
 
 interface RiderSettingsContextValue {
@@ -74,24 +75,12 @@ export function RiderSettingsProvider({
             bikeWeightKg:
               stored.bikeWeightKg ??
               DEFAULT_RIDER_SETTINGS_TIMELINE.bikeWeightKg,
-            cyclingLoadAlgorithm:
-              (stored.cyclingLoadAlgorithm as "tss" | "hrss") ??
-              DEFAULT_RIDER_SETTINGS_TIMELINE.cyclingLoadAlgorithm,
-            runningLoadAlgorithm:
-              (stored.runningLoadAlgorithm as "rtss" | "hrss") ??
-              DEFAULT_RIDER_SETTINGS_TIMELINE.runningLoadAlgorithm,
-            swimmingLoadAlgorithm:
-              (stored.swimmingLoadAlgorithm as "stss" | "hrss") ??
-              DEFAULT_RIDER_SETTINGS_TIMELINE.swimmingLoadAlgorithm,
-            initialValues: {
-              ftp: stored.initialValues.ftp ?? null,
-              weightKg: stored.initialValues.weightKg ?? null,
-              restingHr: stored.initialValues.restingHr ?? null,
-              maxHr: stored.initialValues.maxHr ?? null,
-              lthr: stored.initialValues.lthr ?? null,
-              runThresholdPace: stored.initialValues.runThresholdPace ?? null,
-              swimThresholdPace: stored.initialValues.swimThresholdPace ?? null,
-            },
+            cyclingLoadAlgorithm: stored.cyclingLoadAlgorithm,
+            runningLoadAlgorithm: stored.runningLoadAlgorithm,
+            swimmingLoadAlgorithm: stored.swimmingLoadAlgorithm,
+            initialValues: mapTimeVaryingFields(
+              (field) => stored.initialValues[field] ?? null,
+            ),
             changes: stored.changes,
           }
         : DEFAULT_RIDER_SETTINGS_TIMELINE),
@@ -101,20 +90,7 @@ export function RiderSettingsProvider({
   const setTimeline = React.useCallback(
     (newTimeline: RiderSettingsTimeline) => {
       setDraft(newTimeline);
-      save(
-        {
-          athleteId,
-          cdA: newTimeline.cdA,
-          crr: newTimeline.crr,
-          bikeWeightKg: newTimeline.bikeWeightKg,
-          cyclingLoadAlgorithm: newTimeline.cyclingLoadAlgorithm,
-          runningLoadAlgorithm: newTimeline.runningLoadAlgorithm,
-          swimmingLoadAlgorithm: newTimeline.swimmingLoadAlgorithm,
-          initialValues: newTimeline.initialValues,
-          changes: newTimeline.changes,
-        },
-        { onSuccess: () => setDraft(null) },
-      );
+      save({ athleteId, ...newTimeline }, { onSuccess: () => setDraft(null) });
     },
     [athleteId, save],
   );

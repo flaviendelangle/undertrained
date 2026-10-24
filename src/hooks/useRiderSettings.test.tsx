@@ -10,15 +10,23 @@ import {
   DEFAULT_RIDER_SETTINGS_TIMELINE,
   type RiderSettingsTimeline,
 } from "~/sensors/types";
+import type { riderSettings } from "~/server/db/schema";
+import { riderSettingsTimelineSchema } from "~/utils/riderSettingsSchema";
 
 import {
   RiderSettingsProvider,
   useRiderSettingsTimeline,
 } from "./useRiderSettings";
 
+/** The columns of a stored row that the provider reads. */
+type StoredSettings = Pick<
+  typeof riderSettings.$inferSelect,
+  keyof RiderSettingsTimeline
+>;
+
 const backend = vi.hoisted(() => ({
   save: vi.fn(),
-  stored: null as RiderSettingsTimeline | null,
+  stored: null as StoredSettings | null,
 }));
 vi.mock("./useAthleteId", () => ({ useAthleteId: () => 1 }));
 vi.mock("~/utils/trpc", async () => {
@@ -147,4 +155,21 @@ it("does not treat the fallback timeline as configured FTP before settings exist
   const { result } = renderHook(useRiderSettingsTimeline, { wrapper });
   await waitFor(() => expect(client.isFetching()).toBe(0));
   expect(result.current.configuredFtp).toBeNull();
+});
+
+it("loads a baseline field an older row lacks as unset, and saves it in a shape the server accepts", async () => {
+  const { swimThresholdPace: _, ...initialValues } =
+    DEFAULT_RIDER_SETTINGS_TIMELINE.initialValues;
+  backend.stored = { ...DEFAULT_RIDER_SETTINGS_TIMELINE, initialValues };
+  const { result } = renderHook(useRiderSettingsTimeline, { wrapper });
+  await waitFor(() => expect(result.current.hasSettings).toBe(true));
+  expect(result.current.timeline.initialValues.swimThresholdPace).toBeNull();
+  act(() =>
+    result.current.setTimeline({ ...result.current.timeline, cdA: 0.3 }),
+  );
+  await waitFor(() => expect(backend.save).toHaveBeenCalledTimes(1));
+  expect(
+    riderSettingsTimelineSchema.safeParse(backend.save.mock.calls[0][0])
+      .success,
+  ).toBe(true);
 });

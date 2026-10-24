@@ -29,7 +29,7 @@ export function MetricSparkline({
   const tokens = useChartTokens();
 
   const data = useMemo(() => {
-    const start = timeline.initialValues[field] ?? DEFAULTS[field]!;
+    const start = timeline.initialValues[field] ?? DEFAULTS[field];
     const values: number[] = [start];
     let current = start;
     for (const change of timeline.changes) {

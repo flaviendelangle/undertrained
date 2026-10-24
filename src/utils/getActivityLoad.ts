@@ -1,6 +1,9 @@
 import type { RiderSettingsTimeline } from "~/sensors/types";
 
+import type { LoadAlgorithmPreferences } from "./riderSettingsSchema";
 import { getSportConfig } from "./sportConfig";
+
+export type { LoadAlgorithmPreferences };
 
 interface ActivityLike {
   type: string;
@@ -9,12 +12,6 @@ interface ActivityLike {
   /** Strava's RPE (1-10), the last-resort load source. */
   perceivedExertion: number | null;
   movingTime: number;
-}
-
-export interface LoadAlgorithmPreferences {
-  cyclingLoadAlgorithm: "tss" | "hrss";
-  runningLoadAlgorithm: "rtss" | "hrss";
-  swimmingLoadAlgorithm: "stss" | "hrss";
 }
 
 /** Extracts the per-sport load-algorithm preferences from a rider timeline. */
