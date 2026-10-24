@@ -7,19 +7,18 @@ import {
   activityFilterInput,
   selectActivities,
 } from "../../lib/activitySelection";
-import { protectedProcedure, router, validateAthleteOwnership } from "../index";
+import { athleteProcedure, router } from "../index";
 
 // The raw queries below name the table `a`, so their selection has to as well.
 const a = alias(activities, "a");
 
 export const analyticsRouter = router({
-  getPowerDistribution: protectedProcedure
+  getPowerDistribution: athleteProcedure
     .input(
       activityFilterInput.extend({
         timePeriodId: z.number().int().positive(),
       }),
     )
-    .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
       const selected = await selectActivities(ctx.db, input);
       const rows = await ctx.db
@@ -49,9 +48,8 @@ export const analyticsRouter = router({
         .map(([watts, seconds]) => ({ watts, seconds }));
     }),
 
-  getPowerCurve: protectedProcedure
+  getPowerCurve: athleteProcedure
     .input(activityFilterInput)
-    .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
       const selected = await selectActivities(ctx.db, input, a);
       const rows = await ctx.db.execute<{
@@ -100,9 +98,8 @@ export const analyticsRouter = router({
       }));
     }),
 
-  getPowerCurveYears: protectedProcedure
+  getPowerCurveYears: athleteProcedure
     .input(activityFilterInput)
-    .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
       const selected = await selectActivities(ctx.db, input, a);
       const rows = await ctx.db.execute<{ year: string }>(sql`

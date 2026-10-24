@@ -9,12 +9,7 @@ import {
 } from "../../../utils/routeProfiles";
 import { routes } from "../../db/schema";
 import { getDirections } from "../../lib/openRouteService";
-import {
-  protectedProcedure,
-  routePreviewRateLimited,
-  router,
-  validateAthleteOwnership,
-} from "../index";
+import { athleteProcedure, routePreviewRateLimited, router } from "../index";
 
 // [lat, lng] anchor tuple. ORS caps a single directions request at 50 waypoints.
 const waypointSchema = z.tuple([
@@ -40,15 +35,13 @@ export const routesRouter = router({
    * Road-snaps the given waypoints via OpenRouteService. Pure proxy used live
    * while drawing — nothing is persisted. Rate-limited to protect the ORS quota.
    */
-  preview: protectedProcedure
+  preview: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         profile: profileSchema,
         waypoints: z.array(waypointSchema).min(2).max(50),
       }),
     )
-    .use(validateAthleteOwnership)
     .use(routePreviewRateLimited)
     .mutation(async ({ input }) => {
       const result = await getDirections(input.profile, input.waypoints);
@@ -63,20 +56,16 @@ export const routesRouter = router({
       };
     }),
 
-  list: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      return ctx.db
-        .select()
-        .from(routes)
-        .where(eq(routes.athlete, input.athleteId))
-        .orderBy(desc(routes.createdAt));
-    }),
+  list: athleteProcedure.query(async ({ ctx, input }) => {
+    return ctx.db
+      .select()
+      .from(routes)
+      .where(eq(routes.athlete, input.athleteId))
+      .orderBy(desc(routes.createdAt));
+  }),
 
-  get: protectedProcedure
-    .input(z.object({ athleteId: z.number(), id: z.number() }))
-    .use(validateAthleteOwnership)
+  get: athleteProcedure
+    .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
       const [route] = await ctx.db
         .select()
@@ -90,9 +79,8 @@ export const routesRouter = router({
       return route;
     }),
 
-  create: protectedProcedure
-    .input(z.object({ athleteId: z.number(), ...routeFields }))
-    .use(validateAthleteOwnership)
+  create: athleteProcedure
+    .input(z.object(routeFields))
     .mutation(async ({ ctx, input }) => {
       const { athleteId, ...data } = input;
       const now = Date.now();
@@ -109,9 +97,8 @@ export const routesRouter = router({
       return row;
     }),
 
-  update: protectedProcedure
-    .input(z.object({ athleteId: z.number(), id: z.number(), ...routeFields }))
-    .use(validateAthleteOwnership)
+  update: athleteProcedure
+    .input(z.object({ id: z.number(), ...routeFields }))
     .mutation(async ({ ctx, input }) => {
       const { athleteId, id, ...data } = input;
       await ctx.db
@@ -124,9 +111,8 @@ export const routesRouter = router({
         .where(and(eq(routes.id, id), eq(routes.athlete, athleteId)));
     }),
 
-  delete: protectedProcedure
-    .input(z.object({ athleteId: z.number(), id: z.number() }))
-    .use(validateAthleteOwnership)
+  delete: athleteProcedure
+    .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db
         .delete(routes)

@@ -6,7 +6,7 @@ import { TRPCError } from "@trpc/server";
 
 import { activities, timePeriods } from "../../db/schema";
 import { selectActivities } from "../../lib/activitySelection";
-import { protectedProcedure, router, validateAthleteOwnership } from "../index";
+import { athleteProcedure, router } from "../index";
 
 // The raw queries below name the tables `a` and `p`, so their selection has to
 // as well.
@@ -55,9 +55,8 @@ function toTotals(row: TotalsRow | undefined) {
 }
 
 export const timePeriodsRouter = router({
-  getById: protectedProcedure
-    .input(z.object({ athleteId: z.number(), id: z.number() }))
-    .use(validateAthleteOwnership)
+  getById: athleteProcedure
+    .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
       const [period] = await ctx.db
         .select()
@@ -90,24 +89,16 @@ export const timePeriodsRouter = router({
       return { period, ...toTotals(stats) };
     }),
 
-  list: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      return ctx.db
-        .select()
-        .from(timePeriods)
-        .where(eq(timePeriods.athlete, input.athleteId))
-        .orderBy(timePeriods.startDate);
-    }),
+  list: athleteProcedure.query(async ({ ctx, input }) => {
+    return ctx.db
+      .select()
+      .from(timePeriods)
+      .where(eq(timePeriods.athlete, input.athleteId))
+      .orderBy(timePeriods.startDate);
+  }),
 
-  create: protectedProcedure
-    .input(
-      z
-        .object({ athleteId: z.number(), ...periodFields })
-        .refine(...startsBeforeEnd),
-    )
-    .use(validateAthleteOwnership)
+  create: athleteProcedure
+    .input(z.object(periodFields).refine(...startsBeforeEnd))
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.db
         .insert(timePeriods)
@@ -122,13 +113,10 @@ export const timePeriodsRouter = router({
       return row;
     }),
 
-  update: protectedProcedure
+  update: athleteProcedure
     .input(
-      z
-        .object({ athleteId: z.number(), id: z.number(), ...periodFields })
-        .refine(...startsBeforeEnd),
+      z.object({ id: z.number(), ...periodFields }).refine(...startsBeforeEnd),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       await ctx.db
         .update(timePeriods)
@@ -146,9 +134,8 @@ export const timePeriodsRouter = router({
         );
     }),
 
-  delete: protectedProcedure
-    .input(z.object({ athleteId: z.number(), id: z.number() }))
-    .use(validateAthleteOwnership)
+  delete: athleteProcedure
+    .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db
         .delete(timePeriods)
@@ -160,25 +147,22 @@ export const timePeriodsRouter = router({
         );
     }),
 
-  getStats: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      const periods = await ctx.db
-        .select()
-        .from(timePeriods)
-        .where(eq(timePeriods.athlete, input.athleteId))
-        .orderBy(desc(timePeriods.startDate));
+  getStats: athleteProcedure.query(async ({ ctx, input }) => {
+    const periods = await ctx.db
+      .select()
+      .from(timePeriods)
+      .where(eq(timePeriods.athlete, input.athleteId))
+      .orderBy(desc(timePeriods.startDate));
 
-      if (periods.length === 0) return [];
+    if (periods.length === 0) return [];
 
-      // Single query joining every period to the activities it selects
-      const selected = await selectActivities(
-        ctx.db,
-        { athleteId: input.athleteId, timePeriod: p },
-        a,
-      );
-      const rows = await ctx.db.execute<TotalsRow & { period_id: string }>(sql`
+    // Single query joining every period to the activities it selects
+    const selected = await selectActivities(
+      ctx.db,
+      { athleteId: input.athleteId, timePeriod: p },
+      a,
+    );
+    const rows = await ctx.db.execute<TotalsRow & { period_id: string }>(sql`
         SELECT p.id::text AS period_id, ${totalsColumns}
         FROM ${timePeriods} p
         LEFT JOIN ${activities} a ON ${selected}
@@ -186,11 +170,11 @@ export const timePeriodsRouter = router({
         GROUP BY p.id
       `);
 
-      const statsMap = new Map(rows.map((row) => [Number(row.period_id), row]));
+    const statsMap = new Map(rows.map((row) => [Number(row.period_id), row]));
 
-      return periods.map((period) => ({
-        period,
-        ...toTotals(statsMap.get(period.id)),
-      }));
-    }),
+    return periods.map((period) => ({
+      period,
+      ...toTotals(statsMap.get(period.id)),
+    }));
+  }),
 });
