@@ -27,11 +27,12 @@ const GLOBAL_FILTER_BY_VIEW = {
   statistics: [],
   // A time period's activity table and map show the whole period.
   period: [],
-  // The power card, on the statistics page and on a period's page with its
-  // zones and distribution tabs. The curve and its year list only forward
-  // sports and workout types, so honouring more there means sending it too.
+  // The power card. On the statistics page the curve and its year list honour
+  // the workout types; they only forward sports and workout types, so honouring
+  // more there means sending it too. On a period's page every tab shows the
+  // whole period, like its table and map.
   statisticsPowerCurve: ["workoutTypes"],
-  periodPowerCurve: ["workoutTypes"],
+  periodPowerCurve: [],
   periodPowerZones: [],
   periodPowerDistribution: [],
   // Pickers offer every activity, so the filter can't hide a valid choice.
