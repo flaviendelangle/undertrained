@@ -273,7 +273,8 @@ export function ActivitiesTable(props: {
     state: { globalFilter: props.searchFilter ?? "" },
     globalFilterFn,
     initialState: {
-      sorting: [{ id: "startDateLocal", desc: true }],
+      // A time period reads as a story, so it starts with the first activity.
+      sorting: [{ id: "startDateLocal", desc: props.timePeriodId == null }],
     },
   });
 
