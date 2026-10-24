@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { bisector } from "d3-array";
 
+import { useElementSize } from "~/hooks/useElementSize";
 import { formatKm, formatMeters } from "~/utils/format";
 
 const TOTAL_HEIGHT = 96;
@@ -28,20 +29,8 @@ export function ElevationProfile({
   onHoverPositionChange,
 }: ElevationProfileProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const [width, setWidth] = React.useState(0);
+  const { width } = useElementSize(containerRef);
   const [hoverIndex, setHoverIndex] = React.useState<number | null>(null);
-
-  React.useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setWidth(entry.contentRect.width);
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   const chartWidth = Math.max(0, width - LABEL_MARGIN);
   const drawHeight = CHART_HEIGHT - PADDING_TOP;
