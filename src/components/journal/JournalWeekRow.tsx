@@ -3,16 +3,12 @@ import * as React from "react";
 import { format, isSameMonth, startOfDay } from "date-fns";
 import { CalendarClockIcon } from "lucide-react";
 
-import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
-
 import {
-  Drawer,
-  DrawerContent,
-  DrawerTitle,
-  DrawerTrigger,
-} from "~/components/ui/drawer";
-import { PreviewCardContent } from "~/components/ui/preview-card";
-import { useIsMobile } from "~/hooks/useIsMobile";
+  ResponsivePopover,
+  ResponsivePopoverContent,
+  ResponsivePopoverTitle,
+  ResponsivePopoverTrigger,
+} from "~/components/ui/responsive-popover";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportCategoryLabel, weeklyVerdictLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
@@ -22,7 +18,6 @@ import { SPORT_CATEGORY_META } from "~/utils/sportConfig";
 
 import { JournalDayCell } from "./JournalDayCell";
 import { WeeklyLoadChart } from "./WeeklyLoadChart";
-import { useJournalPreviewHandles } from "./journalPreview";
 import type { JournalWeek } from "./useJournalWeeks";
 
 /** Fixed height of every week row, regardless of how many activities it holds. */
@@ -81,7 +76,7 @@ function VerdictChip({ week }: { week: JournalWeek }) {
   );
 }
 
-/** Hover-card detail for a week's summary. Only mounts while the card is open. */
+/** Detail card for a week's summary. Only mounts while the card is open. */
 function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
   const t = useT();
   const todayStart = startOfDay(new Date()).getTime();
@@ -185,31 +180,6 @@ function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
   );
 }
 
-/**
- * The single preview card shared by every week's Summary cell (desktop hover),
- * mounted once by the Journal. Each summary is a detached
- * `PreviewCard.Trigger` carrying its week as the payload, so one popup serves
- * all rows instead of a card instance per row. Mobile uses a per-cell Drawer
- * (see {@link WeekSummaryDisclosure}), so this never opens there.
- */
-export function WeekSummaryPreviewHost({
-  handle,
-}: {
-  handle: PreviewCardPrimitive.Handle<JournalWeek>;
-}) {
-  return (
-    <PreviewCardPrimitive.Root handle={handle}>
-      {({ payload }) =>
-        payload != null ? (
-          <PreviewCardContent side="left" align="center" className="w-80">
-            <WeekSummaryCardBody week={payload} />
-          </PreviewCardContent>
-        ) : null
-      }
-    </PreviewCardPrimitive.Root>
-  );
-}
-
 function WeekSummary({ week }: { week: JournalWeek }) {
   const t = useT();
   const hasActual = week.totalSeconds > 0;
@@ -232,8 +202,8 @@ function WeekSummary({ week }: { week: JournalWeek }) {
     );
   }
 
-  // The week's headline figures, shared by the desktop hover trigger and the
-  // mobile cell. The "still planned" line is hidden on mobile to save space.
+  // The week's headline figures. The "still planned" line is hidden on mobile
+  // to save space.
   const cellInner = (
     <>
       <div className="text-foreground text-sm font-semibold tabular-nums">
@@ -267,10 +237,9 @@ function WeekSummary({ week }: { week: JournalWeek }) {
 }
 
 /**
- * Reveals the week's detail card, picking the interaction to match the device:
- * a hover `PreviewCard` over the whole cell on desktop, and on mobile (where
- * there is no hover) a discrete "More info" button that opens the detail as a
- * bottom-sheet `Drawer`. Both reuse the same {@link WeekSummaryCardBody}.
+ * Reveals the week's detail card from a "More info" button under the headline
+ * figures: an anchored Popover on desktop, a bottom-sheet Drawer on mobile. A
+ * button rather than hover, so keyboard and touch users can reach it too.
  */
 function WeekSummaryDisclosure({
   week,
@@ -280,44 +249,31 @@ function WeekSummaryDisclosure({
   children: React.ReactNode;
 }) {
   const t = useT();
-  const isMobile = useIsMobile();
-  const handles = useJournalPreviewHandles();
-
-  if (isMobile) {
-    return (
-      <Drawer>
-        <div className={cn(SUMMARY_CELL, "gap-1")}>
-          {children}
-          <DrawerTrigger
-            render={
-              <button
-                type="button"
-                className="text-muted-foreground hover:text-foreground mt-0.5 w-fit text-[11px] whitespace-nowrap underline underline-offset-2"
-              />
-            }
-          >
-            {t("journal.moreInfo")}
-          </DrawerTrigger>
-        </div>
-        <DrawerContent>
-          {/* Screen-reader heading; the visible range lives in the body header. */}
-          <DrawerTitle className="sr-only">
-            {t("journal.weekSummaryTitle", {
-              range: formatWeekRange(week.weekStart, week.weekEnd),
-            })}
-          </DrawerTitle>
-          <WeekSummaryCardBody week={week} />
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
   return (
-    <PreviewCardPrimitive.Trigger
-      handle={handles.summary}
-      payload={week}
-      render={<div className={cn(SUMMARY_CELL, "gap-1")}>{children}</div>}
-    />
+    <ResponsivePopover>
+      <div className={cn(SUMMARY_CELL, "gap-1")}>
+        {children}
+        <ResponsivePopoverTrigger
+          render={
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground mt-0.5 w-fit cursor-pointer text-[11px] whitespace-nowrap underline underline-offset-2"
+            />
+          }
+        >
+          {t("journal.moreInfo")}
+        </ResponsivePopoverTrigger>
+      </div>
+      <ResponsivePopoverContent side="left" className="md:w-80 md:p-0">
+        {/* Screen-reader heading; the visible range lives in the body header. */}
+        <ResponsivePopoverTitle className="sr-only">
+          {t("journal.weekSummaryTitle", {
+            range: formatWeekRange(week.weekStart, week.weekEnd),
+          })}
+        </ResponsivePopoverTitle>
+        <WeekSummaryCardBody week={week} />
+      </ResponsivePopoverContent>
+    </ResponsivePopover>
   );
 }
 

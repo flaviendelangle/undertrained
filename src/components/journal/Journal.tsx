@@ -37,7 +37,6 @@ import { ActivityPreviewHost } from "./ActivityPreviewCard";
 import { CalendarFeedDialog } from "./CalendarFeedButton";
 import { JournalRecordsContext } from "./JournalDayCell";
 import { JournalMonthView } from "./JournalMonthView";
-import { WeekSummaryPreviewHost } from "./JournalWeekRow";
 import { JournalWeekView } from "./JournalWeekView";
 import {
   PlannedTrainingDialog,
@@ -50,7 +49,7 @@ import {
   JournalPreviewProvider,
 } from "./journalPreview";
 import { type JournalView, JournalViewContext } from "./journalView";
-import { type JournalWeek, useJournalWeeks } from "./useJournalWeeks";
+import { useJournalWeeks } from "./useJournalWeeks";
 
 const VIEW_OPTIONS: JournalView[] = ["month", "week"];
 
@@ -166,12 +165,11 @@ export function Journal() {
     [navigate],
   );
 
-  // The two hover cards shared across every activity chip and week summary —
-  // created once so a busy calendar mounts cheap detached triggers instead of a
-  // card instance per chip/row (see {@link JournalPreviewHandles}).
+  // The hover card shared across every activity chip — created once so a busy
+  // calendar mounts cheap detached triggers instead of a card instance per chip
+  // (see {@link JournalPreviewHandles}).
   const [previewHandles] = React.useState<JournalPreviewHandles>(() => ({
     activity: PreviewCard.createHandle<ActivityPreviewPayload>(),
-    summary: PreviewCard.createHandle<JournalWeek>(),
   }));
 
   // Planner dialog state, exposed to the day cells / event blocks via context so
@@ -319,9 +317,8 @@ export function Journal() {
                 />
               )}
 
-              {/* Shared hover cards: one popup each for all chips / week summaries. */}
+              {/* Shared hover card: one popup for all activity chips. */}
               <ActivityPreviewHost handle={previewHandles.activity} />
-              <WeekSummaryPreviewHost handle={previewHandles.summary} />
 
               <PlannedTrainingDialog
                 state={dialogState}
