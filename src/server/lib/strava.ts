@@ -1,10 +1,5 @@
 import { eq } from "drizzle-orm";
 import strava from "strava-v3";
-import type {
-  ActivityStats,
-  DetailedActivity,
-  DetailedSegmentEffort,
-} from "strava-v3";
 import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
@@ -12,7 +7,9 @@ import { TRPCError } from "@trpc/server";
 import type { Database } from "../db";
 import { athletes } from "../db/schema";
 import { env } from "../env";
-import type { StoredLap, StravaActivity, StravaStream } from "./stravaTypes";
+import { StravaError } from "./stravaPort";
+import type { StravaPort } from "./stravaPort";
+import type { StravaStream } from "./stravaTypes";
 
 const stravaTokenResponseSchema = z.object({
   access_token: z.string(),
@@ -224,55 +221,6 @@ export async function updateActivityOnStrava(
   }
 }
 
-export function getModelFromStravaActivity(
-  activity: StravaActivity,
-  athleteId: number,
-) {
-  return {
-    stravaId: activity.id,
-    athlete: athleteId,
-    type: activity.type,
-    name: activity.name,
-    startDate: activity.start_date,
-    startDateLocal: activity.start_date_local,
-    distance: activity.distance,
-    totalElevationGain: activity.total_elevation_gain,
-    averageSpeed: activity.average_speed,
-    averageWatts: activity.average_watts ?? undefined,
-    averageCadence: activity.average_cadence ?? undefined,
-    averageHeartrate: activity.average_heartrate ?? undefined,
-    maxHeartrate: activity.max_heartrate ?? undefined,
-    maxSpeed: activity.max_speed ?? undefined,
-    maxWatts: activity.max_watts ?? undefined,
-    weightedAverageWatts: activity.weighted_average_watts ?? undefined,
-    kilojoules: activity.kilojoules ?? undefined,
-    calories: activity.calories ?? undefined,
-    movingTime: activity.moving_time,
-    elapsedTime: activity.elapsed_time,
-    workoutType: activity.workout_type ?? undefined,
-    commute: activity.commute ?? false,
-    mapPolyline: activity.map?.summary_polyline ?? undefined,
-  };
-}
-
-/**
- * Extracts the fields that only live on the full DetailedActivity (not the
- * summary returned by `listActivities`). `perceived_exertion` (RPE) and
- * `private_note` are absent from the strava-v3 type, so we read them through a
- * loosened shape — same approach `getLapModels` uses for lap power.
- */
-export function getActivityDetailFields(detailed: DetailedActivity) {
-  const loose = detailed as DetailedActivity & {
-    perceived_exertion?: number | null;
-    private_note?: string | null;
-  };
-  return {
-    description: detailed.description ?? null,
-    perceivedExertion: loose.perceived_exertion ?? null,
-    privateNote: loose.private_note ?? null,
-  };
-}
-
 export function normalizeStreams(streams: unknown): {
   type: string;
   seriesType: string;
@@ -319,81 +267,148 @@ export async function fetchStreamsFromStrava(
   return streams ? normalizeStreams(streams) : [];
 }
 
+const RATE_LIMIT_WINDOW_MS = 15 * 60_000;
+
+/** When a Strava response last refreshed `strava.rateLimiting`. */
+let lastResponseAt = 0;
+
 /**
- * Fetches the athlete's curated all-time stats (biggest ride/climb, ride·run·swim
- * totals). One cheap call — Strava keeps these in sync with the athlete's edits.
+ * True while the last response said the read budget is spent and Strava's
+ * 15-minute window (it resets on the quarter-hour) hasn't rolled over since.
+ * strava-v3 updates `strava.rateLimiting` from every response's headers.
  */
-export async function fetchAthleteStats(
-  accessToken: string,
-  stravaAthleteId: number,
-): Promise<ActivityStats> {
-  return strava.athletes.stats({
-    access_token: accessToken,
-    id: String(stravaAthleteId),
-  });
+function readBudgetSpent(): boolean {
+  return (
+    strava.rateLimiting.readExceeded() &&
+    Math.floor(lastResponseAt / RATE_LIMIT_WINDOW_MS) ===
+      Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS)
+  );
+}
+
+/** Milliseconds until Strava's next rate-limit window, plus a small buffer. */
+function msUntilRateLimitReset(): number {
+  return RATE_LIMIT_WINDOW_MS - (Date.now() % RATE_LIMIT_WINDOW_MS) + 2_000;
+}
+
+function statusCodeOf(error: unknown): number | undefined {
+  return typeof error === "object" &&
+    error !== null &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number"
+    ? error.statusCode
+    : undefined;
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Translates a `getAccessToken` failure into the port's vocabulary. */
+function tokenError(error: unknown): StravaError {
+  // `getAccessToken` only says UNAUTHORIZED when Strava rejected the grant
+  // itself or there's no refresh token left. Anything else (the token
+  // endpoint down, our app credentials rejected) isn't the athlete's doing.
+  return new StravaError(
+    error instanceof TRPCError && error.code === "UNAUTHORIZED"
+      ? "grant_revoked"
+      : "token_unavailable",
+    messageOf(error),
+    { cause: error },
+  );
+}
+
+/** Translates a strava-v3 failure into the port's vocabulary. */
+function requestError(error: unknown): StravaError {
+  const message = messageOf(error);
+  switch (statusCodeOf(error)) {
+    case 404:
+      return new StravaError("not_found", message, { cause: error });
+    case 429:
+      return new StravaError("rate_limited", message, {
+        cause: error,
+        retryAfterMs: msUntilRateLimitReset(),
+      });
+    case 401:
+      return new StravaError(
+        "grant_revoked",
+        "Strava session expired. Please sign in again.",
+        { cause: error },
+      );
+    default:
+      return new StravaError("other", message, { cause: error });
+  }
 }
 
 /**
- * Fetches the full DetailedActivity, which (unlike the summary returned by
- * `listActivities`) includes `best_efforts` for run activities.
+ * The production {@link StravaPort}: strava-v3 calls made with the athlete's
+ * access token, refreshed when due, and every failure translated into a
+ * {@link StravaError}. While the read budget of the current window is spent,
+ * calls fail as `rate_limited` without reaching Strava.
  */
-export async function fetchDetailedActivity(
-  accessToken: string,
-  stravaId: number,
-): Promise<DetailedActivity> {
-  return strava.activities.get({
-    access_token: accessToken,
-    id: String(stravaId),
-  });
-}
+export function stravaApi(db: Database): StravaPort {
+  async function call<T>(
+    athleteId: number,
+    request: (accessToken: string) => Promise<T>,
+  ): Promise<T> {
+    if (readBudgetSpent()) {
+      throw new StravaError("rate_limited", "Strava read rate limit reached", {
+        retryAfterMs: msUntilRateLimitReset(),
+      });
+    }
+    let accessToken: string;
+    try {
+      accessToken = await getAccessToken(db, athleteId);
+    } catch (e) {
+      throw tokenError(e);
+    }
+    try {
+      const result = await request(accessToken);
+      lastResponseAt = Date.now();
+      return result;
+    } catch (e) {
+      // Only an HTTP response refreshes the rate-limit headers; a network
+      // failure leaves the previous window's state in place.
+      if (statusCodeOf(e) !== undefined) {
+        lastResponseAt = Date.now();
+      }
+      throw requestError(e);
+    }
+  }
 
-/**
- * Maps the `best_efforts` of a DetailedActivity into `bestEfforts` table rows.
- * Returns an empty array for activities without best efforts (treadmill/manual
- * runs), which is intentional — they still get marked as loaded.
- */
-export function getBestEffortModels(
-  activity: Pick<DetailedActivity, "best_efforts" | "start_date">,
-  activityId: number,
-) {
-  return (activity.best_efforts ?? []).map((e: DetailedSegmentEffort) => ({
-    activityId,
-    stravaEffortId: e.id ?? null,
-    name: e.name,
-    distance: e.distance ?? 0,
-    elapsedTime: e.elapsed_time,
-    movingTime: e.moving_time ?? null,
-    prRank: e.pr_rank ?? null,
-    startDate: e.start_date ?? activity.start_date,
-  }));
-}
-
-/**
- * Maps the `laps` of a DetailedActivity into the compact `StoredLap[]` we persist
- * on the activity row. `start_index`/`end_index` reference the stream samples, so
- * they map straight onto the Time Series chart. `average_watts` is present on the
- * Strava payload for power-equipped activities but missing from the strava-v3 type,
- * so we read it via a loosened shape.
- */
-export function getLapModels(
-  activity: Pick<DetailedActivity, "laps">,
-): StoredLap[] {
-  return (activity.laps ?? []).map((l) => {
-    const withPower = l as typeof l & {
-      average_watts?: number;
-      average_heartrate?: number;
-    };
-    return {
-      index: l.lap_index,
-      name: l.name,
-      startIndex: l.start_index,
-      endIndex: l.end_index,
-      elapsedTime: l.elapsed_time,
-      distance: l.distance,
-      averageSpeed: l.average_speed,
-      averageWatts: withPower.average_watts,
-      averageHeartrate: withPower.average_heartrate,
-      averageCadence: l.average_cadence,
-    };
-  });
+  return {
+    listActivities: (athleteId, { page, perPage, after }) =>
+      call(athleteId, (accessToken) =>
+        strava.athlete.listActivities({
+          access_token: accessToken,
+          per_page: perPage,
+          page,
+          ...(after != null ? { after } : {}),
+        }),
+      ),
+    getActivity: (athleteId, stravaId) =>
+      call(athleteId, (accessToken) =>
+        strava.activities.get({
+          access_token: accessToken,
+          id: String(stravaId),
+        }),
+      ),
+    getStreams: (athleteId, stravaId) =>
+      call(athleteId, (accessToken) =>
+        fetchStreamsFromStrava(accessToken, stravaId),
+      ),
+    async getAthleteStats(athleteId) {
+      const athlete = await db.query.athletes.findFirst({
+        where: eq(athletes.id, athleteId),
+      });
+      if (!athlete) {
+        throw new StravaError("other", `Athlete ${athleteId} not found`);
+      }
+      return call(athleteId, (accessToken) =>
+        strava.athletes.stats({
+          access_token: accessToken,
+          id: String(athlete.stravaAthleteId),
+        }),
+      );
+    },
+  };
 }

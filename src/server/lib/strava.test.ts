@@ -3,13 +3,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
 
 import type { Database } from "../db";
-import { getAccessToken } from "./strava";
+import { getAccessToken, stravaApi } from "./strava";
 
 // `strava.ts` validates the whole environment at import time; these cases only
 // need the OAuth client credentials.
 vi.mock("../env", () => ({
   env: { STRAVA_CLIENT_ID: "client-id", STRAVA_CLIENT_SECRET: "client-secret" },
 }));
+
+const stravaV3 = vi.hoisted(() => ({
+  activities: { get: vi.fn() },
+  rateLimiting: { readExceeded: vi.fn(() => false) },
+}));
+vi.mock("strava-v3", () => ({ default: stravaV3 }));
 
 const ATHLETE_ID = 7;
 
@@ -160,6 +166,90 @@ describe("refresh failures", () => {
       await expect(refreshCode(replies(status, {}))).resolves.toBe(
         "BAD_GATEWAY",
       );
+    }
+  });
+});
+
+// Ingestion reads these kinds: a 404 on streams means none, a rate limit is
+// waited out, a revoked grant stops a sync.
+describe("stravaApi", () => {
+  beforeEach(() => {
+    athleteRow!.tokenExpiresAt = Math.floor(Date.now() / 1000) + 3600;
+    stravaV3.activities.get.mockReset();
+    stravaV3.rateLimiting.readExceeded.mockReturnValue(false);
+  });
+
+  it.each([
+    [404, "not_found"],
+    [429, "rate_limited"],
+    [401, "grant_revoked"],
+    [500, "other"],
+  ])("reads a %i from Strava as %s", async (statusCode, kind) => {
+    stravaV3.activities.get.mockRejectedValue(
+      Object.assign(new Error("Request failed"), { statusCode }),
+    );
+    await expect(
+      stravaApi(db).getActivity(ATHLETE_ID, 1),
+    ).rejects.toMatchObject({ kind });
+  });
+
+  it("reads a rejected refresh token as a revoked grant", async () => {
+    athleteRow!.tokenExpiresAt = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(replies(400, refreshTokenRejected)),
+    );
+    await expect(
+      stravaApi(db).getActivity(ATHLETE_ID, 1),
+    ).rejects.toMatchObject({
+      kind: "grant_revoked",
+      message: "Strava session expired. Please sign in again.",
+    });
+  });
+
+  it.each([
+    ["our app's credentials are rejected", replies(400, applicationRejected)],
+    ["the token endpoint is down", replies(502, {})],
+  ])(
+    "reads a refresh failing because %s as an unavailable token",
+    async (_, response) => {
+      athleteRow!.tokenExpiresAt = 0;
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+      await expect(
+        stravaApi(db).getActivity(ATHLETE_ID, 1),
+      ).rejects.toMatchObject({ kind: "token_unavailable" });
+      expect(stravaV3.activities.get).not.toHaveBeenCalled();
+    },
+  );
+
+  it("stops calling Strava until the window resets once the read budget is spent", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-01-01T10:05:00Z"));
+      stravaV3.activities.get.mockResolvedValue({ id: 1 });
+      const api = stravaApi(db);
+      // This response reports the budget spent.
+      await api.getActivity(ATHLETE_ID, 1);
+      stravaV3.rateLimiting.readExceeded.mockReturnValue(true);
+
+      await expect(api.getActivity(ATHLETE_ID, 1)).rejects.toMatchObject({
+        kind: "rate_limited",
+        retryAfterMs: 10 * 60_000 + 2_000,
+      });
+      expect(stravaV3.activities.get).toHaveBeenCalledTimes(1);
+
+      vi.setSystemTime(new Date("2026-01-01T10:15:02Z"));
+      // A network failure carries no headers, so the spent budget stays stale.
+      stravaV3.activities.get.mockRejectedValueOnce(
+        new Error("socket hang up"),
+      );
+      await expect(api.getActivity(ATHLETE_ID, 1)).rejects.toMatchObject({
+        kind: "other",
+      });
+      await expect(api.getActivity(ATHLETE_ID, 1)).resolves.toEqual({ id: 1 });
+      expect(stravaV3.activities.get).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

@@ -4,13 +4,13 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import { workoutChoiceToValue } from "../../../utils/sportConfig";
-import { activities, riderSettings } from "../../db/schema";
+import { activities } from "../../db/schema";
 import {
   activityFilterInput,
   selectActivities,
 } from "../../lib/activitySelection";
 import { getAccessToken, updateActivityOnStrava } from "../../lib/strava";
-import { computeActivityScoresInternal } from "../../lib/sync";
+import { activityIngestion } from "../../lib/sync";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
 
 export const activitiesRouter = router({
@@ -217,16 +217,10 @@ export const activitiesRouter = router({
       // waiting for Strava's edit webhook — mirrors webhook.ts. Idempotent if the
       // webhook fires too.
       if (input.type !== activity.type) {
-        const settingsDoc =
-          (await ctx.db.query.riderSettings.findFirst({
-            where: eq(riderSettings.athlete, input.athleteId),
-          })) ?? null;
-        const updated = await ctx.db.query.activities.findFirst({
-          where: eq(activities.id, activity.id),
-        });
-        if (updated) {
-          await computeActivityScoresInternal(ctx.db, updated, settingsDoc);
-        }
+        await activityIngestion(ctx.db).rescoreActivity(
+          input.athleteId,
+          activity.id,
+        );
       }
     }),
 });

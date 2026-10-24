@@ -14,7 +14,7 @@ const db = drizzle(
 );
 
 vi.mock("../../db", () => ({ db }));
-vi.mock("../../lib/sync", () => ({ computeActivityScoresInternal: vi.fn() }));
+vi.mock("../../lib/sync", () => ({ activityIngestion: vi.fn() }));
 vi.mock("../../lib/strava", () => ({
   getAccessToken: vi.fn(),
   updateActivityOnStrava: vi.fn(),
