@@ -17,7 +17,6 @@ import { SharedLayout } from "~/components/layouts/SharedLayout";
 import { Button } from "~/components/ui/button";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
-import { authOptions } from "~/pages/api/auth/[...nextauth]";
 import {
   APPROVAL_SECONDS,
   CONSENT_ERROR_STATUS,
@@ -77,6 +76,10 @@ export const getServerSideProps: GetServerSideProps<
   };
   // Set by /api/desktop/authorize when it rejects an approval.
   if (isConsentError(query.error)) return fail(query.error);
+  // Imported here, not at the top: `next build` evaluates every page module,
+  // and the auth options pull in the env check, which fails without the
+  // runtime secrets the Docker build stage doesn't have.
+  const { authOptions } = await import("~/pages/api/auth/[...nextauth]");
   const session = await getServerSession(req, res, authOptions);
   if (!session) {
     // src/proxy.ts usually signs riders in first. The login page only returns
