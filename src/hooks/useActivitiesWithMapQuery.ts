@@ -10,8 +10,8 @@ export function useActivitiesWithMapQuery() {
   const athleteId = useAthleteId();
 
   const result = trpc.activities.maps.useQuery(
-    { athleteId: athleteId!, ...selection },
-    { enabled: athleteId != null, placeholderData: keepPreviousData },
+    { athleteId, ...selection },
+    { placeholderData: keepPreviousData },
   );
 
   return { data: result.data, isLoading: result.isLoading };

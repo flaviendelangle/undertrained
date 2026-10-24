@@ -66,7 +66,7 @@ function TimePeriodPageContent({ periodId }: { periodId: number }) {
   const athleteId = useAthleteId();
   const [mapExpanded, setMapExpanded] = React.useState(false);
   const [data] = trpc.timePeriods.getById.useSuspenseQuery({
-    athleteId: athleteId!,
+    athleteId,
     id: periodId,
   });
 
@@ -185,7 +185,7 @@ function DeletePeriodButton({
   athleteId,
   period,
 }: {
-  athleteId: number | undefined;
+  athleteId: number;
   period: { id: number; name: string };
 }) {
   const t = useT();
@@ -213,7 +213,6 @@ function DeletePeriodButton({
         confirmLabel={t("common.delete")}
         pendingLabel={t("periods.deleting")}
         onConfirm={async () => {
-          if (!athleteId) return;
           await deleteMutation.mutateAsync({ athleteId, id: period.id });
         }}
       />

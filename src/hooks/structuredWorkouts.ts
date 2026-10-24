@@ -24,10 +24,7 @@ interface WriteOptions {
 /** The library's grid: every workout, without its tree. */
 export function useStructuredWorkoutList() {
   const athleteId = useAthleteId();
-  return trpc.structuredWorkouts.list.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  return trpc.structuredWorkouts.list.useQuery({ athleteId });
 }
 
 /** One workout with its tree, for the editor, the ride page and the preview. */
@@ -37,8 +34,8 @@ export function useStructuredWorkout(
 ) {
   const athleteId = useAthleteId();
   return trpc.structuredWorkouts.get.useQuery(
-    { athleteId: athleteId!, id: id! },
-    { enabled: athleteId != null && id != null && (options?.enabled ?? true) },
+    { athleteId, id: id! },
+    { enabled: id != null && (options?.enabled ?? true) },
   );
 }
 

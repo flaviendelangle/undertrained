@@ -78,9 +78,8 @@ export function BuiltInWorkouts({ search }: { search: string }) {
                 </div>
                 <WorkoutActionsMenu
                   name={workout.name}
-                  pending={duplicate.isPending || !athleteId}
+                  pending={duplicate.isPending}
                   onDuplicate={() => {
-                    if (!athleteId) return;
                     duplicate.mutate({
                       athleteId,
                       name: `${workout.name} (2)`,

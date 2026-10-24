@@ -23,7 +23,6 @@ vi.mock("next/router", () => ({
     events: { on: vi.fn(), off: vi.fn() },
   }),
 }));
-vi.mock("~/hooks/useAthleteId", () => ({ useAthleteId: () => 1 }));
 vi.mock("~/hooks/useIsMobile", () => ({ useIsMobile: () => false }));
 vi.mock("~/hooks/useRiderSettings", () => ({
   useRiderSettingsTimeline: () => ({

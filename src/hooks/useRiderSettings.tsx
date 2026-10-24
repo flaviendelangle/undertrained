@@ -46,10 +46,7 @@ export function RiderSettingsProvider({
 }) {
   const athleteId = useAthleteId();
   const [draft, setDraft] = React.useState<RiderSettingsTimeline | null>(null);
-  const { data: stored } = trpc.riderSettings.get.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  const { data: stored } = trpc.riderSettings.get.useQuery({ athleteId });
   const utils = trpc.useUtils();
   const saveSettings = trpc.riderSettings.save.useMutation({
     scope: { id: "rider-settings-save" },
@@ -103,7 +100,6 @@ export function RiderSettingsProvider({
 
   const setTimeline = React.useCallback(
     (newTimeline: RiderSettingsTimeline) => {
-      if (athleteId == null) return;
       setDraft(newTimeline);
       save(
         {

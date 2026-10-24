@@ -23,8 +23,8 @@ const EditRoutePage: NextPageWithLayout = () => {
   const routeId = Number(router.query.routeId);
 
   const { data: route, isLoading } = trpc.routes.get.useQuery(
-    { athleteId: athleteId!, id: routeId },
-    { enabled: !!athleteId && Number.isFinite(routeId) },
+    { athleteId, id: routeId },
+    { enabled: Number.isFinite(routeId) },
   );
 
   return (

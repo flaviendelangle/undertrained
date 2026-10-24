@@ -205,15 +205,12 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
   const queryResults = trpc.useQueries(
     (t) =>
       queryRanges.map((range) =>
-        t.analytics.getPowerCurve(
-          {
-            athleteId: athleteId!,
-            activityTypes: SINGLE_ACTIVITY_TYPES,
-            dateFrom: range.dateFrom,
-            dateTo: range.dateTo,
-          },
-          { enabled: athleteId != null },
-        ),
+        t.analytics.getPowerCurve({
+          athleteId,
+          activityTypes: SINGLE_ACTIVITY_TYPES,
+          dateFrom: range.dateFrom,
+          dateTo: range.dateTo,
+        }),
       ),
     { combine: (results) => results.map((r) => r.data ?? []) },
   );
@@ -407,15 +404,15 @@ function CurveSettings({
   ranges: DateRange[];
   onAddRange: (range: DateRange) => void;
   onRemoveRange: (id: string) => void;
-  athleteId: number | null | undefined;
+  athleteId: number;
 }) {
   const t = useT();
   const tokens = useChartTokens();
   const presetOptions = React.useMemo(() => createPresetOptions(t), [t]);
-  const { data: years } = trpc.analytics.getPowerCurveYears.useQuery(
-    { athleteId: athleteId!, activityTypes: SINGLE_ACTIVITY_TYPES },
-    { enabled: athleteId != null },
-  );
+  const { data: years } = trpc.analytics.getPowerCurveYears.useQuery({
+    athleteId,
+    activityTypes: SINGLE_ACTIVITY_TYPES,
+  });
 
   // Active ranges keyed by id, remembering their position so each toggle can
   // show the dot in its plotted series colour.
@@ -625,19 +622,16 @@ function AggregatedPowerCurve({
   const { resolveForDate } = useRiderSettingsTimeline();
 
   const periodActivities = trpc.activities.list.useQuery(
-    { athleteId: athleteId!, ...zonesSelection },
-    { enabled: athleteId != null && timePeriodId != null && tab === "zones" },
+    { athleteId, ...zonesSelection },
+    { enabled: timePeriodId != null && tab === "zones" },
   );
   const periodDistribution = trpc.analytics.getPowerDistribution.useQuery(
     {
-      athleteId: athleteId!,
+      athleteId,
       ...distributionSelection,
       timePeriodId: timePeriodId!,
     },
-    {
-      enabled:
-        athleteId != null && timePeriodId != null && tab === "distribution",
-    },
+    { enabled: timePeriodId != null && tab === "distribution" },
   );
 
   const periodZones = React.useMemo(() => {
@@ -667,16 +661,13 @@ function AggregatedPowerCurve({
   const queryResults = trpc.useQueries(
     (t) =>
       ranges.map((range) =>
-        t.analytics.getPowerCurve(
-          {
-            athleteId: athleteId!,
-            activityTypes,
-            workoutTypes,
-            dateFrom: range.dateFrom,
-            dateTo: range.dateTo,
-          },
-          { enabled: athleteId != null },
-        ),
+        t.analytics.getPowerCurve({
+          athleteId,
+          activityTypes,
+          workoutTypes,
+          dateFrom: range.dateFrom,
+          dateTo: range.dateTo,
+        }),
       ),
     { combine: (results) => results.map((r) => r.data ?? []) },
   );
@@ -805,7 +796,7 @@ function PeriodPowerToolbar(props: {
   onAddRange: (range: DateRange) => void;
   onRemoveRange: (id: string) => void;
   lockedRangeIds?: Set<string>;
-  athleteId: number | null | undefined;
+  athleteId: number;
   activityTypes?: string[];
   workoutTypes?: number[];
   mode: PowerCurveMode;
@@ -918,7 +909,7 @@ function Toolbar({
   onAddRange: (range: DateRange) => void;
   onRemoveRange: (id: string) => void;
   lockedRangeIds?: Set<string>;
-  athleteId: number | null | undefined;
+  athleteId: number;
   activityTypes?: string[];
   workoutTypes?: number[];
   mode: PowerCurveMode;
@@ -1024,16 +1015,17 @@ function PresetSelect({
   workoutTypes,
 }: {
   onSelect: (range: DateRange) => void;
-  athleteId: number | null | undefined;
+  athleteId: number;
   activityTypes?: string[];
   workoutTypes?: number[];
 }) {
   const t = useT();
   const presetOptions = React.useMemo(() => createPresetOptions(t), [t]);
-  const { data: years } = trpc.analytics.getPowerCurveYears.useQuery(
-    { athleteId: athleteId!, activityTypes, workoutTypes },
-    { enabled: athleteId != null },
-  );
+  const { data: years } = trpc.analytics.getPowerCurveYears.useQuery({
+    athleteId,
+    activityTypes,
+    workoutTypes,
+  });
 
   return (
     <Select

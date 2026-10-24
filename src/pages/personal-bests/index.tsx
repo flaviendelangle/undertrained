@@ -19,10 +19,7 @@ const Records = nextDynamic(loadRecords, { ssr: false });
 const RecordsPage: NextPageWithLayout = () => {
   const t = useT();
   const athleteId = useAthleteId();
-  trpc.records.getOptions.useQuery(
-    { athleteId: athleteId! },
-    { enabled: athleteId != null },
-  );
+  trpc.records.getOptions.useQuery({ athleteId });
 
   const moduleReady = useModuleLoaded(loadRecords);
 

@@ -133,7 +133,7 @@ export function RouteBuilder({ route }: { route?: Route }) {
   const skipNextSnapRef = React.useRef(false);
   const mutate = previewMutation.mutate;
   React.useEffect(() => {
-    if (!athleteId || waypoints.length < 2) {
+    if (waypoints.length < 2) {
       return;
     }
     if (skipNextSnapRef.current) {
@@ -244,11 +244,11 @@ export function RouteBuilder({ route }: { route?: Route }) {
       ? (activePreview.points[hoverIndex] ?? null)
       : null;
 
-  const canSave = !!athleteId && name.trim().length > 0 && !!activePreview;
+  const canSave = name.trim().length > 0 && !!activePreview;
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   const save = () => {
-    if (!athleteId || !activePreview) return;
+    if (!activePreview) return;
     const payload = {
       athleteId,
       name: name.trim(),

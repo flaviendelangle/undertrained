@@ -57,7 +57,6 @@ export function ActivityActionsMenu(props: ActivityActionsMenuProps) {
         <DropdownMenuItem
           disabled={loading}
           onClick={async () => {
-            if (!athleteId) return;
             setLoading(true);
             try {
               await reloadActivity.mutateAsync({ stravaId, athleteId });

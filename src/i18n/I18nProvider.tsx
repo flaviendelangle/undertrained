@@ -3,7 +3,7 @@ import * as React from "react";
 import type { Locale as DateFnsLocale } from "date-fns";
 import { useCookies } from "react-cookie";
 
-import { useAthleteId } from "~/hooks/useAthleteId";
+import { useOptionalAthleteId } from "~/hooks/useAthleteId";
 import { trpc } from "~/utils/trpc";
 
 import { setActiveDateLocale } from "./activeDateLocale";
@@ -57,7 +57,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = React.useState<Locale>(DEFAULT_LOCALE);
   const [cookies, setCookie] = useCookies([LOCALE_COOKIE]);
 
-  const athleteId = useAthleteId();
+  const athleteId = useOptionalAthleteId();
   const { data: dbLanguage } = trpc.account.getLanguage.useQuery(
     { athleteId: athleteId! },
     { enabled: athleteId != null },
