@@ -6,8 +6,7 @@
  * running → pace zones, everything else → HR zones. Swimming has no zone model
  * and is excluded entirely.
  */
-import { RUNNING_PACE_ZONES } from "~/sensors/paceZones";
-import { HR_ZONES, POWER_ZONES } from "~/sensors/types";
+import { ZONE_MODELS } from "~/sensors/zoneModels";
 import type { ZoneSecondsByMetric } from "~/server/lib/activityScoring";
 import { type ZoneModel, getSportConfig } from "~/utils/sportConfig";
 
@@ -109,13 +108,7 @@ export function buildZoneRows(agg: TimeInZonesAggregate): TimeInZoneRow[] {
 
   if (agg.metrics.size === 1) {
     const [metric] = agg.metrics;
-    const zones =
-      metric === "power"
-        ? POWER_ZONES
-        : metric === "pace"
-          ? RUNNING_PACE_ZONES
-          : HR_ZONES;
-    rows = zones.map((zone, index) => ({
+    rows = ZONE_MODELS[metric].zones.map((zone, index) => ({
       ramp: zone.ramp,
       code: `Z${index + 1}`,
       name: zone.name,

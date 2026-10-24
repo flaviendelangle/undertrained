@@ -75,8 +75,8 @@ export function computePaceZoneDistribution(
   if (thresholdSpeed > 0) {
     for (const s of speeds) {
       if (!Number.isFinite(s)) continue;
-      const zone = findRunningPaceZone(Math.max(0, s), thresholdSpeed);
-      seconds[RUNNING_PACE_ZONES.indexOf(zone)] += 1;
+      const { index } = findRunningPaceZone(Math.max(0, s), thresholdSpeed);
+      seconds[index] += 1;
     }
   }
 
@@ -147,7 +147,7 @@ export function computePaceSliceDistribution(
       seconds: secondsByBucket.get(bucket) ?? 0,
       ramp:
         thresholdSpeed > 0
-          ? findRunningPaceZone(paceToSpeed(midPace), thresholdSpeed).ramp
+          ? findRunningPaceZone(paceToSpeed(midPace), thresholdSpeed).zone.ramp
           : RUNNING_PACE_ZONES[0].ramp,
     });
   }

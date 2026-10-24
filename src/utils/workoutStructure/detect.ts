@@ -4,9 +4,8 @@
  * modules (`metric`, `split`, `cluster`, `sets`, `confidence`) for the
  * individual steps and their tunable constants.
  */
-import { findRunningPaceZone } from "~/sensors/paceZones";
 import type { RiderSettings } from "~/sensors/types";
-import { findPowerZone } from "~/sensors/types";
+import { ZONE_MODELS } from "~/sensors/zoneModels";
 
 import { buildRepUnits, clusterBlocks, isAcceptedBlock } from "./cluster";
 import {
@@ -166,23 +165,14 @@ function toIntensity(
   metric: StructureMetric,
   thresholds: Thresholds,
 ): StructureIntensity {
-  if (metric === "power") {
-    const zone =
-      thresholds != null && thresholds.ftp > 0
-        ? findPowerZone(rawValue, thresholds.ftp).zone
-        : null;
-    return {
-      value: Math.round(rawValue),
-      zoneName: zone?.name ?? null,
-      zoneIndex: zone?.ramp ?? null,
-    };
-  }
+  const model = ZONE_MODELS[metric];
   const zone =
-    thresholds != null && thresholds.runThresholdPace > 0
-      ? findRunningPaceZone(rawValue, thresholds.runThresholdPace)
+    thresholds != null && model.threshold(thresholds) != null
+      ? model.classify(rawValue, thresholds).zone
       : null;
   return {
-    value: Math.round(1000 / rawValue),
+    value:
+      metric === "power" ? Math.round(rawValue) : Math.round(1000 / rawValue),
     zoneName: zone?.name ?? null,
     zoneIndex: zone?.ramp ?? null,
   };

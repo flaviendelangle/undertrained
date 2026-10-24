@@ -11,6 +11,7 @@ import {
 
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import type { RiderSettings } from "~/sensors/types";
+import { ZONE_MODELS } from "~/sensors/zoneModels";
 import {
   formatElapsed,
   formatKm,
@@ -29,6 +30,7 @@ export type SportCategory =
 /**
  * A training-zone model: power zones against FTP, pace zones against the run
  * threshold pace, or heart-rate zones (Karvonen, from max and resting HR).
+ * `ZONE_MODELS` (`~/sensors/zoneModels`) holds each model's zones and lookup.
  */
 export type ZoneModel = "power" | "pace" | "hr";
 
@@ -138,13 +140,6 @@ export class SportConfig {
   /** Which stat to show as the third hero metric on an activity card. */
   readonly heroThirdStat: "elevation" | "pace" = "elevation";
 
-  /**
-   * Stream type whose panel the lap (interval) bars are drawn on, and whose
-   * per-lap average drives each bar's height — `"watts"` (Power) for cycling,
-   * `"velocity_smooth"` (Pace/Speed) for running, swimming, and generic sports.
-   */
-  readonly lapMetricStreamType: string = "velocity_smooth";
-
   // ── Sport category & capabilities ───────────────────────────
 
   /** The broad sport category this activity type belongs to. */
@@ -245,7 +240,6 @@ class CyclingSportConfig extends SportConfig {
   override readonly color = "var(--sport-cycling)";
   override readonly hasPowerMetrics = true;
   override readonly zoneModel = "power";
-  override readonly lapMetricStreamType = "watts";
 
   /** Cycling cards show distance + normalized power (falling back to average power, then speed). */
   override formatJournalStats(activity: JournalStatsActivity): string {
@@ -541,14 +535,7 @@ export function hasZoneThreshold(
   model: ZoneModel,
   settings: Pick<RiderSettings, "ftp" | "runThresholdPace" | "maxHr">,
 ): boolean {
-  switch (model) {
-    case "power":
-      return settings.ftp > 0;
-    case "pace":
-      return settings.runThresholdPace > 0;
-    case "hr":
-      return settings.maxHr > 0;
-  }
+  return ZONE_MODELS[model].threshold(settings) != null;
 }
 
 // ── Workout type (Strava `workout_type`) ────────────────────────

@@ -27,12 +27,8 @@ import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { activitySettingsDay } from "~/lib/activityRecording";
 import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
-import { findRunningPaceZone } from "~/sensors/paceZones";
-import {
-  type RiderSettings,
-  findHeartRateZone,
-  findPowerZone,
-} from "~/sensors/types";
+import type { RiderSettings } from "~/sensors/types";
+import { ZONE_MODELS } from "~/sensors/zoneModels";
 import { formatElapsed } from "~/utils/format";
 import {
   type SportConfig,
@@ -114,8 +110,8 @@ const ActivityLaps = React.memo(function ActivityLaps(
   if (!laps || laps.length <= 1) return null;
 
   const settings = resolveForDate(activitySettingsDay({ startDateLocal }));
-  const usePower = sportConfig.lapMetricStreamType === "watts";
-  const isRunning = sportConfig.category === "running";
+  const usePower = sportConfig.zoneModel === "power";
+  const usePace = sportConfig.zoneModel === "pace";
 
   const formatValue = (v: number) =>
     usePower ? `${Math.round(v)} W` : sportConfig.formatSpeed(v);
@@ -234,7 +230,7 @@ const ActivityLaps = React.memo(function ActivityLaps(
                   ? t("charts.laps.power").toLowerCase()
                   : t("charts.laps.pace"),
               })}
-              {isRunning
+              {usePace
                 ? t("charts.laps.hintColorPace")
                 : usePower
                   ? t("charts.laps.hintColorPower")
@@ -242,7 +238,7 @@ const ActivityLaps = React.memo(function ActivityLaps(
               {". "}
               {usePower
                 ? t("charts.laps.hintFromFtp")
-                : isRunning
+                : usePace
                   ? t("charts.laps.hintFromThreshold")
                   : ""}{" "}
               {t("charts.laps.hintFallback")}
@@ -534,22 +530,18 @@ function resolveLapZone(
   const { value, zoneModel, settings, averageHeartrate } = opts;
 
   if (
-    zoneModel === "power" &&
-    hasZoneThreshold("power", settings) &&
+    zoneModel != null &&
+    zoneModel !== "hr" &&
+    hasZoneThreshold(zoneModel, settings) &&
     value > 0
   ) {
-    const { zone, index } = findPowerZone(value, settings.ftp);
-    return { ...zone, name: powerZoneLabel(index, t) };
-  }
-  if (zoneModel === "pace" && hasZoneThreshold("pace", settings) && value > 0) {
-    return findRunningPaceZone(value, settings.runThresholdPace);
+    const { zone, index } = ZONE_MODELS[zoneModel].classify(value, settings);
+    return zoneModel === "power"
+      ? { ...zone, name: powerZoneLabel(index, t) }
+      : zone;
   }
   if (averageHeartrate != null && hasZoneThreshold("hr", settings)) {
-    return findHeartRateZone(
-      averageHeartrate,
-      settings.maxHr,
-      settings.restingHr,
-    ).zone;
+    return ZONE_MODELS.hr.classify(averageHeartrate, settings).zone;
   }
   return null;
 }
