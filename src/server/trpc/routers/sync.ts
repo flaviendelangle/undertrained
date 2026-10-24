@@ -3,35 +3,25 @@ import { z } from "zod";
 
 import { activities, syncJobModeEnum, syncJobs } from "../../db/schema";
 import { activityIngestion } from "../../lib/sync";
-import {
-  protectedProcedure,
-  rateLimited,
-  router,
-  validateAthleteOwnership,
-} from "../index";
+import { athleteProcedure, rateLimited, router } from "../index";
 
 const syncModeSchema = z.enum(syncJobModeEnum.enumValues);
 
 export const syncRouter = router({
-  getJob: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      return (
-        (await ctx.db.query.syncJobs.findFirst({
-          where: eq(syncJobs.athlete, input.athleteId),
-        })) ?? null
-      );
-    }),
+  getJob: athleteProcedure.query(async ({ ctx, input }) => {
+    return (
+      (await ctx.db.query.syncJobs.findFirst({
+        where: eq(syncJobs.athlete, input.athleteId),
+      })) ?? null
+    );
+  }),
 
-  start: protectedProcedure
+  start: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         mode: syncModeSchema,
       }),
     )
-    .use(validateAthleteOwnership)
     .use(rateLimited)
     .mutation(async ({ ctx, input }) => {
       // Wrap in a transaction so SELECT ... FOR UPDATE holds the lock

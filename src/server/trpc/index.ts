@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import type { Session } from "next-auth";
 import { getServerSession } from "next-auth";
 import superjson from "superjson";
+import { z } from "zod";
 
 import { TRPCError, initTRPC } from "@trpc/server";
 
@@ -86,12 +87,17 @@ export const calendarEventsRateLimited = t.middleware(async ({ ctx, next }) => {
   return next();
 });
 
-export const validateAthleteOwnership = t.middleware(
-  async ({ ctx, input, next }) => {
-    const { athleteId } = input as { athleteId: number };
-    if (athleteId !== ctx.session?.athleteId) {
+/**
+ * A procedure over one athlete's data. Its input carries `athleteId`, and only
+ * that athlete may call it. Procedures add their own fields with `.input()`.
+ * tRPC runs each parser on the raw input and merges the parsed objects, so
+ * `input.athleteId` is still there in the resolver.
+ */
+export const athleteProcedure = protectedProcedure
+  .input(z.object({ athleteId: z.number() }))
+  .use(async ({ ctx, input, next }) => {
+    if (input.athleteId !== ctx.session.athleteId) {
       throw new TRPCError({ code: "FORBIDDEN" });
     }
     return next();
-  },
-);
+  });

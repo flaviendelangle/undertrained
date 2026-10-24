@@ -20,7 +20,7 @@ import type { Database } from "../../db";
 import { activities, athletes, plannedTrainings } from "../../db/schema";
 import { env } from "../../env";
 import { getAccessToken, updateActivityOnStrava } from "../../lib/strava";
-import { protectedProcedure, router, validateAthleteOwnership } from "../index";
+import { athleteProcedure, router } from "../index";
 
 /**
  * Upper bound on one link-prompt batch. The prompt shows one row per pairing and
@@ -65,15 +65,13 @@ async function getLinkedActivityIds(
 }
 
 export const plannedTrainingsRouter = router({
-  list: protectedProcedure
+  list: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         from: z.string().optional(),
         to: z.string().optional(),
       }),
     )
-    .use(validateAthleteOwnership)
     .query(async ({ ctx, input }) => {
       const conditions = [
         eq(plannedTrainings.athlete, input.athleteId),
@@ -98,10 +96,9 @@ export const plannedTrainingsRouter = router({
    * the "mark done" picker hide activities that are spoken for, so an activity
    * is never linked to two plans.
    */
-  linkedActivityIds: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(({ ctx, input }) => getLinkedActivityIds(ctx.db, input.athleteId)),
+  linkedActivityIds: athleteProcedure.query(({ ctx, input }) =>
+    getLinkedActivityIds(ctx.db, input.athleteId),
+  ),
 
   /**
    * Activities imported since the athlete last had the link prompt shown to
@@ -118,72 +115,69 @@ export const plannedTrainingsRouter = router({
    * has started: the rule knows nothing about time of day, so a morning commute
    * would otherwise be offered as having completed tonight's interval session.
    */
-  newActivities: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      // Watermark and current maximum in one statement: the scalar subquery is
-      // an index-only probe of `(athlete, id)`, and the two values are always
-      // read together.
-      const [row] = await ctx.db
-        .select({
-          lastSeen: athletes.lastSeenActivityId,
-          maxId: sql<number>`coalesce((select max(${activities.id}) from ${activities} where ${activities.athlete} = ${input.athleteId}), 0)`,
-        })
-        .from(athletes)
-        .where(eq(athletes.id, input.athleteId));
-      if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }
-      const watermark = Number(row.maxId);
+  newActivities: athleteProcedure.query(async ({ ctx, input }) => {
+    // Watermark and current maximum in one statement: the scalar subquery is
+    // an index-only probe of `(athlete, id)`, and the two values are always
+    // read together.
+    const [row] = await ctx.db
+      .select({
+        lastSeen: athletes.lastSeenActivityId,
+        maxId: sql<number>`coalesce((select max(${activities.id}) from ${activities} where ${activities.athlete} = ${input.athleteId}), 0)`,
+      })
+      .from(athletes)
+      .where(eq(athletes.id, input.athleteId));
+    if (!row) {
+      throw new TRPCError({ code: "NOT_FOUND" });
+    }
+    const watermark = Number(row.maxId);
 
-      // The overwhelmingly common path: nothing imported since the last visit.
-      // Bail before touching `activities` again — the candidate scan below can
-      // only return rows when the maximum has moved past the watermark.
-      if (watermark <= row.lastSeen) {
-        return { watermark, activities: [] };
-      }
+    // The overwhelmingly common path: nothing imported since the last visit.
+    // Bail before touching `activities` again — the candidate scan below can
+    // only return rows when the maximum has moved past the watermark.
+    if (watermark <= row.lastSeen) {
+      return { watermark, activities: [] };
+    }
 
-      const rows = await ctx.db
-        .select({
-          stravaId: activities.stravaId,
-          type: activities.type,
-          name: activities.name,
-          startDateLocal: activities.startDateLocal,
-        })
-        .from(activities)
-        .where(
-          and(
-            eq(activities.athlete, input.athleteId),
-            gt(activities.id, row.lastSeen),
-            // Bounded above by the watermark the caller will acknowledge, so a
-            // webhook inserting between the two statements can't land in a batch
-            // that the acknowledgement then fails to cover.
-            lte(activities.id, watermark),
-            eq(activities.commute, false),
-            // An activity already reconciled with a plan is never a candidate.
-            // An anti-join rather than shipping every linked id to node and back
-            // as `not in (...)`, which grows without bound and re-plans per size.
-            notExists(
-              ctx.db
-                .select({ one: sql`1` })
-                .from(plannedTrainings)
-                .where(
-                  and(
-                    eq(plannedTrainings.athlete, input.athleteId),
-                    eq(plannedTrainings.linkedActivityId, activities.id),
-                  ),
+    const rows = await ctx.db
+      .select({
+        stravaId: activities.stravaId,
+        type: activities.type,
+        name: activities.name,
+        startDateLocal: activities.startDateLocal,
+      })
+      .from(activities)
+      .where(
+        and(
+          eq(activities.athlete, input.athleteId),
+          gt(activities.id, row.lastSeen),
+          // Bounded above by the watermark the caller will acknowledge, so a
+          // webhook inserting between the two statements can't land in a batch
+          // that the acknowledgement then fails to cover.
+          lte(activities.id, watermark),
+          eq(activities.commute, false),
+          // An activity already reconciled with a plan is never a candidate.
+          // An anti-join rather than shipping every linked id to node and back
+          // as `not in (...)`, which grows without bound and re-plans per size.
+          notExists(
+            ctx.db
+              .select({ one: sql`1` })
+              .from(plannedTrainings)
+              .where(
+                and(
+                  eq(plannedTrainings.athlete, input.athleteId),
+                  eq(plannedTrainings.linkedActivityId, activities.id),
                 ),
-            ),
+              ),
           ),
-        )
-        .orderBy(asc(activities.startDateLocal))
-        // A backstop, not a business rule: the batch is normally a handful of
-        // activities. It bounds the payload if a watermark ever goes stale.
-        .limit(NEW_ACTIVITY_LIMIT);
+        ),
+      )
+      .orderBy(asc(activities.startDateLocal))
+      // A backstop, not a business rule: the batch is normally a handful of
+      // activities. It bounds the payload if a watermark ever goes stale.
+      .limit(NEW_ACTIVITY_LIMIT);
 
-      return { watermark, activities: rows };
-    }),
+    return { watermark, activities: rows };
+  }),
 
   /**
    * Records that the athlete has been shown the link prompt for everything up to
@@ -192,14 +186,12 @@ export const plannedTrainingsRouter = router({
    * forward; `least` clamps to what actually exists, so a bad client value can't
    * push the column past every future id and mute the prompt permanently.
    */
-  acknowledgeNewActivities: protectedProcedure
+  acknowledgeNewActivities: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         watermark: z.number().int().nonnegative(),
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       await ctx.db
         .update(athletes)
@@ -209,9 +201,8 @@ export const plannedTrainingsRouter = router({
         .where(eq(athletes.id, input.athleteId));
     }),
 
-  create: protectedProcedure
-    .input(z.object({ athleteId: z.number(), ...plannedTrainingFields }))
-    .use(validateAthleteOwnership)
+  create: athleteProcedure
+    .input(z.object(plannedTrainingFields))
     .mutation(async ({ ctx, input }) => {
       const { athleteId, ...data } = input;
       const now = Date.now();
@@ -228,15 +219,13 @@ export const plannedTrainingsRouter = router({
       return created;
     }),
 
-  update: protectedProcedure
+  update: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         id: z.number(),
         ...plannedTrainingFields,
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const { athleteId, id, ...data } = input;
       const existing = await ctx.db.query.plannedTrainings.findFirst({
@@ -254,9 +243,8 @@ export const plannedTrainingsRouter = router({
         .where(eq(plannedTrainings.id, id));
     }),
 
-  delete: protectedProcedure
-    .input(z.object({ athleteId: z.number(), id: z.number() }))
-    .use(validateAthleteOwnership)
+  delete: athleteProcedure
+    .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.db
         .delete(plannedTrainings)
@@ -278,15 +266,13 @@ export const plannedTrainingsRouter = router({
    * (synced to Strava first — if that fails nothing local changes), then mirrors
    * the change locally and marks the plan completed so it leaves the Journal.
    */
-  markDone: protectedProcedure
+  markDone: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         id: z.number(),
         stravaId: z.number(),
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const plan = await ctx.db.query.plannedTrainings.findFirst({
         where: and(
@@ -383,24 +369,21 @@ export const plannedTrainingsRouter = router({
     }),
 
   /** Returns (lazily creating) the athlete's secret iCal subscription token + URL. */
-  getCalendarToken: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      const athlete = await ctx.db.query.athletes.findFirst({
-        where: eq(athletes.id, input.athleteId),
-      });
-      if (!athlete) {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }
-      let token = athlete.calendarToken;
-      if (!token) {
-        token = randomBytes(24).toString("base64url");
-        await ctx.db
-          .update(athletes)
-          .set({ calendarToken: token })
-          .where(eq(athletes.id, input.athleteId));
-      }
-      return { token, url: buildFeedUrl(token) };
-    }),
+  getCalendarToken: athleteProcedure.query(async ({ ctx, input }) => {
+    const athlete = await ctx.db.query.athletes.findFirst({
+      where: eq(athletes.id, input.athleteId),
+    });
+    if (!athlete) {
+      throw new TRPCError({ code: "NOT_FOUND" });
+    }
+    let token = athlete.calendarToken;
+    if (!token) {
+      token = randomBytes(24).toString("base64url");
+      await ctx.db
+        .update(athletes)
+        .set({ calendarToken: token })
+        .where(eq(athletes.id, input.athleteId));
+    }
+    return { token, url: buildFeedUrl(token) };
+  }),
 });

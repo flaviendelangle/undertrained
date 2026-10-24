@@ -11,7 +11,7 @@ import {
 import { structuredWorkouts } from "../../db/schema";
 import type { ListStructuredWorkout } from "../../db/types";
 import { summarizeWorkout } from "../../lib/workoutSummary";
-import { protectedProcedure, router, validateAthleteOwnership } from "../index";
+import { athleteProcedure, router } from "../index";
 
 /** Shared validators for create/update, so the two can never drift apart. */
 const workoutFields = {
@@ -34,10 +34,8 @@ export const structuredWorkoutsRouter = router({
    * profile and one-line summary derived from it server-side. A page of full
    * trees would be an order of magnitude larger for no benefit.
    */
-  list: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }): Promise<ListStructuredWorkout[]> => {
+  list: athleteProcedure.query(
+    async ({ ctx, input }): Promise<ListStructuredWorkout[]> => {
       const rows = await ctx.db
         .select()
         .from(structuredWorkouts)
@@ -45,11 +43,11 @@ export const structuredWorkoutsRouter = router({
         .orderBy(desc(structuredWorkouts.updatedAt));
 
       return rows.map(summarizeWorkout);
-    }),
+    },
+  ),
 
-  get: protectedProcedure
-    .input(z.object({ athleteId: z.number(), id: z.number() }))
-    .use(validateAthleteOwnership)
+  get: athleteProcedure
+    .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
       const [row] = await ctx.db
         .select()
@@ -69,9 +67,8 @@ export const structuredWorkoutsRouter = router({
       return { ...row, structure: migrateStructuredWorkout(row.structure) };
     }),
 
-  create: protectedProcedure
-    .input(z.object({ athleteId: z.number(), ...workoutFields }))
-    .use(validateAthleteOwnership)
+  create: athleteProcedure
+    .input(z.object(workoutFields))
     .mutation(async ({ ctx, input }) => {
       const now = Date.now();
       const [row] = await ctx.db
@@ -93,11 +90,8 @@ export const structuredWorkoutsRouter = router({
       return row;
     }),
 
-  update: protectedProcedure
-    .input(
-      z.object({ athleteId: z.number(), id: z.number(), ...workoutFields }),
-    )
-    .use(validateAthleteOwnership)
+  update: athleteProcedure
+    .input(z.object({ id: z.number(), ...workoutFields }))
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.db
         .update(structuredWorkouts)
@@ -134,15 +128,13 @@ export const structuredWorkoutsRouter = router({
    * they are: they are only unique *within* a tree, and nothing joins across
    * workouts.
    */
-  duplicate: protectedProcedure
+  duplicate: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         id: z.number(),
         name: z.string().trim().min(1).max(200),
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const [source] = await ctx.db
         .select()
@@ -179,9 +171,8 @@ export const structuredWorkoutsRouter = router({
       return row;
     }),
 
-  delete: protectedProcedure
-    .input(z.object({ athleteId: z.number(), id: z.number() }))
-    .use(validateAthleteOwnership)
+  delete: athleteProcedure
+    .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db
         .delete(structuredWorkouts)

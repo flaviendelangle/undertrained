@@ -6,12 +6,7 @@ import { TRPCError } from "@trpc/server";
 import { calendarSubscriptions } from "../../db/schema";
 import { env } from "../../env";
 import { fetchBusyEvents } from "../../lib/icalFeed";
-import {
-  calendarEventsRateLimited,
-  protectedProcedure,
-  router,
-  validateAthleteOwnership,
-} from "../index";
+import { athleteProcedure, calendarEventsRateLimited, router } from "../index";
 
 /** Hex colour like "#64748b" — the only colour shape the UI emits. */
 const hexColor = z
@@ -37,30 +32,25 @@ const name = z.string().trim().min(1).max(120);
 
 export const calendarSubscriptionsRouter = router({
   /** The athlete's calendar subscriptions, ordered as shown in the UI. */
-  list: protectedProcedure
-    .input(z.object({ athleteId: z.number() }))
-    .use(validateAthleteOwnership)
-    .query(async ({ ctx, input }) => {
-      return ctx.db
-        .select()
-        .from(calendarSubscriptions)
-        .where(eq(calendarSubscriptions.athlete, input.athleteId))
-        .orderBy(
-          asc(calendarSubscriptions.sortOrder),
-          asc(calendarSubscriptions.id),
-        );
-    }),
+  list: athleteProcedure.query(async ({ ctx, input }) => {
+    return ctx.db
+      .select()
+      .from(calendarSubscriptions)
+      .where(eq(calendarSubscriptions.athlete, input.athleteId))
+      .orderBy(
+        asc(calendarSubscriptions.sortOrder),
+        asc(calendarSubscriptions.id),
+      );
+  }),
 
-  create: protectedProcedure
+  create: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         name,
         icalUrl,
         color: hexColor.default("#64748b"),
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       // New calendars sort after existing ones.
       const [{ value: maxOrder } = { value: null }] = await ctx.db
@@ -83,10 +73,9 @@ export const calendarSubscriptionsRouter = router({
       return created;
     }),
 
-  update: protectedProcedure
+  update: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         id: z.number(),
         name: name.optional(),
         icalUrl: icalUrl.optional(),
@@ -94,7 +83,6 @@ export const calendarSubscriptionsRouter = router({
         sortOrder: z.number().int().optional(),
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const { athleteId, id, ...fields } = input;
       const result = await ctx.db
@@ -112,9 +100,8 @@ export const calendarSubscriptionsRouter = router({
       }
     }),
 
-  remove: protectedProcedure
-    .input(z.object({ athleteId: z.number(), id: z.number() }))
-    .use(validateAthleteOwnership)
+  remove: athleteProcedure
+    .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.db
         .delete(calendarSubscriptions)
@@ -135,17 +122,15 @@ export const calendarSubscriptionsRouter = router({
    * local `[from, to]` window. Fetches + parses on demand (cached in-process);
    * one bad feed never breaks the rest. Rate-limited since it does outbound I/O.
    */
-  events: protectedProcedure
+  events: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         // Floating local ISO bounds (e.g. "2026-05-28T00:00:00"), same clock the
         // grid positions activities by.
         from: z.string().min(1),
         to: z.string().min(1),
       }),
     )
-    .use(validateAthleteOwnership)
     .use(calendarEventsRateLimited)
     .query(async ({ ctx, input }) => {
       return fetchBusyEvents(
