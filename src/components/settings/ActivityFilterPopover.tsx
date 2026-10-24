@@ -4,10 +4,10 @@ import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
 
 import { Button } from "~/components/ui/button";
 import {
-  ResponsiveDialog,
-  ResponsiveDialogContent,
-  ResponsiveDialogTrigger,
-} from "~/components/ui/responsive-dialog";
+  ResponsivePopover,
+  ResponsivePopoverContent,
+  ResponsivePopoverTrigger,
+} from "~/components/ui/responsive-popover";
 import { useActivityFilter } from "~/hooks/useActivityFilter";
 import { useT } from "~/i18n/useT";
 
@@ -27,8 +27,8 @@ export function ActivityFilterPopover({
   const count = activeFilterCount + (search ? 1 : 0);
 
   return (
-    <ResponsiveDialog>
-      <ResponsiveDialogTrigger
+    <ResponsivePopover>
+      <ResponsivePopoverTrigger
         render={
           <ToolbarPrimitive.Button
             render={
@@ -49,9 +49,9 @@ export function ActivityFilterPopover({
           />
         }
       />
-      <ResponsiveDialogContent className="sm:max-w-sm">
+      <ResponsivePopoverContent align="end" className="md:w-80">
         <ActivityFilterPanel search={search} onSearchChange={onSearchChange} />
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
+      </ResponsivePopoverContent>
+    </ResponsivePopover>
   );
 }
