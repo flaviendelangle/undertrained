@@ -19,7 +19,14 @@ const PREFS: LoadAlgorithmPreferences = {
 
 /** A cycling activity carrying a TSS load on a given local day. */
 function ride(day: string, tss: number): FitnessActivity {
-  return { type: "Ride", tss, hrss: null, startDateLocal: `${day}T10:00:00` };
+  return {
+    type: "Ride",
+    tss,
+    hrss: null,
+    perceivedExertion: null,
+    movingTime: 3600,
+    startDateLocal: `${day}T10:00:00`,
+  };
 }
 
 /** Format a Date as a local `yyyy-MM-dd` key (avoids UTC shift from toISOString). */
@@ -107,12 +114,7 @@ describe("computeFitnessSeries", () => {
   });
 
   it("starts at the oldest activity that carries load, ignoring earlier load-less ones", () => {
-    const noLoad: FitnessActivity = {
-      type: "Ride",
-      tss: null,
-      hrss: null,
-      startDateLocal: "2024-01-01T10:00:00",
-    };
+    const noLoad: FitnessActivity = { ...ride("2024-01-01", 0), tss: null };
     const series = computeFitnessSeries(
       [noLoad, ride("2024-01-04", 100)],
       PREFS,
@@ -127,20 +129,13 @@ describe("computeFitnessSeries", () => {
   });
 
   it("returns an empty series when no activity carries load", () => {
-    const noLoad: FitnessActivity = {
-      type: "Ride",
-      tss: null,
-      hrss: null,
-      startDateLocal: "2024-01-01T10:00:00",
-    };
+    const noLoad: FitnessActivity = { ...ride("2024-01-01", 0), tss: null };
     expect(computeFitnessSeries([noLoad], PREFS)).toEqual([]);
   });
 
   it("skips activities with an unparseable local date instead of collapsing to empty", () => {
     const corrupt: FitnessActivity = {
-      type: "Ride",
-      tss: 100,
-      hrss: null,
+      ...ride("2024-01-01", 100),
       startDateLocal: "",
     };
     const series = computeFitnessSeries(

@@ -641,7 +641,7 @@ const fr: Messages = {
     loadAlgorithm: {
       title: "Algorithme de charge",
       tooltip:
-        "Le TSS utilise les données de puissance (le plus précis pour le cyclisme avec un capteur de puissance). Le HRSS utilise la fréquence cardiaque (fonctionne pour tout sport avec un cardiofréquencemètre). Le rTSS/sTSS utilise l'allure (idéal pour la course/natation sans capteur de puissance).",
+        "Le TSS utilise les données de puissance (le plus précis pour le cyclisme avec un capteur de puissance). Le HRSS utilise la fréquence cardiaque (fonctionne pour tout sport avec un cardiofréquencemètre). Le rTSS/sTSS utilise l'allure (idéal pour la course/natation sans capteur de puissance). Les activités qu'aucune de ces métriques ne peut calculer se rabattent sur le RPE (effort perçu) saisi sur Strava.",
       description:
         "Choisissez la métrique de charge d'entraînement à afficher pour chaque catégorie de sport.",
       option: {
