@@ -10,12 +10,12 @@ const calendarDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format");
 
 /**
- * The filter every endpoint that selects activities accepts. The client sends
- * whatever its view decided (see `useActivitySelection`), so each field has to
- * mean the same thing everywhere: that is {@link selectActivities}' job.
+ * The filter every endpoint that selects activities accepts, next to the
+ * `athleteId` that `athleteProcedure` checks. The client sends whatever its view
+ * decided (see `useActivitySelection`), so each field has to mean the same
+ * thing everywhere: that is {@link selectActivities}' job.
  */
 export const activityFilterInput = z.object({
-  athleteId: z.number(),
   activityTypes: z.array(z.string().max(50)).optional(),
   workoutTypes: z.array(z.number().int()).optional(),
   hideCommutes: z.boolean().optional(),
@@ -37,6 +37,7 @@ interface TimePeriodBounds {
 }
 
 export type ActivitySelection = z.infer<typeof activityFilterInput> & {
+  athleteId: number;
   /**
    * Replaces the `timePeriodId` lookup for callers that already hold the
    * period: its row, or the `time_periods` table (or an alias) when the query

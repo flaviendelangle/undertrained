@@ -7,7 +7,7 @@ import { isOneHertz } from "../../../utils/streamTimeBase";
 import { activities, activityStreams } from "../../db/schema";
 import { StravaError } from "../../lib/stravaPort";
 import { activityIngestion } from "../../lib/sync";
-import { protectedProcedure, router, validateAthleteOwnership } from "../index";
+import { athleteProcedure, protectedProcedure, router } from "../index";
 
 const USABLE_TYPES = new Set([
   "time",
@@ -135,14 +135,12 @@ export const activityStreamsRouter = router({
       })).filter((s) => s.type !== "time" || isTimeNeeded(s.data));
     }),
 
-  reload: protectedProcedure
+  reload: athleteProcedure
     .input(
       z.object({
         stravaId: z.number().int().positive(),
-        athleteId: z.number(),
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const reloaded = await activityIngestion(ctx.db)
         .reloadActivity(input.athleteId, input.stravaId)
@@ -158,14 +156,12 @@ export const activityStreamsRouter = router({
       }
     }),
 
-  fetchStreams: protectedProcedure
+  fetchStreams: athleteProcedure
     .input(
       z.object({
         stravaId: z.number().int().positive(),
-        athleteId: z.number(),
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const result = await activityIngestion(ctx.db)
         .loadStreams(input.athleteId, input.stravaId)

@@ -1,18 +1,12 @@
 import { z } from "zod";
 
 import { getAccessToken } from "../../lib/strava";
-import {
-  protectedProcedure,
-  rateLimited,
-  router,
-  validateAthleteOwnership,
-} from "../index";
+import { athleteProcedure, rateLimited, router } from "../index";
 
 export const uploadRouter = router({
-  uploadToStrava: protectedProcedure
+  uploadToStrava: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         fitFileBase64: z
           .string()
           .max(10 * 1024 * 1024, "File too large (max 10 MB)"),
@@ -20,7 +14,6 @@ export const uploadRouter = router({
         description: z.string().optional(),
       }),
     )
-    .use(validateAthleteOwnership)
     .use(rateLimited)
     .mutation(async ({ ctx, input }) => {
       const accessToken = await getAccessToken(ctx.db, input.athleteId);
@@ -70,14 +63,12 @@ export const uploadRouter = router({
       };
     }),
 
-  checkUploadStatus: protectedProcedure
+  checkUploadStatus: athleteProcedure
     .input(
       z.object({
-        athleteId: z.number(),
         uploadId: z.number(),
       }),
     )
-    .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const accessToken = await getAccessToken(ctx.db, input.athleteId);
 
