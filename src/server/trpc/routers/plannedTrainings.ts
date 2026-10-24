@@ -14,6 +14,7 @@ import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
+import { plannedTrainingFields } from "../../../utils/plannedTraining";
 import type { Database } from "../../db";
 import { activities, athletes, plannedTrainings } from "../../db/schema";
 import { env } from "../../env";
@@ -23,18 +24,6 @@ import {
   workoutTypeForSport,
 } from "../../lib/strava";
 import { protectedProcedure, router, validateAthleteOwnership } from "../index";
-
-/** Shared field validators for create/update. */
-const trainingFields = {
-  title: z.string().trim().min(1).max(200),
-  plannedDate: z.string().min(1), // floating local ISO datetime
-  durationSeconds: z
-    .number()
-    .int()
-    .positive()
-    .max(24 * 3600),
-  sportType: z.string().min(1),
-};
 
 /**
  * Upper bound on one link-prompt batch. The prompt shows one row per pairing and
@@ -224,7 +213,7 @@ export const plannedTrainingsRouter = router({
     }),
 
   create: protectedProcedure
-    .input(z.object({ athleteId: z.number(), ...trainingFields }))
+    .input(z.object({ athleteId: z.number(), ...plannedTrainingFields }))
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
       const { athleteId, ...data } = input;
@@ -244,7 +233,11 @@ export const plannedTrainingsRouter = router({
 
   update: protectedProcedure
     .input(
-      z.object({ athleteId: z.number(), id: z.number(), ...trainingFields }),
+      z.object({
+        athleteId: z.number(),
+        id: z.number(),
+        ...plannedTrainingFields,
+      }),
     )
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {

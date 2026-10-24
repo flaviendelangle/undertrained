@@ -99,7 +99,7 @@ export const structuredWorkoutsRouter = router({
     )
     .use(validateAthleteOwnership)
     .mutation(async ({ ctx, input }) => {
-      await ctx.db
+      const [row] = await ctx.db
         .update(structuredWorkouts)
         .set({
           name: input.name,
@@ -116,7 +116,17 @@ export const structuredWorkoutsRouter = router({
             eq(structuredWorkouts.id, input.id),
             eq(structuredWorkouts.athlete, input.athleteId),
           ),
-        );
+        )
+        .returning();
+      // Deleted in the meantime: a save that wrote nothing must not succeed.
+      if (!row) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workout not found",
+        });
+      }
+      // Shaped like `get`, so the client can cache it as the workout's read.
+      return { ...row, structure: migrateStructuredWorkout(row.structure) };
     }),
 
   /**

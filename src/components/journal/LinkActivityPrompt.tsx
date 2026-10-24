@@ -14,18 +14,19 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "~/components/ui/responsive-dialog";
-import { useAthleteId } from "~/hooks/useAthleteId";
 import {
   markDoneErrorKey,
+  useAcknowledgeNewActivities,
   useMarkPlannedTrainingDone,
-} from "~/hooks/useMarkPlannedTrainingDone";
+} from "~/hooks/plannedTrainings";
+import { useAthleteId } from "~/hooks/useAthleteId";
 import type { NewActivity } from "~/hooks/useNewActivityMatches";
 import { useNewActivityMatches } from "~/hooks/useNewActivityMatches";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { useT } from "~/i18n/useT";
 import { formatCompactDuration } from "~/utils/format";
+import { parsePlannedDate } from "~/utils/plannedTraining";
 import { getSportConfig } from "~/utils/sportConfig";
-import { trpc } from "~/utils/trpc";
 
 import { ActivityOption } from "./ActivityOption";
 
@@ -53,7 +54,7 @@ function MatchRow({
       </div>
       <p className="text-muted-foreground text-xs">
         {t("journal.linkPrompt.plannedFor", {
-          date: format(new Date(plan.plannedDate), "EEE d MMM", {
+          date: format(parsePlannedDate(plan.plannedDate), "EEE d MMM", {
             locale: getActiveDateLocale(),
           }),
           duration: formatCompactDuration(plan.durationSeconds, {
@@ -155,13 +156,7 @@ export function LinkActivityPrompt() {
   const t = useT();
   const { pairs, hasDeferred, watermark, isReady } = useNewActivityMatches();
   const athleteId = useAthleteId();
-  const utils = trpc.useUtils();
-  const acknowledgeMut =
-    trpc.plannedTrainings.acknowledgeNewActivities.useMutation({
-      onSuccess: () => {
-        void utils.plannedTrainings.newActivities.invalidate();
-      },
-    });
+  const acknowledgeMut = useAcknowledgeNewActivities();
 
   const [open, setOpen] = React.useState(false);
   // What the prompt was opened with. Snapshotted rather than read live because
