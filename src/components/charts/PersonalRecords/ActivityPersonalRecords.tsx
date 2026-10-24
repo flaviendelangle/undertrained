@@ -15,7 +15,12 @@ import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import { CYCLING_POWER_DURATIONS } from "~/utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCES } from "~/utils/cyclingRecordDistances";
-import { formatElapsed, formatKm, formatOrdinal } from "~/utils/format";
+import {
+  formatElapsed,
+  formatKm,
+  formatMeters,
+  formatOrdinal,
+} from "~/utils/format";
 import {
   getActivityTypesByCategory,
   getSportConfig,
@@ -97,12 +102,12 @@ function ActivityPersonalRecordsImpl({
       case "biggestClimb":
         return {
           label: t("charts.records.metricLabel.biggestClimb"),
-          value: `${Math.round(r.value)} m`,
+          value: formatMeters(r.value),
         };
       case "totalElevation":
         return {
           label: t("charts.records.metricLabel.totalElevation"),
-          value: `${Math.round(r.value)} m`,
+          value: formatMeters(r.value),
         };
       case "distance":
         return {

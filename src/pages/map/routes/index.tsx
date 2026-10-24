@@ -15,6 +15,7 @@ import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
 import { isRoutesEnabled } from "~/lib/features";
 import type { NextPageWithLayout } from "~/pages/_app";
+import { formatKm, formatMeters } from "~/utils/format";
 import { decode } from "~/utils/polyline";
 import type { RouteSport } from "~/utils/routeProfiles";
 import { trpc } from "~/utils/trpc";
@@ -64,9 +65,9 @@ function RouteCard({
             {route.name}
           </Link>
           <div className="text-muted-foreground text-xs">
-            {(route.distance / 1000).toFixed(1)} km
+            {formatKm(route.distance)}
             {route.elevationGain != null &&
-              ` · ${Math.round(route.elevationGain)} m`}
+              ` · ${formatMeters(route.elevationGain)}`}
           </div>
         </div>
         <div className="flex items-center gap-1">

@@ -31,7 +31,7 @@ import {
 import { useAthleteId } from "~/hooks/useAthleteId";
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
-import { formatKm } from "~/utils/format";
+import { formatKm, formatMeters } from "~/utils/format";
 import { type ParsedGpx, elevationAscent, polylineDistance } from "~/utils/gpx";
 import { takePendingGpx } from "~/utils/pendingGpx";
 import { type LatLngTuple, decode, encode } from "~/utils/polyline";
@@ -416,7 +416,7 @@ export function RouteBuilder({ route }: { route?: Route }) {
               {t("routes.elevationGain")}
             </div>
             <div className="font-semibold">
-              {activePreview ? `${Math.round(activePreview.ascent)} m` : "—"}
+              {activePreview ? formatMeters(activePreview.ascent) : "—"}
             </div>
           </div>
         </div>

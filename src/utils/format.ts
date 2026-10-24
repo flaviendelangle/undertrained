@@ -55,15 +55,43 @@ export function formatMinutesSeconds(seconds: number): string {
  * part is locale-formatted via the active `date-fns` locale's BCP-47 code, so
  * the decimal separator follows the user's language.
  */
-export function formatKm(meters: number, decimals = 1): string {
-  return `${formatNumber(meters / 1000, decimals)} km`;
+export function formatKm(
+  meters: number,
+  decimals = 1,
+  minDecimals = decimals,
+): string {
+  return `${formatNumber(meters / 1000, decimals, minDecimals)} km`;
 }
 
-/** Locale-aware number formatting using the active locale's decimal rules. */
-export function formatNumber(value: number, decimals = 1): string {
+/** Distance or elevation in metres, e.g. "1,234 m" (en) / "1 234 m" (fr). */
+export function formatMeters(
+  meters: number,
+  decimals = 0,
+  minDecimals = decimals,
+): string {
+  return `${formatNumber(meters, decimals, minDecimals)} m`;
+}
+
+/** Speed in km/h from a speed in m/s, e.g. "32.4 km/h" (en) / "32,4 km/h" (fr). */
+export function formatKmh(metersPerSecond: number): string {
+  return `${formatNumber(metersPerSecond * 3.6, 1)} km/h`;
+}
+
+/**
+ * Locale-aware number formatting using the active locale's decimal and
+ * grouping rules. Shows `decimals` fraction digits; a lower `minDecimals` drops
+ * trailing zeros, e.g. `formatNumber(42, 3, 0)` → "42".
+ */
+export function formatNumber(
+  value: number,
+  decimals = 1,
+  minDecimals = decimals,
+): string {
   return new Intl.NumberFormat(getActiveDateLocale().code, {
-    minimumFractionDigits: decimals,
+    minimumFractionDigits: minDecimals,
     maximumFractionDigits: decimals,
+    // Like `Math.round`, never print "-0" for a value that rounds to zero.
+    signDisplay: "negative",
   }).format(value);
 }
 

@@ -4,7 +4,7 @@ import type { MapActivity } from "@server/db/types";
 
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import { formatElapsed } from "~/utils/format";
+import { formatElapsed, formatNumber } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
 interface HeatmapActivityTooltipProps {
@@ -54,7 +54,7 @@ export function HeatmapActivityTooltip({
           {activity.totalElevationGain > 0 && (
             <span>
               {t("map.elevationShort", {
-                value: Math.round(activity.totalElevationGain),
+                value: formatNumber(activity.totalElevationGain, 0),
               })}
             </span>
           )}
