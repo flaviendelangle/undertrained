@@ -109,7 +109,7 @@ describe("buildLaps", () => {
   });
 
   it("laps the warm-up and cool-down either side of the workout", () => {
-    // The shape `useTrainingPageController` actually records: `segmentIndex` is
+    // The shape `RideEngine` actually records: `segmentIndex` is
     // null before the workout starts and again once it ends, so a rider who
     // spins down afterwards must get their own trailing lap rather than having
     // it merged into the last interval.

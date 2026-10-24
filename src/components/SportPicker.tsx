@@ -54,9 +54,8 @@ export function SportPicker({
   extraSportTypes?: string[];
 }) {
   const t = useT();
-  // Empty options => unfiltered, all-time history, regardless of the global
-  // activity filter the rest of the app applies.
-  const { data: activities } = useActivitiesQuery({});
+  // Unfiltered, all-time history, regardless of the global activity filter.
+  const { data: activities } = useActivitiesQuery("sportPicker");
 
   const groups = React.useMemo<SportGroup[]>(() => {
     const allSports = [...PLANNABLE_SPORT_TYPES];

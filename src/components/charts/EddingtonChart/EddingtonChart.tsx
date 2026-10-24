@@ -7,6 +7,7 @@ import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useActivitiesFilteredByType } from "~/hooks/useActivitiesFilteredByType";
 import { useEddingtonData } from "~/hooks/useEddingtonData";
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { sportCategoryLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import {
   AXIS_SIZE,
@@ -14,26 +15,33 @@ import {
   formatCompact,
   useChartTokens,
 } from "~/lib/chartTokens";
-import { getSportConfig } from "~/utils/sportConfig";
+import {
+  getActivityTypesByCategory,
+  getSportConfig,
+} from "~/utils/sportConfig";
 
 import { ChartMessage } from "../ChartMessage";
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { ChartTooltip } from "../ChartTooltip";
 
 const TABS = {
-  riding: { label: "Riding", activityTypes: ["Ride", "VirtualRide"] },
-  running: { label: "Running", activityTypes: ["Run"] },
+  riding: {
+    category: "cycling",
+    activityTypes: getActivityTypesByCategory("cycling"),
+  },
+  // Unlike riding, running leaves virtual (treadmill) runs out.
+  running: {
+    category: "running",
+    activityTypes: getActivityTypesByCategory("running", {
+      includeVirtual: false,
+    }),
+  },
 } as const;
 
 type TabKey = keyof typeof TABS;
 
 const RideIcon = getSportConfig("Ride").icon;
 const RunIcon = getSportConfig("Run").icon;
-
-const TAB_OPTIONS: { value: TabKey; label: React.ReactNode }[] = [
-  { value: "riding", label: <RideIcon className="size-3.5" /> },
-  { value: "running", label: <RunIcon className="size-3.5" /> },
-];
 
 const DISTANCE_DIVISOR = 1000;
 
@@ -43,6 +51,23 @@ export default function EddingtonChart() {
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
   const tab = TABS[activeTab];
+
+  const tabOptions: {
+    value: TabKey;
+    label: React.ReactNode;
+    tooltip: string;
+  }[] = [
+    {
+      value: "riding",
+      label: <RideIcon className="size-3.5" />,
+      tooltip: sportCategoryLabel(TABS.riding.category, t),
+    },
+    {
+      value: "running",
+      label: <RunIcon className="size-3.5" />,
+      tooltip: sportCategoryLabel(TABS.running.category, t),
+    },
+  ];
 
   // Share the full unfiltered activities query with the other statistics charts
   // and filter to this tab's sports client-side (useEddingtonData is a pure
@@ -95,7 +120,7 @@ export default function EddingtonChart() {
         <SegmentedToggle
           value={activeTab}
           onChange={setActiveTab}
-          options={TAB_OPTIONS}
+          options={tabOptions}
         />
       </div>
     </>

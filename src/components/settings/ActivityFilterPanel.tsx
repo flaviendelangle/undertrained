@@ -16,34 +16,33 @@ import { useAthleteId } from "~/hooks/useAthleteId";
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import { getSportConfig } from "~/utils/sportConfig";
+import {
+  type WorkoutKind,
+  getSportConfig,
+  workoutTypesOfKind,
+} from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 const NONE_VALUE = "__none__";
 
-const WORKOUT_TYPE_GROUPS: {
-  id: string;
-  labelKey: AppMessageKey;
-  types: number[];
-}[] = [
-  {
-    id: "default",
-    labelKey: "settings.filter.workout.default",
-    types: [0, 10],
-  },
-  { id: "race", labelKey: "settings.filter.workout.race", types: [1, 11] },
-  { id: "longRun", labelKey: "settings.filter.workout.longRun", types: [2] },
-  {
-    id: "workout",
-    labelKey: "settings.filter.workout.workout",
-    types: [3, 12],
-  },
-  {
-    id: "weightTraining",
-    labelKey: "settings.filter.workout.weightTraining",
-    types: [30],
-  },
-];
+/** i18n key for each workout kind's filter toggle, in display order. */
+const WORKOUT_KIND_LABEL_KEY: Record<WorkoutKind, AppMessageKey> = {
+  none: "settings.filter.workout.default",
+  race: "settings.filter.workout.race",
+  long_run: "settings.filter.workout.longRun",
+  workout: "settings.filter.workout.workout",
+  weight_training: "settings.filter.workout.weightTraining",
+};
+
+// One toggle per kind, matching every sport's `workout_type` for it (a race
+// toggle selects both run and ride races).
+const WORKOUT_TYPE_GROUPS = (
+  Object.keys(WORKOUT_KIND_LABEL_KEY) as WorkoutKind[]
+).map((kind) => ({
+  id: kind,
+  labelKey: WORKOUT_KIND_LABEL_KEY[kind],
+  types: workoutTypesOfKind(kind),
+}));
 
 export function ActivityFilterPanel({
   search,

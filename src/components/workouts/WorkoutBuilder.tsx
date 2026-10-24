@@ -15,6 +15,10 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from "~/components/ui/responsive-dialog";
+import {
+  useCreateStructuredWorkout,
+  useUpdateStructuredWorkout,
+} from "~/hooks/structuredWorkouts";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
@@ -30,7 +34,6 @@ import {
   structuredWorkoutSchema,
 } from "~/utils/structuredWorkout";
 import { hasPowerTarget } from "~/utils/structuredWorkout/types";
-import { trpc } from "~/utils/trpc";
 
 import { QuickAddBar } from "./QuickAddBar";
 import { StepList } from "./StepList";
@@ -92,22 +95,16 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
     [segments, ftp, currentSettings.ftp],
   );
 
-  const utils = trpc.useUtils();
   // Set the instant a save succeeds, so the guard below doesn't prompt on the
   // very navigation the save asked for. A ref, not state: `router.push` runs in
   // the same tick and would not see a re-render.
   const savedRef = React.useRef(false);
   const onSaved = () => {
     savedRef.current = true;
-    void utils.structuredWorkouts.list.invalidate();
     void router.push("/workouts");
   };
-  const createMutation = trpc.structuredWorkouts.create.useMutation({
-    onSuccess: onSaved,
-  });
-  const updateMutation = trpc.structuredWorkouts.update.useMutation({
-    onSuccess: onSaved,
-  });
+  const createMutation = useCreateStructuredWorkout({ onSuccess: onSaved });
+  const updateMutation = useUpdateStructuredWorkout({ onSuccess: onSaved });
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   // Memoized on the tree like `segments`/`spans`/`metrics` above: a full parse
