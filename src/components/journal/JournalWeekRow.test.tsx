@@ -10,7 +10,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 
-import { JournalWeekRow } from "./JournalWeekRow";
+import { JournalWeekRow, ROW_HEIGHT } from "./JournalWeekRow";
 import type { JournalWeek } from "./useJournalWeeks";
 
 vi.mock("~/hooks/useIsMobile", () => ({ useIsMobile: () => false }));
@@ -35,7 +35,9 @@ const week: JournalWeek = {
 };
 
 it("opens the week summary from the keyboard on desktop", async () => {
-  render(<JournalWeekRow week={week} dayLoadScale={0} />);
+  render(
+    <JournalWeekRow week={week} dayLoadScale={0} start={0} size={ROW_HEIGHT} />,
+  );
   const trigger = screen.getByRole("button", { name: "journal.moreInfo" });
 
   act(() => trigger.focus());
