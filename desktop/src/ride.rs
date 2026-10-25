@@ -6,9 +6,9 @@
 //! becomes a saved ride. The screen supplies actions and observations (the sensors, the
 //! trainer that takes commands, the clock) and projects the state; nothing here reads it.
 use crate::{
-    ble,
     player::{Plan, Player},
-    recording::{Phase, Recording, Sensors},
+    recording::{Phase, Recording},
+    sensors::{Command, Readings},
     speed::Rider,
 };
 use std::{
@@ -51,19 +51,19 @@ pub struct Start {
 /// decision entails, so whoever takes it sees the order the ride meant.
 #[derive(Clone)]
 pub struct Commands {
-    sink: Rc<dyn Fn(ble::Command)>,
+    sink: Rc<dyn Fn(Command)>,
     requests: Rc<Cell<u64>>,
 }
 impl Commands {
     /// `sink` takes every command as it goes out: the radio's queue in the app, a capture
     /// in the tests.
-    pub fn new(sink: impl Fn(ble::Command) + 'static) -> Self {
+    pub fn new(sink: impl Fn(Command) + 'static) -> Self {
         Self {
             sink: Rc::new(sink),
             requests: Rc::default(),
         }
     }
-    fn send(&self, command: ble::Command) {
+    fn send(&self, command: Command) {
         (self.sink)(command);
     }
 }
@@ -134,7 +134,7 @@ impl ErgControl {
         wanted: Option<u16>,
         trainer: Option<&str>,
         requests: &Cell<u64>,
-    ) -> Option<ble::Command> {
+    ) -> Option<Command> {
         let device = self.device.clone().or_else(|| trainer.map(str::to_owned))?;
         let wanted = if self.fault {
             // After a failure only a release may go out, once, before any target.
@@ -159,7 +159,7 @@ impl ErgControl {
         self.sent = Some(wanted);
         self.latest = Some(request);
         self.pending = true;
-        Some(ble::Command::SetErg {
+        Some(Command::SetErg {
             device_id: device,
             request,
             watts: wanted,
@@ -290,7 +290,7 @@ pub struct Ride {
 impl Ride {
     /// A reading above zero watts from the trainer: a pedal stroke. A measured zero is a
     /// trainer at rest, so Start keeps waiting on it.
-    pub fn pedaling(sensors: &Sensors, now: Instant) -> bool {
+    pub fn pedaling(sensors: &Readings, now: Instant) -> bool {
         sensors.pedaled_at(now).is_some()
     }
 
@@ -298,7 +298,7 @@ impl Ride {
     pub fn begin(
         start: Start,
         commands: Commands,
-        sensors: &Sensors,
+        sensors: &Readings,
         now: Instant,
     ) -> anyhow::Result<Self> {
         let recording = match &start.root {
@@ -324,7 +324,7 @@ impl Ride {
     /// One tick of the clock: a sample if a second passed, the pedals' verdict on the clock,
     /// the trainer's silence on control, and whatever the trainer now needs to hear.
     /// `trainer` is the connected trainer that takes commands, if any.
-    pub fn tick(&mut self, sensors: &Sensors, trainer: Option<&str>, now: Instant) -> Tick {
+    pub fn tick(&mut self, sensors: &Readings, trainer: Option<&str>, now: Instant) -> Tick {
         let mut tick = Tick::default();
         let journal = match self.recording.phase() {
             Phase::Running => match self.recording.tick(now, sensors.live(now)) {
@@ -434,7 +434,7 @@ impl Ride {
     pub fn set_erg(
         &mut self,
         enable: bool,
-        sensors: &Sensors,
+        sensors: &Readings,
         trainer: Option<&str>,
         now: Instant,
     ) -> Switched {
@@ -544,7 +544,7 @@ impl Ride {
     /// resumed the ride, once the journal took it.
     fn follow_pedals(
         &mut self,
-        sensors: &Sensors,
+        sensors: &Readings,
         trainer: Option<&str>,
         now: Instant,
     ) -> anyhow::Result<bool> {
@@ -585,7 +585,7 @@ impl Ride {
     /// a target: control goes off with a release, the recording goes on, and the rider
     /// enables control again once readings are back. Shorter dropouts, common over ANT+,
     /// leave it on. Returns whether control went off here.
-    fn guard_power(&mut self, sensors: &Sensors, now: Instant) -> bool {
+    fn guard_power(&mut self, sensors: &Readings, now: Instant) -> bool {
         let stale = sensors
             .power_silence(now)
             .is_none_or(|silence| silence > ERG_SILENCE);
@@ -643,9 +643,9 @@ mod tests {
     const OTHER: &str = "ant:17:9021:1";
 
     /// The request number, target and trainer of a command, or None for no command.
-    fn sent(command: Option<ble::Command>) -> Option<(u64, Option<u16>, String)> {
+    fn sent(command: Option<Command>) -> Option<(u64, Option<u16>, String)> {
         match command {
-            Some(ble::Command::SetErg {
+            Some(Command::SetErg {
                 device_id,
                 request,
                 watts,
@@ -655,7 +655,7 @@ mod tests {
         }
     }
 
-    fn watts(command: Option<ble::Command>) -> Option<(u64, Option<u16>)> {
+    fn watts(command: Option<Command>) -> Option<(u64, Option<u16>)> {
         sent(command).map(|(request, watts, device)| {
             assert_eq!(device, KICKR, "Every command names the trainer");
             (request, watts)
@@ -830,7 +830,7 @@ mod tests {
     // the sensor model fed by hand, instants chosen by the test, files under a throwaway
     // folder.
 
-    fn capture() -> (Commands, mpsc::UnboundedReceiver<ble::Command>) {
+    fn capture() -> (Commands, mpsc::UnboundedReceiver<Command>) {
         let (sink, captured) = mpsc::unbounded_channel();
         (
             Commands::new(move |command| {
@@ -841,11 +841,11 @@ mod tests {
     }
 
     /// The next captured command, or None when nothing went out.
-    fn next(captured: &mut mpsc::UnboundedReceiver<ble::Command>) -> Option<ble::Command> {
+    fn next(captured: &mut mpsc::UnboundedReceiver<Command>) -> Option<Command> {
         captured.try_recv().ok()
     }
 
-    fn quiet(captured: &mut mpsc::UnboundedReceiver<ble::Command>) -> bool {
+    fn quiet(captured: &mut mpsc::UnboundedReceiver<Command>) -> bool {
         captured.try_recv().is_err()
     }
 
@@ -885,14 +885,16 @@ mod tests {
         std::env::temp_dir().join(format!("undertrained-ride-test-{}", rand::random::<u64>()))
     }
 
-    fn power(sensors: &mut Sensors, watts: i16, at: Instant) {
-        sensors.update(
-            0,
-            &Reading {
-                power: Some(watts),
-                ..Default::default()
+    fn power(sensors: &mut Readings, watts: i16, at: Instant) {
+        sensors.observe(
+            &crate::sensors::Event::Sample {
+                radio: crate::sensors::Radio::Bluetooth,
+                role: 0,
+                reading: Reading {
+                    power: Some(watts),
+                    ..Default::default()
+                },
             },
-            false,
             at,
         );
     }
@@ -902,8 +904,8 @@ mod tests {
     fn guided(
         root: &std::path::Path,
         commands: Commands,
-        captured: &mut mpsc::UnboundedReceiver<ble::Command>,
-        sensors: &mut Sensors,
+        captured: &mut mpsc::UnboundedReceiver<Command>,
+        sensors: &mut Readings,
         t: Instant,
     ) -> Ride {
         power(sensors, 150, t);
@@ -917,7 +919,7 @@ mod tests {
     }
 
     /// Wait for the disk worker to report, through the ride's own tick.
-    fn settle(ride: &mut Ride, sensors: &Sensors, at: Instant, done: impl Fn(&Ride) -> bool) {
+    fn settle(ride: &mut Ride, sensors: &Readings, at: Instant, done: impl Fn(&Ride) -> bool) {
         let deadline = Instant::now() + Duration::from_secs(5);
         while !done(ride) {
             assert!(Instant::now() < deadline, "The disk worker did not report");
@@ -934,7 +936,7 @@ mod tests {
         // read after each call returns.
         let root = throwaway();
         let (commands, mut captured) = capture();
-        let mut sensors = Sensors::default();
+        let mut sensors = Readings::default();
         let t = Instant::now();
         let at = |s: u64| t + Duration::from_secs(s);
         let mut ride = guided(&root, commands, &mut captured, &mut sensors, t);
@@ -1023,7 +1025,7 @@ mod tests {
     fn the_pedals_drive_the_clock_and_a_journal_fault_waits_for_the_rider() {
         let root = throwaway();
         let (commands, mut captured) = capture();
-        let mut sensors = Sensors::default();
+        let mut sensors = Readings::default();
         let t = Instant::now();
         let at = |s: u64| t + Duration::from_secs(s);
         let mut ride = guided(&root, commands.clone(), &mut captured, &mut sensors, t);
@@ -1156,7 +1158,7 @@ mod tests {
     fn stale_control_and_a_replaced_trainer_are_let_go_of_without_retry() {
         let root = throwaway();
         let (commands, mut captured) = capture();
-        let mut sensors = Sensors::default();
+        let mut sensors = Readings::default();
         let t = Instant::now();
         let at = |s: u64| t + Duration::from_secs(s);
         let mut ride = guided(&root, commands.clone(), &mut captured, &mut sensors, t);
@@ -1262,7 +1264,7 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    fn watts_to(command: Option<ble::Command>, device: &str) -> Option<(u64, Option<u16>)> {
+    fn watts_to(command: Option<Command>, device: &str) -> Option<(u64, Option<u16>)> {
         sent(command).map(|(request, watts, to)| {
             assert_eq!(to, device);
             (request, watts)
@@ -1282,13 +1284,13 @@ mod tests {
         let commands = Commands::new({
             let refuse = refuse.clone();
             move |command| {
-                if refuse.get() && matches!(command, ble::Command::SetErg { watts: None, .. }) {
+                if refuse.get() && matches!(command, Command::SetErg { watts: None, .. }) {
                     panic!("the release is refused before anything else happens");
                 }
                 let _ = sink.send(command);
             }
         });
-        let mut sensors = Sensors::default();
+        let mut sensors = Readings::default();
         let t = Instant::now();
         let at = |s: u64| t + Duration::from_secs(s);
         let mut ride = guided(&root, commands.clone(), &mut captured, &mut sensors, t);
@@ -1329,7 +1331,7 @@ mod tests {
     fn finish_is_idempotent_and_a_failed_export_keeps_the_samples_for_a_retry() {
         let root = throwaway();
         let (commands, mut captured) = capture();
-        let mut sensors = Sensors::default();
+        let mut sensors = Readings::default();
         let t = Instant::now();
         let at = |s: u64| t + Duration::from_secs(s);
         let mut ride = guided(&root, commands, &mut captured, &mut sensors, t);

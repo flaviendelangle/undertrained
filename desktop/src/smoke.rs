@@ -5,6 +5,7 @@ use crate::i18n::Lang;
 use crate::model::{Capabilities, Device, Reading};
 use crate::player::{Plan, Segment};
 use crate::recording::Phase;
+use crate::sensors::{Command, Event, Radio};
 use crate::workouts::{Workout, WorkoutId};
 use crate::{
     Actions, AppState, AppWindow, Overlay, RideOnSignIn, apply_language, apply_live, connected,
@@ -205,13 +206,13 @@ fn settle_save(ui: &AppWindow, state: &Rc<RefCell<AppState>>) {
     }
 }
 
-type Captured = tokio::sync::mpsc::UnboundedReceiver<crate::ble::Command>;
+type Captured = tokio::sync::mpsc::UnboundedReceiver<Command>;
 
 /// The next resistance command captured in place of the radio, as its request number and
 /// target, after checking it names the connected trainer. None when nothing went out.
 fn command(captured: &mut Captured) -> Option<(u64, Option<u16>)> {
     match captured.try_recv() {
-        Ok(crate::ble::Command::SetErg {
+        Ok(Command::SetErg {
             device_id,
             request,
             watts,
@@ -232,16 +233,28 @@ fn released(captured: &mut Captured) -> Option<u64> {
     })
 }
 
+/// A sample from a Bluetooth sensor in `role`, stamped `at`, as the radio delivers it.
+fn bluetooth_sample(state: &mut AppState, role: usize, reading: Reading, at: Instant) {
+    state.sensors.observe(
+        &Event::Sample {
+            radio: Radio::Bluetooth,
+            role,
+            reading,
+        },
+        at,
+    );
+}
+
 /// A sample from the trainer, stamped `at`, as the radio event handler feeds it.
 fn trainer_reading(state: &Rc<RefCell<AppState>>, watts: i16, cadence: Option<f32>, at: Instant) {
-    state.borrow_mut().sensors.update(
+    bluetooth_sample(
+        &mut state.borrow_mut(),
         0,
-        &Reading {
+        Reading {
             power: Some(watts),
             cadence,
             heart_rate: None,
         },
-        false,
         at,
     );
 }
@@ -532,23 +545,23 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     {
         let now = Instant::now();
         let mut state = state.borrow_mut();
-        state.sensors.update(
+        bluetooth_sample(
+            &mut state,
             0,
-            &Reading {
+            Reading {
                 power: Some(212),
                 cadence: Some(88.0),
                 heart_rate: None,
             },
-            false,
             now,
         );
-        state.sensors.update(
+        bluetooth_sample(
+            &mut state,
             1,
-            &Reading {
+            Reading {
                 heart_rate: Some(141),
                 ..Default::default()
             },
-            true,
             now,
         );
         let live = state.sensors.live(now);
@@ -1530,23 +1543,23 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
 
     // A partial BLE update must not keep the other displayed field fresh.
     let stamp = Instant::now();
-    state.borrow_mut().sensors.update(
+    bluetooth_sample(
+        &mut state.borrow_mut(),
         0,
-        &Reading {
+        Reading {
             power: Some(200),
             cadence: Some(90.0),
             heart_rate: None,
         },
-        false,
         stamp,
     );
-    state.borrow_mut().sensors.update(
+    bluetooth_sample(
+        &mut state.borrow_mut(),
         0,
-        &Reading {
+        Reading {
             power: Some(205),
             ..Default::default()
         },
-        false,
         stamp + Duration::from_secs(6),
     );
     crate::refresh_device_readings(ui, &state.borrow(), stamp + Duration::from_secs(6));

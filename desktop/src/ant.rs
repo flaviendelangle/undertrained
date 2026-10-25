@@ -2,10 +2,10 @@
 //! trainer that supports target power is commanded through `fec`, never by device setup alone.
 //! Protocol references and upstream licensing: docs/ant-bridge.md.
 use crate::{
-    ble::{Command, Event},
     fec::{Control, Radio},
     ftms::Request,
     model::{Capabilities, Device, Reading},
+    sensors::{Command, DeviceError, Event, Radio as SensorRadio, RadioIssue, RadioStatus},
 };
 use anyhow::{Context, Result, bail};
 use rusb::{DeviceHandle, Direction, GlobalContext, TransferType};
@@ -76,6 +76,20 @@ impl Drop for Stick {
         let _ = self.handle.release_interface(self.interface);
     }
 }
+// Classify access failures at the USB operation, before adding diagnostic context.
+fn usb_issue(error: rusb::Error) -> anyhow::Error {
+    match error {
+        rusb::Error::Access | rusb::Error::Busy => RadioIssue::AntAccess.into(),
+        error => error.into(),
+    }
+}
+fn open_issue(error: anyhow::Error) -> RadioIssue {
+    match error.downcast::<RadioIssue>() {
+        Ok(issue) => issue,
+        Err(error) => RadioIssue::Other(format!("{error:#}")),
+    }
+}
+
 impl Stick {
     fn open() -> Result<Self> {
         let devices = rusb::devices().context("Cannot enumerate USB devices")?;
@@ -88,7 +102,7 @@ impl Stick {
                 continue;
             }
             let result = (|| -> Result<Self> {
-                let handle = device.open().context("Cannot open ANT+ USB stick. Check USB permissions or close other training apps")?;
+                let handle = device.open().map_err(usb_issue).context("Cannot open ANT+ USB stick. Check USB permissions or close other training apps")?;
                 let config = device.active_config_descriptor()?;
                 for interface in config.interfaces() {
                     for setting in interface.descriptors() {
@@ -108,6 +122,7 @@ impl Stick {
                             let _ = handle.set_auto_detach_kernel_driver(true);
                             handle
                                 .claim_interface(interface.number())
+                                .map_err(usb_issue)
                                 .context("ANT+ USB stick is busy or permission is denied")?;
                             let mut stick = Self {
                                 handle,
@@ -129,9 +144,7 @@ impl Stick {
                 Err(error) => last_error = Some(error),
             }
         }
-        Err(last_error.unwrap_or_else(|| {
-            anyhow::anyhow!("No ANT+ USB stick found. Plug in an ANTUSB2 or ANTUSB-m stick")
-        }))
+        Err(last_error.unwrap_or_else(|| RadioIssue::NoAntStick.into()))
     }
     fn send(&mut self, id: u8, payload: &[u8]) -> Result<()> {
         let data = frame(id, payload);
@@ -375,8 +388,10 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
                         match Stick::open() {
                             Ok(opened) => stick = Some(opened),
                             Err(error) => {
-                                let _ = events
-                                    .send(Event::Status(format!("ANT+ unavailable: {error:#}")));
+                                let _ = events.send(Event::RadioStatus {
+                                    radio: SensorRadio::Ant,
+                                    status: RadioStatus::Unavailable(open_issue(error)),
+                                });
                                 let _ = events.send(Event::Devices(vec![]));
                                 let _ = events.send(Event::ScanDone);
                                 continue;
@@ -385,7 +400,10 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
                     }
                     scan_until = Some(Instant::now() + Duration::from_secs(12));
                     release_at = None;
-                    let _ = events.send(Event::Status("ANT+ ready".into()));
+                    let _ = events.send(Event::RadioStatus {
+                        radio: SensorRadio::Ant,
+                        status: RadioStatus::Ready,
+                    });
                 }
                 Command::StopScan => {
                     scan_until = None;
@@ -421,14 +439,18 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
                             let _ = events.send(Event::Connected(role, seen.device.clone(), false));
                         }
                         if seen.time.elapsed() < Duration::from_secs(5) {
-                            let _ = events.send(Event::Sample(role, seen.reading.clone()));
+                            let _ = events.send(Event::Sample {
+                                radio: SensorRadio::Ant,
+                                role,
+                                reading: seen.reading.clone(),
+                            });
                         }
                     } else {
                         selected[role] = None;
                         let _ = events.send(Event::Disconnected(role));
-                        let _ = events.send(Event::Error(
+                        let _ = events.send(Event::Error(DeviceError::Other(
                             "ANT+ device is no longer available. Wake it and search again.".into(),
-                        ));
+                        )));
                     }
                 }
                 Command::Disconnect(role) if role < 2 => {
@@ -498,7 +520,11 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
                 if let Some((device, reading)) = decode(id, &bytes) {
                     for (role, selected_id) in selected.iter().enumerate() {
                         if selected_id.as_ref() == Some(&device.id) {
-                            let _ = events.send(Event::Sample(role, reading.clone()));
+                            let _ = events.send(Event::Sample {
+                                radio: SensorRadio::Ant,
+                                role,
+                                reading: reading.clone(),
+                            });
                         }
                     }
                     found.insert(
@@ -524,9 +550,12 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
                     }
                 }
                 let _ = events.send(Event::Devices(vec![]));
-                let _ = events.send(Event::Status(format!(
-                    "ANT+ unavailable: {error}. Reconnect the USB stick and search again."
-                )));
+                let _ = events.send(Event::RadioStatus {
+                    radio: SensorRadio::Ant,
+                    status: RadioStatus::Unavailable(RadioIssue::Other(format!(
+                        "{error}. Reconnect the USB stick and search again."
+                    ))),
+                });
                 let _ = events.send(Event::ScanDone);
                 continue;
             }
@@ -565,6 +594,21 @@ pub fn run(commands: mpsc::Receiver<Command>, events: UnboundedSender<Event>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn usb_initialization_classifies_access_without_parsing_diagnostics() {
+        for error in [rusb::Error::Access, rusb::Error::Busy] {
+            assert_eq!(
+                open_issue(usb_issue(error).context("opening the stick")),
+                RadioIssue::AntAccess
+            );
+        }
+        let error = usb_issue(rusb::Error::Pipe).context("Cannot open ANT+ USB stick");
+        assert_eq!(
+            open_issue(error),
+            RadioIssue::Other("Cannot open ANT+ USB stick: Pipe error".into())
+        );
+    }
+
     fn packet(kind: u8, page: [u8; 8]) -> Vec<u8> {
         let mut bytes = vec![0];
         bytes.extend(page);
@@ -647,8 +691,10 @@ mod tests {
                         selected = true;
                     }
                 }
-                Ok(Event::Sample(1, reading)) if reading.heart_rate.is_some() => received = true,
-                Ok(Event::Error(error)) => panic!("ANT+ error: {error}"),
+                Ok(Event::Sample {
+                    role: 1, reading, ..
+                }) if reading.heart_rate.is_some() => received = true,
+                Ok(Event::Error(error)) => panic!("ANT+ error: {error:?}"),
                 _ => std::thread::sleep(Duration::from_millis(20)),
             }
         }

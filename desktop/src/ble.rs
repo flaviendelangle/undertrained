@@ -1,5 +1,6 @@
 use crate::ftms::{self, Failure, PowerRange, Request, Transport};
-use crate::model::{Capabilities, Device, Reading, cycling_power, heart_rate, indoor_bike_data};
+use crate::model::{Capabilities, Device, cycling_power, heart_rate, indoor_bike_data};
+use crate::sensors::{Command, DeviceError, Event, Radio, RadioIssue, RadioStatus};
 use anyhow::{Context, Result};
 use btleplug::{
     api::{
@@ -23,36 +24,6 @@ use uuid::Uuid;
 
 pub fn uuid(short: u16) -> Uuid {
     Uuid::from_u128(((short as u128) << 96) | 0x0000_1000_8000_0080_5f9b_34fb)
-}
-
-#[derive(Debug)]
-pub enum Command {
-    Scan,
-    StopScan,
-    Connect(String, usize),
-    Disconnect(usize),
-    Reset,
-    SetErg {
-        device_id: String,
-        request: u64,
-        watts: Option<u16>,
-    },
-}
-
-#[derive(Debug)]
-pub enum Event {
-    Status(String),
-    Devices(Vec<Device>),
-    ScanDone,
-    Connecting(usize),
-    Connected(usize, Device, bool),
-    Sample(usize, Reading),
-    Disconnected(usize),
-    Error(String),
-    Erg {
-        request: u64,
-        result: Result<Option<u16>, String>,
-    },
 }
 
 struct Link {
@@ -171,7 +142,11 @@ async fn connect(
                 None
             };
             if let Some(reading) = reading {
-                let _ = sample_events.send(Event::Sample(role, reading));
+                let _ = sample_events.send(Event::Sample {
+                    radio: Radio::Bluetooth,
+                    role,
+                    reading,
+                });
             }
         }
     });
@@ -242,6 +217,17 @@ fn retire_control(slot: &ControlSlot) {
     }
 }
 
+// btleplug has a typed no-adapter failure as well as an empty adapter list. Other
+// platform failures keep their detail; their English wording never classifies them.
+fn scan_issue(error: btleplug::Error) -> RadioIssue {
+    match error {
+        btleplug::Error::NoAdapterAvailable => RadioIssue::NoBluetoothAdapter,
+        error => RadioIssue::Other(format!(
+            "{error}. Check Bluetooth is on and permission is granted."
+        )),
+    }
+}
+
 pub async fn run(
     mut commands: mpsc::UnboundedReceiver<Command>,
     events: mpsc::UnboundedSender<Event>,
@@ -288,15 +274,15 @@ pub async fn run(
                     Command::Scan => {
                         let result = timeout(Duration::from_secs(10), async {
                             if adapter.is_none() {
-                                let manager = Manager::new().await?;
-                                adapter = manager.adapters().await?.into_iter().next();
+                                let manager = Manager::new().await.map_err(scan_issue)?;
+                                adapter = manager.adapters().await.map_err(scan_issue)?.into_iter().next();
                             }
-                            let adapter = adapter.as_ref().context("No Bluetooth adapter found. Connect an adapter and try again.")?;
-                            if adapter.adapter_state().await? == CentralState::PoweredOff {
-                                anyhow::bail!("Bluetooth is switched off or blocked by the system");
+                            let adapter = adapter.as_ref().ok_or(RadioIssue::NoBluetoothAdapter)?;
+                            if adapter.adapter_state().await.map_err(scan_issue)? == CentralState::PoweredOff {
+                                return Err(RadioIssue::BluetoothOff);
                             }
-                            adapter.start_scan(ScanFilter::default()).await?;
-                            Ok::<_, anyhow::Error>(())
+                            adapter.start_scan(ScanFilter::default()).await.map_err(scan_issue)?;
+                            Ok::<_, RadioIssue>(())
                         }).await;
                         match result {
                             Ok(Ok(())) => {
@@ -304,12 +290,14 @@ pub async fn run(
                                 // Keep their handles until reset so clicking one during a rescan
                                 // does not race the next discovery tick.
                                 scan_until = Some(Instant::now() + Duration::from_secs(12));
-                                let _ = events.send(Event::Status("Bluetooth ready".into()));
+                                let _ = events.send(Event::RadioStatus { radio: Radio::Bluetooth, status: RadioStatus::Ready });
                             }
                             result => {
-                                let detail = match result { Ok(Err(e)) => e.to_string(), _ => "Bluetooth did not respond in time".into() };
-                                let _ = events.send(Event::Status("Bluetooth unavailable".into()));
-                                let _ = events.send(Event::Error(format!("{detail}. Check Bluetooth is on and permission is granted.")));
+                                let issue = match result {
+                                    Ok(Err(issue)) => issue,
+                                    _ => RadioIssue::Other("Bluetooth did not respond in time. Check Bluetooth is on and permission is granted.".into()),
+                                };
+                                let _ = events.send(Event::RadioStatus { radio: Radio::Bluetooth, status: RadioStatus::Unavailable(issue) });
                                 let _ = events.send(Event::ScanDone);
                                 scan_until = None;
                                 found.clear();
@@ -327,7 +315,7 @@ pub async fn run(
                         if role == 0 {retire_control(&control_slot);}
                         if let Some((device, peripheral)) = found.get(&id).cloned() {
                             if links[1-role].as_ref().is_some_and(|l| l.peripheral.id() == peripheral.id()) {
-                                let _ = events.send(Event::Error("That device is already assigned to another sensor role.".into()));
+                                let _ = events.send(Event::Error(DeviceError::AlreadyAssigned));
                                 continue;
                             }
                             release(links[role].take()).await;
@@ -345,11 +333,11 @@ pub async fn run(
                                     let _ = timeout(Duration::from_secs(3), peripheral.disconnect()).await;
                                     let detail = match result { Ok(Err(e)) => e.to_string(), _ => "Connection timed out".into() };
                                     let _ = events.send(Event::Disconnected(role));
-                                    let _ = events.send(Event::Error(format!("{detail}. Wake the device, close other training apps, and retry.")));
+                                    let _ = events.send(Event::Error(DeviceError::ConnectionFailed(detail)));
                                 }
                             }
                         } else {
-                            let _ = events.send(Event::Error("Device is no longer available. Search again.".into()));
+                            let _ = events.send(Event::Error(DeviceError::Unavailable));
                         }
                     }
                     Command::Disconnect(role) if role < 2 => {
@@ -424,6 +412,21 @@ pub async fn run(
 #[cfg(test)]
 mod control_tests {
     use super::*;
+    #[test]
+    fn scan_failures_use_typed_conditions_and_preserve_unknown_details() {
+        assert_eq!(
+            scan_issue(btleplug::Error::NoAdapterAvailable),
+            RadioIssue::NoBluetoothAdapter
+        );
+        let detail = "driver said No Bluetooth adapter, but returned a runtime error";
+        assert_eq!(
+            scan_issue(btleplug::Error::RuntimeError(detail.into())),
+            RadioIssue::Other(format!(
+                "Runtime Error: {detail}. Check Bluetooth is on and permission is granted."
+            ))
+        );
+    }
+
     #[test]
     fn queued_commands_are_bound_to_the_selected_device_and_retirement_releases() {
         let (tx, mut desired) = watch::channel(None);
