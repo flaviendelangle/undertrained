@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { PlannedTraining } from "@server/db/types";
 
 import type { JournalActivity, JournalDay } from "./useJournalWeeks";
-import { buildDayEvents, coveredDayKeys } from "./weekGrid";
+import { buildDayEvents, coveredDayKeys, initialScrollHour } from "./weekGrid";
 
 const HOUR = 3600;
 
@@ -18,6 +18,24 @@ function makeDay(date: string, overrides?: Partial<JournalDay>): JournalDay {
     ...overrides,
   };
 }
+
+describe("initialScrollHour", () => {
+  it("opens on the hour line at least 30 minutes above the earliest event", () => {
+    expect(initialScrollHour(5 * 60 + 10)).toBe(4);
+    expect(initialScrollHour(5 * 60 + 40)).toBe(5);
+    expect(initialScrollHour(5 * 60 + 30)).toBe(5);
+  });
+
+  it("never opens later than 07:00", () => {
+    expect(initialScrollHour(14 * 60)).toBe(7);
+    expect(initialScrollHour(Infinity)).toBe(7);
+  });
+
+  it("clamps to midnight for events right after it", () => {
+    expect(initialScrollHour(0)).toBe(0);
+    expect(initialScrollHour(20)).toBe(0);
+  });
+});
 
 describe("coveredDayKeys", () => {
   it("keeps a same-day event on its start day only", () => {

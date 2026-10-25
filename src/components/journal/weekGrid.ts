@@ -102,6 +102,28 @@ export function minutesToTimeLabel(minutes: number): string {
   return `${hh}:${mm}`;
 }
 
+/**
+ * Latest hour the grid opens on: the top of the viewport when the week has no
+ * events, or when its earliest event starts later than that.
+ */
+const LATEST_SCROLL_HOUR = 7;
+
+/** Headroom kept above the week's earliest event when the grid opens. */
+const SCROLL_HEADROOM_MINUTES = 30;
+
+/**
+ * Hour line the week grid opens on: the one at least
+ * {@link SCROLL_HEADROOM_MINUTES} above the week's earliest event, never later
+ * than {@link LATEST_SCROLL_HOUR}. `earliestMinutes` is `Infinity` for an empty
+ * week, which falls back to the cap.
+ */
+export function initialScrollHour(earliestMinutes: number): number {
+  return Math.min(
+    LATEST_SCROLL_HOUR,
+    Math.max(0, Math.floor((earliestMinutes - SCROLL_HEADROOM_MINUTES) / 60)),
+  );
+}
+
 /** Round to the nearest {@link SNAP_MINUTES}, clamped to the day. */
 export function snapMinutes(minutes: number): number {
   const snapped = Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;

@@ -27,16 +27,8 @@ import {
   HOURS,
   HOUR_HEIGHT,
   TOTAL_HEIGHT,
+  initialScrollHour,
 } from "./weekGrid";
-
-/**
- * Latest hour the grid opens on: the top of the viewport when the week has no
- * events, or when its earliest event starts later than that.
- */
-const LATEST_SCROLL_HOUR = 7;
-
-/** Headroom kept above the week's earliest event when the grid opens. */
-const SCROLL_HEADROOM_MINUTES = 30;
 
 /** Fallback URL-sync timeout when `scrollend` isn't supported (Safari < 17.4). */
 const SCROLL_END_FALLBACK_MS = 150;
@@ -299,15 +291,9 @@ function JournalWeekViewImpl({
       return;
     }
     didInitialVerticalScroll.current = true;
-    // `earliestMinutes` is `Infinity` for an empty week, so `min` falls back to
-    // the cap.
-    const startHour = Math.min(
-      LATEST_SCROLL_HOUR,
-      Math.max(0, Math.floor((earliestMinutes - SCROLL_HEADROOM_MINUTES) / 60)),
-    );
     // The day header and all-day strip are sticky inside the scroller, so the
     // grid row under them sits at `scrollTop` itself: no `topOffset` to add.
-    scroller.scrollTop = startHour * HOUR_HEIGHT;
+    scroller.scrollTop = initialScrollHour(earliestMinutes) * HOUR_HEIGHT;
   }, [earliestMinutes, weeks.length]);
 
   // ---- URL sync: only after the user stops scrolling horizontally ----
