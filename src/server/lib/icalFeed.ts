@@ -5,7 +5,11 @@ import { isIP } from "node:net";
 
 import type { Database } from "../db";
 import { calendarSubscriptions } from "../db/schema";
-import { utcToZonedWallClock, zonedWallClockToUtc } from "./timezone";
+import {
+  tzOffsetMs,
+  utcToZonedWallClock,
+  zonedWallClockToUtc,
+} from "./timezone";
 
 /**
  * One external-calendar event, reduced to what the Journal week grid needs. Times
@@ -212,6 +216,51 @@ async function getFeed(rawUrl: string, now: number): Promise<ParsedFeed> {
 // ── Parse + normalize ────────────────────────────────────────────────────
 
 /**
+ * A zone ical.js resolves through `Intl`. Used for a TZID the feed names
+ * without defining it in a VTIMEZONE (ical.js would read it as floating), so
+ * that recurrence limits, EXDATEs and moved instances compare at the right
+ * instant.
+ */
+class IntlTimezone extends ICAL.Timezone {
+  constructor(tzid: string) {
+    super({ tzid });
+  }
+
+  override utcOffset(tt: ICAL.Time): number {
+    const wallAsUtc = Date.UTC(
+      tt.year,
+      tt.month - 1,
+      tt.day,
+      tt.hour,
+      tt.minute,
+      tt.second,
+    );
+    const instant = zonedWallClockToUtc(tt.toString(), this.tzid).getTime();
+    return (wallAsUtc - instant) / 1000;
+  }
+}
+
+/**
+ * Register every IANA TZID the events use with ical.js's zone service, which
+ * it falls back to when the feed has no VTIMEZONE for it. A feed's own
+ * definition still wins.
+ */
+function registerNamedZones(vevents: ICAL.Component[]): void {
+  for (const vevent of vevents) {
+    for (const prop of vevent.getAllProperties()) {
+      const tzid = prop.getParameter("tzid");
+      if (typeof tzid !== "string" || ICAL.TimezoneService.has(tzid)) continue;
+      try {
+        tzOffsetMs(0, tzid);
+      } catch {
+        continue; // Not an IANA zone: ical.js reads it as floating.
+      }
+      ICAL.TimezoneService.register(new IntlTimezone(tzid));
+    }
+  }
+}
+
+/**
  * A feed parsed once per fetch. Each series is related to its own moved or
  * edited instances only: left alone, ical.js relates every RECURRENCE-ID event
  * in the feed to every event, which is quadratic and attaches one series'
@@ -233,6 +282,7 @@ export function parseFeed(ics: string): ParsedFeed {
   } catch {
     throw new IcalFeedError("parse_error");
   }
+  registerNamedZones(vevents);
 
   const instancesByUid = new Map<string, ICAL.Event[]>();
   const masters: ICAL.Component[] = [];
@@ -300,22 +350,13 @@ interface TimeWindow {
 }
 
 /**
- * The instant a timed value denotes. ical.js reads a TZID the feed doesn't
- * define (no VTIMEZONE) as floating, so resolve it through `Intl`. A truly
- * floating time, or a TZID `Intl` doesn't know, is read in the athlete's zone.
+ * The instant a timed value denotes. A floating time, or one whose TZID is
+ * neither defined by the feed nor known to `Intl`, is read in the athlete's
+ * zone.
  */
-function instantMs(time: ICAL.Time, item: ICAL.Event, tz: string): number {
+function instantMs(time: ICAL.Time, tz: string): number {
   if (time.zone?.tzid !== "floating") return time.toUnixTime() * 1000;
-  const tzid = item.component.getFirstProperty("dtstart")?.getParameter("tzid");
-  const wallClock = time.toString();
-  if (typeof tzid === "string") {
-    try {
-      return zonedWallClockToUtc(wallClock, tzid).getTime();
-    } catch {
-      // Not an IANA zone: fall through to the athlete's zone.
-    }
-  }
-  return zonedWallClockToUtc(wallClock, tz).getTime();
+  return zonedWallClockToUtc(time.toString(), tz).getTime();
 }
 
 /**
@@ -361,8 +402,8 @@ function pushEvent(
     return;
   }
 
-  const startMs = instantMs(start, item, tz);
-  let endMs = instantMs(end, item, tz);
+  const startMs = instantMs(start, tz);
+  let endMs = instantMs(end, tz);
   if (endMs < bounds.after || startMs > bounds.before) return;
   // Zero-length / inverted events still want a visible block: default to 30 min.
   if (endMs <= startMs) endMs = startMs + 30 * 60_000;
@@ -388,26 +429,61 @@ function seriesLastDay(event: ICAL.Event): number {
   return last;
 }
 
+function lengthDays(event: ICAL.Event): number {
+  return Math.max(0, Math.ceil(event.duration.toSeconds() / 86_400));
+}
+
+/** Milliseconds since the epoch of a time's own wall clock, whatever its zone. */
+function wallClockMs(time: ICAL.Time): number {
+  return Date.UTC(
+    time.year,
+    time.month - 1,
+    time.day,
+    time.hour,
+    time.minute,
+    time.second,
+  );
+}
+
+/**
+ * How many days a series' RANGE=THISANDFUTURE edits can move an occurrence
+ * earlier or later, and the most days any of its occurrences lasts.
+ */
+function seriesReach(event: ICAL.Event): {
+  earlier: number;
+  later: number;
+  length: number;
+} {
+  const reach = { earlier: 0, later: 0, length: lengthDays(event) };
+  for (const edit of Object.values(event.exceptions)) {
+    if (!edit.modifiesFuture()) continue;
+    const shift = wallClockMs(edit.startDate) - wallClockMs(edit.recurrenceId);
+    reach.earlier = Math.max(reach.earlier, Math.ceil(-shift / MS_PER_DAY));
+    reach.later = Math.max(reach.later, Math.ceil(shift / MS_PER_DAY));
+    reach.length = Math.max(reach.length, lengthDays(edit));
+  }
+  return reach;
+}
+
 /** Feed each occurrence of a series that can touch the window to `add`. */
 function expandSeries(
   event: ICAL.Event,
   bounds: TimeWindow,
   add: (item: ICAL.Event, start: ICAL.Time, end: ICAL.Time) => void,
 ): void {
-  const lengthDays = Math.max(
-    0,
-    Math.ceil(event.duration.toSeconds() / 86_400),
-  );
+  // Days past an occurrence's original date that it can still cover.
+  const { earlier, later, length } = seriesReach(event);
+  const reach = later + length;
   // Expansion always starts at DTSTART, so a series that ended before the
   // window would walk its whole history for nothing.
-  if (seriesLastDay(event) + lengthDays < bounds.firstDay) return;
+  if (seriesLastDay(event) + reach < bounds.firstDay) return;
   const iterator = event.iterator();
   for (let i = 0; i < MAX_RECUR_ITERATIONS; i += 1) {
     const next = iterator.next();
     if (!next) return;
     const day = dayNumber(next);
-    if (day > bounds.lastDay) return;
-    if (day + lengthDays < bounds.firstDay) continue;
+    if (day - earlier > bounds.lastDay) return;
+    if (day + reach < bounds.firstDay) continue;
     const details = event.getOccurrenceDetails(next);
     // Moved and edited instances are listed on their own, at their own time.
     if (details.item !== event && !details.item.modifiesFuture()) continue;

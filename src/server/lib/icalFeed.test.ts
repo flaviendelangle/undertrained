@@ -153,6 +153,53 @@ describe("eventsFromIcs — TZID", () => {
     expect(out[0].startLocal).toBe("2026-08-01T18:00:00");
     expect(out[0].endLocal).toBe("2026-08-01T19:00:00");
   });
+
+  it("reads DTEND in its own zone", () => {
+    // 12:00 in New York is 18:00 in Paris; 15:00 in Los Angeles is midnight.
+    const feed = ics(
+      [
+        "UID:flight@test",
+        "DTSTART;TZID=America/New_York:20260801T120000",
+        "DTEND;TZID=America/Los_Angeles:20260801T150000",
+        "SUMMARY:Flight",
+      ].join("\r\n"),
+    );
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-07-25T00:00:00",
+      "2026-08-10T00:00:00",
+      TZ,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].startLocal).toBe("2026-08-01T18:00:00");
+    expect(out[0].endLocal).toBe("2026-08-02T00:00:00");
+  });
+
+  it("matches UTC UNTIL and EXDATE against a series in an undefined zone", () => {
+    // 09:00 in Paris is 08:00Z in winter: Feb 3 is excluded, Feb 4 is the last.
+    const feed = ics(
+      [
+        "UID:paris@test",
+        "DTSTART;TZID=Europe/Paris:20260202T090000",
+        "DTEND;TZID=Europe/Paris:20260202T100000",
+        "RRULE:FREQ=DAILY;UNTIL=20260204T080000Z",
+        "EXDATE:20260203T080000Z",
+        "SUMMARY:Standup",
+      ].join("\r\n"),
+    );
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-02-01T00:00:00",
+      "2026-02-10T00:00:00",
+      TZ,
+    );
+    expect(out.map((e) => e.startLocal)).toEqual([
+      "2026-02-02T09:00:00",
+      "2026-02-04T09:00:00",
+    ]);
+  });
 });
 
 describe("eventsFromIcs — all-day events", () => {
@@ -277,6 +324,35 @@ describe("eventsFromIcs — recurrence", () => {
       "2026-02-23T10:00:00 1:1",
       "2026-02-23T10:00:00 Team sync",
     ]);
+  });
+
+  it("shows an occurrence a THISANDFUTURE edit moves into the window", () => {
+    // From Feb 9 on, the Monday series moves a week later: the Feb 9
+    // occurrence lands on Feb 16.
+    const feed = ics(
+      [
+        "UID:shifted@test",
+        "DTSTART:20260202T090000Z",
+        "DTEND:20260202T100000Z",
+        "RRULE:FREQ=WEEKLY;BYDAY=MO",
+        "SUMMARY:Weekly sync",
+      ].join("\r\n"),
+      [
+        "UID:shifted@test",
+        "RECURRENCE-ID;RANGE=THISANDFUTURE:20260209T090000Z",
+        "DTSTART:20260216T090000Z",
+        "DTEND:20260216T100000Z",
+        "SUMMARY:Weekly sync",
+      ].join("\r\n"),
+    );
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-02-16T00:00:00",
+      "2026-02-22T23:59:59",
+      TZ,
+    );
+    expect(out.map((e) => e.startLocal)).toEqual(["2026-02-16T10:00:00"]);
   });
 
   it("drops cancelled events", () => {
