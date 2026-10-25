@@ -48,15 +48,16 @@ export interface ActivityIngestion {
   /**
    * Webhook create: imports the activity unless it's already stored, with its
    * streams, details and scores, and refreshes the athlete's stats. Waits out
-   * the rate limit.
+   * the rate limit. Returns true only when the import completed successfully.
    */
-  activityCreated(athleteId: number, stravaId: number): Promise<void>;
+  activityCreated(athleteId: number, stravaId: number): Promise<boolean>;
   /**
    * Webhook update: re-fetches a stored activity and refreshes every column
    * from it, re-fetching the streams when its metrics changed. Ignores
-   * activities we don't store. Waits out the rate limit.
+   * activities we don't store. Waits out the rate limit. Returns true only
+   * when the activity was refreshed successfully.
    */
-  activityUpdated(athleteId: number, stravaId: number): Promise<void>;
+  activityUpdated(athleteId: number, stravaId: number): Promise<boolean>;
   /**
    * Manual reload of everything from Strava. Fetches before writing, so a
    * failure leaves the stored copy as it was. Returns false when the athlete
@@ -452,7 +453,7 @@ export function createActivityIngestion({
       } catch (e) {
         if (isStravaError(e, "not_found")) {
           console.warn(`[webhook] Activity ${stravaId} not found on Strava`);
-          return;
+          return false;
         }
         throw e;
       }
@@ -461,13 +462,14 @@ export function createActivityIngestion({
       const id = await store.insertActivity(newActivity(athleteId, detailed));
       if (id === null) {
         console.log(`[webhook] Activity ${stravaId} already exists, skipping`);
-        return;
+        return false;
       }
       console.log(`[webhook] Inserted activity ${stravaId} (id=${id})`);
 
       const activity = { id, stravaId };
-      await refreshStreams(athleteId, activity);
-      await refreshDetails(athleteId, activity, detailed);
+      const streamsLoaded = await refreshStreams(athleteId, activity);
+      const detailsLoaded = await refreshDetails(athleteId, activity, detailed);
+      let succeeded = streamsLoaded && detailsLoaded;
 
       // Cheap, and keeps Records fresh.
       try {
@@ -477,6 +479,7 @@ export function createActivityIngestion({
           `[webhook] Failed to refresh athlete stats for athlete ${athleteId}:`,
           err,
         );
+        succeeded = false;
       }
 
       try {
@@ -486,7 +489,9 @@ export function createActivityIngestion({
           `[webhook] Failed to compute scores for ${stravaId}:`,
           err,
         );
+        succeeded = false;
       }
+      return succeeded;
     },
 
     async activityUpdated(athleteId, stravaId) {
@@ -495,7 +500,7 @@ export function createActivityIngestion({
         console.log(
           `[webhook] Activity ${stravaId} not found locally for update, ignoring`,
         );
-        return;
+        return false;
       }
 
       // Strava's update payload only flags *which* kinds of fields changed,
@@ -509,7 +514,7 @@ export function createActivityIngestion({
           `[webhook] Failed to re-fetch activity ${stravaId} on update:`,
           err,
         );
-        return;
+        return false;
       }
 
       const columns = summaryColumns(detailed);
@@ -520,10 +525,12 @@ export function createActivityIngestion({
       );
 
       const activity = { id: stored.id, stravaId };
-      if (stale || !stored.areStreamsLoaded) {
-        await refreshStreams(athleteId, activity);
-      }
-      await refreshDetails(athleteId, activity, detailed);
+      const streamsLoaded =
+        stale || !stored.areStreamsLoaded
+          ? await refreshStreams(athleteId, activity)
+          : true;
+      const detailsLoaded = await refreshDetails(athleteId, activity, detailed);
+      let succeeded = streamsLoaded && detailsLoaded;
 
       try {
         await store.rescoreActivity(athleteId, stored.id);
@@ -532,9 +539,11 @@ export function createActivityIngestion({
           `[webhook] Failed to recompute scores for ${stravaId}:`,
           err,
         );
+        succeeded = false;
       }
 
       console.log(`[webhook] Activity ${stravaId} refreshed from Strava`);
+      return succeeded;
     },
 
     async reloadActivity(athleteId, stravaId) {

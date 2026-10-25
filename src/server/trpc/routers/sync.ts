@@ -1,19 +1,32 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { activities, syncJobModeEnum, syncJobs } from "../../db/schema";
+import {
+  activities,
+  athletes,
+  syncJobModeEnum,
+  syncJobs,
+} from "../../db/schema";
 import { activityIngestion } from "../../lib/sync";
 import { athleteProcedure, rateLimited, router } from "../index";
 
 const syncModeSchema = z.enum(syncJobModeEnum.enumValues);
 
 export const syncRouter = router({
-  getJob: athleteProcedure.query(async ({ ctx, input }) => {
-    return (
-      (await ctx.db.query.syncJobs.findFirst({
+  getStatus: athleteProcedure.query(async ({ ctx, input }) => {
+    const [job, athlete] = await Promise.all([
+      ctx.db.query.syncJobs.findFirst({
         where: eq(syncJobs.athlete, input.athleteId),
-      })) ?? null
-    );
+      }),
+      ctx.db.query.athletes.findFirst({
+        where: eq(athletes.id, input.athleteId),
+        columns: { lastWebhookSyncAt: true },
+      }),
+    ]);
+    return {
+      job: job ?? null,
+      lastWebhookSyncAt: athlete?.lastWebhookSyncAt ?? null,
+    };
   }),
 
   start: athleteProcedure

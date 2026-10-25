@@ -1,0 +1,1 @@
+ALTER TABLE "athletes" ADD COLUMN "last_webhook_sync_at" bigint;

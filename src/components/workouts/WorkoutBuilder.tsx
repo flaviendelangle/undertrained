@@ -37,6 +37,7 @@ import { hasPowerTarget } from "~/utils/structuredWorkout/types";
 
 import { QuickAddBar } from "./QuickAddBar";
 import { StepList } from "./StepList";
+import { WorkoutExportButton } from "./WorkoutExportButton";
 import { WorkoutPreviewChart } from "./WorkoutPreviewChart";
 import { WorkoutSportToggle } from "./WorkoutSportToggle";
 import { WorkoutSummaryPanel } from "./WorkoutSummaryPanel";
@@ -232,6 +233,12 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
 
           {/* Just "Save" on a phone: the full label is what pushes this row
               over 390 px and wraps the header onto a third line. */}
+          <WorkoutExportButton
+            name={name}
+            description={description}
+            structure={editor.workout}
+            ftp={ftp}
+          />
           <Button size="sm" disabled={!canSave} onClick={save}>
             {isSaving
               ? t("workouts.saving")

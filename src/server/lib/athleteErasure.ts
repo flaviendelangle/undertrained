@@ -107,6 +107,7 @@ export async function eraseAthleteData(
         calendarToken: null,
         name: null,
         lastSeenActivityId: 0,
+        lastWebhookSyncAt: null,
       })
       .where(eq(athletes.id, athleteId));
   });

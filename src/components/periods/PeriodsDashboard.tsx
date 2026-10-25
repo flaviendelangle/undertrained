@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { ArrowRightIcon } from "lucide-react";
+import { ArrowRightIcon, ListIcon, RouteIcon, TimerIcon } from "lucide-react";
 import nextDynamic from "next/dynamic";
 import Link from "next/link";
 
@@ -16,6 +16,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
+import { formatCompactDuration, formatKm, formatNumber } from "~/utils/format";
 
 const TimePeriodMap = nextDynamic(
   () =>
@@ -66,58 +67,105 @@ function DashboardMasterDetail({ stats, onDelete }: PeriodsDashboardProps) {
   return (
     <div className="hidden gap-5 lg:flex">
       {/* Master list */}
-      <div className="flex w-72 shrink-0 flex-col gap-3">
-        <div className="flex items-center justify-end">
+      <aside
+        className="flex w-80 shrink-0 flex-col gap-3"
+        aria-label={t("periods.pageTitle")}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground text-sm font-medium">
+            {t("periods.pageTitle")}
+            <span className="bg-muted ml-2 rounded px-1.5 py-0.5 text-xs tabular-nums">
+              {stats.length}
+            </span>
+          </span>
           <NewPeriodButton
             size="sm"
             variant="outline"
             label={t("periods.new")}
           />
         </div>
-        <div className="border-border bg-card flex flex-col overflow-hidden rounded-sm border">
+        <ul className="flex flex-col gap-2">
           {stats.map((row) => {
             const active = row.period.id === selected?.period.id;
             return (
-              <div
+              <li
                 key={row.period.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelectedId(row.period.id)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setSelectedId(row.period.id);
-                  }
-                }}
                 className={cn(
-                  "group border-border hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1 border-b border-l-2 px-4 py-3 text-left transition-colors last:border-b-0",
+                  "group relative rounded-lg border transition-colors",
                   active
-                    ? "border-l-primary bg-muted/60"
-                    : "border-l-transparent",
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border bg-card hover:bg-muted/50",
                 )}
               >
-                <div className="flex w-full items-center justify-between gap-2">
+                <button
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setSelectedId(row.period.id)}
+                  className="focus-visible:ring-ring flex w-full flex-col items-start gap-2 rounded-lg p-4 text-left outline-none focus-visible:ring-2"
+                >
                   <span
                     className={cn(
-                      "min-w-0 truncate text-sm font-medium",
-                      active ? "text-foreground" : "text-muted-foreground",
+                      "line-clamp-2 w-full pr-6 text-sm leading-snug font-semibold",
+                      active ? "text-primary" : "text-foreground",
                     )}
                   >
                     {row.period.name}
                   </span>
-                  <DeletePeriodButton
-                    name={row.period.name}
-                    onDelete={() => onDelete(row.period.id)}
+                  <span className="text-muted-foreground text-xs">
+                    {formatPeriodRange(
+                      row.period.startDate,
+                      row.period.endDate,
+                    )}
+                  </span>
+                  <SportTypeIcons
+                    sportTypes={row.period.sportTypes}
+                    className="flex-wrap"
                   />
-                </div>
-                <span className="text-muted-foreground text-xs">
-                  {formatPeriodRange(row.period.startDate, row.period.endDate)}
-                </span>
-              </div>
+                  <span className="text-muted-foreground border-border mt-1 flex w-full flex-wrap items-center gap-x-3 gap-y-2 border-t pt-3 text-xs tabular-nums">
+                    <span
+                      className="flex items-center gap-1"
+                      title={t("periods.stats.activities")}
+                    >
+                      <ListIcon className="size-3.5" aria-hidden />
+                      <span className="sr-only">
+                        {t("periods.stats.activities")}:{" "}
+                      </span>
+                      {formatNumber(row.activityCount, 0)}
+                    </span>
+                    <span
+                      className="flex items-center gap-1"
+                      title={t("periods.stats.distance")}
+                    >
+                      <RouteIcon className="size-3.5" aria-hidden />
+                      <span className="sr-only">
+                        {t("periods.stats.distance")}:{" "}
+                      </span>
+                      {formatKm(row.totalDistance, 0)}
+                    </span>
+                    <span
+                      className="flex items-center gap-1"
+                      title={t("periods.stats.movingTime")}
+                    >
+                      <TimerIcon className="size-3.5" aria-hidden />
+                      <span className="sr-only">
+                        {t("periods.stats.movingTime")}:{" "}
+                      </span>
+                      {formatCompactDuration(row.totalMovingTime, {
+                        subHour: "min",
+                      })}
+                    </span>
+                  </span>
+                </button>
+                <DeletePeriodButton
+                  name={row.period.name}
+                  onDelete={() => onDelete(row.period.id)}
+                  className="absolute top-3 right-3 group-focus-within:opacity-100"
+                />
+              </li>
             );
           })}
-        </div>
-      </div>
+        </ul>
+      </aside>
 
       {/* Detail panel */}
       {selected && (
@@ -140,6 +188,7 @@ function DashboardMasterDetail({ stats, onDelete }: PeriodsDashboardProps) {
             <Button
               variant="outline"
               size="sm"
+              nativeButton={false}
               render={<Link href={`/time-periods/${selected.period.id}`} />}
             >
               {t("periods.openPeriod")}

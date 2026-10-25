@@ -36,6 +36,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useI18n } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import { trpc } from "~/utils/trpc";
@@ -350,19 +351,22 @@ function IdleContent(props: {
 
 export function SyncPanel() {
   const t = useT();
+  const { locale } = useI18n();
   const athleteId = useAthleteId();
-  const { data: syncJob } = trpc.sync.getJob.useQuery(
+  const [open, setOpen] = React.useState(false);
+  const { data: syncStatus } = trpc.sync.getStatus.useQuery(
     { athleteId },
     {
       refetchInterval: (query) => {
-        const data = query.state.data;
+        const data = query.state.data?.job;
         if (data && data.status !== "completed" && data.status !== "failed") {
           return 3000;
         }
-        return false;
+        return open ? 30_000 : false;
       },
     },
   );
+  const syncJob = syncStatus?.job;
   const startSync = trpc.sync.start.useMutation();
   const utils = trpc.useUtils();
 
@@ -395,7 +399,11 @@ export function SyncPanel() {
   const start = (mode: SyncMode) => {
     startSync.mutate(
       { athleteId, mode },
-      { onSuccess: () => utils.sync.getJob.invalidate() },
+      {
+        onSuccess: () => {
+          void utils.sync.getStatus.invalidate();
+        },
+      },
     );
   };
 
@@ -409,7 +417,13 @@ export function SyncPanel() {
 
   return (
     <>
-      <Popover>
+      <Popover
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (nextOpen) void utils.sync.getStatus.invalidate();
+        }}
+      >
         <PopoverTrigger
           render={
             <ToolbarPrimitive.Button
@@ -462,6 +476,28 @@ export function SyncPanel() {
               onAction={handleAction}
               recomputing={startSync.isPending}
             />
+          )}
+          {syncStatus && (
+            <p className="text-muted-foreground border-border mt-3 border-t pt-3 text-xs">
+              {t("sync.status.lastWebhookSynced")}{" "}
+              {syncStatus.lastWebhookSyncAt == null ? (
+                t("sync.status.noWebhookSync")
+              ) : (
+                <time
+                  dateTime={new Date(
+                    syncStatus.lastWebhookSyncAt,
+                  ).toISOString()}
+                >
+                  {new Date(syncStatus.lastWebhookSyncAt).toLocaleString(
+                    locale,
+                    {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    },
+                  )}
+                </time>
+              )}
+            </p>
           )}
         </PopoverContent>
       </Popover>

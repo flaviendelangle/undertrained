@@ -76,7 +76,7 @@ export function SportTypeIcons({
   }
 
   return (
-    <div className={cn("flex items-center gap-1", className)}>
+    <span className={cn("flex items-center gap-1", className)}>
       {sportTypes.map((type) => {
         const Icon = getSportConfig(type).icon;
         return (
@@ -85,11 +85,12 @@ export function SportTypeIcons({
             title={sportTypeLabel(type, t)}
             className="text-muted-foreground bg-muted flex size-6 items-center justify-center rounded-md"
           >
-            <Icon className="size-3.5" />
+            <Icon className="size-3.5" aria-hidden />
+            <span className="sr-only">{sportTypeLabel(type, t)}</span>
           </span>
         );
       })}
-    </div>
+    </span>
   );
 }
 
