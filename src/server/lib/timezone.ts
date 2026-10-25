@@ -9,18 +9,30 @@
  * calendar client's timezone guess.
  */
 
+/** One formatter per zone: building an `Intl.DateTimeFormat` is the slow part. */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatter(timeZone: string): Intl.DateTimeFormat {
+  let format = formatters.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    formatters.set(timeZone, format);
+  }
+  return format;
+}
+
 /** Milliseconds `timeZone` is ahead of UTC at the given absolute instant. */
 export function tzOffsetMs(utcMs: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(new Date(utcMs));
+  const parts = formatter(timeZone).formatToParts(new Date(utcMs));
   const f = (type: string) => Number(parts.find((p) => p.type === type)?.value);
   const asUtc = Date.UTC(
     f("year"),
