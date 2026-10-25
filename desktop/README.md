@@ -115,7 +115,8 @@ Interface text is written in English inside the `ui/*.slint` files as `@tr("..."
 - `ui/widgets.slint`, `ui/shared.slint`: reusable controls, and the blocks whose wording and states are the same on every screen (dialogs, upload, sensors, library cards, ride controls).
 - `ui/design_flow.slint`: the screens: login, devices, the workout board in its three layouts, the ride briefing, the HUD, the summary.
 - `src/scenes.rs`: capture-only fixture scenes for design review.
-- `src/main.rs`: application state, UI commands and event delivery.
+- `src/main.rs`: application state, UI commands and event delivery: the presentation adapter around the ride.
+- `src/ride.rs`: the ride's lifecycle: the recording clock, the step player and the trainer's resistance control, and the decisions that bind them (pedal-driven pauses, releases and their order with the journal, the trainer's answers and silences, finishing and saving). The screen supplies the sensors, the trainer and the clock and projects the result.
 - `src/awake.rs`: keeping the screen on and the computer awake during a ride, per operating system.
 - `src/i18n.rs`: language resolution and the few language-dependent strings Rust formats.
 - `src/sensors.rs`, `src/ant.rs`: the merged Bluetooth and ANT+ discovery, and the ANT+ USB driver.
