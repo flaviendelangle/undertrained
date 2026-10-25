@@ -326,6 +326,37 @@ describe("eventsFromIcs — recurrence", () => {
     ]);
   });
 
+  it("matches a moved instance whose RECURRENCE-ID names another zone", () => {
+    // 10:00 Paris is the series' 09:00Z Feb 9 occurrence.
+    const feed = ics(
+      [
+        "UID:sync@test",
+        "DTSTART:20260202T090000Z",
+        "DTEND:20260202T100000Z",
+        "RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=2",
+        "SUMMARY:Team sync",
+      ].join("\r\n"),
+      [
+        "UID:sync@test",
+        "RECURRENCE-ID;TZID=Europe/Paris:20260209T100000",
+        "DTSTART:20260210T090000Z",
+        "DTEND:20260210T100000Z",
+        "SUMMARY:Team sync",
+      ].join("\r\n"),
+    );
+    const out = eventsFromIcs(
+      feed,
+      SUB,
+      "2026-02-01T00:00:00",
+      "2026-03-01T00:00:00",
+      TZ,
+    );
+    expect(out.map((e) => e.startLocal).sort()).toEqual([
+      "2026-02-02T10:00:00",
+      "2026-02-10T10:00:00",
+    ]);
+  });
+
   it("shows an occurrence a THISANDFUTURE edit moves into the window", () => {
     // From Feb 9 on, the Monday series moves a week later: the Feb 9
     // occurrence lands on Feb 16.

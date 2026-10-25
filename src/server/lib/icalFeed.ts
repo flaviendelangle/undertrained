@@ -281,6 +281,23 @@ export interface ParsedFeed {
   instances: ICAL.Event[];
 }
 
+/**
+ * ical.js finds a series' exception by its RECURRENCE-ID string, trying the
+ * occurrence in the series' zone and then in UTC. Also key each timed exception
+ * by its UTC string, so one whose RECURRENCE-ID names another zone still
+ * replaces its occurrence.
+ */
+function aliasExceptionsByUtc(event: ICAL.Event): void {
+  // Typed as an array, but keyed by RECURRENCE-ID string.
+  const exceptions = event.exceptions as unknown as Record<string, ICAL.Event>;
+  for (const exception of Object.values(exceptions)) {
+    const id = exception.recurrenceId;
+    if (id.isDate || id.zone?.tzid === "floating") continue;
+    const utcId = id.convertToZone(ICAL.Timezone.utcTimezone).toString();
+    exceptions[utcId] ??= exception;
+  }
+}
+
 export function parseFeed(ics: string): ParsedFeed {
   let vevents: ICAL.Component[];
   try {
@@ -319,6 +336,7 @@ export function parseFeed(ics: string): ParsedFeed {
         exceptions:
           instancesByUid.get(String(vevent.getFirstPropertyValue("uid"))) ?? [],
       });
+      aliasExceptionsByUtc(event);
       (event.isRecurring() ? feed.series : feed.singles).push(event);
     } catch {
       // One malformed event must not sink the whole feed.
