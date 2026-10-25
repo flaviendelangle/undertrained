@@ -296,6 +296,8 @@ const en = {
       scanningAll: "Scanning all activities…",
       lastFailed: "Last sync failed",
       lastSynced: "Last synced:",
+      lastWebhookSynced: "Last automatic sync:",
+      noWebhookSync: "None recorded yet",
     },
     progress: {
       streamsWaiting: "Streams: waiting…",
@@ -1095,6 +1097,16 @@ const en = {
       "Set your FTP in Settings to use workouts with relative power targets.",
     actions: "Workout actions",
     editAction: "Edit",
+    exportZwo: "Export .zwo",
+    exportHelp: "Download a Zwift workout file.",
+    exportInvalid: "Add valid workout steps before exporting.",
+    exportBikeOnly: "Only cycling workouts can be exported.",
+    exportTestUnsupported: "FTP tests must be ridden in Undertrained.",
+    exportBlockLimit:
+      "Zwift supports up to 250 blocks, including repeated steps.",
+    exportFtpRequired: "Set your FTP in Settings to export fixed watt targets.",
+    exportFixedTargets:
+      "Use the same FTP in Zwift ({ftp} W) to preserve fixed watt targets.",
     builtIn: {
       viewResult: "View FTP result",
       keepFtp: "Keep current FTP",

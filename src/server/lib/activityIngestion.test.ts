@@ -188,7 +188,7 @@ function activityCalls() {
 describe("webhook create", () => {
   it("stores the activity with its streams, details, best efforts and scores", async () => {
     strava.put(ATHLETE, run(1), RUN_STREAMS);
-    await ingestion.activityCreated(ATHLETE, 1);
+    expect(await ingestion.activityCreated(ATHLETE, 1)).toBe(true);
 
     const row = store.activity(1);
     expect(row).toMatchObject({
@@ -212,7 +212,7 @@ describe("webhook create", () => {
 
   it("still stores the details and scores when Strava has no streams", async () => {
     strava.put(ATHLETE, swim(2));
-    await ingestion.activityCreated(ATHLETE, 2);
+    expect(await ingestion.activityCreated(ATHLETE, 2)).toBe(true);
 
     const row = store.activity(2);
     expect(row).toMatchObject({
@@ -228,7 +228,7 @@ describe("webhook create", () => {
   it("counts a failed stream fetch and still stores the details and scores", async () => {
     strava.put(ATHLETE, ride(3), rideStreams(200));
     strava.failNext("getStreams", new StravaError("other", "Bad Gateway"));
-    await ingestion.activityCreated(ATHLETE, 3);
+    expect(await ingestion.activityCreated(ATHLETE, 3)).toBe(false);
 
     expect(store.activity(3)).toMatchObject({
       areStreamsLoaded: false,
@@ -259,7 +259,7 @@ describe("webhook update", () => {
       const before = store.activity(4).powerBests;
       const recomputed = rideStreams(300);
       strava.put(ATHLETE, ride(4, change), recomputed);
-      await ingestion.activityUpdated(ATHLETE, 4);
+      expect(await ingestion.activityUpdated(ATHLETE, 4)).toBe(true);
 
       const row = store.activity(4);
       expect(activityCalls()).toEqual(["getActivity 4", "getStreams 4"]);
@@ -295,10 +295,18 @@ describe("webhook update", () => {
 
   it("ignores an activity we don't store", async () => {
     strava.put(ATHLETE, ride(5));
-    await ingestion.activityUpdated(ATHLETE, 5);
+    expect(await ingestion.activityUpdated(ATHLETE, 5)).toBe(false);
 
     expect(strava.calls).toEqual([]);
     expect(store.activities).toHaveLength(1);
+  });
+
+  it("reports a failed refresh without replacing the stored activity", async () => {
+    strava.put(ATHLETE, ride(4, { name: "New name" }));
+    strava.failNext("getActivity", new StravaError("other", "Bad Gateway"));
+    const previousName = store.activity(4).name;
+    expect(await ingestion.activityUpdated(ATHLETE, 4)).toBe(false);
+    expect(store.activity(4).name).toBe(previousName);
   });
 });
 

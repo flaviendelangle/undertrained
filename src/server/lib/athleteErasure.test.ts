@@ -137,6 +137,7 @@ describe("eraseAthleteData", () => {
       calendarToken: null,
       name: null,
       lastSeenActivityId: 0,
+      lastWebhookSyncAt: null,
     });
   });
 });

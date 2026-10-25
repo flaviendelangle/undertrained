@@ -76,6 +76,7 @@ export const athletes = pgTable(
     // `max(activities.id)` in migration 0022; 0 for a brand-new athlete, whose
     // first prompt check then silently acknowledges the backfilled history.
     lastSeenActivityId: integer("last_seen_activity_id").notNull().default(0),
+    lastWebhookSyncAt: bigint("last_webhook_sync_at", { mode: "number" }),
   },
   (t) => [
     uniqueIndex("athletes_strava_id_idx").on(t.stravaAthleteId),

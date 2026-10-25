@@ -301,6 +301,8 @@ const fr: Messages = {
       scanningAll: "Analyse de toutes les activités…",
       lastFailed: "La dernière synchronisation a échoué",
       lastSynced: "Dernière synchronisation :",
+      lastWebhookSynced: "Dernière synchronisation automatique :",
+      noWebhookSync: "Aucune enregistrée",
     },
     progress: {
       streamsWaiting: "Flux : en attente…",
@@ -1120,6 +1122,17 @@ const fr: Messages = {
       "Renseignez votre FTP dans les réglages pour les séances avec des cibles de puissance relatives.",
     actions: "Actions de la séance",
     editAction: "Modifier",
+    exportZwo: "Exporter en .zwo",
+    exportHelp: "Télécharger un fichier de séance Zwift.",
+    exportInvalid: "Ajoutez des étapes valides avant d'exporter.",
+    exportBikeOnly: "Seules les séances de vélo peuvent être exportées.",
+    exportTestUnsupported:
+      "Les tests FTP doivent être réalisés dans Undertrained.",
+    exportBlockLimit: "Zwift accepte jusqu'à 250 blocs, répétitions comprises.",
+    exportFtpRequired:
+      "Renseignez votre FTP dans les réglages pour exporter des cibles en watts.",
+    exportFixedTargets:
+      "Utilisez la même FTP dans Zwift ({ftp} W) pour conserver les cibles en watts.",
     builtIn: {
       viewResult: "Voir le résultat FTP",
       keepFtp: "Conserver la FTP actuelle",

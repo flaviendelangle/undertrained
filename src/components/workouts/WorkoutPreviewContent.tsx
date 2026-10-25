@@ -18,6 +18,8 @@ import {
 } from "~/utils/structuredWorkout";
 import { hasPowerTarget } from "~/utils/structuredWorkout/types";
 
+import { WorkoutExportButton } from "./WorkoutExportButton";
+
 function WorkoutSteps({ nodes }: { nodes: WorkoutNode[] }) {
   const t = useT();
   return (
@@ -95,21 +97,28 @@ export function WorkoutPreviewContent({
           structure && <WorkoutSteps nodes={structure.nodes} />
         )}
       </div>
-      {structure &&
-        !error &&
-        !loading &&
-        (missingFtp ? (
-          <p className="text-sm">
-            {t("workouts.ftpRequired")}{" "}
-            <Link href="/settings" className="text-primary underline">
-              {t("common.openSettings")}
-            </Link>
-          </p>
-        ) : (
-          <Button nativeButton={false} render={<Link href={startHref} />}>
-            {t("workouts.startWorkout")}
-          </Button>
-        ))}
+      {structure && !error && !loading && (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <WorkoutExportButton
+            name={name}
+            description={description}
+            structure={structure}
+            ftp={configuredFtp}
+          />
+          {missingFtp ? (
+            <p className="text-sm">
+              {t("workouts.ftpRequired")}{" "}
+              <Link href="/settings" className="text-primary underline">
+                {t("common.openSettings")}
+              </Link>
+            </p>
+          ) : (
+            <Button nativeButton={false} render={<Link href={startHref} />}>
+              {t("workouts.startWorkout")}
+            </Button>
+          )}
+        </div>
+      )}
     </ResponsiveDialogContent>
   );
 }

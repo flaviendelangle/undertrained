@@ -1,9 +1,9 @@
 import { and, eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TRPCError } from "@trpc/server";
 
-import { activities } from "../db/schema";
+import { activities, athletes } from "../db/schema";
 
 // `webhook.ts` reaches for the singleton db and the production ingestion at
 // import time; stub them so these cases exercise the dispatcher alone, with no
@@ -12,12 +12,19 @@ import { activities } from "../db/schema";
 vi.mock("../db", () => ({ db: dbMock }));
 vi.mock("./athleteErasure", () => ({ eraseAthleteData }));
 vi.mock("./strava", () => ({ getAccessToken }));
-vi.mock("./sync", () => ({ activityIngestion: vi.fn() }));
+vi.mock("./sync", () => ({
+  activityIngestion: () => ({ activityCreated, activityUpdated }),
+}));
 
 const ATHLETE_ID = 7;
 const STRAVA_ATHLETE_ID = 12345;
 
-type Op = { verb: "delete" | "update"; table: unknown; where: unknown };
+type Op = {
+  verb: "delete" | "update";
+  table: unknown;
+  where: unknown;
+  values?: unknown;
+};
 
 /** Every write the handler attempted, in order. */
 let ops: Op[] = [];
@@ -27,6 +34,8 @@ let activityRow: Record<string, unknown> | undefined;
 let activityLookup: unknown;
 const getAccessToken = vi.fn<() => Promise<string>>();
 const eraseAthleteData = vi.fn<() => Promise<void>>();
+const activityCreated = vi.fn<() => Promise<boolean>>();
+const activityUpdated = vi.fn<() => Promise<boolean>>();
 
 /**
  * Awaitable stand-in for a drizzle query builder tail: `await …where(x)` and
@@ -57,9 +66,9 @@ const dbMock = {
     },
   }),
   update: (table: unknown) => ({
-    set: () => ({
+    set: (values: unknown) => ({
       where: (where: unknown) => {
-        ops.push({ verb: "update", table, where });
+        ops.push({ verb: "update", table, where, values });
         return thenable([]);
       },
     }),
@@ -94,6 +103,8 @@ beforeEach(() => {
   resetDeauthCheckThrottle();
   getAccessToken.mockReset().mockResolvedValue("live-token");
   eraseAthleteData.mockReset().mockResolvedValue();
+  activityCreated.mockReset().mockResolvedValue(true);
+  activityUpdated.mockReset().mockResolvedValue(true);
   athleteRow = {
     id: ATHLETE_ID,
     stravaAthleteId: STRAVA_ATHLETE_ID,
@@ -101,6 +112,66 @@ beforeEach(() => {
     refreshToken: "refresh",
     tokenExpiresAt: 9_999_999_999,
   };
+});
+
+afterEach(() => vi.restoreAllMocks());
+
+describe("last successful webhook sync", () => {
+  function activityEvent(aspect: "create" | "update") {
+    return {
+      ...deauthEvent(),
+      object_type: "activity" as const,
+      object_id: 555,
+      aspect_type: aspect,
+      updates: {},
+    };
+  }
+
+  it.each(["create", "update"] as const)(
+    "records %s completion for only the event's athlete",
+    async (aspect) => {
+      let complete!: (value: boolean) => void;
+      const completion = new Promise<boolean>((resolve) => {
+        complete = resolve;
+      });
+      const ingest = aspect === "create" ? activityCreated : activityUpdated;
+      ingest.mockReturnValue(completion);
+      const pending = processWebhookEvent(activityEvent(aspect));
+      await vi.waitFor(() => expect(ingest).toHaveBeenCalled());
+      expect(ops).toEqual([]);
+
+      const completedAt = 1_792_944_000_000;
+      vi.spyOn(Date, "now").mockReturnValue(completedAt);
+      complete(true);
+      await pending;
+      expect(ops).toEqual([
+        {
+          verb: "update",
+          table: athletes,
+          where: eq(athletes.id, ATHLETE_ID),
+          values: { lastWebhookSyncAt: completedAt },
+        },
+      ]);
+    },
+  );
+
+  it.each(["create", "update"] as const)(
+    "keeps the timestamp when %s was incomplete or ignored",
+    async (aspect) => {
+      const ingest = aspect === "create" ? activityCreated : activityUpdated;
+      ingest.mockResolvedValue(false);
+      await processWebhookEvent(activityEvent(aspect));
+      expect(ops).toEqual([]);
+    },
+  );
+
+  it("keeps the timestamp when processing throws", async () => {
+    activityCreated.mockRejectedValue(new Error("Strava unavailable"));
+    await expect(processWebhookEvent(activityEvent("create"))).rejects.toThrow(
+      "Strava unavailable",
+    );
+    expect(ops).toEqual([]);
+  });
 });
 
 /** Stubs the confirmation call to `GET /api/v3/athlete`. */
@@ -222,7 +293,7 @@ describe("activity deletion", () => {
       event_time: 0,
     });
 
-    expect(ops).toHaveLength(1);
+    expect(ops).toHaveLength(2);
     expect(ops[0].table).toBe(activities);
     expect(ops[0].where).toEqual(
       and(eq(activities.stravaId, 555), eq(activities.athlete, ATHLETE_ID)),
@@ -244,7 +315,7 @@ describe("activity deletion", () => {
     expect(activityLookup).toEqual(
       and(eq(activities.stravaId, 555), eq(activities.athlete, ATHLETE_ID)),
     );
-    expect(ops).toHaveLength(1);
+    expect(ops).toHaveLength(2);
     expect(ops[0].where).toEqual(eq(activities.id, 4242));
   });
 });

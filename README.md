@@ -79,6 +79,19 @@ Open http://localhost:3000 — you'll be redirected to the login page where you 
 | `pnpm webhook:create` | Register a new webhook subscription      |
 | `pnpm webhook:delete` | Delete a webhook subscription            |
 
+## Workout export
+
+Use **Export .zwo** in the workout editor or a workout's preview to download
+a cycling workout for Zwift. Ramps, repeated steps, cadence cues and notes are
+included. Files contain up to 250 blocks after expanding repeats. FTP tests
+stay in Undertrained because their playback and result calculation need the app.
+
+Fixed watt targets require an FTP in Settings and are converted to fractions
+of that FTP. Use the same FTP in Zwift to keep those targets at their original
+wattage. Workouts written entirely in percentages do not require a configured FTP.
+
+Import the file using [Zwift's custom workout instructions](https://support.zwift.com/en_us/custom-workouts-ryGOTVEPs).
+
 ## Production deployment
 
 The project includes Docker files for self-hosted deployment: PostgreSQL, the Next.js app, and Caddy as a reverse proxy with automatic HTTPS.

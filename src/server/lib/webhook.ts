@@ -41,22 +41,33 @@ export async function processWebhookEvent(
   }
 
   if (event.object_type === "activity") {
+    let synced: boolean;
     switch (event.aspect_type) {
       case "create":
-        return activityIngestion(db).activityCreated(
+        synced = await activityIngestion(db).activityCreated(
           athlete.id,
           event.object_id,
         );
+        break;
       case "update":
-        return handleActivityUpdate(
+        synced = await handleActivityUpdate(
           db,
           athlete.id,
           event.object_id,
           event.updates,
         );
+        break;
       case "delete":
-        return handleActivityDelete(db, athlete.id, event.object_id);
+        synced = await handleActivityDelete(db, athlete.id, event.object_id);
+        break;
     }
+    if (synced) {
+      await db
+        .update(athletes)
+        .set({ lastWebhookSyncAt: Date.now() })
+        .where(eq(athletes.id, athlete.id));
+    }
+    return;
   }
 
   if (event.object_type === "athlete" && event.aspect_type === "update") {
@@ -73,7 +84,7 @@ async function handleActivityUpdate(
   athleteId: number,
   stravaActivityId: number,
   updates: Record<string, string>,
-): Promise<void> {
+): Promise<boolean> {
   if (updates.private !== "true") {
     return activityIngestion(db).activityUpdated(athleteId, stravaActivityId);
   }
@@ -90,7 +101,7 @@ async function handleActivityUpdate(
     console.log(
       `[webhook] Activity ${stravaActivityId} not found locally for update, ignoring`,
     );
-    return;
+    return false;
   }
 
   // Activity made private — no longer accessible to our app
@@ -98,6 +109,7 @@ async function handleActivityUpdate(
   console.log(
     `[webhook] Activity ${stravaActivityId} made private, deleted locally`,
   );
+  return true;
 }
 
 // ── Activity Delete ─────────────────────────────────────────────────────
@@ -106,7 +118,7 @@ async function handleActivityDelete(
   db: Database,
   athleteId: number,
   stravaActivityId: number,
-): Promise<void> {
+): Promise<boolean> {
   // Scoped to the event's athlete: the payload carrying `stravaId` is
   // unauthenticated (see the deauthorization note below), so a delete must be
   // constrained to the athlete the event claims to speak for — otherwise any
@@ -128,6 +140,7 @@ async function handleActivityDelete(
       `[webhook] Deleted activity ${stravaActivityId} (id=${result[0].id})`,
     );
   }
+  return result.length > 0;
 }
 
 // ── Athlete Deauthorization ─────────────────────────────────────────────
