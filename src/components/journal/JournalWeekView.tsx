@@ -27,10 +27,8 @@ import {
   HOURS,
   HOUR_HEIGHT,
   TOTAL_HEIGHT,
+  initialScrollHour,
 } from "./weekGrid";
-
-/** Hour the grid scrolls to when the week has no events to anchor on. */
-const DEFAULT_SCROLL_HOUR = 6;
 
 /** Fallback URL-sync timeout when `scrollend` isn't supported (Safari < 17.4). */
 const SCROLL_END_FALLBACK_MS = 150;
@@ -276,8 +274,9 @@ function JournalWeekViewImpl({
 
   // ---- Vertical scroll: only once on mount, not on every cross-week snap ----
 
-  // Open the grid near the first event of the anchor week (or 06:00 if empty);
-  // gated by a ref so cross-week scrolls preserve the user's vertical position.
+  // Open the grid on the hour line just above the anchor week's first event,
+  // never later than 07:00 (07:00 for an empty week); gated by a ref so
+  // cross-week scrolls preserve the user's vertical position.
   const earliestMinutes = React.useMemo(
     () => earliestMinutesOfWeek(week),
     [week],
@@ -292,12 +291,10 @@ function JournalWeekViewImpl({
       return;
     }
     didInitialVerticalScroll.current = true;
-    const startMinutes = Number.isFinite(earliestMinutes)
-      ? earliestMinutes
-      : DEFAULT_SCROLL_HOUR * 60;
-    const eventTop = (startMinutes / 60) * HOUR_HEIGHT;
-    scroller.scrollTop = topOffset + Math.max(0, eventTop - HOUR_HEIGHT);
-  }, [earliestMinutes, weeks.length, topOffset]);
+    // The day header and all-day strip are sticky inside the scroller, so the
+    // grid row under them sits at `scrollTop` itself: no `topOffset` to add.
+    scroller.scrollTop = initialScrollHour(earliestMinutes) * HOUR_HEIGHT;
+  }, [earliestMinutes, weeks.length]);
 
   // ---- URL sync: only after the user stops scrolling horizontally ----
 
