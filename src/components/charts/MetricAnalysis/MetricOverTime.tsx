@@ -111,7 +111,11 @@ export function MetricOverTime({
         <ChartsContainerPro
           series={[]}
           margin={
-            isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
+            isMobile
+              ? metric.zoomable
+                ? CHART_MARGINS.zoomMobile
+                : CHART_MARGINS.standardMobile
+              : CHART_MARGINS.standard
           }
           zoomData={metric.zoomable ? zoomData : undefined}
           onZoomChange={metric.zoomable ? setZoomData : undefined}

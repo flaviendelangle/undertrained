@@ -336,6 +336,11 @@ export const CHART_MARGINS = {
   standard: { left: 8, right: 16, top: 16, bottom: 8 },
   /** Standard margins for mobile */
   standardMobile: { left: 4, right: 4, top: 4, bottom: 4 },
+  /**
+   * With a mobile y-axis, both slider handles sit at least 48px from the
+   * chart edges so their 44px touch targets avoid Android's back gesture.
+   */
+  zoomMobile: { left: 16, right: 48, top: 4, bottom: 4 },
   /** Compact margin for dense multi-panel layouts */
   compact: { top: 8, right: 16, bottom: 36, left: 56 },
   /** Dual-axis chart with labels on both sides */

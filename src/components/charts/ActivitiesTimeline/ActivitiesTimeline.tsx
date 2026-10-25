@@ -277,7 +277,7 @@ export default function ActivitiesTimeline() {
             grid={{ horizontal: true }}
             skipAnimation
             margin={
-              isMobile ? CHART_MARGINS.standardMobile : CHART_MARGINS.standard
+              isMobile ? CHART_MARGINS.zoomMobile : CHART_MARGINS.standard
             }
             hideLegend={isMobile}
             slots={{ tooltip: ChartTooltip }}
