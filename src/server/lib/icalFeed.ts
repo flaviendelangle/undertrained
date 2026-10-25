@@ -38,6 +38,8 @@ const MAX_EVENTS_PER_FEED = 2_000;
 const MAX_ALLDAY_SPAN_DAYS = 90;
 const CACHE_TTL_MS = 15 * 60_000;
 const MAX_CACHE_ENTRIES = 50;
+/** Offsets cached per zone the feeds name without defining (a few MB at most). */
+const MAX_ZONE_OFFSETS = 50_000;
 const MS_PER_DAY = 86_400_000;
 
 /**
@@ -222,21 +224,26 @@ async function getFeed(rawUrl: string, now: number): Promise<ParsedFeed> {
  * instant.
  */
 class IntlTimezone extends ICAL.Timezone {
+  /**
+   * Offsets by wall clock. Recurrence expansion asks for the same instants on
+   * every request, and each `Intl` lookup is slow.
+   */
+  private readonly offsets = new Map<number, number>();
+
   constructor(tzid: string) {
     super({ tzid });
   }
 
   override utcOffset(tt: ICAL.Time): number {
-    const wallAsUtc = Date.UTC(
-      tt.year,
-      tt.month - 1,
-      tt.day,
-      tt.hour,
-      tt.minute,
-      tt.second,
-    );
-    const instant = zonedWallClockToUtc(tt.toString(), this.tzid).getTime();
-    return (wallAsUtc - instant) / 1000;
+    const wallAsUtc = wallClockMs(tt);
+    let offset = this.offsets.get(wallAsUtc);
+    if (offset === undefined) {
+      const instant = zonedWallClockToUtc(tt.toString(), this.tzid).getTime();
+      offset = (wallAsUtc - instant) / 1000;
+      if (this.offsets.size >= MAX_ZONE_OFFSETS) this.offsets.clear();
+      this.offsets.set(wallAsUtc, offset);
+    }
+    return offset;
   }
 }
 
