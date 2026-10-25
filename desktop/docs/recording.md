@@ -34,7 +34,7 @@ The ride folder retains separate upload-intent, receipt and completion files. No
 
 ## Validation
 
-Unit tests cover independent sensor expiry, pause/resume clocks, real zero versus missing power, delayed timer gaps, disk-full handling, failed export retries, and FIT framing/CRC. Upload tests use a local HTTP server to check persistence, account ownership, status-only retries and uncertain submissions. No test sends a ride to Strava.
+Unit tests cover independent sensor expiry, pause/resume clocks, real zero versus missing power, delayed timer gaps, disk-full handling, failed export retries, and FIT framing/CRC. The ride module's tests drive the lifecycle through the interface the screen uses, with instants of their choosing and resistance commands captured in place of the radio: the pedals pausing and resuming the clock on the five- and thirty-second rules, the rider's pause and a journal fault waiting for Resume, a pause releasing the trainer and Resume sending the target again, finishing once with a failed export retried from the samples in memory. Upload tests use a local HTTP server to check persistence, account ownership, status-only retries and uncertain submissions. No test sends a ride to Strava.
 
 An ignored hardware test exercises ANT+ discovery, sensor selection, recording and export together. It passed locally with five real heart-rate samples. Run it only when the USB stick is free and a heart-rate sensor is broadcasting:
 
