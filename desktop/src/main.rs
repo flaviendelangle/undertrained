@@ -21,8 +21,9 @@ mod workouts;
 
 use crate::i18n::Lang;
 use crate::model::Device;
-use crate::recording::{Live, Phase};
+use crate::recording::Phase;
 use crate::ride::{Control, ErgAnswer, Ride, Save, Switched};
+use crate::sensors::Live;
 use crate::workouts::{LoadError, Workout, WorkoutId};
 use slint::{ComponentHandle, Model, ModelRc, Timer, TimerMode, VecModel};
 use std::{
@@ -53,14 +54,15 @@ struct AppState {
     last_sample: [Option<Instant>; 2],
     selected: [Option<String>; 2],
     /// The device behind each role while connected, so names can be reworded on a
-    /// language change and ANT+ samples can be told from Bluetooth ones.
+    /// language change and commands can be addressed to it. Its id labels the radio on
+    /// screen; what a sample means is decided by the radio that tagged it, never here.
     connected: [Option<Device>; 2],
     library: workouts::Library,
     workout_job: Option<tokio::task::JoinHandle<()>>,
     selected_workout: Option<WorkoutId>,
     lang: Lang,
-    /// Fresh readings from both roles, fed by every real sample and cleared on disconnect.
-    sensors: recording::Sensors,
+    /// Fresh readings from both roles, fed by every radio event and cleared on disconnect.
+    sensors: sensors::Readings,
     /// The connected trainer confirmed that it takes target power: over Bluetooth the FTMS
     /// feature flags, over ANT+ the FE capabilities page. Only then does it get commands.
     trainer_erg: bool,
@@ -1451,51 +1453,30 @@ fn connected(ui: &AppWindow, state: &mut AppState, device: &Device, role: usize,
     }
 }
 
-/// A radio report from the sensor layer: a state code (0 not checked, 1 ready, 2 unavailable),
-/// a known-condition code the interface words itself, and the raw remainder for anything
-/// else. The aggregated statuses read "<Radio> ready" or "<Radio> unavailable: <reason>".
+/// A radio report, as the interface codes it: a state (0 not checked, 1 ready, 2 unavailable),
+/// a known condition the interface words itself, and the raw detail of anything else.
 /// Known conditions: Bluetooth 1 switched off or blocked, 2 no adapter; ANT+ 1 no USB stick,
-/// 2 stick busy or permission denied. Their raw text is dropped so nothing shows twice.
-fn radio_state(status: &str) -> (i32, i32, String) {
-    let lower = status.to_ascii_lowercase();
-    if lower.contains("unavailable") {
-        let detail = status
-            .split_once(':')
-            .map(|(_, rest)| rest.trim().to_owned())
-            .unwrap_or_default();
-        let issue = if detail.contains("switched off or blocked") {
-            1
-        } else if detail.starts_with("No Bluetooth adapter") {
-            2
-        } else if detail.starts_with("No ANT+ USB stick") {
-            1
-        } else if detail.contains("Cannot open ANT+ USB stick")
-            || detail.contains("busy or permission is denied")
-        {
-            2
-        } else {
-            0
-        };
-        (2, issue, if issue == 0 { detail } else { String::new() })
-    } else if lower.contains("ready") {
-        (1, 0, String::new())
-    } else {
-        (0, 0, status.to_owned())
+/// 2 stick busy or permission denied. They carry no raw text, so nothing shows twice.
+fn radio_state(status: sensors::RadioStatus) -> (i32, i32, String) {
+    use sensors::{RadioIssue, RadioStatus};
+    match status {
+        RadioStatus::Ready => (1, 0, String::new()),
+        RadioStatus::Unavailable(issue) => match issue {
+            RadioIssue::BluetoothOff | RadioIssue::NoAntStick => (2, 1, String::new()),
+            RadioIssue::NoBluetoothAdapter | RadioIssue::AntAccess => (2, 2, String::new()),
+            RadioIssue::Other(detail) => (2, 0, detail),
+        },
     }
 }
 
-/// Map a driver error, which arrives as English text, to a message code and the raw detail.
-fn device_error(message: &str) -> (i32, String) {
-    if message.starts_with("Device is no longer available") {
-        (1, String::new())
-    } else if message.starts_with("That device is already assigned") {
-        (2, String::new())
-    } else if message.contains("switched off or blocked") {
-        (4, String::new())
-    } else if let Some((detail, _)) = message.split_once(". Wake the device") {
-        (3, detail.to_owned())
-    } else {
-        (6, message.to_owned())
+/// A device error from either radio, as a message code and the raw detail shown under it.
+fn device_error(error: sensors::DeviceError) -> (i32, String) {
+    use sensors::DeviceError;
+    match error {
+        DeviceError::Unavailable => (1, String::new()),
+        DeviceError::AlreadyAssigned => (2, String::new()),
+        DeviceError::ConnectionFailed(detail) => (3, detail),
+        DeviceError::Other(detail) => (6, detail),
     }
 }
 
@@ -1561,7 +1542,7 @@ fn main() -> anyhow::Result<()> {
         library: workouts::Library::default(),
         workout_job: None,
         selected_workout: None,
-        sensors: recording::Sensors::default(),
+        sensors: sensors::Readings::default(),
         trainer_erg: false,
         ride: None,
         upload_jobs: 0,
@@ -1685,7 +1666,7 @@ fn main() -> anyhow::Result<()> {
                     let _ = events.send(AuthEvent::Notice(Notice::RevokeFailed));
                 }
             });
-            let _ = commands.send(ble::Command::Reset);
+            let _ = commands.send(sensors::Command::Reset);
             reset_session_ui(&ui, &mut state.borrow_mut());
             // Without an account the system decides the language again.
             apply_language(&ui, &mut state.borrow_mut(), i18n::resolve(None));
@@ -2084,7 +2065,7 @@ fn main() -> anyhow::Result<()> {
             ui.set_message_code(0);
             ui.set_message_detail("".into());
             ui.set_scanning(true);
-            let _ = commands.send(ble::Command::Scan);
+            let _ = commands.send(sensors::Command::Scan);
             // A new search lists devices in the radios' order again, strongest first.
             let state = state.borrow();
             state.nearby.clear();
@@ -2097,7 +2078,7 @@ fn main() -> anyhow::Result<()> {
         ui.global::<Actions>().on_close_picker(move || {
             let ui = weak.unwrap();
             ui.set_picker_open(false);
-            let _ = commands.send(ble::Command::StopScan);
+            let _ = commands.send(sensors::Command::StopScan);
         });
     }
     {
@@ -2117,8 +2098,8 @@ fn main() -> anyhow::Result<()> {
             if role == 0 {
                 let_go_of_trainer(&ui, &mut state.borrow_mut());
             }
-            let _ = commands.send(ble::Command::StopScan);
-            let _ = commands.send(ble::Command::Connect(id.to_string(), role));
+            let _ = commands.send(sensors::Command::StopScan);
+            let _ = commands.send(sensors::Command::Connect(id.to_string(), role));
         });
     }
     {
@@ -2138,7 +2119,7 @@ fn main() -> anyhow::Result<()> {
             }
             disconnected(&ui, &mut state.borrow_mut(), role);
             state.borrow_mut().selected[role] = None;
-            let _ = commands.send(ble::Command::Disconnect(role));
+            let _ = commands.send(sensors::Command::Disconnect(role));
         });
     }
     {
@@ -2314,74 +2295,61 @@ fn main() -> anyhow::Result<()> {
             if !ui.get_logged_in() {
                 continue;
             }
+            // The readings see every event first: each sample carries the radio that
+            // tagged it, so what a missing field means is settled there, never from a
+            // device id on screen. The recorder reads those readings, never the screen.
+            let now = Instant::now();
+            timer_state.borrow_mut().sensors.observe(&event, now);
             match event {
                 // Each radio reports on its own; one failing never blocks the other.
-                sensors::Event::RadioStatus { ant, status } => {
-                    let (state, issue, detail) = radio_state(&status);
-                    if ant {
-                        ui.set_ant_state(state);
-                        ui.set_ant_issue(issue);
-                        ui.set_ant_detail(detail.into());
-                    } else {
-                        ui.set_bluetooth_state(state);
-                        ui.set_bluetooth_issue(issue);
-                        ui.set_bluetooth_detail(detail.into());
-                    }
-                }
-                sensors::Event::Device(event) => match event {
-                    ble::Event::Status(status) => {
-                        let (state, issue, detail) = radio_state(&status);
-                        ui.set_bluetooth_state(state);
-                        ui.set_bluetooth_issue(issue);
-                        ui.set_bluetooth_detail(detail.into());
-                    }
-                    ble::Event::Devices(devices) => {
-                        timer_state.borrow_mut().devices = devices;
-                        device_rows(&ui, &timer_state.borrow());
-                    }
-                    ble::Event::ScanDone => ui.set_scanning(false),
-                    ble::Event::Connecting(role) => {
-                        disconnected(&ui, &mut timer_state.borrow_mut(), role);
-                        if role == 0 {
-                            ui.set_trainer_state(1);
-                        } else {
-                            ui.set_hr_state(1);
+                sensors::Event::RadioStatus { radio, status } => {
+                    let (state, issue, detail) = radio_state(status);
+                    match radio {
+                        sensors::Radio::Ant => {
+                            ui.set_ant_state(state);
+                            ui.set_ant_issue(issue);
+                            ui.set_ant_detail(detail.into());
+                        }
+                        sensors::Radio::Bluetooth => {
+                            ui.set_bluetooth_state(state);
+                            ui.set_bluetooth_issue(issue);
+                            ui.set_bluetooth_detail(detail.into());
                         }
                     }
-                    ble::Event::Connected(role, device, erg) => {
-                        connected(&ui, &mut timer_state.borrow_mut(), &device, role, erg);
-                        timer_state.borrow_mut().selected[role] = Some(device.id);
-                        timer_state.borrow_mut().last_sample[role] = Some(Instant::now());
+                }
+                sensors::Event::Devices(devices) => {
+                    timer_state.borrow_mut().devices = devices;
+                    device_rows(&ui, &timer_state.borrow());
+                }
+                sensors::Event::ScanDone => ui.set_scanning(false),
+                sensors::Event::Connecting(role) => {
+                    disconnected(&ui, &mut timer_state.borrow_mut(), role);
+                    if role == 0 {
+                        ui.set_trainer_state(1);
+                    } else {
+                        ui.set_hr_state(1);
                     }
-                    ble::Event::Sample(role, reading) => {
-                        timer_state.borrow_mut().last_sample[role] = Some(Instant::now());
-                        // ANT+ sends a whole snapshot each time, so a missing field means
-                        // the sensor has no valid value right now. Bluetooth notifications
-                        // may carry one field at a time, so the others are kept.
-                        let snapshot = timer_state.borrow().connected[role]
-                            .as_ref()
-                            .is_some_and(|d| d.id.starts_with("ant:"));
-                        // The recorder reads sensors, never the screen.
-                        timer_state.borrow_mut().sensors.update(
-                            role,
-                            &reading,
-                            snapshot,
-                            Instant::now(),
-                        );
-                    }
-                    ble::Event::Disconnected(role) => {
-                        disconnected(&ui, &mut timer_state.borrow_mut(), role);
-                        timer_state.borrow_mut().selected[role] = None;
-                    }
-                    ble::Event::Error(message) => {
-                        let (code, detail) = device_error(&message);
-                        ui.set_message_code(code);
-                        ui.set_message_detail(detail.into());
-                    }
-                    ble::Event::Erg { request, result } => {
-                        erg_answer(&ui, &mut timer_state.borrow_mut(), request, &result);
-                    }
-                },
+                }
+                sensors::Event::Connected(role, device, erg) => {
+                    connected(&ui, &mut timer_state.borrow_mut(), &device, role, erg);
+                    timer_state.borrow_mut().selected[role] = Some(device.id);
+                    timer_state.borrow_mut().last_sample[role] = Some(now);
+                }
+                sensors::Event::Sample { role, .. } => {
+                    timer_state.borrow_mut().last_sample[role] = Some(now);
+                }
+                sensors::Event::Disconnected(role) => {
+                    disconnected(&ui, &mut timer_state.borrow_mut(), role);
+                    timer_state.borrow_mut().selected[role] = None;
+                }
+                sensors::Event::Error(error) => {
+                    let (code, detail) = device_error(error);
+                    ui.set_message_code(code);
+                    ui.set_message_detail(detail.into());
+                }
+                sensors::Event::Erg { request, result } => {
+                    erg_answer(&ui, &mut timer_state.borrow_mut(), request, &result);
+                }
             }
         }
         // The ride, from the sensors and the clock. A capture scene writes its own figures
@@ -2617,68 +2585,59 @@ mod tests {
     }
 
     #[test]
-    fn radio_and_driver_messages_map_to_codes_with_raw_detail() {
-        assert_eq!(radio_state("Bluetooth ready"), (1, 0, String::new()));
-        assert_eq!(radio_state("ANT+ ready"), (1, 0, String::new()));
+    fn radio_and_device_conditions_map_to_codes_with_raw_detail() {
+        use sensors::{DeviceError, RadioIssue, RadioStatus};
         // Known conditions become codes the interface words itself, with no raw echo.
-        assert_eq!(
-            radio_state(
-                "ANT+ unavailable: No ANT+ USB stick found. Plug in an ANTUSB2 or ANTUSB-m stick"
+        // Anything else keeps its raw text as a detail under the translated summary, even
+        // when that text happens to read like a known condition: wording classifies nothing.
+        let radios = [
+            (RadioStatus::Ready, (1, 0, "")),
+            (
+                RadioStatus::Unavailable(RadioIssue::BluetoothOff),
+                (2, 1, ""),
             ),
-            (2, 1, String::new())
-        );
-        assert_eq!(
-            radio_state(
-                "ANT+ unavailable: Cannot open ANT+ USB stick. Check USB permissions or close other training apps: Access denied"
+            (RadioStatus::Unavailable(RadioIssue::NoAntStick), (2, 1, "")),
+            (
+                RadioStatus::Unavailable(RadioIssue::NoBluetoothAdapter),
+                (2, 2, ""),
             ),
-            (2, 2, String::new())
-        );
-        assert_eq!(
-            radio_state(
-                "Bluetooth unavailable: Bluetooth is switched off or blocked by the system. Check Bluetooth is on and permission is granted."
+            (RadioStatus::Unavailable(RadioIssue::AntAccess), (2, 2, "")),
+            (
+                RadioStatus::Unavailable(RadioIssue::Other("libusb: pipe error".into())),
+                (2, 0, "libusb: pipe error"),
             ),
-            (2, 1, String::new())
-        );
-        assert_eq!(
-            radio_state(
-                "Bluetooth unavailable: No Bluetooth adapter found. Connect an adapter and try again."
+            (
+                RadioStatus::Unavailable(RadioIssue::Other(
+                    "No Bluetooth adapter found. Connect an adapter and try again.".into(),
+                )),
+                (
+                    2,
+                    0,
+                    "No Bluetooth adapter found. Connect an adapter and try again.",
+                ),
             ),
-            (2, 2, String::new())
-        );
-        // Anything else keeps its raw text as a detail under the translated summary.
-        assert_eq!(
-            radio_state("ANT+ unavailable: libusb: pipe error"),
-            (2, 0, "libusb: pipe error".to_string())
-        );
-        assert_eq!(radio_state("Bluetooth unavailable"), (2, 0, String::new()));
-        assert_eq!(
-            radio_state("Checking"),
-            (0, 0, "Checking".to_string()),
-            "Unknown wording is shown raw"
-        );
-        assert_eq!(
-            device_error("Device is no longer available. Search again."),
-            (1, String::new())
-        );
-        assert_eq!(
-            device_error("That device is already assigned to another sensor role."),
-            (2, String::new())
-        );
-        assert_eq!(
-            device_error(
-                "Connection timed out. Wake the device, close other training apps, and retry."
+        ];
+        for (status, (state, issue, detail)) in radios {
+            assert_eq!(radio_state(status), (state, issue, detail.to_string()));
+        }
+        let devices = [
+            (DeviceError::Unavailable, (1, "")),
+            (DeviceError::AlreadyAssigned, (2, "")),
+            (
+                DeviceError::ConnectionFailed("Connection timed out".into()),
+                (3, "Connection timed out"),
             ),
-            (3, "Connection timed out".to_string())
-        );
-        assert_eq!(
-            device_error(
-                "Bluetooth is switched off or blocked by the system. Check Bluetooth is on and permission is granted."
+            (
+                DeviceError::Other("Something else".into()),
+                (6, "Something else"),
             ),
-            (4, String::new())
-        );
-        assert_eq!(
-            device_error("Something else"),
-            (6, "Something else".to_string())
-        );
+            (
+                DeviceError::Other("Device is no longer available. Search again.".into()),
+                (6, "Device is no longer available. Search again."),
+            ),
+        ];
+        for (error, (code, detail)) in devices {
+            assert_eq!(device_error(error), (code, detail.to_string()));
+        }
     }
 }

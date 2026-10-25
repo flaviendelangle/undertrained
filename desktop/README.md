@@ -119,15 +119,16 @@ Interface text is written in English inside the `ui/*.slint` files as `@tr("..."
 - `src/ride.rs`: the ride's lifecycle: the recording clock, the step player and the trainer's resistance control, and the decisions that bind them (pedal-driven pauses, releases and their order with the journal, the trainer's answers and silences, finishing and saving). The screen supplies the sensors, the trainer and the clock and projects the result.
 - `src/awake.rs`: keeping the screen on and the computer awake during a ride, per operating system.
 - `src/i18n.rs`: language resolution and the few language-dependent strings Rust formats.
-- `src/sensors.rs`, `src/ant.rs`: the merged Bluetooth and ANT+ discovery, and the ANT+ USB driver.
+- `src/sensors.rs`: the shared radio command/event contract, structured conditions, independent discovery and role ownership, and the live reading interface with per-field freshness and source semantics.
+- `src/ant.rs`: the ANT+ USB adapter on a blocking worker.
 - `src/fec.rs`: ERG over ANT+ FE-C: the capability request, targets and releases, driven by the ANT+ worker.
 - `ui/lang/`: bundled translation catalogs.
 - `src/smoke.rs`: developer smoke test with its own fixtures, behind `--smoke-test`.
-- `src/ble.rs`: Bluetooth ownership, discovery, connections and subscriptions.
+- `src/ble.rs`: the Bluetooth adapter, with discovery, connections and subscriptions.
 - `src/model.rs`: protocol data decoding and malformed-packet tests.
 - `src/auth.rs`: browser authorization, loopback callback, session exchange and keyring storage.
 - `src/workouts.rs`: read-only workout fetch for personal and built-in workouts, request generations and name search, independent of the UI.
-- `src/recording.rs`, `src/fit.rs`, `src/speed.rs`: the sensor freshness model, the ride journal, the FIT export, and the speed and distance simulated from power.
+- `src/recording.rs`, `src/fit.rs`, `src/speed.rs`: the ride journal, the FIT export, and the speed and distance simulated from power.
 - `src/upload.rs`: the Strava upload through the desktop API, with its on-disk intent, receipt and completion files.
 - `src/recording_view.rs`: clock and value formatting, chart binning, the target delta and cadence-cue rules, and the activity-name rule for the ride screen.
 - `src/player.rs`, `src/ftms.rs`: exact step playback over a plan, and the serialized FTMS control-point exchange behind ERG.

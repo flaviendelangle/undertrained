@@ -278,7 +278,7 @@ mod tests {
             timestamp_ms: 1_790_000_000_000,
             elapsed: 0.0,
             pause_index: 0,
-            live: crate::recording::Live {
+            live: crate::sensors::Live {
                 power: Some(0.0),
                 ..Default::default()
             },
@@ -365,7 +365,7 @@ mod tests {
             timestamp_ms: t + at,
             elapsed: 0.0,
             pause_index: 0,
-            live: crate::recording::Live {
+            live: crate::sensors::Live {
                 power: Some(150.0),
                 ..Default::default()
             },
