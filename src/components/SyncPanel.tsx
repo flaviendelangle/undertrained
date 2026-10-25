@@ -179,7 +179,7 @@ function SyncAction(props: {
       <Button
         variant={props.variant ?? "secondary"}
         size="sm"
-        className="flex-1 justify-start gap-1.5"
+        className="h-auto min-h-8 min-w-0 flex-1 justify-start gap-1.5 py-1 text-left whitespace-normal"
         aria-label={props.label}
         disabled={props.disabled || props.loading}
         onClick={props.onClick}
@@ -445,7 +445,10 @@ export function SyncPanel() {
             />
           }
         />
-        <PopoverContent align="end" className="w-72 p-3">
+        <PopoverContent
+          align="end"
+          className="w-max max-w-(--available-width) p-3"
+        >
           {isInProgress ? (
             <SyncProgress syncJob={syncJob} />
           ) : neverSynced ? (
