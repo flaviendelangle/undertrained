@@ -62,6 +62,7 @@ const ViewsPage: NextPageWithLayout = () => {
   const utils = trpc.useUtils();
   const [folderId, setFolderId] = React.useState<number | null | "all">("all");
   const [action, setAction] = React.useState<Action | null>(null);
+  const mainRef = React.useRef<HTMLElement>(null);
   const counts = trpc.views.counts.useQuery({ athleteId, today: scope.today });
   const onSuccess = async () => {
     await Promise.all([
@@ -157,7 +158,7 @@ const ViewsPage: NextPageWithLayout = () => {
             {t("views.folderHelp")}
           </p>
         </aside>
-        <main className="min-w-0 flex-1 p-4 md:p-6">
+        <main ref={mainRef} className="min-w-0 flex-1 p-4 md:p-6">
           <div className="mb-4 flex items-center gap-2">
             <h2 className="min-w-0 flex-1 truncate text-xl font-semibold">
               {folders.find((f) => f.id === folderId)?.name ?? t("views.title")}
@@ -300,7 +301,9 @@ const ViewsPage: NextPageWithLayout = () => {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  {/* Outside the list: a <ul> only accepts <li> children. */}
                   <Draggable.Preview
+                    container={mainRef}
                     offset={({ container }) => ({
                       x: container.getBoundingClientRect().width / 2,
                       y: -8,
