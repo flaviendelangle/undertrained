@@ -22,15 +22,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "~/components/ui/responsive-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { SelectTrigger, SelectValue } from "~/components/ui/select";
 import { useActivityView } from "~/hooks/useActivityView";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useIsMobile } from "~/hooks/useIsMobile";
@@ -42,7 +34,7 @@ import { ActivityDisplayEditor } from "./ActivityDisplayEditor";
 import { ActivityFilterEditor } from "./ActivityFilterEditor";
 import { MobileViewDrawer } from "./MobileViewDrawer";
 import { ViewDetailsDialog } from "./ViewDetailsDialog";
-import { groupViewsByFolder } from "./groupViewsByFolder";
+import { ViewPicker } from "./ViewPicker";
 import { useSaveActivityView } from "./useSaveActivityView";
 
 export function SharedViewBar({ table = false }: { table?: boolean }) {
@@ -78,19 +70,8 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
   const stateLabel = scope.hasChanges
     ? t(scope.view ? "views.modified" : "views.unsaved")
     : null;
-  const viewGroups = groupViewsByFolder(
-    scope.views,
-    scope.folders,
-    t("views.ungrouped"),
-  );
   const picker = (
-    <Select
-      value={scope.view ? String(scope.view.id) : ""}
-      onValueChange={(value) => {
-        if (value !== null)
-          void scope.selectView(value ? Number(value) : undefined);
-      }}
-    >
+    <ViewPicker>
       <ToolbarPrimitive.Button
         render={<SelectTrigger />}
         aria-label={t("views.title")}
@@ -100,25 +81,7 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
           {scope.view?.name ?? t("views.allActivities")}
         </SelectValue>
       </ToolbarPrimitive.Button>
-      <SelectContent align="start" alignItemWithTrigger={false} className="p-1">
-        <SelectItem value="">{t("views.allActivities")}</SelectItem>
-        {viewGroups.map((group) => {
-          const items = group.views.map((view) => (
-            <SelectItem key={view.id} value={String(view.id)}>
-              {view.name}
-            </SelectItem>
-          ));
-          return group.label === null ? (
-            <React.Fragment key={group.key}>{items}</React.Fragment>
-          ) : (
-            <SelectGroup key={group.key} className="p-0 pt-1.5">
-              <SelectLabel>{group.label}</SelectLabel>
-              {items}
-            </SelectGroup>
-          );
-        })}
-      </SelectContent>
-    </Select>
+    </ViewPicker>
   );
   const filters = (
     <ToolbarPrimitive.Button

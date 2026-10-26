@@ -1,11 +1,10 @@
+import { Select } from "~/components/primitives/Select";
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
 import {
   ACTIVITY_COLUMNS,
   type ActivityDisplay,
 } from "~/utils/activityFilters";
-
-import { viewInputClass } from "./ActivityFilterEditor";
 
 const columnLabels: Record<(typeof ACTIVITY_COLUMNS)[number], AppMessageKey> = {
   type: "activities.columns.sport",
@@ -52,53 +51,33 @@ export function ActivityDisplayEditor({
           </label>
         ))}
       </fieldset>
-      <label className="flex flex-col gap-2 text-sm">
-        {t("views.groupBy")}
-        <select
-          className={viewInputClass}
+      <div className="flex flex-col gap-2 text-sm">
+        <Select
+          label={t("views.groupBy")}
+          className="w-full"
           value={draft.groupBy}
-          onChange={(event) =>
-            onChange({
-              ...draft,
-              groupBy: event.target.value as ActivityDisplay["groupBy"],
-            })
-          }
-        >
-          {(["none", "sport", "month"] as const).map((groupBy) => (
-            <option key={groupBy} value={groupBy}>
-              {t(
-                groupBy === "none"
-                  ? "views.groupNone"
-                  : groupBy === "sport"
-                    ? "views.groupSport"
-                    : "views.groupMonth",
-              )}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-2 text-sm">
-        {t("common.sortBy")}
-        <select
-          className={viewInputClass}
+          onValueChange={(groupBy) => onChange({ ...draft, groupBy })}
+          options={[
+            { value: "none", label: t("views.groupNone") },
+            { value: "sport", label: t("views.groupSport") },
+            { value: "month", label: t("views.groupMonth") },
+          ]}
+        />
+      </div>
+      <div className="flex flex-col gap-2 text-sm">
+        <Select
+          label={t("common.sortBy")}
+          className="w-full"
           value={draft.sort.id}
-          onChange={(event) =>
-            onChange({
-              ...draft,
-              sort: {
-                ...draft.sort,
-                id: event.target.value as ActivityDisplay["sort"]["id"],
-              },
-            })
+          onValueChange={(id) =>
+            onChange({ ...draft, sort: { ...draft.sort, id } })
           }
-        >
-          {ACTIVITY_COLUMNS.map((id) => (
-            <option key={id} value={id}>
-              {t(columnLabels[id])}
-            </option>
-          ))}
-        </select>
-      </label>
+          options={ACTIVITY_COLUMNS.map((id) => ({
+            value: id,
+            label: t(columnLabels[id]),
+          }))}
+        />
+      </div>
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
