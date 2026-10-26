@@ -59,7 +59,9 @@ type HighlightedAxis = NonNullable<
 export default function ActivitiesTimeline() {
   const t = useT();
   const scope = useActivityView();
-  const { state, update, returnHref } = useTimelineState();
+  const { state, update, returnHref } = useTimelineState(
+    JSON.stringify(scope.rules),
+  );
   const { metric, precision } = state;
   const setMetric = (metric: string) =>
     update({ metric: metric as typeof state.metric });
@@ -143,14 +145,6 @@ export default function ActivitiesTimeline() {
         },
       ]
     : defaultZoom;
-  const rulesKey = JSON.stringify(scope.rules);
-  const previousRules = React.useRef(rulesKey);
-  React.useEffect(() => {
-    if (previousRules.current !== rulesKey) {
-      previousRules.current = rulesKey;
-      update({ period: undefined, sport: undefined, zoom: undefined });
-    }
-  }, [rulesKey, update]);
 
   const metricConfig = METRICS.find((el) => el.value === metric);
 

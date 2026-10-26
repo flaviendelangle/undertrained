@@ -303,6 +303,66 @@ test("desktop inspection intersects a temporary root OR and returns with its cha
   ).toBeUndefined();
 });
 
+test("browser history restores the inspection taken with each selection", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const rides: ActivityFilterGroup = {
+    kind: "group",
+    id: "rides",
+    join: "AND",
+    children: [
+      {
+        kind: "condition",
+        id: "sport",
+        field: "sport",
+        operator: "in",
+        values: ["Ride"],
+        value: "",
+        valueTo: "",
+      },
+    ],
+  };
+  await page.goto(`${origin}/activities/charts`);
+  await clickBucket(page, 0, 7);
+  const panel = inspector(page);
+  await expect(total(panel)).toHaveText("5h00");
+  await expect(page).toHaveURL(/period/);
+  // The modal drawer covers the filters; change the selection the way they do.
+  await page.evaluate((rules) => {
+    const { router } = (
+      window as unknown as {
+        next: {
+          router: {
+            query: Record<string, string>;
+            push(url: object, as: undefined, options: object): Promise<boolean>;
+          };
+        };
+      }
+    ).next;
+    return router.push(
+      {
+        pathname: "/activities/charts",
+        query: { ...router.query, rules: JSON.stringify(rules) },
+      },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  }, rides);
+  // A new selection starts without the previous inspection.
+  await expect(panel).toHaveCount(0);
+  await expect(page).not.toHaveURL(/period/);
+  await clickBucket(page, 0, 7);
+  await expect(panel).toBeVisible();
+  const ridesTotal = await total(panel).textContent();
+  expect(ridesTotal).not.toBe("5h00");
+  await expect(page).toHaveURL(/period/);
+  await page.goBack();
+  await expect(total(panel)).toHaveText("5h00");
+  await page.goForward();
+  await expect(total(panel)).toHaveText(ridesTotal!);
+});
+
 test("metric contributions follow legend visibility and keep missing load distinct from zero", async ({
   page,
   viewsFixture: f,

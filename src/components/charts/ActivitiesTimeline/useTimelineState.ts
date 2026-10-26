@@ -6,8 +6,12 @@ import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 
 import { type TimelineState, readTimelineState } from "./timelineState";
 
-/** URL snapshots let activity links and browser Back restore this inspection. */
-export function useTimelineState() {
+/**
+ * URL snapshots let activity links and browser Back restore this inspection.
+ * A new selection resets the period, sport and zoom, unless browser history
+ * restored a snapshot taken with that selection.
+ */
+export function useTimelineState(selectionKey: string) {
   const router = useRouter();
   const [state, setState] = React.useState(() =>
     readTimelineState(router.query.timeline),
@@ -17,16 +21,19 @@ export function useTimelineState() {
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  // Next may render a history entry before or after `popstate` reaches us, so
+  // recognise a restored snapshot by the selection it was taken with.
+  const seenRef = React.useRef(new Set<string>());
+  const selectionRef = React.useRef(selectionKey);
 
   const persist = React.useCallback(
     (snapshot: TimelineState) => {
       const route = routerRef.current;
+      // `update` already skips unchanged state. Comparing with `route.query`
+      // would be wrong: it lags behind a replace that is still in flight.
+      if (route.pathname !== "/activities/charts") return;
       const serialized = JSON.stringify(snapshot);
-      if (
-        route.pathname !== "/activities/charts" ||
-        route.query.timeline === serialized
-      )
-        return;
+      seenRef.current.add(`${selectionRef.current}\n${serialized}`);
       void route.replace(
         {
           pathname: route.pathname,
@@ -72,6 +79,21 @@ export function useTimelineState() {
       window.removeEventListener("popstate", restore);
     };
   }, [router.events]);
+
+  const urlTimeline = router.query.timeline;
+  React.useEffect(() => {
+    const seen = `${selectionKey}\n${String(urlTimeline)}`;
+    if (selectionRef.current === selectionKey) {
+      seenRef.current.add(seen);
+      return;
+    }
+    selectionRef.current = selectionKey;
+    if (seenRef.current.has(seen)) {
+      const snapshot = readTimelineState(urlTimeline);
+      currentRef.current = snapshot;
+      setState(snapshot);
+    } else update({ period: undefined, sport: undefined, zoom: undefined });
+  }, [selectionKey, urlTimeline, update]);
 
   const url = new URL(router.asPath, "https://app.invalid");
   url.searchParams.set("timeline", JSON.stringify(state));
