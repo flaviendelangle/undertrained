@@ -10,8 +10,6 @@ import { ZONE_MODELS } from "~/sensors/zoneModels";
 import type { ZoneSecondsByMetric } from "~/server/lib/activityScoring";
 import { type ZoneModel, getSportConfig } from "~/utils/sportConfig";
 
-export type ZoneTimeSpan = "week" | "month" | "year";
-
 const RAMP_COUNT = 7;
 
 export interface ZoneActivity {

@@ -12,6 +12,12 @@ export interface ActivityViewState {
   display?: ActivityDisplay;
 }
 export const ACTIVITY_VIEW_PARAMS = ["view", "rules", "display"] as const;
+/** The Activities pages that share, and edit, the activity selection. */
+export const ACTIVITY_PRESENTATION_PATHS = {
+  list: "/activities",
+  map: "/activities/map",
+  charts: "/activities/charts",
+} as const;
 
 /** An invalid link is an error, never an implicit unfiltered selection. */
 export function readActivityViewState(

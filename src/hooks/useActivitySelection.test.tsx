@@ -61,31 +61,12 @@ it("shares the analysis selection while Journal and Fitness ignore legacy browse
     result.current.statistics,
     result.current.heatmap,
   ])
-    expect(input).toMatchObject({
-      rules,
-      today: "2026-10-25",
-      activityTypes: [],
-      workoutTypes: [],
-      hideCommutes: false,
-    });
-  expect(result.current.journal).toMatchObject({
-    activityTypes: [],
-    workoutTypes: [],
-    hideCommutes: false,
-  });
-  expect(result.current.journal.dateFrom).toBeUndefined();
-  expect(result.current.journal.dateTo).toBeUndefined();
-  expect(result.current.journal.rules).toBeUndefined();
-  expect(result.current.fitness).toMatchObject({
-    activityTypes: [],
-    workoutTypes: [],
-    hideCommutes: false,
-  });
-  expect(result.current.fitness.rules).toBeUndefined();
-  expect(result.current.fitness.dateFrom).toBeUndefined();
-  expect(result.current.power).toMatchObject({
+    expect(input).toEqual({ rules, today: "2026-10-25", activityTypes: [] });
+  expect(result.current.journal).toEqual({ activityTypes: [] });
+  expect(result.current.fitness).toEqual({ activityTypes: [] });
+  expect(result.current.power).toEqual({
     rules,
+    today: "2026-10-25",
     activityTypes: ["Ride", "VirtualRide"],
-    workoutTypes: [],
   });
 });

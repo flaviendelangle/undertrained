@@ -9,8 +9,6 @@ import { useRiderSettingsTimeline } from "./useRiderSettings";
 export interface UseFitnessDataResult {
   /** The full Performance Management Chart series (warmed up over all history). */
   series: FitnessPoint[];
-  /** The most recent point, i.e. today's Fitness / Fatigue / Form / Ramp. */
-  current: FitnessPoint | null;
   isLoading: boolean;
   isError: boolean;
 }
@@ -41,7 +39,6 @@ export function useFitnessData(): UseFitnessDataResult {
   return React.useMemo(
     () => ({
       series,
-      current: series.length > 0 ? series[series.length - 1] : null,
       isLoading: activitiesQuery.isLoading,
       isError: activitiesQuery.isError,
     }),

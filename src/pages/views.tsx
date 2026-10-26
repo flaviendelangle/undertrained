@@ -14,6 +14,7 @@ import { Draggable } from "@base-ui/react/draggable";
 import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { QueryState } from "~/components/primitives/QueryState";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,6 +99,7 @@ const ViewsPage: NextPageWithLayout = () => {
     { id: null, name: t("views.ungrouped") },
     ...scope.folders,
   ];
+  const currentFolder = scope.folders.find((f) => f.id === folderId);
   const filteredViews = scope.views.filter(
     (view) => folderId === "all" || view.folderId === folderId,
   );
@@ -160,7 +162,7 @@ const ViewsPage: NextPageWithLayout = () => {
             <h2 className="min-w-0 flex-1 truncate text-xl font-semibold">
               {folders.find((f) => f.id === folderId)?.name ?? t("views.title")}
             </h2>
-            {typeof folderId === "number" && (
+            {currentFolder && (
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
@@ -176,10 +178,7 @@ const ViewsPage: NextPageWithLayout = () => {
                 <DropdownMenuContent>
                   <DropdownMenuItem
                     onClick={() =>
-                      setAction({
-                        kind: "folder",
-                        folder: scope.folders.find((f) => f.id === folderId)!,
-                      })
+                      setAction({ kind: "folder", folder: currentFolder })
                     }
                   >
                     {t("views.rename")}
@@ -187,13 +186,10 @@ const ViewsPage: NextPageWithLayout = () => {
                   <DropdownMenuItem
                     variant="destructive"
                     onClick={() =>
-                      setAction({
-                        kind: "deleteFolder",
-                        folder: scope.folders.find((f) => f.id === folderId)!,
-                      })
+                      setAction({ kind: "deleteFolder", folder: currentFolder })
                     }
                   >
-                    {t("views.delete")}
+                    {t("common.delete")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -300,7 +296,7 @@ const ViewsPage: NextPageWithLayout = () => {
                         variant="destructive"
                         onClick={() => setAction({ kind: "delete", view })}
                       >
-                        {t("views.delete")}
+                        {t("common.delete")}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -357,48 +353,30 @@ const ViewsPage: NextPageWithLayout = () => {
       )}
       {action &&
         (action.kind === "delete" || action.kind === "deleteFolder") && (
-          <ResponsiveDialog
+          <ConfirmDialog
             open
             onOpenChange={(open) => {
               if (!open) setAction(null);
             }}
-          >
-            <ResponsiveDialogContent>
-              <ResponsiveDialogHeader>
-                <ResponsiveDialogTitle>
-                  {t("views.confirmDelete", {
-                    name:
-                      action.kind === "delete"
-                        ? action.view.name
-                        : action.folder.name,
-                  })}
-                </ResponsiveDialogTitle>
-                <ResponsiveDialogDescription>
-                  {t(
-                    action.kind === "delete"
-                      ? "views.deleteViewHelp"
-                      : "views.deleteFolderHelp",
-                  )}
-                </ResponsiveDialogDescription>
-              </ResponsiveDialogHeader>
-              <ResponsiveDialogFooter>
-                <Button variant="outline" onClick={() => setAction(null)}>
-                  {t("views.cancel")}
-                </Button>
-                <Button
-                  variant="destructive"
-                  disabled={busy}
-                  onClick={() =>
-                    action.kind === "delete"
-                      ? remove.mutate({ athleteId, id: action.view.id })
-                      : deleteFolder.mutate({ athleteId, id: action.folder.id })
-                  }
-                >
-                  {t("views.delete")}
-                </Button>
-              </ResponsiveDialogFooter>
-            </ResponsiveDialogContent>
-          </ResponsiveDialog>
+            title={t("common.deleteConfirmTitle", {
+              name:
+                action.kind === "delete"
+                  ? action.view.name
+                  : action.folder.name,
+            })}
+            description={t(
+              action.kind === "delete"
+                ? "views.deleteViewHelp"
+                : "views.deleteFolderHelp",
+            )}
+            confirmLabel={t("common.delete")}
+            pendingLabel={t("common.deleting")}
+            onConfirm={() =>
+              action.kind === "delete"
+                ? remove.mutateAsync({ athleteId, id: action.view.id })
+                : deleteFolder.mutateAsync({ athleteId, id: action.folder.id })
+            }
+          />
         )}
     </Draggable.Provider>
   );
@@ -453,7 +431,7 @@ function FolderDialog({
           </label>
           <ResponsiveDialogFooter>
             <Button variant="outline" onClick={onClose}>
-              {t("views.cancel")}
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={busy || !name.trim()}>
               {t("views.save")}

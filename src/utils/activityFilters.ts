@@ -2,6 +2,7 @@ import { format, isValid, parseISO, subDays } from "date-fns";
 import { z } from "zod";
 
 import type { AppMessageKey } from "~/i18n/I18nProvider";
+import { WORKOUT_KINDS } from "~/utils/sportConfig";
 
 export const FILTER_FIELDS = [
   { id: "sport", kind: "set" },
@@ -18,23 +19,25 @@ export const FILTER_FIELDS = [
 ] as const;
 
 export type FilterField = (typeof FILTER_FIELDS)[number]["id"];
-export type FilterOperator =
-  | "in"
-  | "notIn"
-  | "eq"
-  | "ne"
-  | "gt"
-  | "ge"
-  | "lt"
-  | "le"
-  | "between"
-  | "contains"
-  | "notContains"
-  | "startsWith"
-  | "endsWith"
-  | "blank"
-  | "notBlank"
-  | "last";
+const FILTER_OPERATORS = [
+  "in",
+  "notIn",
+  "eq",
+  "ne",
+  "gt",
+  "ge",
+  "lt",
+  "le",
+  "between",
+  "contains",
+  "notContains",
+  "startsWith",
+  "endsWith",
+  "blank",
+  "notBlank",
+  "last",
+] as const;
+export type FilterOperator = (typeof FILTER_OPERATORS)[number];
 
 export interface ActivityCondition {
   kind: "condition";
@@ -114,10 +117,7 @@ export function conditionError(
     if (
       condition.field === "workoutKind" &&
       condition.values.some(
-        (v) =>
-          !["none", "race", "long_run", "workout", "weight_training"].includes(
-            v,
-          ),
+        (v) => !(WORKOUT_KINDS as readonly string[]).includes(v),
       )
     )
       return "views.errors.value";
@@ -157,24 +157,7 @@ const conditionSchema = z.object({
   kind: z.literal("condition"),
   id: z.string().min(1).max(100),
   field: z.enum(FILTER_FIELDS.map((f) => f.id)),
-  operator: z.enum([
-    "in",
-    "notIn",
-    "eq",
-    "ne",
-    "gt",
-    "ge",
-    "lt",
-    "le",
-    "between",
-    "contains",
-    "notContains",
-    "startsWith",
-    "endsWith",
-    "blank",
-    "notBlank",
-    "last",
-  ]),
+  operator: z.enum(FILTER_OPERATORS),
   value: z.string().max(500),
   valueTo: z.string().max(500),
   values: z.array(z.string().min(1).max(100)).max(100),
@@ -322,25 +305,56 @@ export function conditionCount(root: ActivityFilterGroup): number {
     0,
   );
 }
+/**
+ * The same selection with structural IDs and without the values its operators
+ * ignore, so equal selections send equal query inputs and share cached results.
+ */
+export function canonicalRules(root: ActivityFilterGroup): ActivityFilterGroup {
+  let id = 0;
+  // Depth-first from `n1`, the numbering links decode to.
+  const visit = (node: ActivityFilterNode): ActivityFilterNode => {
+    const nodeId = `n${++id}`;
+    if (node.kind === "group")
+      return {
+        kind: "group",
+        id: nodeId,
+        join: node.join,
+        children: node.children.map(visit),
+      };
+    const list = node.operator === "in" || node.operator === "notIn";
+    const blank = node.operator === "blank" || node.operator === "notBlank";
+    return {
+      kind: "condition",
+      id: nodeId,
+      field: node.field,
+      operator: node.operator,
+      value: list || blank ? "" : node.value,
+      valueTo: node.operator === "between" ? node.valueTo : "",
+      values: list ? node.values : [],
+    };
+  };
+  return visit(root) as ActivityFilterGroup;
+}
 export function sameFilter(
   a: ActivityFilterGroup,
   b: ActivityFilterGroup,
 ): boolean {
-  const semantic = (node: ActivityFilterNode): unknown =>
-    node.kind === "group"
-      ? { join: node.join, children: node.children.map(semantic) }
-      : {
-          field: node.field,
-          operator: node.operator,
-          value: ["blank", "notBlank", "in", "notIn"].includes(node.operator)
-            ? ""
-            : node.value,
-          valueTo: node.operator === "between" ? node.valueTo : "",
-          values: ["in", "notIn"].includes(node.operator)
-            ? [...node.values].sort()
-            : [],
-        };
-  return JSON.stringify(semantic(a)) === JSON.stringify(semantic(b));
+  // The order of a condition's values does not change what it matches.
+  const key = (root: ActivityFilterGroup) =>
+    JSON.stringify(canonicalRules(root), (name, value: unknown) =>
+      name === "values" ? [...(value as string[])].sort() : value,
+    );
+  return key(a) === key(b);
+}
+/** Key-order independent: stored views and parsed URLs order keys differently. */
+export function sameDisplay(a: ActivityDisplay, b: ActivityDisplay): boolean {
+  return (
+    a.groupBy === b.groupBy &&
+    a.sort.id === b.sort.id &&
+    a.sort.desc === b.sort.desc &&
+    a.columns.length === b.columns.length &&
+    a.columns.every((column, index) => column === b.columns[index])
+  );
 }
 export function rollingDateRange(
   days: number,

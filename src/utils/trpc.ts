@@ -86,3 +86,18 @@ export const trpc = createTRPCNext<AppRouter>({
   ssr: false,
   transformer: superjson,
 });
+
+/** Refreshes every query derived from the athlete's activities. */
+export function invalidateActivityData(
+  utils: ReturnType<typeof trpc.useUtils>,
+) {
+  return Promise.all([
+    utils.activities.list.invalidate(),
+    utils.activities.maps.invalidate(),
+    utils.views.summary.invalidate(),
+    utils.views.counts.invalidate(),
+    utils.analytics.getPowerCurve.invalidate(),
+    utils.analytics.getPowerCurveYears.invalidate(),
+    utils.analytics.getPowerDistribution.invalidate(),
+  ]);
+}

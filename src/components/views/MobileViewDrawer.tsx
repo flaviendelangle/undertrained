@@ -10,18 +10,16 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "~/components/ui/responsive-dialog";
-import { showErrorToast } from "~/components/ui/toast";
 import { useActivityView } from "~/hooks/useActivityView";
-import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
 import {
   DEFAULT_ACTIVITY_DISPLAY,
   EMPTY_ACTIVITY_FILTER,
   activityRulesSchema,
   conditionCount,
+  sameDisplay,
   sameFilter,
 } from "~/utils/activityFilters";
-import { trpc } from "~/utils/trpc";
 
 import { ActivityDisplayEditor } from "./ActivityDisplayEditor";
 import {
@@ -29,26 +27,23 @@ import {
   ActivitySelectionPreview,
   viewInputClass,
 } from "./ActivityFilterEditor";
+import { ViewDetailsFields } from "./ViewDetailsDialog";
+import { useSaveActivityView } from "./useSaveActivityView";
 
 /** One working copy and one drawer for editing, previewing, applying and saving. */
 export function MobileViewDrawer({
   table,
-  initialFiltersOpen,
   onClose,
   onCommit,
 }: {
   table: boolean;
-  initialFiltersOpen: boolean;
   onClose: () => void;
   onCommit: () => void;
 }) {
   const t = useT();
   const scope = useActivityView();
-  const athleteId = useAthleteId();
-  const utils = trpc.useUtils();
   const [rules, setRules] = React.useState(scope.rules);
   const [display, setDisplay] = React.useState(scope.display);
-  const [rulesOpen, setRulesOpen] = React.useState(initialFiltersOpen);
   const [saving, setSaving] = React.useState(false);
   const [name, setName] = React.useState(scope.view?.name ?? "");
   const [folderId, setFolderId] = React.useState(
@@ -63,24 +58,9 @@ export function MobileViewDrawer({
   const dirty =
     scope.hasChanges ||
     !sameFilter(rules, scope.rules) ||
-    JSON.stringify(display) !== JSON.stringify(scope.display);
-  const onSuccess = async (saved: NonNullable<typeof scope.view>) => {
-    utils.views.list.setData({ athleteId }, (old) =>
-      [...(old ?? []).filter((view) => view.id !== saved.id), saved].sort(
-        (a, b) => a.name.localeCompare(b.name),
-      ),
-    );
-    await utils.views.counts.invalidate();
-    await scope.acceptSaved(saved);
-    onCommit();
-  };
-  const options = {
-    onSuccess,
-    onError: () => showErrorToast(t("common.saveError")),
-  };
-  const create = trpc.views.create.useMutation(options);
-  const update = trpc.views.update.useMutation(options);
-  const busy = create.isPending || update.isPending;
+    !sameDisplay(display, scope.display);
+  const save = useSaveActivityView(onCommit);
+  const busy = save.busy;
   return (
     <ResponsiveDialog
       open
@@ -141,11 +121,7 @@ export function MobileViewDrawer({
               {t("views.manage")}
             </Link>
           </div>
-          <details
-            className="border-border mt-4 border-t"
-            open={rulesOpen}
-            onToggle={(event) => setRulesOpen(event.currentTarget.open)}
-          >
+          <details className="border-border mt-4 border-t" open>
             <summary className="cursor-pointer py-3 text-sm font-medium">
               {t("views.filterTitle")} ({conditionCount(rules)})
             </summary>
@@ -176,34 +152,12 @@ export function MobileViewDrawer({
           )}
           {saving && (
             <div className="border-border flex flex-col gap-3 border-t py-3">
-              <label className="flex flex-col gap-1 text-sm">
-                {t("views.name")}
-                <input
-                  aria-label={t("views.name")}
-                  autoFocus
-                  required
-                  maxLength={100}
-                  className={viewInputClass}
-                  placeholder={t("views.namePlaceholder")}
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                {t("views.folder")}
-                <select
-                  className={viewInputClass}
-                  value={folderId}
-                  onChange={(event) => setFolderId(event.target.value)}
-                >
-                  <option value="">{t("views.ungrouped")}</option>
-                  {scope.folders.map((folder) => (
-                    <option key={folder.id} value={folder.id}>
-                      {folder.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <ViewDetailsFields
+                name={name}
+                folder={folderId}
+                onNameChange={setName}
+                onFolderChange={setFolderId}
+              />
             </div>
           )}
         </div>
@@ -219,16 +173,7 @@ export function MobileViewDrawer({
             <Button
               className="col-span-2"
               disabled={!valid || busy}
-              onClick={() =>
-                update.mutate({
-                  athleteId,
-                  id: scope.view!.id,
-                  name: scope.view!.name,
-                  folderId: scope.view!.folderId,
-                  rules,
-                  display,
-                })
-              }
+              onClick={() => save.update(scope.view!, rules, display)}
             >
               {t("views.update")}
             </Button>
@@ -247,13 +192,12 @@ export function MobileViewDrawer({
             onClick={() => {
               if (!saving) setSaving(true);
               else
-                create.mutate({
-                  athleteId,
-                  name: name.trim(),
-                  folderId: folderId ? Number(folderId) : null,
+                save.saveNew(
+                  name.trim(),
+                  folderId ? Number(folderId) : null,
                   rules,
                   display,
-                });
+                );
             }}
           >
             {t(scope.view && !saving ? "views.saveAs" : "views.save")}

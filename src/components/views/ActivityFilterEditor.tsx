@@ -34,6 +34,7 @@ import {
   type FilterField,
   type FilterOperator,
   activityRulesSchema,
+  canonicalRules,
   conditionError,
   createCondition,
   createFilterGroup,
@@ -41,6 +42,7 @@ import {
   getFilterOperators,
   updateFilterNode,
 } from "~/utils/activityFilters";
+import { WORKOUT_KINDS, type WorkoutKind } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 const inputClass =
@@ -51,7 +53,7 @@ const workoutLabels: Record<string, AppMessageKey> = {
   long_run: "settings.filter.workout.longRun",
   workout: "settings.filter.workout.workout",
   weight_training: "settings.filter.workout.weightTraining",
-};
+} satisfies Record<WorkoutKind, AppMessageKey>;
 
 function FieldSelect({
   value,
@@ -137,7 +139,6 @@ export function ActivityFilterBuilder({
 
   return (
     <div className="min-w-0 px-1">
-      {" "}
       <Tree.ReorderProvider<ActivityFilterNode>
         canMoveItems={({ destination }) => destination.parentId !== null}
         isItemReorderable={(_item, { itemId }) => itemId !== draft.id}
@@ -299,7 +300,7 @@ export function ActivityFilterBuilder({
                                       ...node.values,
                                     ]),
                                   ].sort()
-                                : Object.keys(workoutLabels)
+                                : WORKOUT_KINDS
                               ).map((v) => (
                                 <SelectItem key={v} value={v}>
                                   {node.field === "sport"
@@ -443,8 +444,10 @@ export function ActivitySelectionPreview({
     return () => clearTimeout(timer);
   }, [rules]);
   const valid = activityRulesSchema.safeParse(rules).success;
+  // Canonical like the applied selection, whose summary then comes from cache.
+  const previewRules = React.useMemo(() => canonicalRules(preview), [preview]);
   const summary = trpc.views.summary.useQuery(
-    { athleteId, rules: preview, today },
+    { athleteId, rules: previewRules, today },
     { enabled: activityRulesSchema.safeParse(preview).success },
   );
   return (
@@ -517,7 +520,7 @@ export function ActivityFilterEditor({
             <ActivitySelectionPreview rules={draft} today={today} />
           </div>
           <Button variant="outline" onClick={onClose}>
-            {t("views.cancel")}
+            {t("common.cancel")}
           </Button>
           <Button
             disabled={!activityRulesSchema.safeParse(draft).success}

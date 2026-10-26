@@ -45,11 +45,20 @@ const nextConfig = {
         destination: "/journal",
         permanent: false,
       },
-      {
-        source: "/map",
-        destination: "/map/heatmap",
-        permanent: false,
-      },
+      // Pages that moved; the query (e.g. a saved view) passes through.
+      ...[
+        { source: "/map/heatmap", destination: "/activities/map" },
+        { source: "/map/new", destination: "/routes/new" },
+        { source: "/map/routes/:routeId", destination: "/routes/:routeId" },
+        { source: "/map/routes", destination: "/routes" },
+        { source: "/map", destination: "/activities/map" },
+        { source: "/statistics/:tab*", destination: "/activities/charts" },
+        {
+          source: "/time-periods/:periodId",
+          destination: "/activities?view=:periodId",
+        },
+        { source: "/time-periods", destination: "/views" },
+      ].map((redirect) => ({ ...redirect, permanent: false })),
     ];
   },
   // PostHog analytics reverse proxy (EU region). Routing analytics through our

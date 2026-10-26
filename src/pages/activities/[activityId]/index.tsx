@@ -29,7 +29,7 @@ import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { useActivityRecording } from "~/lib/activityRecording";
 import { NextPageWithLayout } from "~/pages/_app";
-import { isCalendarDate } from "~/utils/activityFilters";
+import { readReturnTo } from "~/utils/activityLinks";
 import {
   getSportConfig,
   supportsAnalysis,
@@ -58,23 +58,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   const t = useT();
   const router = useRouter();
   const scope = useActivityView();
-  // Coming from the journal, rebuild its URL from the `view`/`week` recorded on
-  // the link so back returns to the right view and week (independent of how the
-  // calendar was scrolled).
-  const journalBackHref = (() => {
-    const view = router.query.view === "week" ? "week" : "month";
-    const week =
-      typeof router.query.week === "string" ? router.query.week : null;
-    return `/journal/${view}${week ? `?week=${week}` : ""}`;
-  })();
-  const backHref =
-    router.query.from === "period" && router.query.periodId
-      ? `/time-periods/${String(router.query.periodId)}`
-      : router.query.from === "journal"
-        ? journalBackHref
-        : router.query.from === "fitness"
-          ? `/fitness${typeof router.query.day === "string" && isCalendarDate(router.query.day) ? `?day=${router.query.day}` : ""}`
-          : scope.href("/activities");
+  const backHref = readReturnTo(router.query) ?? scope.href("/activities");
 
   const [hoverPosition, setHoverPosition] = React.useState<
     [number, number] | null

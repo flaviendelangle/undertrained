@@ -23,33 +23,25 @@ const EditWorkoutPage: NextPageWithLayout = () => {
     Number.isFinite(workoutId) ? workoutId : null,
   );
 
-  if (isError) {
-    return (
-      <>
-        <PageToolbar
-          title={t("workouts.editWorkout")}
-          icon={BikeIcon}
-          backHref="/workouts"
-        />
-        <p className="text-muted-foreground p-8 text-center text-sm">
-          {t("workouts.notFound")}
-        </p>
-      </>
-    );
-  }
-
   // The builder seeds its undo history from `workout`, so it must not mount
   // before the data is there — and must remount if the id changes.
-  if (!workout)
-    return (
+  if (workout && !isError)
+    return <WorkoutBuilder key={workout.id} workout={workout} />;
+
+  return (
+    <>
       <PageToolbar
         title={t("workouts.editWorkout")}
         icon={BikeIcon}
         backHref="/workouts"
       />
-    );
-
-  return <WorkoutBuilder key={workout.id} workout={workout} />;
+      {isError && (
+        <p className="text-muted-foreground p-8 text-center text-sm">
+          {t("workouts.notFound")}
+        </p>
+      )}
+    </>
+  );
 };
 
 export default EditWorkoutPage;

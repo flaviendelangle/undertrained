@@ -32,7 +32,7 @@ import { type WorkoutKind, workoutTypesOfKind } from "~/utils/sportConfig";
 
 import { activities } from "../db/schema";
 
-const calendarDate = z
+export const calendarDate = z
   .string()
   .refine(isCalendarDate, "Expected a valid YYYY-MM-DD date");
 
@@ -46,8 +46,6 @@ export const activityFilterInput = z.object({
   rules: activityRulesSchema.optional(),
   today: calendarDate.optional(),
   activityTypes: z.array(z.string().max(50)).optional(),
-  workoutTypes: z.array(z.number().int()).optional(),
-  hideCommutes: z.boolean().optional(),
   dateFrom: calendarDate.optional(),
   dateTo: calendarDate.optional(),
 });
@@ -78,12 +76,6 @@ export function selectActivities(
     conditions.push(activityRuleCondition(selection.rules, t, selection.today));
   if (selection.activityTypes && selection.activityTypes.length > 0) {
     conditions.push(inArray(t.type, selection.activityTypes));
-  }
-  if (selection.workoutTypes && selection.workoutTypes.length > 0) {
-    conditions.push(inArray(t.workoutType, selection.workoutTypes));
-  }
-  if (selection.hideCommutes) {
-    conditions.push(eq(t.commute, false));
   }
   const dateFrom = selection.dateFrom;
   if (dateFrom) {

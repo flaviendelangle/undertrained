@@ -13,6 +13,7 @@ import { activities, activityViews, viewFolders } from "../../db/schema";
 import {
   activityFilterInput,
   activityRuleCondition,
+  calendarDate,
   selectActivities,
 } from "../../lib/activitySelection";
 import { athleteProcedure, router } from "../index";
@@ -165,14 +166,13 @@ export const viewsRouter = router({
         .select({
           count: sql<number>`count(*)::int`,
           routes: sql<number>`count(*) filter (where ${activities.mapPolyline} is not null and ${activities.mapPolyline} <> '')::int`,
-          power: sql<number>`count(*) filter (where ${activities.powerBests} is not null and ${activities.powerBests} <> '{}'::jsonb)::int`,
         })
         .from(activities)
         .where(selected);
       return row;
     }),
   counts: athleteProcedure
-    .input(z.object({ today: z.string().date() }))
+    .input(z.object({ today: calendarDate }))
     .query(async ({ ctx, input }) => {
       const views = await ctx.db
         .select()

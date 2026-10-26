@@ -12,9 +12,13 @@ import {
   type ActivityFilterGroup,
   DEFAULT_ACTIVITY_DISPLAY,
   EMPTY_ACTIVITY_FILTER,
+  canonicalRules,
+  sameDisplay,
   sameFilter,
 } from "~/utils/activityFilters";
+import { readReturnTo } from "~/utils/activityLinks";
 import {
+  ACTIVITY_PRESENTATION_PATHS,
   ACTIVITY_VIEW_PARAMS,
   type ActivityViewState,
   activityViewHref,
@@ -30,7 +34,7 @@ export type SavedActivityView =
 const ActivityViewContext = React.createContext<ReturnType<
   typeof useActivityViewState
 > | null>(null);
-const ANALYSIS_PATHS = ["/activities", "/activities/map", "/activities/charts"];
+const ANALYSIS_PATHS: string[] = Object.values(ACTIVITY_PRESENTATION_PATHS);
 
 function useActivityViewState() {
   const router = useRouter();
@@ -49,8 +53,9 @@ function useActivityViewState() {
   }, []);
   const analysisRoute =
     ANALYSIS_PATHS.includes(router.pathname) ||
+    // An activity opened from another page keeps that page's back link instead.
     (router.pathname === "/activities/[activityId]" &&
-      !["fitness", "journal"].includes(String(router.query.from)));
+      !readReturnTo(router.query));
   const parsed = React.useMemo(
     () => (analysisRoute ? readActivityViewState(router.query) : {}),
     [router.query, analysisRoute],
@@ -63,22 +68,30 @@ function useActivityViewState() {
       : parsed.viewId && viewsQuery.data && !view
         ? "views.errors.missing"
         : null;
-  const rules = parsed?.rules ?? view?.rules ?? EMPTY_ACTIVITY_FILTER;
+  // A saved view and the same rules from a link query (and cache) identically.
+  const rules = React.useMemo(
+    () => canonicalRules(parsed?.rules ?? view?.rules ?? EMPTY_ACTIVITY_FILTER),
+    [parsed, view],
+  );
   const display = parsed?.display ?? view?.display ?? DEFAULT_ACTIVITY_DISPLAY;
   const ready = router.isReady && !error && (!parsed?.viewId || !!view);
   const modified =
     !!view &&
-    (!sameFilter(rules, view.rules) ||
-      JSON.stringify(display) !== JSON.stringify(view.display));
+    (!sameFilter(rules, view.rules) || !sameDisplay(display, view.display));
   const hasChanges =
     modified ||
     (!view &&
       (rules.children.length > 0 ||
-        JSON.stringify(display) !== JSON.stringify(DEFAULT_ACTIVITY_DISPLAY)));
-  const lastSelection = React.useRef<ActivityViewState>({});
+        !sameDisplay(display, DEFAULT_ACTIVITY_DISPLAY)));
+  // Serialized once per selection: every table row links with it.
+  const search = React.useMemo(
+    () => parsed && new URLSearchParams(activityViewQuery(parsed)).toString(),
+    [parsed],
+  );
+  const lastSearch = React.useRef("");
   React.useEffect(() => {
-    if (analysisRoute && parsed) lastSelection.current = parsed;
-  }, [analysisRoute, parsed]);
+    if (analysisRoute && search !== null) lastSearch.current = search;
+  }, [analysisRoute, search]);
 
   const navigate = React.useCallback(
     (state: ActivityViewState, replace = false) => {
@@ -130,10 +143,8 @@ function useActivityViewState() {
         );
         return `${path}?${query}`;
       }
-      return activityViewHref(
-        path,
-        analysisRoute ? (parsed ?? {}) : lastSelection.current,
-      );
+      const query = analysisRoute ? search : lastSearch.current;
+      return query ? `${path}?${query}` : path;
     },
     viewHref: (id: number, path = "/activities") =>
       activityViewHref(path, { viewId: id }),

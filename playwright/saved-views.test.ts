@@ -68,7 +68,7 @@ test("nested selection agrees across list, routes, counts and power analytics", 
   expect(maps.map((a) => a.stravaId).sort()).toEqual(
     [f.ids.long, f.ids.race].sort(),
   );
-  expect(summary).toEqual({ count: 2, routes: 2, power: 1 });
+  expect(summary).toEqual({ count: 2, routes: 2 });
   expect(curve).toEqual([
     expect.objectContaining({
       duration: 60,

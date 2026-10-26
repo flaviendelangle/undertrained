@@ -564,6 +564,10 @@ export type WorkoutChoice = (typeof WORKOUT_CHOICES)[number];
  * lists for weight-training sessions and the edit form can't set.
  */
 export type WorkoutKind = WorkoutChoice | "weight_training";
+export const WORKOUT_KINDS = [
+  ...WORKOUT_CHOICES,
+  "weight_training",
+] as const satisfies readonly WorkoutKind[];
 
 const RUN_WORKOUT_TYPES = { none: 0, race: 1, long_run: 2, workout: 3 };
 // Rides have no "long run".

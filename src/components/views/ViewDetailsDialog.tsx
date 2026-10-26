@@ -29,7 +29,6 @@ export function ViewDetailsDialog({
   onClose: () => void;
 }) {
   const t = useT();
-  const { folders } = useActivityView();
   const [name, setName] = React.useState(initialName);
   const [folder, setFolder] = React.useState(
     initialFolder === null ? "" : String(initialFolder),
@@ -53,36 +52,15 @@ export function ViewDetailsDialog({
           }}
           className="flex flex-col gap-4"
         >
-          <label className="flex flex-col gap-2 text-sm">
-            {t("views.name")}
-            <input
-              autoFocus
-              required
-              maxLength={100}
-              className={viewInputClass}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={t("views.namePlaceholder")}
-            />
-          </label>
-          <label className="flex flex-col gap-2 text-sm">
-            {t("views.folder")}
-            <select
-              className={viewInputClass}
-              value={folder}
-              onChange={(event) => setFolder(event.target.value)}
-            >
-              <option value="">{t("views.ungrouped")}</option>
-              {folders.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ViewDetailsFields
+            name={name}
+            folder={folder}
+            onNameChange={setName}
+            onFolderChange={setFolder}
+          />
           <ResponsiveDialogFooter>
             <Button variant="outline" onClick={onClose}>
-              {t("views.cancel")}
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={busy || !name.trim()}>
               {t("views.save")}
@@ -91,5 +69,52 @@ export function ViewDetailsDialog({
         </form>
       </ResponsiveDialogContent>
     </ResponsiveDialog>
+  );
+}
+
+/** A view's name and folder; `folder` is a folder ID, or "" for ungrouped. */
+export function ViewDetailsFields({
+  name,
+  folder,
+  onNameChange,
+  onFolderChange,
+}: {
+  name: string;
+  folder: string;
+  onNameChange: (name: string) => void;
+  onFolderChange: (folder: string) => void;
+}) {
+  const t = useT();
+  const { folders } = useActivityView();
+  return (
+    <>
+      <label className="flex flex-col gap-2 text-sm">
+        {t("views.name")}
+        <input
+          autoFocus
+          required
+          maxLength={100}
+          className={viewInputClass}
+          value={name}
+          onChange={(event) => onNameChange(event.target.value)}
+          placeholder={t("views.namePlaceholder")}
+        />
+      </label>
+      <label className="flex flex-col gap-2 text-sm">
+        {t("views.folder")}
+        <select
+          className={viewInputClass}
+          value={folder}
+          onChange={(event) => onFolderChange(event.target.value)}
+        >
+          <option value="">{t("views.ungrouped")}</option>
+          {folders.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
   );
 }

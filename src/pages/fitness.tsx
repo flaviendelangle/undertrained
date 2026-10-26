@@ -1,3 +1,5 @@
+import * as React from "react";
+
 import { format } from "date-fns";
 import { HeartPulseIcon } from "lucide-react";
 import nextDynamic from "next/dynamic";
@@ -55,16 +57,20 @@ const FitnessPage: NextPageWithLayout = () => {
       );
   };
   const first = series[0] ? format(series[0].date, "yyyy-MM-dd") : today;
-  const point = series.find(
-    (p) => format(p.date, "yyyy-MM-dd") === selectedDate,
+  const point = React.useMemo(
+    () => series.find((p) => format(p.date, "yyyy-MM-dd") === selectedDate),
+    [series, selectedDate],
   );
   const zone = point && classifyForm(point.tsb);
-  const activities =
-    activitiesQuery.data?.filter((activity) =>
-      coveredDayKeys(activity.startDateLocal, activity.elapsedTime).includes(
-        selectedDate,
-      ),
-    ) ?? [];
+  const activities = React.useMemo(
+    () =>
+      activitiesQuery.data?.filter((activity) =>
+        coveredDayKeys(activity.startDateLocal, activity.elapsedTime).includes(
+          selectedDate,
+        ),
+      ) ?? [],
+    [activitiesQuery.data, selectedDate],
+  );
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -96,7 +102,8 @@ const FitnessPage: NextPageWithLayout = () => {
                 </div>
                 <ChartCardSurfaceProvider surface="responsive">
                   <FitnessChart
-                    selectedDate={selectedDate}
+                    series={series}
+                    selectedPoint={point}
                     onDateChange={setSelectedDate}
                   />
                 </ChartCardSurfaceProvider>

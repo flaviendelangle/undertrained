@@ -35,7 +35,7 @@ import { useAthleteId } from "~/hooks/useAthleteId";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useI18n } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
-import { trpc } from "~/utils/trpc";
+import { invalidateActivityData, trpc } from "~/utils/trpc";
 
 type SyncMode = NonNullable<SyncJob["mode"]>;
 
@@ -391,14 +391,8 @@ export function SyncPanel({
       void utils.activities.maps.invalidate();
     } else if (wasSyncingRef.current) {
       wasSyncingRef.current = false;
-      void utils.activities.list.invalidate();
-      void utils.activities.maps.invalidate();
       void utils.activities.get.invalidate();
-      void utils.analytics.getPowerCurve.invalidate();
-      void utils.analytics.getPowerCurveYears.invalidate();
-      void utils.analytics.getPowerDistribution.invalidate();
-      void utils.views.summary.invalidate();
-      void utils.views.counts.invalidate();
+      void invalidateActivityData(utils);
     }
   }, [syncJob, isInProgress, utils]);
 
@@ -426,7 +420,6 @@ export function SyncPanel({
   }, [open, utils]);
   const content = (
     <>
-      {" "}
       {isInProgress ? (
         <SyncProgress syncJob={syncJob} />
       ) : neverSynced ? (

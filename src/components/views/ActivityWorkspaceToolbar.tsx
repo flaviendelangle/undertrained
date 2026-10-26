@@ -1,17 +1,20 @@
-import type { ReactNode } from "react";
-
 import { BarChart3Icon, ListIcon, MapIcon } from "lucide-react";
 
 import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { useActivityView } from "~/hooks/useActivityView";
 import { useT } from "~/i18n/useT";
+import { ACTIVITY_PRESENTATION_PATHS } from "~/utils/activityViewState";
+
+const PRESENTATIONS = [
+  { id: "list", label: "views.list", icon: ListIcon },
+  { id: "map", label: "views.map", icon: MapIcon },
+  { id: "charts", label: "views.charts", icon: BarChart3Icon },
+] as const;
 
 export function ActivityWorkspaceToolbar({
   presentation,
-  actions,
 }: {
-  presentation: "list" | "map" | "charts";
-  actions?: ReactNode;
+  presentation: keyof typeof ACTIVITY_PRESENTATION_PATHS;
 }) {
   const t = useT();
   const scope = useActivityView();
@@ -19,34 +22,12 @@ export function ActivityWorkspaceToolbar({
     <PageToolbar
       title={t("activities.pageTitle")}
       icon={ListIcon}
-      actions={actions}
       tabs={{
         label: t("views.presentation"),
-        items: (
-          [
-            {
-              id: "list",
-              path: "/activities",
-              label: "views.list",
-              icon: ListIcon,
-            },
-            {
-              id: "map",
-              path: "/activities/map",
-              label: "views.map",
-              icon: MapIcon,
-            },
-            {
-              id: "charts",
-              path: "/activities/charts",
-              label: "views.charts",
-              icon: BarChart3Icon,
-            },
-          ] as const
-        ).map(({ id, path, label, icon }) => ({
+        items: PRESENTATIONS.map(({ id, label, icon }) => ({
           label: t(label),
           icon,
-          href: scope.href(path),
+          href: scope.href(ACTIVITY_PRESENTATION_PATHS[id]),
           active: presentation === id,
         })),
       }}

@@ -7,10 +7,7 @@ import {
 
 import { viewInputClass } from "./ActivityFilterEditor";
 
-export const columnLabels: Record<
-  (typeof ACTIVITY_COLUMNS)[number],
-  AppMessageKey
-> = {
+const columnLabels: Record<(typeof ACTIVITY_COLUMNS)[number], AppMessageKey> = {
   type: "activities.columns.sport",
   name: "activities.columns.title",
   startDateLocal: "activities.columns.date",
@@ -81,7 +78,7 @@ export function ActivityDisplayEditor({
         </select>
       </label>
       <label className="flex flex-col gap-2 text-sm">
-        {t("views.sortBy")}
+        {t("common.sortBy")}
         <select
           className={viewInputClass}
           value={draft.sort.id}

@@ -2,6 +2,10 @@ import { CalendarDaysIcon, CalendarRangeIcon } from "lucide-react";
 import nextDynamic from "next/dynamic";
 import { useRouter } from "next/router";
 
+import {
+  journalHref,
+  readJournalLocation,
+} from "~/components/journal/journalView";
 import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { LoadingOverlay } from "~/components/primitives/LoadingOverlay";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
@@ -20,11 +24,7 @@ const Journal = nextDynamic(loadJournal, { ssr: false });
 const JournalPage: NextPageWithLayout = () => {
   const t = useT();
   const router = useRouter();
-  const requestedView = Array.isArray(router.query.view)
-    ? router.query.view[0]
-    : router.query.view;
-  const view = requestedView === "week" ? "week" : "month";
-  const week = typeof router.query.week === "string" ? router.query.week : null;
+  const { view, weekParam } = readJournalLocation(router.query);
   // Prefetch the journal's primary dataset from the (non-lazy) page itself so
   // the request overlaps with the Journal module loading; the component then
   // mounts already populated. Harmless on SPA navigation — the cache is warm,
@@ -48,21 +48,23 @@ const JournalPage: NextPageWithLayout = () => {
         icon={CalendarDaysIcon}
         tabs={{
           label: t("journal.view.label"),
-          items: [
-            {
-              value: "month",
-              icon: CalendarDaysIcon,
-              label: t("journal.view.month"),
-            },
-            {
-              value: "week",
-              icon: CalendarRangeIcon,
-              label: t("journal.view.week"),
-            },
-          ].map((item) => ({
+          items: (
+            [
+              {
+                value: "month",
+                icon: CalendarDaysIcon,
+                label: t("journal.view.month"),
+              },
+              {
+                value: "week",
+                icon: CalendarRangeIcon,
+                label: t("journal.view.week"),
+              },
+            ] as const
+          ).map((item) => ({
             label: item.label,
             icon: item.icon,
-            href: `/journal/${item.value}${week ? `?week=${encodeURIComponent(week)}` : ""}`,
+            href: journalHref(item.value, weekParam),
             active: view === item.value,
           })),
         }}

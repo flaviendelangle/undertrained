@@ -231,20 +231,26 @@ export function ActivitiesTable() {
     [activitiesQuery.data, loadPreferences],
   );
 
+  // Stable references: the table memoizes its sorted rows on these.
+  const sorting = React.useMemo(
+    () => [scope.display.sort],
+    [scope.display.sort],
+  );
+  const columnVisibility = React.useMemo(
+    () =>
+      Object.fromEntries(
+        ACTIVITY_COLUMNS.map((id) => [id, scope.display.columns.includes(id)]),
+      ),
+    [scope.display.columns],
+  );
   const table = useTable({
     enableSortingRemoval: false,
     features,
     data,
     columns,
-    state: {
-      sorting: [scope.display.sort],
-      columnVisibility: Object.fromEntries(
-        ACTIVITY_COLUMNS.map((id) => [id, scope.display.columns.includes(id)]),
-      ),
-    },
+    state: { sorting, columnVisibility },
     onSortingChange: (updater) => {
-      const next =
-        typeof updater === "function" ? updater([scope.display.sort]) : updater;
+      const next = typeof updater === "function" ? updater(sorting) : updater;
       if (next[0])
         void scope.setDisplay({
           ...scope.display,

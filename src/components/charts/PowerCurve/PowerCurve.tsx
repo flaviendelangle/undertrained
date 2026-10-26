@@ -132,30 +132,20 @@ function buildRangeSeries(
 
 interface PowerCurveProps {
   activityTypes?: string[];
-  workoutTypes?: number[];
   stravaId?: number;
-  defaultRanges?: DateRange[];
 }
 
 // --- Component ---
 
 const PowerCurve = React.memo(function PowerCurve({
   activityTypes,
-  workoutTypes,
   stravaId,
-  defaultRanges,
 }: PowerCurveProps) {
   if (stravaId != null) {
     return <SingleActivityPowerCurve stravaId={stravaId} />;
   }
 
-  return (
-    <AggregatedPowerCurve
-      activityTypes={activityTypes}
-      workoutTypes={workoutTypes}
-      defaultRanges={defaultRanges}
-    />
-  );
+  return <AggregatedPowerCurve activityTypes={activityTypes} />;
 });
 
 export default PowerCurve;
@@ -587,40 +577,33 @@ function PowerSliceWidthSettings() {
 
 // --- Aggregated mode with multi-range support ---
 
-function AggregatedPowerCurve({
-  activityTypes,
-  workoutTypes: workoutTypesProp,
-  defaultRanges,
-}: {
-  activityTypes?: string[];
-  workoutTypes?: number[];
-  defaultRanges?: DateRange[];
-}) {
+// The range covering the whole selection, labelled with the view's name.
+const SELECTION_RANGE_ID = "selection";
+const LOCKED_RANGE_IDS = new Set([SELECTION_RANGE_ID]);
+
+function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
   const t = useT();
   const tokens = useChartTokens();
   const athleteId = useAthleteId();
   const scope = useActivityView();
   const selection = useActivitySelection("statisticsPowerCurve", {
     activityTypes,
-    ...(workoutTypesProp ? { workoutTypes: workoutTypesProp } : {}),
   });
-  const { workoutTypes } = selection;
-  const zonesSelection = selection;
-  const distributionSelection = selection;
   const {
     ranges: rawRanges,
     addRange,
     removeRange,
-  } = useDateRanges(() => defaultRanges ?? [{ id: "selection", label: "" }]);
-  const ranges = rawRanges.map((range) =>
-    range.id === "selection"
-      ? { ...range, label: scope.view?.name ?? t("views.allActivities") }
-      : range,
-  );
-  const lockedRangeIds = React.useMemo(
+  } = useDateRanges(() => [{ id: SELECTION_RANGE_ID, label: "" }]);
+  const selectionLabel = scope.view?.name ?? t("views.allActivities");
+  // Stable while the ranges and label are: the chart-data memo depends on it.
+  const ranges = React.useMemo(
     () =>
-      new Set(defaultRanges ? defaultRanges.map((r) => r.id) : ["selection"]),
-    [defaultRanges],
+      rawRanges.map((range) =>
+        range.id === SELECTION_RANGE_ID
+          ? { ...range, label: selectionLabel }
+          : range,
+      ),
+    [rawRanges, selectionLabel],
   );
   const [mode, setMode] = React.useState<PowerCurveMode>("watts");
   const [tab, setTab] = React.useState<Exclude<PowerTab, "timeline">>("curve");
@@ -628,14 +611,11 @@ function AggregatedPowerCurve({
   const { resolveForDate } = useRiderSettingsTimeline();
 
   const selectedActivities = trpc.activities.list.useQuery(
-    { athleteId, ...zonesSelection },
+    { athleteId, ...selection },
     { enabled: scope.ready && tab === "zones" },
   );
   const selectedDistribution = trpc.analytics.getPowerDistribution.useQuery(
-    {
-      athleteId,
-      ...distributionSelection,
-    },
+    { athleteId, ...selection },
     { enabled: scope.ready && tab === "distribution" },
   );
 
@@ -653,10 +633,10 @@ function AggregatedPowerCurve({
     return { seconds, coastingSeconds };
   }, [selectedActivities.data]);
 
-  const selectedFtp = React.useMemo(() => {
-    const date = defaultRanges?.[0]?.dateTo ?? formatDateOnly(new Date());
-    return resolveForDate(date).ftp;
-  }, [defaultRanges, resolveForDate]);
+  const selectedFtp = React.useMemo(
+    () => resolveForDate(formatDateOnly(new Date())).ftp,
+    [resolveForDate],
+  );
 
   // One query per range. `combine` reduces the results to their data arrays and
   // React Query memoizes that output (replaceEqualDeep), so `queryResults` stays
@@ -732,10 +712,9 @@ function AggregatedPowerCurve({
       ranges={ranges}
       onAddRange={addRange}
       onRemoveRange={removeRange}
-      lockedRangeIds={lockedRangeIds}
+      lockedRangeIds={LOCKED_RANGE_IDS}
       athleteId={athleteId}
       activityTypes={activityTypes}
-      workoutTypes={workoutTypes}
       mode={mode}
       onModeChange={setMode}
     />
@@ -797,7 +776,6 @@ function SelectionPowerToolbar(props: {
   lockedRangeIds?: Set<string>;
   athleteId: number;
   activityTypes?: string[];
-  workoutTypes?: number[];
   mode: PowerCurveMode;
   onModeChange: (mode: PowerCurveMode) => void;
 }) {
@@ -831,7 +809,6 @@ function SelectionPowerToolbar(props: {
               onSelect={props.onAddRange}
               athleteId={props.athleteId}
               activityTypes={props.activityTypes}
-              workoutTypes={props.workoutTypes}
             />
             <CustomRangePopover onAdd={props.onAddRange} />
           </div>
@@ -928,24 +905,19 @@ function PresetSelect({
   onSelect,
   athleteId,
   activityTypes,
-  workoutTypes,
 }: {
   onSelect: (range: DateRange) => void;
   athleteId: number;
   activityTypes?: string[];
-  workoutTypes?: number[];
 }) {
   const t = useT();
   const scope = useActivityView();
+  const selection = useActivitySelection("statisticsPowerCurve", {
+    activityTypes,
+  });
   const presetOptions = React.useMemo(() => createPresetOptions(t), [t]);
   const { data: years } = trpc.analytics.getPowerCurveYears.useQuery(
-    {
-      athleteId,
-      activityTypes,
-      workoutTypes,
-      rules: scope.rules,
-      today: scope.today,
-    },
+    { athleteId, ...selection },
     { enabled: scope.ready },
   );
 

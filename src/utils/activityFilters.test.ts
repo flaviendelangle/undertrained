@@ -4,8 +4,14 @@ import {
   type ActivityCondition,
   type ActivityFilterGroup,
   activityRulesSchema,
+  canonicalRules,
 } from "./activityFilters";
 import { activityViewHref, readActivityViewState } from "./activityViewState";
+
+const readLink = (href: string) =>
+  readActivityViewState(
+    Object.fromEntries(new URL(href, "https://undertrained.test").searchParams),
+  );
 
 const date: ActivityCondition = {
   kind: "condition",
@@ -37,11 +43,8 @@ describe("activity links", () => {
         },
       ],
     };
-    const href = activityViewHref("/activities/charts", { viewId: 42, rules });
-    const restored = readActivityViewState(
-      Object.fromEntries(
-        new URL(href, "https://undertrained.test").searchParams,
-      ),
+    const restored = readLink(
+      activityViewHref("/activities/charts", { viewId: 42, rules }),
     );
     expect(restored?.viewId).toBe(42);
     expect(restored?.rules?.children[1]).toMatchObject({
@@ -63,6 +66,27 @@ describe("activity links", () => {
       },
     ])
       expect(readActivityViewState(query)).toBeNull();
+  });
+
+  it("gives a saved view and the same rules from a link one query input", () => {
+    // As stored: editor IDs, and values left over from an earlier operator.
+    const saved: ActivityFilterGroup = {
+      ...root,
+      children: [
+        { ...date, id: "editor-1", values: ["2026-01-01"] },
+        {
+          kind: "condition",
+          id: "editor-2",
+          field: "sport",
+          operator: "in",
+          value: "Run",
+          valueTo: "",
+          values: ["Ride"],
+        },
+      ],
+    };
+    const linked = readLink(activityViewHref("/activities", { rules: saved }));
+    expect(canonicalRules(linked!.rules!)).toEqual(canonicalRules(saved));
   });
 });
 

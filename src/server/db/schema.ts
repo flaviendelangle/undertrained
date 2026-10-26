@@ -167,6 +167,12 @@ export const activities = pgTable(
     // well and the single-column index was pure write amplification.
     index("activities_athlete_id_idx").on(t.athlete, t.id),
     index("activities_athlete_start_date_idx").on(t.athlete, t.startDate),
+    // Activity selections filter dates by local calendar day; the expression
+    // must match `selectActivities`' exactly for the planner to use it.
+    index("activities_athlete_local_day_idx").on(
+      t.athlete,
+      sql`left(${t.startDateLocal}, 10)`,
+    ),
     index("activities_athlete_streams_loaded_idx").on(
       t.athlete,
       t.areStreamsLoaded,

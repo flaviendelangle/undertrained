@@ -6,6 +6,7 @@ import { useActivityFilterOptions } from "./useActivityFilterOptions";
 import {
   type ActivitySelection,
   type ActivityView,
+  isAnalysisView,
   useActivitySelection,
 } from "./useActivitySelection";
 import { useActivityView } from "./useActivityView";
@@ -17,12 +18,7 @@ export function useActivitiesQuery(
 ) {
   const selection = useActivitySelection(view, own);
   const scope = useActivityView();
-  const scoped = [
-    "activities",
-    "heatmap",
-    "statistics",
-    "statisticsPowerCurve",
-  ].includes(view);
+  const scoped = isAnalysisView(view);
   const athleteId = useAthleteId();
 
   const result = trpc.activities.list.useQuery(

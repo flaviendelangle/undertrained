@@ -20,6 +20,7 @@ import { coveredDayKeys } from "~/components/journal/weekGrid";
 import { QueryState } from "~/components/primitives/QueryState";
 import { usePlannedTrainingList } from "~/hooks/plannedTrainings";
 import { useT } from "~/i18n/useT";
+import { activityHref } from "~/utils/activityLinks";
 
 export function FitnessDayEntries({
   activities,
@@ -68,7 +69,10 @@ export function FitnessDayEntries({
                 key={activity.stravaId}
                 activity={activity}
                 variant="card"
-                href={`/activities/${activity.stravaId}?from=fitness&day=${selectedDate}`}
+                href={activityHref(
+                  activity.stravaId,
+                  `/fitness?day=${selectedDate}`,
+                )}
               />
             ))}
           </div>

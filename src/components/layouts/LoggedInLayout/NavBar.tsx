@@ -63,7 +63,6 @@ function NavBarLink({
   badge,
 }: NavBarLinkProps) {
   const { isMenuExpanded } = React.useContext(NavBarContext);
-  const scope = useActivityView();
   const pathname = usePathname();
   const isActive = (pathname ?? "").startsWith(activeFor ?? href);
 
@@ -76,7 +75,7 @@ function NavBarLink({
           : "text-muted-foreground hover:bg-accent hover:text-foreground",
       )}
       aria-label={label}
-      href={href === "/activities" ? scope.href(href) : href}
+      href={href}
       aria-current={isActive ? "page" : undefined}
     >
       {isActive && (
@@ -153,6 +152,7 @@ function SettingsSetupDot() {
 /* ── Desktop sidebar ── */
 export function NavBar() {
   const t = useT();
+  const scope = useActivityView();
   const syncHandle = useSyncPanelHandle();
   const [isMenuExpanded, setIsMenuExpanded] = React.useState(false);
 
@@ -200,7 +200,8 @@ export function NavBar() {
             <NavBarLink
               icon={ListIcon}
               label={t("nav.activities")}
-              href="/activities"
+              href={scope.href("/activities")}
+              activeFor="/activities"
             />
           </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label={t("nav.fitness")}>
@@ -306,13 +307,12 @@ function MobileTabLink({
   href,
   activeFor,
 }: MobileTabLinkProps) {
-  const scope = useActivityView();
   const pathname = usePathname();
   const isActive = (pathname ?? "").startsWith(activeFor ?? href);
 
   return (
     <Link
-      href={href === "/activities" ? scope.href(href) : href}
+      href={href}
       aria-current={isActive ? "page" : undefined}
       className={cn(
         "flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors",
@@ -328,6 +328,7 @@ function MobileTabLink({
 }
 
 export function MobileBottomBar() {
+  const scope = useActivityView();
   const openSync = useSyncPanel();
   const pathname = usePathname() ?? "";
   const moreActive = [
@@ -352,7 +353,8 @@ export function MobileBottomBar() {
       <MobileTabLink
         icon={ListIcon}
         label={t("nav.activities")}
-        href="/activities"
+        href={scope.href("/activities")}
+        activeFor="/activities"
       />
       <MobileTabLink
         icon={HeartPulseIcon}

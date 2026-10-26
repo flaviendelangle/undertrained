@@ -14,12 +14,20 @@ export type ActivityView =
   | "planTitles";
 export interface ActivitySelection {
   activityTypes: string[];
-  workoutTypes: number[];
-  hideCommutes: boolean;
-  dateFrom?: string;
-  dateTo?: string;
   rules?: ActivityFilterGroup;
   today?: string;
+}
+
+const ANALYSIS_VIEWS: readonly ActivityView[] = [
+  "activities",
+  "heatmap",
+  "statistics",
+  "statisticsPowerCurve",
+];
+
+/** Whether `view` follows the shared activity selection. */
+export function isAnalysisView(view: ActivityView): boolean {
+  return ANALYSIS_VIEWS.includes(view);
 }
 
 /** Analysis shares one selection; planning and athlete context have separate inputs. */
@@ -28,17 +36,9 @@ export function useActivitySelection(
   own: Partial<ActivitySelection> = {},
 ): ActivitySelection {
   const scope = useActivityView();
-  const analysis = [
-    "activities",
-    "heatmap",
-    "statistics",
-    "statisticsPowerCurve",
-  ].includes(view);
   return {
     activityTypes: [],
-    workoutTypes: [],
-    hideCommutes: false,
-    ...(analysis ? { rules: scope.rules, today: scope.today } : {}),
+    ...(isAnalysisView(view) ? { rules: scope.rules, today: scope.today } : {}),
     ...own,
   };
 }

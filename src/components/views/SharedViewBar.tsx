@@ -31,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { showErrorToast } from "~/components/ui/toast";
 import { useActivityView } from "~/hooks/useActivityView";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useIsMobile } from "~/hooks/useIsMobile";
@@ -43,6 +42,7 @@ import { ActivityDisplayEditor } from "./ActivityDisplayEditor";
 import { ActivityFilterEditor } from "./ActivityFilterEditor";
 import { MobileViewDrawer } from "./MobileViewDrawer";
 import { ViewDetailsDialog } from "./ViewDetailsDialog";
+import { useSaveActivityView } from "./useSaveActivityView";
 
 export function SharedViewBar({ table = false }: { table?: boolean }) {
   const t = useT();
@@ -50,7 +50,6 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
   const scope = useActivityView();
   const athleteId = useAthleteId();
   const isMobile = useIsMobile();
-  const utils = trpc.useUtils();
   const [panel, setPanel] = React.useState<
     "view" | "filters" | "save" | "display" | null
   >(null);
@@ -66,19 +65,7 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
       });
     }
   };
-  const onError = () => showErrorToast(t("common.saveError"));
-  const onSuccess = async (saved: NonNullable<typeof scope.view>) => {
-    utils.views.list.setData({ athleteId }, (old) =>
-      [...(old ?? []).filter((v) => v.id !== saved.id), saved].sort((a, b) =>
-        a.name.localeCompare(b.name),
-      ),
-    );
-    await utils.views.counts.invalidate();
-    setPanel(null);
-    await scope.acceptSaved(saved);
-  };
-  const create = trpc.views.create.useMutation({ onError, onSuccess });
-  const update = trpc.views.update.useMutation({ onError, onSuccess });
+  const save = useSaveActivityView(() => setPanel(null));
   const summary = trpc.views.summary.useQuery(
     { athleteId, rules: scope.rules, today: scope.today },
     { enabled: scope.ready },
@@ -170,17 +157,8 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
       {scope.modified && scope.view && (
         <ToolbarPrimitive.Button
           render={<Button />}
-          disabled={update.isPending}
-          onClick={() =>
-            update.mutate({
-              athleteId,
-              id: scope.view!.id,
-              name: scope.view!.name,
-              folderId: scope.view!.folderId,
-              rules: scope.rules,
-              display: scope.display,
-            })
-          }
+          disabled={save.busy}
+          onClick={() => save.update(scope.view!, scope.rules, scope.display)}
         >
           {t("views.update")}
         </ToolbarPrimitive.Button>
@@ -319,7 +297,6 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
       {isMobile && (panel !== null || editorRequested) && (
         <MobileViewDrawer
           key={scope.view?.id ?? "all"}
-          initialFiltersOpen
           table={table}
           onClose={closeEditor}
           onCommit={() => setPanel(null)}
@@ -341,16 +318,10 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
           title={t("views.saveAs")}
           initialName={scope.view?.name}
           initialFolder={scope.view?.folderId}
-          busy={create.isPending}
+          busy={save.busy}
           onClose={() => setPanel(null)}
           onSave={(name, folderId) =>
-            create.mutate({
-              athleteId,
-              name,
-              folderId,
-              rules: scope.rules,
-              display: scope.display,
-            })
+            save.saveNew(name, folderId, scope.rules, scope.display)
           }
         />
       )}
@@ -393,7 +364,7 @@ function DisplayDialog({
         <ActivityDisplayEditor value={draft} onChange={setDraft} />
         <ResponsiveDialogFooter>
           <Button variant="outline" onClick={onClose}>
-            {t("views.cancel")}
+            {t("common.cancel")}
           </Button>
           <Button
             disabled={!draft.columns.length}
