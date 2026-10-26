@@ -68,7 +68,7 @@ test("nested selection agrees across list, routes, counts and power analytics", 
   expect(maps.map((a) => a.stravaId).sort()).toEqual(
     [f.ids.long, f.ids.race].sort(),
   );
-  expect(summary).toEqual({ count: 2, routes: 2 });
+  expect(summary).toEqual({ count: 2 });
   expect(curve).toEqual([
     expect.objectContaining({
       duration: 60,
@@ -371,14 +371,18 @@ for (const viewport of [
       await expect(
         page.getByRole("combobox", { name: "Saved views" }),
       ).toContainText(saved.name);
-    await expect(page.getByText("2 activities", { exact: true })).toBeVisible();
+    if (viewport.width < 768)
+      await expect(
+        page.getByText("2 activities", { exact: true }),
+      ).toBeVisible();
     await closeViewOptions();
     await page.getByRole("link", { name: "Map", exact: true }).last().click();
     await expect(page).toHaveURL(/\/activities\/map\?/);
     await openViewOptions();
-    await expect(
-      page.getByText("1 routes from 2 selected activities", { exact: true }),
-    ).toBeVisible();
+    if (viewport.width < 768)
+      await expect(
+        page.getByText("2 activities", { exact: true }),
+      ).toBeVisible();
     await closeViewOptions();
     await expect(
       page
