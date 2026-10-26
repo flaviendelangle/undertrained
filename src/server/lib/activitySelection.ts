@@ -57,6 +57,11 @@ export type ActivitySelection = z.infer<typeof activityFilterInput> & {
   athleteId: number;
 };
 
+/** Escapes LIKE wildcards so a typed "%" or "_" matches itself. */
+export function escapeLike(input: string): string {
+  return input.replace(/[\\%_]/g, "\\$&");
+}
+
 /**
  * The SQL condition matching the athlete's activities that `selection`
  * describes, for a Drizzle `.where()` or a raw `sql` template.
@@ -147,7 +152,6 @@ export function activityRuleCondition(
   const definition = FILTER_FIELDS.find((f) => f.id === field)!;
   const operand = (input: string) =>
     definition.kind === "number" ? Number(input) * definition.scale : input;
-  const escapeLike = (input: string) => input.replace(/[\\%_]/g, "\\$&");
   switch (operator) {
     case "eq":
       return eq(column, operand(value));

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
+import { COMBINING_ACCENTS, queryWords } from "../../../utils/searchText";
 import {
   WORKOUT_CHOICES,
   workoutChoiceToValue,
@@ -10,11 +11,14 @@ import {
 import { activities } from "../../db/schema";
 import {
   activityFilterInput,
+  escapeLike,
   selectActivities,
 } from "../../lib/activitySelection";
 import { getAccessToken, updateActivityOnStrava } from "../../lib/strava";
 import { activityIngestion } from "../../lib/sync";
 import { athleteProcedure, protectedProcedure, router } from "../index";
+
+const SEARCH_LIMIT = 20;
 
 export const activitiesRouter = router({
   list: athleteProcedure
@@ -89,6 +93,41 @@ export const activitiesRouter = router({
         .from(activities)
         .where(and(selected, isNotNull(activities.mapPolyline)))
         .orderBy(desc(activities.startDate));
+    }),
+
+  /**
+   * The newest activities whose title contains every word of `query`, ignoring
+   * case and accents. Backs the command palette.
+   */
+  search: athleteProcedure
+    .input(z.object({ query: z.string().max(100) }))
+    .query(({ ctx, input }) => {
+      const words = queryWords(input.query);
+      if (words.length === 0) return [];
+      // Folded like `foldText` folds the query, once per row for every word.
+      const name = sql`lower(regexp_replace(normalize(${activities.name}, NFD), ${COMBINING_ACCENTS}, '', 'g'))`;
+      const patterns = sql.join(
+        words.map((word) => sql`${`%${escapeLike(word)}%`}`),
+        sql`, `,
+      );
+      return ctx.db
+        .select({
+          stravaId: activities.stravaId,
+          name: activities.name,
+          type: activities.type,
+          startDateLocal: activities.startDateLocal,
+          distance: activities.distance,
+          movingTime: activities.movingTime,
+        })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.athlete, input.athleteId),
+            sql`${name} LIKE ALL (ARRAY[${patterns}])`,
+          ),
+        )
+        .orderBy(desc(activities.startDate))
+        .limit(SEARCH_LIMIT);
     }),
 
   /**

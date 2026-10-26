@@ -1,13 +1,6 @@
 import * as React from "react";
 
-import {
-  CogIcon,
-  GaugeIcon,
-  LogInIcon,
-  TimerIcon,
-  TrendingUpIcon,
-  WrenchIcon,
-} from "lucide-react";
+import { LogInIcon, WrenchIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -21,25 +14,13 @@ import { GearCalculator } from "~/components/toolbox/GearCalculator";
 import { PaceCalculator } from "~/components/toolbox/PaceCalculator";
 import { RacePredictor } from "~/components/toolbox/RacePredictor";
 import { ZoneCalculator } from "~/components/toolbox/ZoneCalculator";
-import { type TFunction } from "~/i18n/I18nProvider";
+import {
+  TOOLS,
+  type ToolId,
+  createToolLabels,
+} from "~/components/toolbox/tools";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
-
-const TOOLS = [
-  { id: "pace-calculator", icon: TimerIcon },
-  { id: "race-predictor", icon: TrendingUpIcon },
-  { id: "zone-calculator", icon: GaugeIcon },
-  { id: "gear-calculator", icon: CogIcon },
-] as const;
-
-type ToolId = (typeof TOOLS)[number]["id"];
-
-const createToolLabels = (t: TFunction): Record<ToolId, string> => ({
-  "pace-calculator": t("toolbox.tool.paceCalculator"),
-  "race-predictor": t("toolbox.tool.racePredictor"),
-  "zone-calculator": t("toolbox.tool.zoneCalculator"),
-  "gear-calculator": t("toolbox.tool.gearCalculator"),
-});
 
 const ToolboxPage: NextPageWithLayout = () => {
   const t = useT();

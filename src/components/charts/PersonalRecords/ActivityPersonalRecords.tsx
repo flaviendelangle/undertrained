@@ -4,8 +4,10 @@ import { TrophyIcon } from "lucide-react";
 import Link from "next/link";
 
 import {
+  durationLabel,
   formatCyclingSpeed,
   formatPace,
+  speedLabel,
 } from "~/components/charts/Records/format";
 import { getMedalClasses } from "~/components/charts/Records/shared";
 import { ChartCard } from "~/components/ui/chart-card";
@@ -13,14 +15,7 @@ import { useAthleteId } from "~/hooks/useAthleteId";
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
-import { CYCLING_POWER_DURATIONS } from "~/utils/cyclingPowerDurations";
-import { CYCLING_SPEED_DISTANCES } from "~/utils/cyclingRecordDistances";
-import {
-  formatElapsed,
-  formatKm,
-  formatMeters,
-  formatOrdinal,
-} from "~/utils/format";
+import { formatElapsed, formatMeters, formatOrdinal } from "~/utils/format";
 import {
   getActivityTypesByCategory,
   getSportConfig,
@@ -43,14 +38,6 @@ const GROUP_LABEL_KEY: Record<RecordGroupKey, AppMessageKey> = {
   overall: "charts.personalRecords.group.overall",
   bestEfforts: "charts.personalRecords.group.bestEfforts",
 };
-
-const durationLabel = (seconds: number) =>
-  CYCLING_POWER_DURATIONS.find((d) => d.seconds === seconds)?.label ??
-  formatElapsed(seconds);
-
-const speedLabel = (meters: number) =>
-  CYCLING_SPEED_DISTANCES.find((d) => d.meters === meters)?.label ??
-  formatKm(meters, 0);
 
 /**
  * "Personal records" card for the activity detail page: every leaderboard on

@@ -23,6 +23,7 @@ import { PowerCurve } from "~/components/charts/PowerCurve";
 import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
 import { useActivityView } from "~/hooks/useActivityView";
+import { useRememberRecentItem } from "~/hooks/useRememberRecentItem";
 import { useTypedParams } from "~/hooks/useTypedParams";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
@@ -76,6 +77,15 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
 
   const [activity] = trpc.activities.get.useSuspenseQuery({ stravaId });
   const { recording } = useActivityRecording(stravaId);
+  useRememberRecentItem(
+    activity && {
+      kind: "activity",
+      id: activity.stravaId,
+      name: activity.name,
+      type: activity.type,
+      startDateLocal: activity.startDateLocal,
+    },
+  );
 
   // The map and the elevation profile are drawn against position and distance,
   // so they take the samples as recorded rather than per second.

@@ -1355,6 +1355,37 @@ const en = {
     Kayaking: "Kayaking",
     Workout: "Workout",
   },
+  commandPalette: {
+    label: "Search",
+    shortcut: "Search ({shortcut})",
+    placeholder: "Search activities, views, workouts, pages…",
+    ridePlaceholder: "Pick a workout to ride…",
+    back: "Back to all results",
+    noResults: "No results",
+    searching: "Searching activities…",
+    searchError: "Couldn't search activities.",
+    keys: {
+      navigate: "Navigate",
+      open: "Open",
+      close: "Close",
+    },
+    group: {
+      recent: "Recent",
+      bests: "Personal bests",
+      pages: "Pages",
+      actions: "Actions",
+      views: "Saved views",
+      workouts: "Workouts",
+      routes: "Routes",
+      activities: "Activities",
+      ride: "Ride a workout",
+    },
+    activityMap: "Activity map",
+    activityCharts: "Activity charts",
+    startRide: "Start a live ride",
+    bestPower: "{duration} power",
+    bestTime: "Fastest {distance}",
+  },
 };
 
 export type Messages = typeof en;
