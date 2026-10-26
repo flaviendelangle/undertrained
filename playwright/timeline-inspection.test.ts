@@ -24,8 +24,17 @@ test.beforeEach(async ({ viewsFixture: f }) => {
   }
 });
 
-const periodPicker = (page: Page) =>
-  page.getByRole("combobox", { name: "Choose a period", exact: true });
+const timeline = (page: Page) =>
+  page.getByRole("group", { name: "Activities Timeline", exact: true });
+async function expectChartFocused(page: Page) {
+  await expect
+    .poll(() =>
+      timeline(page).evaluate((element) =>
+        element.contains(document.activeElement),
+      ),
+    )
+    .toBe(true);
+}
 const inspector = (page: Page) => page.getByRole("dialog");
 const total = (panel: Locator) => panel.locator("strong");
 
@@ -143,6 +152,9 @@ test("desktop inspection intersects a temporary root OR and returns with its cha
   });
   await expect(plot.locator("canvas").first()).toBeVisible();
   const plotBox = await plot.boundingBox();
+  await expect(
+    page.getByRole("combobox", { name: "Choose a period", exact: true }),
+  ).toHaveCount(0);
   await clickBucket(page, 0, 7);
   const panel = inspector(page);
   await expect(panel).toBeVisible();
@@ -173,8 +185,7 @@ test("desktop inspection intersects a temporary root OR and returns with its cha
   await panel.getByRole("button", { name: "Close", exact: true }).click();
   await expect(panel).toHaveCount(0);
   await changeMetric(page, "Distance (km)");
-  await periodPicker(page).click();
-  await page.getByRole("option", { name: "W2 2026", exact: true }).click();
+  await clickBucket(page, 0, 7);
   await panel.getByRole("button", { name: "Ride", exact: true }).click();
   await expect(total(panel)).toHaveText("50 km");
   const chartUrl = page.url();
@@ -227,9 +238,11 @@ test("desktop inspection intersects a temporary root OR and returns with its cha
   ).toEqual([]);
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
-  await expect(periodPicker(page)).toBeFocused();
-  await periodPicker(page).press("ArrowDown");
-  await page.getByRole("option", { name: "W3 2026", exact: true }).click();
+  await expectChartFocused(page);
+  // The first arrow establishes chart item focus; the next moves to the empty week.
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
   await expect(
     inspector(page).getByText("No matching activities in this period."),
   ).toBeVisible();
@@ -246,8 +259,7 @@ test("desktop inspection intersects a temporary root OR and returns with its cha
   await header.getByRole("combobox").last().click();
   await page.getByRole("option", { name: "Month", exact: true }).click();
   await expect(inspector(page)).toHaveCount(0);
-  await periodPicker(page).click();
-  await page.getByRole("option", { name: "Jan 2026", exact: true }).click();
+  await clickBucket(page, 0, 2);
   await expect(total(inspector(page))).toHaveText("67 km");
   await expect(inspector(page).getByRole("listitem")).toHaveCount(3);
   await panel.getByRole("button", { name: "Close", exact: true }).click();
@@ -263,15 +275,14 @@ test("desktop inspection intersects a temporary root OR and returns with its cha
     .poll(async () => (await chart.boundingBox())?.width)
     .toBeLessThan(550);
   const narrowChartBox = await chart.boundingBox();
-  await periodPicker(page).click();
-  await page.getByRole("option", { name: "Jan 2026", exact: true }).click();
+  await clickBucket(page, 0, 2);
   await expect(panel).toBeVisible();
   await expect.poll(async () => (await panel.boundingBox())?.x).toBe(320);
   expect((await chart.boundingBox())?.width).toBe(narrowChartBox?.width);
-  // Pressing the backdrop dismisses the drawer and returns focus to the period picker.
+  // Pressing the backdrop dismisses the drawer and returns focus to the chart.
   await page.mouse.click(280, 400);
   await expect(panel).toHaveCount(0);
-  await expect(periodPicker(page)).toBeFocused();
+  await expectChartFocused(page);
   await page
     .getByRole("button", { name: "Collapse menu", exact: true })
     .click();
@@ -310,8 +321,7 @@ test("metric contributions follow legend visibility and keep missing load distin
   await panel.getByRole("button", { name: "Close", exact: true }).click();
   await expect(panel).toHaveCount(0);
   await changeMetric(page, "Load");
-  await periodPicker(page).click();
-  await page.getByRole("option", { name: "W2 2026", exact: true }).click();
+  await clickBucket(page, 0, 7);
   await expect(total(panel)).toHaveText("200");
   await expect(
     panel.getByText(
@@ -329,8 +339,7 @@ test("metric contributions follow legend visibility and keep missing load distin
   await panel.getByRole("button", { name: "Close", exact: true }).click();
   await expect(panel).toHaveCount(0);
   await chart.getByRole("button", { name: "Ride", exact: true }).click();
-  await periodPicker(page).click();
-  await page.getByRole("option", { name: "W2 2026", exact: true }).click();
+  await clickBucket(page, 0, 7);
   await expect(total(panel)).toHaveText("100");
   await expect(panel.getByRole("listitem")).toHaveCount(2);
   await expect(
@@ -339,8 +348,7 @@ test("metric contributions follow legend visibility and keep missing load distin
   await panel.getByRole("button", { name: "Close", exact: true }).click();
   await expect(panel).toHaveCount(0);
   await chart.getByRole("button", { name: "Run", exact: true }).click();
-  await periodPicker(page).click();
-  await page.getByRole("option", { name: "W2 2026", exact: true }).click();
+  await clickBucket(page, 0, 7);
   await expect(panel.getByRole("listitem")).toHaveCount(0);
   await expect(
     panel.getByRole("button", { name: "Open in Activities", exact: true }),
@@ -390,10 +398,9 @@ test.describe("mobile", () => {
       .getByRole("button", { name: "Close", exact: true })
       .click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(periodPicker(page)).toBeFocused();
+    await expectChartFocused(page);
     await changeMetric(page, "Activities");
-    await periodPicker(page).click();
-    await page.getByRole("option", { name: "W2 2026", exact: true }).click();
+    await clickBucket(page, 0, 7, true);
     await expect(total(page.getByRole("dialog"))).toHaveText("5");
     await page
       .getByRole("dialog")

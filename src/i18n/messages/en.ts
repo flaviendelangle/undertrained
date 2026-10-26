@@ -569,8 +569,6 @@ const en = {
     activitiesTimeline: {
       title: "Activities Timeline",
       inspection: "Activities behind this period",
-      inspect: "Inspect",
-      choose: "Choose a period",
       previous: "Previous period",
       next: "Next period",
       unavailable: "Unavailable",

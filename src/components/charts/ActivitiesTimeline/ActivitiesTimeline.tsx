@@ -15,13 +15,6 @@ import {
   ResponsivePopoverTitle,
   ResponsivePopoverTrigger,
 } from "~/components/ui/responsive-popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import { useActivitiesFilteredByType } from "~/hooks/useActivitiesFilteredByType";
 import { useActivityView } from "~/hooks/useActivityView";
 import { useElementSize } from "~/hooks/useElementSize";
@@ -73,7 +66,7 @@ export default function ActivitiesTimeline() {
   const setPrecision = (precision: SlicePrecision) =>
     update({ precision, period: undefined, sport: undefined, zoom: undefined });
   const chartRef = React.useRef<HTMLDivElement>(null);
-  const periodTrigger = React.useRef<HTMLButtonElement>(null);
+  const plotRef = React.useRef<HTMLDivElement>(null);
   const [hoveredAxis, setHoveredAxis] = React.useState<HighlightedAxis>([]);
   const { width } = useElementSize(chartRef);
   const tokens = useChartTokens();
@@ -366,6 +359,8 @@ export default function ActivitiesTimeline() {
           bodyClassName="flex flex-col"
         >
           <div
+            ref={plotRef}
+            tabIndex={-1}
             className="h-80 min-w-0"
             role="group"
             aria-label={t("charts.activitiesTimeline.title")}
@@ -373,6 +368,7 @@ export default function ActivitiesTimeline() {
             <ChartTooltipTotalProvider formatTotal={formatValue}>
               <BarChartPremium
                 renderer="webgl"
+                experimentalFeatures={{ keyboardActivation: true }}
                 zoomData={zoomData}
                 onZoomChange={(zoom) => {
                   if (zoom[0])
@@ -451,48 +447,6 @@ export default function ActivitiesTimeline() {
               />
             </ChartTooltipTotalProvider>
           </div>
-          <div className="border-border flex min-w-0 items-center gap-2 border-t p-3">
-            <span className="text-muted-foreground text-xs">
-              {t("charts.activitiesTimeline.inspect")}
-            </span>
-            <Select
-              value={state.period ?? null}
-              onValueChange={(value) => {
-                if (value)
-                  selectPeriod(
-                    groupedActivities.findIndex(
-                      (group) => format(group.date, "yyyy-MM-dd") === value,
-                    ),
-                  );
-              }}
-            >
-              <SelectTrigger
-                ref={periodTrigger}
-                className="min-w-0 flex-1"
-                aria-label={t("charts.activitiesTimeline.choose")}
-              >
-                <SelectValue
-                  placeholder={t("charts.activitiesTimeline.choose")}
-                >
-                  {() =>
-                    selected
-                      ? formatSlice(selected.date, precision)
-                      : t("charts.activitiesTimeline.choose")
-                  }
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {[...groupedActivities].reverse().map((group) => (
-                  <SelectItem
-                    key={group.date.toISOString()}
-                    value={format(group.date, "yyyy-MM-dd")}
-                  >
-                    {formatSlice(group.date, precision)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </ChartCard>
         {selected && (
           <TimelineInspection
@@ -524,7 +478,10 @@ export default function ActivitiesTimeline() {
             }
             returnHref={returnHref}
             listHref={listUrl ? listUrl.pathname + listUrl.search : undefined}
-            returnFocus={periodTrigger}
+            returnFocus={() =>
+              plotRef.current?.querySelector<HTMLElement>('[tabindex="0"]') ??
+              plotRef.current
+            }
           />
         )}
       </ChartThemeProvider>

@@ -581,8 +581,6 @@ const fr: Messages = {
     activitiesTimeline: {
       title: "Chronologie des activités",
       inspection: "Activités de cette période",
-      inspect: "Explorer",
-      choose: "Choisir une période",
       previous: "Période précédente",
       next: "Période suivante",
       unavailable: "Indisponible",

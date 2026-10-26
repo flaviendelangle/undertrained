@@ -69,7 +69,7 @@ export function TimelineInspection({
   onShowAll?: () => void;
   returnHref: string;
   listHref?: string;
-  returnFocus: React.RefObject<HTMLButtonElement | null>;
+  returnFocus: () => HTMLElement | null;
 }) {
   const t = useT();
   const isMobile = useIsMobile();
