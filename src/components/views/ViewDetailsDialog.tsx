@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { Select } from "~/components/primitives/Select";
 import { Button } from "~/components/ui/button";
 import {
   ResponsiveDialog,
@@ -100,21 +101,18 @@ export function ViewDetailsFields({
           placeholder={t("views.namePlaceholder")}
         />
       </label>
-      <label className="flex flex-col gap-2 text-sm">
-        {t("views.folder")}
-        <select
-          className={viewInputClass}
+      <div className="flex flex-col gap-2 text-sm">
+        <Select
+          label={t("views.folder")}
+          className="w-full"
           value={folder}
-          onChange={(event) => onFolderChange(event.target.value)}
-        >
-          <option value="">{t("views.ungrouped")}</option>
-          {folders.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
-      </label>
+          onValueChange={onFolderChange}
+          options={[
+            { value: "", label: t("views.ungrouped") },
+            ...folders.map((f) => ({ value: String(f.id), label: f.name })),
+          ]}
+        />
+      </div>
     </>
   );
 }

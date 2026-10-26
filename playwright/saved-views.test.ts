@@ -1,3 +1,5 @@
+import { type Locator, type Page } from "@playwright/test";
+
 import {
   type ActivityCondition,
   type ActivityFilterGroup,
@@ -234,6 +236,10 @@ for (const viewport of [
           .click();
     };
 
+    const folder = await f.client.views.createFolder.mutate({
+      athleteId: f.athleteId,
+      name: "Training",
+    });
     await page.goto(`${origin}/activities?edit=filters`);
     const dialog = page.getByRole("dialog", {
       name: viewport.width < 768 ? "View options" : "Activity filters",
@@ -297,6 +303,37 @@ for (const viewport of [
     expect(await f.client.views.list.query({ athleteId: f.athleteId })).toEqual(
       [],
     );
+    const pick = async (
+      scope: Locator | Page,
+      combobox: string,
+      option: string,
+    ): Promise<void> => {
+      await scope
+        .getByRole("combobox", { name: combobox, exact: true })
+        .click();
+      await page.getByRole("option", { name: option, exact: true }).click();
+    };
+    if (viewport.width < 768) {
+      const drawer = page.getByRole("dialog", {
+        name: "View options",
+        exact: true,
+      });
+      await drawer.getByText("Display", { exact: true }).click();
+      await pick(drawer, "Group by", "Month");
+      await pick(drawer, "Sort by", "Distance");
+    } else {
+      await page.getByRole("button", { name: "Display", exact: true }).click();
+      const displayDialog = page.getByRole("dialog", {
+        name: "Display",
+        exact: true,
+      });
+      await pick(displayDialog, "Group by", "Month");
+      await pick(displayDialog, "Sort by", "Distance");
+      await displayDialog
+        .getByRole("button", { name: "Apply filters", exact: true })
+        .click();
+      await expect(displayDialog).not.toBeVisible();
+    }
     await page.getByRole("button", { name: "Save view", exact: true }).click();
     const saveDialog = page.getByRole("dialog", {
       name: viewport.width < 768 ? "View options" : "Save as new",
@@ -307,6 +344,7 @@ for (const viewport of [
     await saveDialog
       .getByRole("textbox", { name: "Name", exact: true })
       .fill("Long activities");
+    await pick(saveDialog, "Folder", "Training");
     if (viewport.width < 768)
       await page.screenshot({ path: "/tmp/undertrained-inline-save-390.png" });
     await saveDialog
@@ -314,20 +352,33 @@ for (const viewport of [
       .click();
     await expect(saveDialog).not.toBeVisible();
     await openViewOptions();
-    if (viewport.width < 768)
-      await expect(
-        page.getByRole("combobox", { name: "Saved views" }),
-      ).toHaveValue(/\d+/);
-    else
-      await expect(
-        page.getByRole("combobox", { name: "Saved views" }),
-      ).toContainText("Long activities");
+    await expect(
+      page.getByRole("combobox", { name: "Saved views" }),
+    ).toContainText("Long activities");
     await closeViewOptions();
     const [saved] = await f.client.views.list.query({ athleteId: f.athleteId });
     expect(saved.rules.children[0]).toMatchObject({
       kind: "group",
       join: "OR",
     });
+    expect(saved.folderId).toBe(folder.id);
+    expect(saved.display).toMatchObject({
+      groupBy: "month",
+      sort: { id: "distance" },
+    });
+    for (const name of ["All activities", saved.name]) {
+      await openViewOptions();
+      await pick(page, "Saved views", name);
+      if (viewport.width < 768)
+        await expect(
+          page.getByRole("dialog", { name: "View options", exact: true }),
+        ).not.toBeVisible();
+      await openViewOptions();
+      await expect(
+        page.getByRole("combobox", { name: "Saved views" }),
+      ).toContainText(name);
+      await closeViewOptions();
+    }
     if (viewport.width >= 768) {
       const toolbar = page.getByRole("toolbar", {
         name: "View options",
@@ -363,14 +414,9 @@ for (const viewport of [
       .click();
     await expect(page).toHaveURL(/\/activities\/charts\?/);
     await openViewOptions();
-    if (viewport.width < 768)
-      await expect(
-        page.getByRole("combobox", { name: "Saved views" }),
-      ).toHaveValue(String(saved.id));
-    else
-      await expect(
-        page.getByRole("combobox", { name: "Saved views" }),
-      ).toContainText(saved.name);
+    await expect(
+      page.getByRole("combobox", { name: "Saved views" }),
+    ).toContainText(saved.name);
     if (viewport.width < 768)
       await expect(
         page.getByText("2 activities", { exact: true }),

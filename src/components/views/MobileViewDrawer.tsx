@@ -10,6 +10,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "~/components/ui/responsive-dialog";
+import { SelectTrigger, SelectValue } from "~/components/ui/select";
 import { useActivityView } from "~/hooks/useActivityView";
 import { useT } from "~/i18n/useT";
 import {
@@ -25,10 +26,9 @@ import { ActivityDisplayEditor } from "./ActivityDisplayEditor";
 import {
   ActivityFilterBuilder,
   ActivitySelectionPreview,
-  viewInputClass,
 } from "./ActivityFilterEditor";
 import { ViewDetailsFields } from "./ViewDetailsDialog";
-import { groupViewsByFolder } from "./groupViewsByFolder";
+import { ViewPicker } from "./ViewPicker";
 import { useSaveActivityView } from "./useSaveActivityView";
 
 /** One working copy and one drawer for editing, previewing, applying and saving. */
@@ -76,41 +76,16 @@ export function MobileViewDrawer({
           </ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         <div className="min-h-0 overflow-y-auto pb-1">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="sr-only">{t("views.title")}</span>
-            <select
+          <ViewPicker onSelect={onCommit}>
+            <SelectTrigger
               aria-label={t("views.title")}
-              className={`${viewInputClass} w-full font-medium`}
-              value={scope.view?.id ?? ""}
-              onChange={(event) => {
-                void scope
-                  .selectView(
-                    event.target.value ? Number(event.target.value) : undefined,
-                  )
-                  .then(onCommit);
-              }}
+              className="w-full font-medium"
             >
-              <option value="">{t("views.allActivities")}</option>
-              {groupViewsByFolder(
-                scope.views,
-                scope.folders,
-                t("views.ungrouped"),
-              ).map((group) => {
-                const options = group.views.map((view) => (
-                  <option key={view.id} value={view.id}>
-                    {view.name}
-                  </option>
-                ));
-                return group.label === null ? (
-                  <React.Fragment key={group.key}>{options}</React.Fragment>
-                ) : (
-                  <optgroup key={group.key} label={group.label}>
-                    {options}
-                  </optgroup>
-                );
-              })}
-            </select>
-          </label>
+              <SelectValue>
+                {scope.view?.name ?? t("views.allActivities")}
+              </SelectValue>
+            </SelectTrigger>
+          </ViewPicker>
           <div className="mt-2 flex items-center justify-between gap-2">
             <span role="status" className="text-muted-foreground text-xs">
               {dirty ? t(scope.view ? "views.modified" : "views.unsaved") : ""}
