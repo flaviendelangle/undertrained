@@ -5,11 +5,12 @@ use crate::i18n::Lang;
 use crate::model::{Capabilities, Device, Reading};
 use crate::player::{Plan, Segment};
 use crate::recording::Phase;
+use crate::sensors::{Command, Event, Radio};
 use crate::workouts::{Workout, WorkoutId};
 use crate::{
-    Actions, AppState, AppWindow, Overlay, RideOnSignIn, apply_language, apply_live, auto_pause,
-    connected, connected_trainer, device_rows, disconnected, erg_event, guard_erg_power,
-    refresh_player, reset_session_ui, ride_on_sign_in, start_on_power, workout_rows,
+    Actions, AppState, AppWindow, Overlay, RideOnSignIn, apply_language, apply_live, connected,
+    device_rows, disconnected, erg_answer, refresh_player, reset_session_ui, ride_on_sign_in, tick,
+    workout_rows,
 };
 use slint::platform::{Key, WindowEvent};
 use slint::{ComponentHandle, Model};
@@ -195,13 +196,67 @@ pub(crate) fn fixture_workouts() -> Vec<Workout> {
     ]
 }
 
+/// Wait for the disk worker through the same tick the timer runs.
 fn settle_save(ui: &AppWindow, state: &Rc<RefCell<AppState>>) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while ui.get_ride_save_state() == 3 {
-        crate::poll_ride_save(ui, &mut state.borrow_mut());
+        tick(ui, &mut state.borrow_mut(), Instant::now());
         assert!(Instant::now() < deadline, "Save worker timed out");
         std::thread::sleep(Duration::from_millis(1));
     }
+}
+
+type Captured = tokio::sync::mpsc::UnboundedReceiver<Command>;
+
+/// The next resistance command captured in place of the radio, as its request number and
+/// target, after checking it names the connected trainer. None when nothing went out.
+fn command(captured: &mut Captured) -> Option<(u64, Option<u16>)> {
+    match captured.try_recv() {
+        Ok(Command::SetErg {
+            device_id,
+            request,
+            watts,
+        }) => {
+            assert_eq!(device_id, TRAINER_ID, "Addressed to the connected trainer");
+            Some((request, watts))
+        }
+        Ok(other) => panic!("unexpected command {other:?}"),
+        Err(_) => None,
+    }
+}
+
+/// The next captured command, which must be a release: its request number.
+fn released(captured: &mut Captured) -> Option<u64> {
+    command(captured).map(|(request, watts)| {
+        assert_eq!(watts, None, "A release, never a target");
+        request
+    })
+}
+
+/// A sample from a Bluetooth sensor in `role`, stamped `at`, as the radio delivers it.
+fn bluetooth_sample(state: &mut AppState, role: usize, reading: Reading, at: Instant) {
+    state.sensors.observe(
+        &Event::Sample {
+            radio: Radio::Bluetooth,
+            role,
+            reading,
+        },
+        at,
+    );
+}
+
+/// A sample from the trainer, stamped `at`, as the radio event handler feeds it.
+fn trainer_reading(state: &Rc<RefCell<AppState>>, watts: i16, cadence: Option<f32>, at: Instant) {
+    bluetooth_sample(
+        &mut state.borrow_mut(),
+        0,
+        Reading {
+            power: Some(watts),
+            cadence,
+            heart_rate: None,
+        },
+        at,
+    );
 }
 
 /// `root` is the throwaway folder the ride callbacks record under during the smoke test.
@@ -317,11 +372,6 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(ui.get_resistance_state(), 3, "Readings only over ANT+");
     connected(ui, &mut state.borrow_mut(), &ant_trainer, 0, true);
     assert_eq!(ui.get_resistance_state(), 1, "FE-C target power confirmed");
-    assert_eq!(
-        connected_trainer(&state.borrow()),
-        Some(ANT_TRAINER_ID),
-        "Commands are addressed to the ANT+ trainer"
-    );
     ui.set_picker_open(true);
     connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
     assert!(ui.get_trainer_connected() && !ui.get_picker_open());
@@ -495,23 +545,23 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     {
         let now = Instant::now();
         let mut state = state.borrow_mut();
-        state.sensors.update(
+        bluetooth_sample(
+            &mut state,
             0,
-            &Reading {
+            Reading {
                 power: Some(212),
                 cadence: Some(88.0),
                 heart_rate: None,
             },
-            false,
             now,
         );
-        state.sensors.update(
+        bluetooth_sample(
+            &mut state,
             1,
-            &Reading {
+            Reading {
                 heart_rate: Some(141),
                 ..Default::default()
             },
-            true,
             now,
         );
         let live = state.sensors.live(now);
@@ -739,8 +789,14 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     );
 
     // A real ride through the callbacks, recorded under the throwaway folder: the journal,
-    // the export and every guard, with no account and nothing sent anywhere.
+    // the export and every guard, with nothing sent anywhere. Resistance commands are
+    // captured here in place of the radio, and the clock is driven through the same tick
+    // the timer runs, with instants of this test's choosing.
     assert!(ui.get_trainer_connected() && ui.get_hr_connected());
+    let (sink, mut captured) = tokio::sync::mpsc::unbounded_channel();
+    state.borrow_mut().commands = crate::ride::Commands::new(move |command| {
+        let _ = sink.send(command);
+    });
     ui.global::<Actions>().invoke_select_workout("p:2".into());
     assert_eq!(ui.get_ride_phase(), 0);
     ui.set_signing_in(true);
@@ -751,20 +807,9 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     );
     ui.set_signing_in(false);
     // With a trainer, Start waits for the first pedal stroke and records nothing until then.
-    // The waiting is driven here through the same check the timer runs.
-    let (start_sink, mut start_commands) = tokio::sync::mpsc::unbounded_channel();
     let pedal = |watts: i16| {
-        state.borrow_mut().sensors.update(
-            0,
-            &Reading {
-                power: Some(watts),
-                cadence: None,
-                heart_rate: None,
-            },
-            false,
-            Instant::now(),
-        );
-        start_on_power(ui, &mut state.borrow_mut(), &start_sink, Instant::now());
+        trainer_reading(state, watts, None, Instant::now());
+        tick(ui, &mut state.borrow_mut(), Instant::now());
     };
     ui.global::<Actions>().invoke_start_ride_now();
     assert!(
@@ -796,11 +841,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     // own settings.
     ui.global::<Actions>().invoke_set_erg(true);
     assert!(ui.get_ride_erg_enabled(), "The choice waits for the ride");
-    assert_eq!(
-        state.borrow().erg_requests,
-        0,
-        "Nothing sent before the ride"
-    );
+    assert!(captured.try_recv().is_err(), "Nothing sent before the ride");
     assert!(
         crate::store::load(Some(root)).unwrap().start_with_erg,
         "The choice is saved"
@@ -838,39 +879,53 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         ui.get_ride_erg_enabled(),
         "The remembered choice is back with a trainer that takes control"
     );
+    // The ride copies the account it starts under. This session is a presentation-only
+    // stand-in with no token: nothing below reaches a server, and it is gone again before
+    // the upload card is tried.
+    let owner = ("https://undertrained.invalid/".to_owned(), 7);
+    state.borrow_mut().session = Some(crate::auth::Session {
+        origin: owner.0.clone(),
+        token: String::new(),
+        athlete: crate::auth::Athlete {
+            id: owner.1,
+            name: "Test rider".into(),
+            language: None,
+        },
+    });
     ui.global::<Actions>().invoke_start_ride();
     pedal(0);
     assert!(state.borrow().ride.is_none());
     pedal(150);
+    state.borrow_mut().session = None;
     assert!(!ui.get_ride_waiting());
     // The first watts start the ride, and the ERG chosen before it goes on with the clock.
     assert!(ui.get_ride_erg_enabled(), "ERG goes on with the clock");
     assert_eq!(ui.get_ride_erg_state(), 1, "Pending, not held");
     assert_eq!(ui.get_ride_erg_watts(), "100", "The first step's target");
-    match start_commands.try_recv() {
-        Ok(crate::ble::Command::SetErg {
-            device_id, watts, ..
-        }) => {
-            assert_eq!(device_id, TRAINER_ID);
-            assert_eq!(watts, Some(100));
-        }
-        other => panic!("expected the first target, got {other:?}"),
-    }
-    assert!(start_commands.try_recv().is_err(), "One command");
+    assert_eq!(
+        command(&mut captured).map(|(_, watts)| watts),
+        Some(Some(100)),
+        "The first target went out"
+    );
+    assert!(captured.try_recv().is_err(), "One command");
     // Off again, so the guided checks below start from a ride without control. Switching
     // during a ride leaves the remembered choice alone.
     ui.global::<Actions>().invoke_set_erg(false);
     assert!(state.borrow().settings.start_with_erg);
-    let release = state.borrow().erg_requests;
-    erg_event(ui, &mut state.borrow_mut(), &start_sink, release, &Ok(None));
+    let release = released(&mut captured).expect("Switching off releases");
+    erg_answer(ui, &mut state.borrow_mut(), release, &Ok(None));
     assert!(!ui.get_ride_erg_enabled() && ui.get_ride_erg_state() == 0);
     let directory = {
         let state = state.borrow();
-        let ride = state.ride.as_ref().expect("The ride started");
-        assert_eq!(ride.recording.phase(), Phase::Running);
-        assert!(ride.owner.is_none(), "No session, no owner");
-        assert_eq!(ride.ftp, Some(250.0), "The fixture test's FTP");
-        ride.recording.directory().to_path_buf()
+        let ride = &state.ride.as_ref().expect("The ride started").ride;
+        assert_eq!(ride.phase(), Phase::Running);
+        assert_eq!(
+            ride.owner(),
+            Some(&owner),
+            "The account is copied at the start"
+        );
+        assert_eq!(ride.ftp(), Some(250.0), "The fixture test's FTP");
+        ride.recording().directory().to_path_buf()
     };
     assert!(
         directory.starts_with(root),
@@ -889,7 +944,14 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(ui.get_ride_name(), "VO2 max 5 × 3");
     ui.global::<Actions>().invoke_start_ride();
     assert_eq!(
-        state.borrow().ride.as_ref().unwrap().recording.directory(),
+        state
+            .borrow()
+            .ride
+            .as_ref()
+            .unwrap()
+            .ride
+            .recording()
+            .directory(),
         directory,
         "A second start changes nothing"
     );
@@ -900,162 +962,41 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(ui.get_leave_guard(), 2, "Sign-in asks first mid-ride");
     assert!(!ui.get_signing_in());
     ui.global::<Actions>().invoke_keep_riding();
-    {
-        // Samples come from the sensor model; the engine takes one per second.
-        let mut state = state.borrow_mut();
-        let now = Instant::now();
-        state.sensors.update(
-            0,
-            &Reading {
-                power: Some(198),
-                cadence: Some(86.0),
-                heart_rate: None,
-            },
-            false,
-            now,
-        );
-        let live = state.sensors.live(now);
-        let ride = state.ride.as_mut().unwrap();
-        assert!(ride.recording.tick(now, live).unwrap());
-        let live = state.sensors.live(now);
-        let ride = state.ride.as_mut().unwrap();
-        assert!(
-            !ride
-                .recording
-                .tick(now + Duration::from_millis(200), live)
-                .unwrap(),
-            "Not a second later yet"
-        );
-        assert_eq!(ride.recording.samples().len(), 1);
-        assert_eq!(ride.recording.samples()[0].live.power, Some(198.0));
-    }
-    // Auto-pause: more than five seconds at a measured zero pauses the ride, and the next
-    // pedal stroke resumes it. A pause the rider asked for waits for Resume.
-    let coast = |watts: i16| {
-        state.borrow_mut().sensors.update(
-            0,
-            &Reading {
-                power: Some(watts),
-                cadence: None,
-                heart_rate: None,
-            },
-            false,
-            Instant::now(),
-        );
-        auto_pause(ui, &mut state.borrow_mut(), &start_sink, Instant::now());
-    };
-    coast(0);
-    assert_eq!(ui.get_ride_phase(), 1, "Not five seconds yet");
-    state.borrow_mut().ride.as_mut().unwrap().pedaled_at =
-        Some(Instant::now() - Duration::from_secs(6));
-    coast(0);
-    assert_eq!(ui.get_ride_phase(), 2, "Five seconds at zero watts");
-    assert!(ui.get_ride_auto_paused());
-    assert_eq!(
-        state.borrow().ride.as_ref().unwrap().recording.phase(),
-        Phase::Paused
-    );
-    coast(0);
-    assert_eq!(ui.get_ride_phase(), 2, "A zero does not resume");
-    coast(160);
-    assert_eq!(ui.get_ride_phase(), 1, "The next pedal stroke resumes");
-    assert!(!ui.get_ride_auto_paused());
-    assert_eq!(
-        state.borrow().ride.as_ref().unwrap().recording.phase(),
-        Phase::Running
-    );
-    ui.global::<Actions>().invoke_pause_ride();
-    assert!(!ui.get_ride_auto_paused());
-    coast(160);
-    assert_eq!(ui.get_ride_phase(), 2, "The rider's pause waits for Resume");
-    ui.global::<Actions>().invoke_resume_ride();
-    assert_eq!(ui.get_ride_phase(), 1);
-    // A resume restarts the count: the pedals get five seconds again.
-    coast(0);
-    assert_eq!(ui.get_ride_phase(), 1);
-    // The count runs from the last reading with watts, not from the ticks that keep it on
-    // screen. A trainer that falls silent is a dropout rather than a rider at rest: the
-    // clock runs through it, and only half a minute without any reading pauses the ride.
-    let stroke = Instant::now() - Duration::from_secs(31);
-    state.borrow_mut().ride.as_mut().unwrap().pedaled_at = Some(stroke - Duration::from_secs(1));
-    state.borrow_mut().sensors.update(
-        0,
-        &Reading {
-            power: Some(160),
-            cadence: None,
-            heart_rate: None,
-        },
-        false,
-        stroke,
-    );
-    for (after, why) in [
-        (4, "The reading still shows"),
-        (6, "A dropout keeps the clock running"),
-        (29, "Still within half a minute"),
-    ] {
-        auto_pause(
-            ui,
-            &mut state.borrow_mut(),
-            &start_sink,
-            stroke + Duration::from_secs(after),
-        );
-        assert_eq!(ui.get_ride_phase(), 1, "{why}");
-    }
-    auto_pause(ui, &mut state.borrow_mut(), &start_sink, Instant::now());
-    assert_eq!(ui.get_ride_phase(), 2, "Half a minute without any reading");
-    ui.global::<Actions>().invoke_resume_ride();
-    assert_eq!(ui.get_ride_phase(), 1);
-    // Losing the trainer stops the count until the next trainer's first watts.
-    disconnected(ui, &mut state.borrow_mut(), 0);
-    connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
-    assert!(state.borrow().ride.as_ref().unwrap().pedaled_at.is_none());
-    auto_pause(
+    // Samples come from the sensor model; the ride takes one per second, the first with
+    // the pedal stroke that started it.
+    let t0 = Instant::now();
+    let at = |seconds: u64| t0 + Duration::from_secs(seconds);
+    trainer_reading(state, 198, Some(86.0), at(1));
+    tick(ui, &mut state.borrow_mut(), at(1));
+    tick(
         ui,
         &mut state.borrow_mut(),
-        &start_sink,
-        Instant::now() + Duration::from_secs(6),
+        at(1) + Duration::from_millis(200),
     );
-    assert_eq!(
-        ui.get_ride_phase(),
-        1,
-        "No watts seen from this trainer yet"
-    );
-    assert!(
-        start_commands.try_recv().is_err(),
-        "ERG is off: nothing sent"
-    );
-    state.borrow_mut().sensors.update(
-        0,
-        &Reading {
-            power: Some(198),
-            cadence: Some(86.0),
-            heart_rate: None,
-        },
-        false,
-        Instant::now(),
-    );
+    {
+        let state = state.borrow();
+        let samples = state.ride.as_ref().unwrap().ride.recording().samples();
+        assert_eq!(samples.len(), 2, "Not a second later yet");
+        assert_eq!(samples[0].live.power, Some(150.0));
+        assert_eq!(samples[1].live.power, Some(198.0));
+    }
+    assert_eq!(ui.get_ride_power(), "198");
     ui.global::<Actions>().invoke_navigate(0);
     assert_eq!(ui.get_screen(), 0);
     assert!(ui.get_ride_active());
     assert_eq!(
-        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        state.borrow().ride.as_ref().unwrap().ride.phase(),
         Phase::Running,
         "Navigating never touches the ride"
     );
     ui.global::<Actions>().invoke_navigate(2);
-    // The guide, refreshed as the timer does it from the plan copied into the ride and the
+    // The guide, as the timer refreshes it from the plan copied into the ride and the
     // sensor model: first step, ramp start.
-    {
-        let state = state.borrow();
-        let ride = state.ride.as_ref().unwrap();
-        let now = Instant::now();
-        refresh_player(
-            ui,
-            ride,
-            &state.sensors.live(now),
-            ride.recording.elapsed(now),
-        );
-    }
+    tick(
+        ui,
+        &mut state.borrow_mut(),
+        at(1) + Duration::from_millis(300),
+    );
     assert!(ui.get_ride_guided());
     assert_eq!(ui.get_ride_step_number(), 1);
     assert_eq!(ui.get_ride_plan_steps(), 4);
@@ -1097,36 +1038,17 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     ui.global::<Actions>().invoke_adjust_bias(-1);
     assert_eq!(ui.get_ride_bias(), "100 %");
     assert_eq!(ui.get_ride_target(), "100");
-    // Answers from the trainer are fed through the same handler the sensor events use; the
-    // release a failure asks for is captured here rather than sent anywhere.
-    let (sink, mut captured) = tokio::sync::mpsc::unbounded_channel();
-    let released =
-        |captured: &mut tokio::sync::mpsc::UnboundedReceiver<crate::ble::Command>| match captured
-            .try_recv()
-        {
-            Ok(crate::ble::Command::SetErg {
-                device_id,
-                request,
-                watts,
-            }) => {
-                assert_eq!(device_id, TRAINER_ID, "Addressed to the connected trainer");
-                assert_eq!(watts, None, "A release, never a target");
-                Some(request)
-            }
-            Ok(other) => panic!("unexpected command {other:?}"),
-            Err(_) => None,
-        };
     // ERG needs a trainer that takes commands: a read-only Bluetooth trainer is refused,
     // and no command leaves the app.
-    let requests_before = state.borrow().erg_requests;
     connected(ui, &mut state.borrow_mut(), &devices[0], 0, false);
     assert!(!ui.get_ride_erg_available());
     ui.global::<Actions>().invoke_set_erg(true);
     assert!(!ui.get_ride_erg_enabled(), "No control without support");
     assert_eq!(ui.get_ride_erg_state(), 0);
-    assert_eq!(state.borrow().erg_requests, requests_before, "Nothing sent");
+    assert!(captured.try_recv().is_err(), "Nothing sent");
     // With a supporting trainer, the explicit switch sends the current target once and
-    // shows it as pending until the trainer answers.
+    // shows it as pending until the trainer answers. Answers are fed through the same
+    // handler the radio events use.
     connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
     assert!(ui.get_ride_erg_available());
     assert!(
@@ -1137,37 +1059,31 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert!(ui.get_ride_erg_enabled());
     assert_eq!(ui.get_ride_erg_state(), 1, "Pending, not held");
     assert_eq!(ui.get_ride_erg_watts(), "100");
-    let request = state.borrow().erg_requests;
-    assert_eq!(request, requests_before + 1);
-    assert_eq!(
-        state.borrow().ride.as_ref().unwrap().erg.device.as_deref(),
-        Some(TRAINER_ID),
-        "The command carries the connected trainer's id"
-    );
+    let (request, watts) = command(&mut captured).expect("The target went out");
+    assert_eq!(watts, Some(100));
+    assert!(captured.try_recv().is_err(), "Once");
     // An answer to an earlier request changes nothing; the awaited one confirms the hold.
-    erg_event(
-        ui,
-        &mut state.borrow_mut(),
-        &sink,
-        request - 1,
-        &Ok(Some(100)),
-    );
+    erg_answer(ui, &mut state.borrow_mut(), request - 1, &Ok(Some(100)));
     assert_eq!(ui.get_ride_erg_state(), 1, "Old answers are ignored");
-    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(100)));
+    erg_answer(ui, &mut state.borrow_mut(), request, &Ok(Some(100)));
     assert_eq!(ui.get_ride_erg_state(), 2, "Held once the trainer answered");
     assert_eq!(ui.get_ride_erg_watts(), "100");
     // Skip moves the workout clock alone: the recording's elapsed time does not jump.
-    let elapsed_before = {
-        let state = state.borrow();
-        let ride = state.ride.as_ref().unwrap();
-        ride.recording.elapsed(Instant::now())
-    };
+    let elapsed_before = state
+        .borrow()
+        .ride
+        .as_ref()
+        .unwrap()
+        .ride
+        .elapsed(Instant::now());
     ui.global::<Actions>().invoke_skip_step();
-    let elapsed_after = {
-        let state = state.borrow();
-        let ride = state.ride.as_ref().unwrap();
-        ride.recording.elapsed(Instant::now())
-    };
+    let elapsed_after = state
+        .borrow()
+        .ride
+        .as_ref()
+        .unwrap()
+        .ride
+        .elapsed(Instant::now());
     assert!(
         elapsed_after - elapsed_before < 1.0,
         "Skipping a two-minute step left the ride clock alone: {elapsed_before} → {elapsed_after}"
@@ -1183,14 +1099,13 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(ui.get_ride_delta_state(), 3, "198 W is under 300 W");
     assert_eq!(ui.get_ride_erg_state(), 1, "The new target went out");
     assert_eq!(ui.get_ride_erg_watts(), "300");
-    assert_eq!(state.borrow().erg_requests, request + 1);
-    let request = request + 1;
+    let (request, watts) = command(&mut captured).expect("The step's target went out");
+    assert_eq!(watts, Some(300));
     // The trainer refusing a target switches control off, asks for one release, and says
     // so without claiming the trainer let go. The recording is untouched.
-    erg_event(
+    erg_answer(
         ui,
         &mut state.borrow_mut(),
-        &sink,
         request,
         &Err("Trainer rejected the command".into()),
     );
@@ -1200,16 +1115,15 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(ui.get_ride_notice_detail(), "Trainer rejected the command");
     assert_eq!(ui.get_ride_phase(), 1, "Still recording");
     assert_eq!(
-        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        state.borrow().ride.as_ref().unwrap().ride.phase(),
         Phase::Running
     );
     let release = released(&mut captured).expect("One release after the failure");
-    assert_eq!(release, request + 1);
     assert!(released(&mut captured).is_none(), "Exactly one");
     ui.global::<Actions>().invoke_skip_step();
     ui.global::<Actions>().invoke_adjust_bias(1);
     ui.global::<Actions>().invoke_adjust_bias(-1);
-    assert_eq!(state.borrow().erg_requests, release, "No retry on its own");
+    assert!(captured.try_recv().is_err(), "No retry on its own");
     assert_eq!(ui.get_ride_step_number(), 3);
     assert_eq!(ui.get_ride_target(), "", "A free step has no target");
     assert_eq!(ui.get_ride_delta(), "");
@@ -1218,7 +1132,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         4,
         "Still releasing until the trainer answers"
     );
-    erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
+    erg_answer(ui, &mut state.borrow_mut(), release, &Ok(None));
     assert_eq!(ui.get_ride_erg_state(), 0, "Released and off");
     assert_eq!(ui.get_ride_notice(), 5, "The failure stays explained");
     // Enabling again is the rider's call; a free step gives nothing to send.
@@ -1230,33 +1144,31 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         0,
         "Enabling clears the failure notice"
     );
-    assert_eq!(state.borrow().erg_requests, release, "Nothing to send");
+    assert!(captured.try_recv().is_err(), "Nothing to send");
     ui.global::<Actions>().invoke_skip_step();
     assert_eq!(ui.get_ride_step_number(), 4);
     assert_eq!(ui.get_ride_target(), "120");
     assert_eq!(ui.get_ride_erg_state(), 1, "A targeted step sends again");
     assert_eq!(ui.get_ride_next_duration(), "", "Last step");
-    let request = state.borrow().erg_requests;
-    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
+    let (request, watts) = command(&mut captured).expect("The target went out");
+    assert_eq!(watts, Some(120));
+    erg_answer(ui, &mut state.borrow_mut(), request, &Ok(Some(120)));
     assert_eq!(ui.get_ride_erg_state(), 2);
     // Permission lost after the target was confirmed: the trainer reports it against the
     // request it was following. Control goes off, one release follows, nothing is retried.
-    erg_event(
+    erg_answer(
         ui,
         &mut state.borrow_mut(),
-        &sink,
         request,
         &Err("Trainer control permission was lost".into()),
     );
     assert!(!ui.get_ride_erg_enabled());
     assert_eq!(ui.get_ride_notice(), 5);
     let release = released(&mut captured).expect("One release after the lost permission");
-    assert_eq!(release, request + 1);
     assert_eq!(ui.get_ride_erg_state(), 4);
-    erg_event(
+    erg_answer(
         ui,
         &mut state.borrow_mut(),
-        &sink,
         request,
         &Err("Trainer control permission was lost".into()),
     );
@@ -1264,7 +1176,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         released(&mut captured).is_none(),
         "A repeat changes nothing"
     );
-    erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
+    erg_answer(ui, &mut state.borrow_mut(), release, &Ok(None));
     assert_eq!(ui.get_ride_erg_state(), 0);
     ui.global::<Actions>().invoke_set_erg(true);
     assert_eq!(
@@ -1272,38 +1184,38 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         1,
         "Enabling again sends the target"
     );
-    let request = state.borrow().erg_requests;
-    assert_eq!(request, release + 1);
-    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
+    let (request, watts) = command(&mut captured).expect("The target went out");
+    assert_eq!(watts, Some(120));
+    erg_answer(ui, &mut state.borrow_mut(), request, &Ok(Some(120)));
     assert_eq!(ui.get_ride_erg_state(), 2);
     // Pause freezes the recording clock and the workout with it, and asks for a release
     // before the journal is written; the rider's choice stays on for Resume.
     ui.global::<Actions>().invoke_pause_ride();
     assert_eq!(ui.get_ride_phase(), 2);
+    assert!(!ui.get_ride_auto_paused());
     assert_eq!(
-        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        state.borrow().ride.as_ref().unwrap().ride.phase(),
         Phase::Paused
     );
     assert!(ui.get_ride_erg_enabled(), "The choice survives the pause");
     assert_eq!(ui.get_ride_erg_state(), 4, "Release in flight");
     assert_eq!(ui.get_ride_erg_watts(), "");
-    let release = state.borrow().erg_requests;
-    assert_eq!(release, request + 1);
-    erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
+    let release = released(&mut captured).expect("A pause releases");
+    erg_answer(ui, &mut state.borrow_mut(), release, &Ok(None));
     assert_eq!(ui.get_ride_erg_state(), 3, "Paused: on, nothing held");
     let remaining = ui.get_ride_step_remaining();
     {
         let state = state.borrow();
-        let ride = state.ride.as_ref().unwrap();
+        let ride = &state.ride.as_ref().unwrap().ride;
         let now = Instant::now();
         let later = now + Duration::from_secs(30);
         assert_eq!(
-            ride.recording.elapsed(later),
-            ride.recording.elapsed(now),
+            ride.elapsed(later),
+            ride.elapsed(now),
             "The clock is stopped"
         );
         let live = state.sensors.live(now);
-        refresh_player(ui, ride, &live, ride.recording.elapsed(later));
+        refresh_player(ui, ride, &live, ride.elapsed(later));
     }
     assert_eq!(
         ui.get_ride_step_remaining(),
@@ -1311,15 +1223,11 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         "The step waits with the clock"
     );
     assert_eq!(ui.get_ride_step_number(), 4);
-    assert_eq!(
-        state.borrow().erg_requests,
-        release,
-        "Nothing sent while paused"
-    );
+    assert!(captured.try_recv().is_err(), "Nothing sent while paused");
     ui.global::<Actions>().invoke_resume_ride();
     assert_eq!(ui.get_ride_phase(), 1);
     assert_eq!(
-        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        state.borrow().ride.as_ref().unwrap().ride.phase(),
         Phase::Running
     );
     assert_eq!(ui.get_ride_step_number(), 4, "Resume does not skip");
@@ -1329,26 +1237,21 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         "The target goes back out on resume"
     );
     assert_eq!(ui.get_ride_erg_watts(), "120");
-    let request = state.borrow().erg_requests;
-    assert_eq!(request, release + 1);
-    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
+    let (request, watts) = command(&mut captured).expect("The target went back out");
+    assert_eq!(watts, Some(120));
+    erg_answer(ui, &mut state.borrow_mut(), request, &Ok(Some(120)));
     assert_eq!(ui.get_ride_erg_state(), 2);
-    // A dropout of a few seconds leaves control on.
-    guard_erg_power(
-        ui,
-        &mut state.borrow_mut(),
-        &sink,
-        Instant::now() + Duration::from_secs(6),
-    );
+    // A dropout of a few seconds leaves control on; a trainer that stops reporting power
+    // for fifteen seconds loses it: one release, a notice, the recording goes on, and
+    // enabling needs a fresh reading first. The ticks run ahead of the last reading.
+    let silent = Instant::now();
+    tick(ui, &mut state.borrow_mut(), silent + Duration::from_secs(6));
     assert!(ui.get_ride_erg_enabled(), "A dropout keeps control");
     assert!(released(&mut captured).is_none(), "Nothing sent");
-    // A trainer that stops reporting power for fifteen seconds loses control: one release,
-    // a notice, the recording goes on, and enabling needs a fresh reading first.
-    guard_erg_power(
+    tick(
         ui,
         &mut state.borrow_mut(),
-        &sink,
-        Instant::now() + Duration::from_secs(16),
+        silent + Duration::from_secs(16),
     );
     assert!(
         !ui.get_ride_erg_enabled(),
@@ -1357,47 +1260,22 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(ui.get_ride_notice(), 7);
     assert_eq!(ui.get_ride_phase(), 1, "The recording goes on");
     let release = released(&mut captured).expect("One release on stale power");
-    assert_eq!(release, request + 1);
-    erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
+    erg_answer(ui, &mut state.borrow_mut(), release, &Ok(None));
     assert_eq!(ui.get_ride_erg_state(), 0);
-    {
-        // The reading expired for real: the sensor model, not the screen, decides.
-        let mut state = state.borrow_mut();
-        state.sensors.update(
-            0,
-            &Reading {
-                power: Some(0),
-                cadence: Some(0.0),
-                heart_rate: None,
-            },
-            false,
-            Instant::now() - Duration::from_secs(6),
-        );
-    }
+    // The reading expired for real: the sensor model, not the screen, decides.
+    trainer_reading(state, 0, Some(0.0), Instant::now() - Duration::from_secs(6));
     ui.global::<Actions>().invoke_set_erg(true);
     assert!(!ui.get_ride_erg_enabled(), "No fresh power, no control");
     assert_eq!(ui.get_ride_notice(), 7);
-    assert_eq!(state.borrow().erg_requests, release, "Nothing sent");
-    {
-        // A measured zero is a reading: a stopped rider on a live trainer may enable.
-        let mut state = state.borrow_mut();
-        state.sensors.update(
-            0,
-            &Reading {
-                power: Some(0),
-                cadence: Some(0.0),
-                heart_rate: None,
-            },
-            false,
-            Instant::now(),
-        );
-    }
+    assert!(captured.try_recv().is_err(), "Nothing sent");
+    // A measured zero is a reading: a stopped rider on a live trainer may enable.
+    trainer_reading(state, 0, Some(0.0), Instant::now());
     ui.global::<Actions>().invoke_set_erg(true);
     assert!(ui.get_ride_erg_enabled(), "A real zero is fresh power");
     assert_eq!(ui.get_ride_erg_state(), 1);
-    let request = state.borrow().erg_requests;
-    assert_eq!(request, release + 1);
-    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
+    let (request, watts) = command(&mut captured).expect("The target went out");
+    assert_eq!(watts, Some(120));
+    erg_answer(ui, &mut state.borrow_mut(), request, &Ok(Some(120)));
     assert_eq!(ui.get_ride_erg_state(), 2);
     // The trainer dropping out switches control off and keeps the ride; a reconnection
     // does not switch it back on.
@@ -1408,9 +1286,8 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(ui.get_ride_phase(), 1, "The ride goes on");
     connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
     assert!(!ui.get_ride_erg_enabled(), "No reacquire on reconnect");
-    assert_eq!(
-        state.borrow().erg_requests,
-        request,
+    assert!(
+        captured.try_recv().is_err(),
         "Nothing sent to the new connection"
     );
     ui.global::<Actions>().invoke_set_erg(true);
@@ -1419,30 +1296,19 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         "The reconnected trainer has not reported power yet"
     );
     assert_eq!(ui.get_ride_notice(), 7);
-    {
-        let mut state = state.borrow_mut();
-        state.sensors.update(
-            0,
-            &Reading {
-                power: Some(180),
-                cadence: Some(85.0),
-                heart_rate: None,
-            },
-            false,
-            Instant::now(),
-        );
-    }
+    trainer_reading(state, 180, Some(85.0), Instant::now());
     ui.global::<Actions>().invoke_set_erg(true);
     assert_eq!(ui.get_ride_erg_state(), 1);
-    let request = state.borrow().erg_requests;
-    erg_event(ui, &mut state.borrow_mut(), &sink, request, &Ok(Some(120)));
+    let (request, watts) = command(&mut captured).expect("The target went out");
+    assert_eq!(watts, Some(120));
+    erg_answer(ui, &mut state.borrow_mut(), request, &Ok(Some(120)));
     assert_eq!(ui.get_ride_erg_state(), 2);
     // Reaching the end asks for a release and keeps recording until Finish.
     ui.global::<Actions>().invoke_skip_step();
     assert!(ui.get_ride_workout_complete());
     assert_eq!(ui.get_ride_phase(), 1, "Recording continues as a free ride");
     assert_eq!(
-        state.borrow().ride.as_ref().unwrap().recording.phase(),
+        state.borrow().ride.as_ref().unwrap().ride.phase(),
         Phase::Running
     );
     assert_eq!(ui.get_ride_target(), "");
@@ -1450,16 +1316,80 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert!((ui.get_ride_workout_progress() - 1.0).abs() < 1e-6);
     assert_eq!(ui.get_ride_erg_state(), 4, "Release in flight");
     assert_eq!(ui.get_ride_erg_watts(), "");
-    let release = state.borrow().erg_requests;
-    assert_eq!(release, request + 1);
-    erg_event(ui, &mut state.borrow_mut(), &sink, release, &Ok(None));
+    let release = released(&mut captured).expect("Completion releases");
+    erg_answer(ui, &mut state.borrow_mut(), release, &Ok(None));
     assert_eq!(ui.get_ride_erg_state(), 3);
     ui.global::<Actions>().invoke_skip_step();
+    assert!(captured.try_recv().is_err(), "Nothing left to skip or send");
+    // Auto-pause, through the tick the timer runs: more than five seconds at a measured
+    // zero pauses the ride, and the next pedal stroke resumes it. A pause the rider asked
+    // for waits for Resume. A trainer that falls silent is a dropout rather than a rider
+    // at rest: the clock runs through it, and only half a minute without any reading
+    // pauses the ride.
+    let t1 = Instant::now();
+    let coast = |watts: i16, seconds: u64| {
+        let at = t1 + Duration::from_secs(seconds);
+        trainer_reading(state, watts, None, at);
+        tick(ui, &mut state.borrow_mut(), at);
+    };
+    coast(160, 1);
+    coast(0, 2);
+    assert_eq!(ui.get_ride_phase(), 1, "Not five seconds yet");
+    // A pause or a resume by the pedals settles an earlier notice, as the rider's own do.
+    ui.set_ride_notice(5);
+    ui.set_ride_notice_detail("Trainer rejected the command".into());
+    coast(0, 7);
+    assert_eq!(ui.get_ride_phase(), 2, "Five seconds at zero watts");
+    assert!(ui.get_ride_auto_paused());
     assert_eq!(
-        state.borrow().erg_requests,
-        release,
-        "Nothing left to skip or send"
+        ui.get_ride_notice(),
+        0,
+        "The pedals' pause settles the notice"
     );
+    assert_eq!(ui.get_ride_notice_detail(), "");
+    assert_eq!(
+        state.borrow().ride.as_ref().unwrap().ride.phase(),
+        Phase::Paused
+    );
+    coast(0, 8);
+    assert_eq!(ui.get_ride_phase(), 2, "A zero does not resume");
+    ui.set_ride_notice(5);
+    ui.set_ride_notice_detail("Trainer rejected the command".into());
+    coast(160, 9);
+    assert_eq!(ui.get_ride_phase(), 1, "The next pedal stroke resumes");
+    assert!(!ui.get_ride_auto_paused());
+    assert_eq!(ui.get_ride_notice(), 0, "The pedals' resume settles it too");
+    assert_eq!(ui.get_ride_notice_detail(), "");
+    assert_eq!(
+        state.borrow().ride.as_ref().unwrap().ride.phase(),
+        Phase::Running
+    );
+    ui.global::<Actions>().invoke_pause_ride();
+    assert!(!ui.get_ride_auto_paused());
+    coast(160, 10);
+    assert_eq!(ui.get_ride_phase(), 2, "The rider's pause waits for Resume");
+    ui.global::<Actions>().invoke_resume_ride();
+    assert_eq!(ui.get_ride_phase(), 1);
+    coast(160, 11);
+    tick(ui, &mut state.borrow_mut(), t1 + Duration::from_secs(17));
+    assert_eq!(ui.get_ride_phase(), 1, "A dropout keeps the clock running");
+    tick(ui, &mut state.borrow_mut(), t1 + Duration::from_secs(41));
+    assert_eq!(ui.get_ride_phase(), 1, "Still within half a minute");
+    tick(ui, &mut state.borrow_mut(), t1 + Duration::from_secs(42));
+    assert_eq!(ui.get_ride_phase(), 2, "Half a minute without any reading");
+    assert!(ui.get_ride_auto_paused());
+    ui.global::<Actions>().invoke_resume_ride();
+    assert_eq!(ui.get_ride_phase(), 1);
+    // Losing the trainer stops the count until the next trainer's first watts.
+    disconnected(ui, &mut state.borrow_mut(), 0);
+    connected(ui, &mut state.borrow_mut(), &devices[0], 0, true);
+    tick(ui, &mut state.borrow_mut(), t1 + Duration::from_secs(60));
+    assert_eq!(
+        ui.get_ride_phase(),
+        1,
+        "No watts seen from this trainer yet"
+    );
+    assert!(captured.try_recv().is_err(), "ERG is off: nothing sent");
     ui.global::<Actions>().invoke_close_training();
     assert_eq!(ui.get_screen(), 2, "Back is refused mid-ride");
     ui.global::<Actions>().invoke_finish_ride();
@@ -1475,16 +1405,24 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(ui.get_ride_phase(), 3);
     assert!(!ui.get_ride_erg_enabled(), "Finishing leaves control off");
     assert_eq!(ui.get_ride_erg_state(), 0);
-    assert_eq!(
-        state.borrow().erg_requests,
-        release,
+    assert!(
+        captured.try_recv().is_err(),
         "Already released: nothing more to send"
     );
     assert!(ui.get_ride_workout_complete(), "The summary says completed");
     assert_eq!(ui.get_ride_save_state(), 1, "Saved on the first try");
     assert_eq!(ui.get_ride_folder(), directory.display().to_string());
     assert_eq!(ui.get_ride_activity_name(), "VO2 max 5 × 3");
-    assert!(state.borrow().ride.as_ref().unwrap().recording.saved());
+    assert!(
+        state
+            .borrow()
+            .ride
+            .as_ref()
+            .unwrap()
+            .ride
+            .recording()
+            .saved()
+    );
     assert!(directory.join("ride.fit").exists() && directory.join("ride.json").exists());
     let fit = fs::read(directory.join("ride.fit")).unwrap();
     ui.global::<Actions>().invoke_finish_ride();
@@ -1530,9 +1468,7 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
     assert_eq!(ui.get_ride_upload_error(), 1, "Still waiting for a sign-in");
     assert_eq!(ui.get_ride_activity_name(), "VO2 max 5 × 3");
     assert!(state.borrow().ride.is_some(), "Cancelling keeps the ride");
-    let owner = ("https://undertrained.invalid/".to_owned(), 7);
     let other = ("https://undertrained.invalid/".to_owned(), 8);
-    state.borrow_mut().ride.as_mut().unwrap().owner = Some(owner.clone());
     ui.global::<Actions>().invoke_navigate(1);
     assert_eq!(
         ride_on_sign_in(ui, &mut state.borrow_mut(), &owner),
@@ -1549,7 +1485,16 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
         "VO2 max 5 × 3",
         "The title survives the sign-in"
     );
-    assert!(state.borrow().ride.as_ref().unwrap().recording.saved());
+    assert!(
+        state
+            .borrow()
+            .ride
+            .as_ref()
+            .unwrap()
+            .ride
+            .recording()
+            .saved()
+    );
     // Actionable again: the click reaches the account check, and nothing is sent on its own.
     ui.global::<Actions>().invoke_upload_ride();
     assert_eq!(ui.get_ride_upload_state(), 5);
@@ -1598,23 +1543,23 @@ pub fn run(ui: &AppWindow, state: &Rc<RefCell<AppState>>, root: &Path) {
 
     // A partial BLE update must not keep the other displayed field fresh.
     let stamp = Instant::now();
-    state.borrow_mut().sensors.update(
+    bluetooth_sample(
+        &mut state.borrow_mut(),
         0,
-        &Reading {
+        Reading {
             power: Some(200),
             cadence: Some(90.0),
             heart_rate: None,
         },
-        false,
         stamp,
     );
-    state.borrow_mut().sensors.update(
+    bluetooth_sample(
+        &mut state.borrow_mut(),
         0,
-        &Reading {
+        Reading {
             power: Some(205),
             ..Default::default()
         },
-        false,
         stamp + Duration::from_secs(6),
     );
     crate::refresh_device_readings(ui, &state.borrow(), stamp + Duration::from_secs(6));

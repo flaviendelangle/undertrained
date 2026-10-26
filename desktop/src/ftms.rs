@@ -1,5 +1,5 @@
 //! Serialized FTMS control. No command is successful until its indication arrives.
-use crate::ble::Event;
+use crate::sensors::Event;
 use std::future::Future;
 use tokio::sync::{mpsc, watch};
 

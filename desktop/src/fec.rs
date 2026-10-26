@@ -7,7 +7,7 @@
 //! `ftms.rs`: changing targets are coalesced, a failure needs a release before any new target,
 //! a refusal is never retried, and an unanswered command makes control untrustworthy until
 //! the trainer is reconnected. See docs/ant-bridge.md.
-use crate::{ble::Event, ftms::Request, model::Device};
+use crate::{ftms::Request, model::Device, sensors::Event};
 use anyhow::Result;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;

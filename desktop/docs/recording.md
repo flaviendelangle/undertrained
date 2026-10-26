@@ -8,7 +8,7 @@ With a trainer connected, Start arms the ride and the recording begins at the fi
 
 The recorder samples at most once per second. Active elapsed time uses a monotonic clock and excludes pauses. Sample timestamps use the start's UTC time plus monotonic elapsed time, so changing the system clock during a ride cannot reorder records. A delayed timer leaves a gap instead of backfilling invented samples.
 
-Power, cadence and heart rate expire independently after five seconds without an update. Missing values stay null, while a measured zero remains zero. A dedicated heart-rate sensor takes priority over a trainer's heart-rate reading. Disconnecting one role clears only its measurements. Pausing stops recording but leaves live sensor display active. Summary averages use available samples, including real zeros, and exclude missing values.
+The sensor module owns the live readings consumed by both the screen and the ride. It applies Bluetooth deltas and ANT+ snapshots using the adapter's report, without asking callers to identify the transport. Power, cadence and heart rate expire independently after five seconds without an update. Missing values stay null, while a measured zero remains zero. A dedicated heart-rate sensor takes priority over a trainer's heart-rate reading. Disconnecting one role clears only its measurements. Pausing stops recording but leaves live sensor display active. Summary averages use available samples, including real zeros, and exclude missing values.
 
 ## Local files
 
@@ -34,7 +34,7 @@ The ride folder retains separate upload-intent, receipt and completion files. No
 
 ## Validation
 
-Unit tests cover independent sensor expiry, pause/resume clocks, real zero versus missing power, delayed timer gaps, disk-full handling, failed export retries, and FIT framing/CRC. Upload tests use a local HTTP server to check persistence, account ownership, status-only retries and uncertain submissions. No test sends a ride to Strava.
+Sensor tests own report semantics, independent expiry, role priority and valid-power timestamps. Recording tests cover pause/resume clocks, real zero versus missing power in exports, delayed timer gaps, disk-full handling, failed export retries, and FIT framing/CRC. The ride module's tests drive the lifecycle through the interface the screen uses, with instants of their choosing and resistance commands captured in place of the radio: the pedals pausing and resuming the clock on the five- and thirty-second rules, the rider's pause and a journal fault waiting for Resume, a pause releasing the trainer and Resume sending the target again, finishing once with a failed export retried from the samples in memory. Upload tests use a local HTTP server to check persistence, account ownership, status-only retries and uncertain submissions. No test sends a ride to Strava.
 
 An ignored hardware test exercises ANT+ discovery, sensor selection, recording and export together. It passed locally with five real heart-rate samples. Run it only when the USB stick is free and a heart-rate sensor is broadcasting:
 

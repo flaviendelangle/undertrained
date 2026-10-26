@@ -1,6 +1,6 @@
 //! Local ride recording. Monotonic clocks drive elapsed time; absent sensor values remain absent.
 use crate::{
-    model::Reading,
+    sensors::Live,
     speed::{Rider, Simulator},
 };
 use anyhow::{Context, Result};
@@ -14,107 +14,6 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct Live {
-    pub power: Option<f64>,
-    pub heart_rate: Option<f64>,
-    pub cadence: Option<f64>,
-}
-#[derive(Default)]
-struct Field(Option<(f64, Instant)>);
-impl Field {
-    fn update(&mut self, value: Option<f64>, snapshot: bool, now: Instant) {
-        if value.is_some() || snapshot {
-            self.0 = value
-                .filter(|v| v.is_finite() && *v >= 0.0)
-                .map(|v| (v, now));
-        }
-    }
-    fn value(&self, now: Instant) -> Option<f64> {
-        self.reading(now).map(|(v, _)| v)
-    }
-    fn reading(&self, now: Instant) -> Option<(f64, Instant)> {
-        self.0
-            .filter(|(_, t)| now.saturating_duration_since(*t) < Duration::from_secs(5))
-    }
-}
-#[derive(Default)]
-pub struct Sensors {
-    power: Field,
-    cadence: Field,
-    trainer_hr: Field,
-    hr: Field,
-    /// When the trainer last reported any valid power, zero included. Unlike `power`, it
-    /// outlives the five-second freshness, so a dropout can be told apart from a long one.
-    power_seen: Option<Instant>,
-}
-impl Sensors {
-    pub fn update(&mut self, role: usize, reading: &Reading, snapshot: bool, now: Instant) {
-        if role == 0 {
-            if reading.power.is_some_and(|w| w >= 0) {
-                self.power_seen = Some(now);
-            }
-            self.power
-                .update(reading.power.map(f64::from), snapshot, now);
-            self.cadence
-                .update(reading.cadence.map(f64::from), snapshot, now);
-            self.trainer_hr.update(
-                reading.heart_rate.filter(|h| *h > 0).map(f64::from),
-                snapshot,
-                now,
-            );
-        } else if role == 1 {
-            self.hr.update(
-                reading.heart_rate.filter(|h| *h > 0).map(f64::from),
-                snapshot,
-                now,
-            );
-        }
-    }
-    pub fn disconnect(&mut self, role: usize) {
-        if role == 0 {
-            self.power = Field::default();
-            self.cadence = Field::default();
-            self.trainer_hr = Field::default();
-            self.power_seen = None;
-        } else if role == 1 {
-            self.hr = Field::default();
-        }
-    }
-    pub fn role_live(&self, role: usize, now: Instant) -> Live {
-        if role == 0 {
-            Live {
-                power: self.power.value(now),
-                cadence: self.cadence.value(now),
-                heart_rate: self.trainer_hr.value(now),
-            }
-        } else {
-            Live {
-                heart_rate: self.hr.value(now),
-                ..Default::default()
-            }
-        }
-    }
-    /// How long since the trainer last reported power, whatever the value; None before any.
-    pub fn power_silence(&self, now: Instant) -> Option<Duration> {
-        self.power_seen.map(|at| now.saturating_duration_since(at))
-    }
-    /// When the live power reading above zero watts arrived: a pedal stroke dates from the
-    /// trainer's report, not from the ticks that keep showing it.
-    pub fn pedaled_at(&self, now: Instant) -> Option<Instant> {
-        self.power
-            .reading(now)
-            .filter(|(watts, _)| *watts > 0.0)
-            .map(|(_, at)| at)
-    }
-    pub fn live(&self, now: Instant) -> Live {
-        Live {
-            power: self.power.value(now),
-            cadence: self.cadence.value(now),
-            heart_rate: self.hr.value(now).or_else(|| self.trainer_hr.value(now)),
-        }
-    }
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
     Running,
@@ -604,7 +503,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires a free ANT+ stick and broadcasting HR sensor; writes only to a temporary folder"]
     async fn hardware_ant_heart_rate_records_and_exports() {
-        use crate::{ble, sensors};
+        use crate::sensors;
         use tokio::sync::mpsc;
         let root = std::env::temp_dir().join(format!(
             "undertrained-hardware-recording-{}",
@@ -613,34 +512,36 @@ mod tests {
         let (commands, receiver) = mpsc::unbounded_channel();
         let (events, mut incoming) = mpsc::unbounded_channel();
         let worker = tokio::spawn(sensors::run(receiver, events));
-        commands.send(ble::Command::Scan).unwrap();
+        commands.send(sensors::Command::Scan).unwrap();
         let mut selected = false;
         let mut recording: Option<Recording> = None;
-        let mut sensor = Sensors::default();
+        let mut sensor = sensors::Readings::default();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(25);
         while let Ok(Some(event)) = tokio::time::timeout_at(deadline, incoming.recv()).await {
+            let now = Instant::now();
+            sensor.observe(&event, now);
             match event {
-                sensors::Event::Device(ble::Event::Devices(devices)) if !selected => {
+                sensors::Event::Devices(devices) if !selected => {
                     if let Some(device) = devices
                         .iter()
                         .find(|d| d.id.starts_with("ant:") && d.capabilities.heart_rate)
                     {
-                        commands.send(ble::Command::StopScan).unwrap();
+                        commands.send(sensors::Command::StopScan).unwrap();
                         commands
-                            .send(ble::Command::Connect(device.id.clone(), 1))
+                            .send(sensors::Command::Connect(device.id.clone(), 1))
                             .unwrap();
                         selected = true;
                     }
                 }
-                sensors::Event::Device(ble::Event::Sample(1, reading)) => {
-                    let now = Instant::now();
+                sensors::Event::Sample {
+                    role: 1, reading, ..
+                } => {
                     if recording.is_none() && reading.heart_rate.is_some() {
                         recording = Some(
                             Recording::start_in(&root, "Hardware validation".into(), None, now)
                                 .unwrap(),
                         );
                     }
-                    sensor.update(1, &reading, true, now);
                     if let Some(ride) = recording.as_mut() {
                         ride.tick(now, sensor.live(now)).unwrap();
                         if ride.samples().len() >= 5 {
@@ -651,7 +552,7 @@ mod tests {
                 _ => {}
             }
         }
-        commands.send(ble::Command::Reset).unwrap();
+        commands.send(sensors::Command::Reset).unwrap();
         drop(commands);
         tokio::time::timeout(Duration::from_secs(8), worker)
             .await
@@ -675,73 +576,6 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    #[test]
-    fn independent_field_expiry_and_disconnect_do_not_invent_zero() {
-        let t = Instant::now();
-        let mut s = Sensors::default();
-        s.update(
-            0,
-            &Reading {
-                power: Some(0),
-                cadence: Some(90.0),
-                heart_rate: Some(120),
-            },
-            false,
-            t,
-        );
-        s.update(
-            0,
-            &Reading {
-                power: Some(200),
-                ..Default::default()
-            },
-            false,
-            t + Duration::from_secs(4),
-        );
-        assert_eq!(s.live(t + Duration::from_secs(5)).power, Some(200.0));
-        assert_eq!(s.live(t + Duration::from_secs(5)).cadence, None);
-        s.update(
-            1,
-            &Reading {
-                heart_rate: Some(150),
-                ..Default::default()
-            },
-            true,
-            t + Duration::from_secs(5),
-        );
-        s.disconnect(0);
-        assert_eq!(s.live(t + Duration::from_secs(5)).heart_rate, Some(150.0));
-        s.update(1, &Reading::default(), true, t + Duration::from_secs(6));
-        assert!(s.live(t + Duration::from_secs(6)).heart_rate.is_none());
-    }
-
-    #[test]
-    fn power_silence_counts_from_any_reading_and_outlives_freshness() {
-        let t = Instant::now();
-        let mut s = Sensors::default();
-        assert_eq!(s.power_silence(t), None, "Nothing heard yet");
-        let power = |watts: Option<i16>| Reading {
-            power: watts,
-            ..Default::default()
-        };
-        s.update(0, &power(Some(0)), true, t);
-        // A snapshot without power clears the live value but is not a power reading.
-        s.update(0, &power(None), true, t + Duration::from_secs(2));
-        assert!(s.live(t + Duration::from_secs(2)).power.is_none());
-        assert_eq!(
-            s.power_silence(t + Duration::from_secs(20)),
-            Some(Duration::from_secs(20)),
-            "A measured zero counts, and is remembered past five seconds"
-        );
-        s.update(0, &power(Some(-1)), false, t + Duration::from_secs(21));
-        assert_eq!(
-            s.power_silence(t + Duration::from_secs(21)),
-            Some(Duration::from_secs(21)),
-            "An invalid value is no reading"
-        );
-        s.disconnect(0);
-        assert_eq!(s.power_silence(t + Duration::from_secs(22)), None);
-    }
     #[test]
     fn pause_clock_missing_data_export_and_idempotent_finish() {
         let root = std::env::temp_dir().join(format!(

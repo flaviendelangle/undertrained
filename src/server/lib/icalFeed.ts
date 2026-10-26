@@ -1,12 +1,15 @@
 import { asc, eq } from "drizzle-orm";
-import IcalExpander from "ical-expander";
-import type ICAL from "ical.js";
+import ICAL from "ical.js";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
 import type { Database } from "../db";
 import { calendarSubscriptions } from "../db/schema";
-import { utcToZonedWallClock, zonedWallClockToUtc } from "./timezone";
+import {
+  tzOffsetMs,
+  utcToZonedWallClock,
+  zonedWallClockToUtc,
+} from "./timezone";
 
 /**
  * One external-calendar event, reduced to what the Journal week grid needs. Times
@@ -35,6 +38,8 @@ const MAX_EVENTS_PER_FEED = 2_000;
 const MAX_ALLDAY_SPAN_DAYS = 90;
 const CACHE_TTL_MS = 15 * 60_000;
 const MAX_CACHE_ENTRIES = 50;
+/** Offsets cached per zone the feeds name without defining (a few MB at most). */
+const MAX_ZONE_OFFSETS = 50_000;
 const MS_PER_DAY = 86_400_000;
 
 /**
@@ -176,11 +181,11 @@ async function fetchIcs(rawUrl: string): Promise<string> {
 }
 
 /**
- * In-process cache of raw feed text keyed by URL (~15 min TTL), so paging across
- * weeks within a session doesn't refetch. Single-instance VPS, so a plain Map is
- * enough — no Redis. The URL key lives only in memory.
+ * In-process cache of parsed feeds keyed by URL (~15 min TTL), so paging across
+ * weeks within a session neither refetches nor reparses. Single-instance VPS, so
+ * a plain Map is enough — no Redis. The URL key lives only in memory.
  */
-const feedCache = new Map<string, { fetchedAt: number; ics: string }>();
+const feedCache = new Map<string, { fetchedAt: number; feed: ParsedFeed }>();
 
 function pruneCache(now: number): void {
   for (const [key, entry] of feedCache) {
@@ -199,18 +204,146 @@ function pruneCache(now: number): void {
   }
 }
 
-async function getIcs(rawUrl: string, now: number): Promise<string> {
+async function getFeed(rawUrl: string, now: number): Promise<ParsedFeed> {
   const cached = feedCache.get(rawUrl);
   if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
-    return cached.ics;
+    return cached.feed;
   }
-  const ics = await fetchIcs(rawUrl);
-  feedCache.set(rawUrl, { fetchedAt: now, ics });
+  const feed = parseFeed(await fetchIcs(rawUrl));
+  feedCache.set(rawUrl, { fetchedAt: now, feed });
   pruneCache(now);
-  return ics;
+  return feed;
 }
 
 // ── Parse + normalize ────────────────────────────────────────────────────
+
+/**
+ * A zone ical.js resolves through `Intl`. Used for a TZID the feed names
+ * without defining it in a VTIMEZONE (ical.js would read it as floating), so
+ * that recurrence limits, EXDATEs and moved instances compare at the right
+ * instant.
+ */
+class IntlTimezone extends ICAL.Timezone {
+  /**
+   * Offsets by wall clock. Recurrence expansion asks for the same instants on
+   * every request, and each `Intl` lookup is slow.
+   */
+  private readonly offsets = new Map<number, number>();
+
+  constructor(tzid: string) {
+    super({ tzid });
+  }
+
+  override utcOffset(tt: ICAL.Time): number {
+    const wallAsUtc = wallClockMs(tt);
+    let offset = this.offsets.get(wallAsUtc);
+    if (offset === undefined) {
+      const instant = zonedWallClockToUtc(tt.toString(), this.tzid).getTime();
+      offset = (wallAsUtc - instant) / 1000;
+      if (this.offsets.size >= MAX_ZONE_OFFSETS) this.offsets.clear();
+      this.offsets.set(wallAsUtc, offset);
+    }
+    return offset;
+  }
+}
+
+/**
+ * Register every IANA TZID the events use with ical.js's zone service, which
+ * it falls back to when the feed has no VTIMEZONE for it. A feed's own
+ * definition still wins.
+ */
+function registerNamedZones(vevents: ICAL.Component[]): void {
+  for (const vevent of vevents) {
+    for (const prop of vevent.getAllProperties()) {
+      const tzid = prop.getParameter("tzid");
+      if (typeof tzid !== "string" || ICAL.TimezoneService.has(tzid)) continue;
+      try {
+        tzOffsetMs(0, tzid);
+      } catch {
+        continue; // Not an IANA zone: ical.js reads it as floating.
+      }
+      ICAL.TimezoneService.register(new IntlTimezone(tzid));
+    }
+  }
+}
+
+/**
+ * A feed parsed once per fetch. Each series is related to its own moved or
+ * edited instances only: left alone, ical.js relates every RECURRENCE-ID event
+ * in the feed to every event, which is quadratic and attaches one series'
+ * moved instance to another series that happens to occur at the same time.
+ */
+export interface ParsedFeed {
+  singles: ICAL.Event[];
+  /** Events with an RRULE or RDATE. */
+  series: ICAL.Event[];
+  /** Moved or edited occurrences (RECURRENCE-ID), shown at their own time. */
+  instances: ICAL.Event[];
+}
+
+/**
+ * ical.js finds a series' exception by its RECURRENCE-ID string, trying the
+ * occurrence in the series' zone and then in UTC. Also key each timed exception
+ * by its UTC string, so one whose RECURRENCE-ID names another zone still
+ * replaces its occurrence.
+ */
+function aliasExceptionsByUtc(event: ICAL.Event): void {
+  // Typed as an array, but keyed by RECURRENCE-ID string.
+  const exceptions = event.exceptions as unknown as Record<string, ICAL.Event>;
+  for (const exception of Object.values(exceptions)) {
+    const id = exception.recurrenceId;
+    if (id.isDate || id.zone?.tzid === "floating") continue;
+    const utcId = id.convertToZone(ICAL.Timezone.utcTimezone).toString();
+    exceptions[utcId] ??= exception;
+  }
+}
+
+export function parseFeed(ics: string): ParsedFeed {
+  let vevents: ICAL.Component[];
+  try {
+    const jcal = ICAL.parse(ics) as unknown[];
+    vevents = new ICAL.Component(jcal).getAllSubcomponents("vevent");
+  } catch {
+    throw new IcalFeedError("parse_error");
+  }
+  registerNamedZones(vevents);
+
+  const instancesByUid = new Map<string, ICAL.Event[]>();
+  const masters: ICAL.Component[] = [];
+  for (const vevent of vevents) {
+    if (!vevent.hasProperty("recurrence-id")) {
+      masters.push(vevent);
+      continue;
+    }
+    const instance = new ICAL.Event(vevent);
+    const siblings = instancesByUid.get(instance.uid);
+    if (siblings) siblings.push(instance);
+    else instancesByUid.set(instance.uid, [instance]);
+  }
+
+  const feed: ParsedFeed = {
+    singles: [],
+    series: [],
+    // A THISANDFUTURE edit shifts the occurrences after it, so it comes out of
+    // its series' expansion instead.
+    instances: [...instancesByUid.values()]
+      .flat()
+      .filter((instance) => !instance.modifiesFuture()),
+  };
+  for (const vevent of masters) {
+    try {
+      const event = new ICAL.Event(vevent, {
+        exceptions:
+          instancesByUid.get(String(vevent.getFirstPropertyValue("uid"))) ?? [],
+      });
+      aliasExceptionsByUtc(event);
+      (event.isRecurring() ? feed.series : feed.singles).push(event);
+    } catch {
+      // One malformed event must not sink the whole feed.
+    }
+  }
+  return feed;
+}
 
 function isCancelled(event: ICAL.Event): boolean {
   const status = event.component.getFirstPropertyValue("status");
@@ -222,27 +355,55 @@ function isoDay(utcMs: number): string {
   return new Date(utcMs).toISOString().slice(0, 10);
 }
 
+/** Days since the epoch of a time's own wall-clock date, whatever its zone. */
+function dayNumber(time: ICAL.Time): number {
+  return Date.UTC(time.year, time.month - 1, time.day) / MS_PER_DAY;
+}
+
+/**
+ * The requested window, as instants and as padded wall-clock day numbers. No
+ * UTC offset reaches a day, so anything outside `[firstDay, lastDay]` misses
+ * the window and can be skipped before paying for a time zone conversion.
+ */
+interface TimeWindow {
+  fromFloating: string;
+  toFloating: string;
+  after: number;
+  before: number;
+  firstDay: number;
+  lastDay: number;
+}
+
+/**
+ * The instant a timed value denotes. A floating time, or one whose TZID is
+ * neither defined by the feed nor known to `Intl`, is read in the athlete's
+ * zone.
+ */
+function instantMs(time: ICAL.Time, tz: string): number {
+  if (time.zone?.tzid !== "floating") return time.toUnixTime() * 1000;
+  return zonedWallClockToUtc(time.toString(), tz).getTime();
+}
+
 /**
  * Append one or more {@link BusyEvent}s for a single VEVENT occurrence, clamped to
- * the `[fromFloating, toFloating]` window. Timed events become one block; all-day
- * events fan out to one entry per covered local day.
+ * the window. Timed events become one block; all-day events fan out to one entry
+ * per covered local day.
  */
 function pushEvent(
   out: BusyEvent[],
-  subscriptionId: number,
-  color: string,
-  summary: string,
+  sub: { subscriptionId: number; color: string },
+  item: ICAL.Event,
   start: ICAL.Time,
   end: ICAL.Time,
-  fromFloating: string,
-  toFloating: string,
+  bounds: TimeWindow,
   tz: string,
 ): void {
-  const title = (summary || "").trim();
-  const fromDay = fromFloating.slice(0, 10);
-  const toDay = toFloating.slice(0, 10);
+  const title = (item.summary || "").trim();
+  const { subscriptionId, color } = sub;
 
   if (start.isDate) {
+    const fromDay = bounds.fromFloating.slice(0, 10);
+    const toDay = bounds.toFloating.slice(0, 10);
     const startMs = Date.UTC(start.year, start.month - 1, start.day);
     // iCal all-day DTEND is exclusive; a single-day event has end = start + 1 day.
     let endMs = Date.UTC(end.year, end.month - 1, end.day);
@@ -266,74 +427,145 @@ function pushEvent(
     return;
   }
 
-  const startLocal = utcToZonedWallClock(start.toJSDate(), tz);
-  let endLocal = utcToZonedWallClock(end.toJSDate(), tz);
+  const startMs = instantMs(start, tz);
+  let endMs = instantMs(end, tz);
+  if (endMs < bounds.after || startMs > bounds.before) return;
   // Zero-length / inverted events still want a visible block: default to 30 min.
-  if (endLocal <= startLocal) {
-    endLocal = utcToZonedWallClock(
-      new Date(start.toJSDate().getTime() + 30 * 60_000),
-      tz,
-    );
-  }
+  if (endMs <= startMs) endMs = startMs + 30 * 60_000;
   out.push({
     subscriptionId,
     title,
-    startLocal,
-    endLocal,
+    startLocal: utcToZonedWallClock(new Date(startMs), tz),
+    endLocal: utcToZonedWallClock(new Date(endMs), tz),
     allDay: false,
     color,
   });
 }
 
+/** The last wall-clock day a series can start on, `Infinity` if open-ended. */
+function seriesLastDay(event: ICAL.Event): number {
+  if (event.component.hasProperty("rdate")) return Infinity;
+  let last = -Infinity;
+  for (const rrule of event.component.getAllProperties("rrule")) {
+    const { until } = rrule.getFirstValue() as ICAL.Recur;
+    if (!until) return Infinity;
+    last = Math.max(last, dayNumber(until));
+  }
+  return last;
+}
+
+function lengthDays(event: ICAL.Event): number {
+  return Math.max(0, Math.ceil(event.duration.toSeconds() / 86_400));
+}
+
+/** Milliseconds since the epoch of a time's own wall clock, whatever its zone. */
+function wallClockMs(time: ICAL.Time): number {
+  return Date.UTC(
+    time.year,
+    time.month - 1,
+    time.day,
+    time.hour,
+    time.minute,
+    time.second,
+  );
+}
+
 /**
- * Parse a raw `.ics` string and expand its events (incl. recurrences, honouring
- * RRULE/EXDATE/VTIMEZONE) within `[fromFloating, toFloating]` into {@link BusyEvent}s.
- * Pure (no network / DB) so it's directly unit-testable.
+ * How many days a series' RANGE=THISANDFUTURE edits can move an occurrence
+ * earlier or later, and the most days any of its occurrences lasts.
  */
-export function eventsFromIcs(
-  ics: string,
+function seriesReach(event: ICAL.Event): {
+  earlier: number;
+  later: number;
+  length: number;
+} {
+  const reach = { earlier: 0, later: 0, length: lengthDays(event) };
+  for (const edit of Object.values(event.exceptions)) {
+    if (!edit.modifiesFuture()) continue;
+    const shift = wallClockMs(edit.startDate) - wallClockMs(edit.recurrenceId);
+    reach.earlier = Math.max(reach.earlier, Math.ceil(-shift / MS_PER_DAY));
+    reach.later = Math.max(reach.later, Math.ceil(shift / MS_PER_DAY));
+    reach.length = Math.max(reach.length, lengthDays(edit));
+  }
+  return reach;
+}
+
+/** Feed each occurrence of a series that can touch the window to `add`. */
+function expandSeries(
+  event: ICAL.Event,
+  bounds: TimeWindow,
+  add: (item: ICAL.Event, start: ICAL.Time, end: ICAL.Time) => void,
+): void {
+  // Days past an occurrence's original date that it can still cover.
+  const { earlier, later, length } = seriesReach(event);
+  const reach = later + length;
+  // Expansion always starts at DTSTART, so a series that ended before the
+  // window would walk its whole history for nothing.
+  if (seriesLastDay(event) + reach < bounds.firstDay) return;
+  const iterator = event.iterator();
+  for (let i = 0; i < MAX_RECUR_ITERATIONS; i += 1) {
+    const next = iterator.next();
+    if (!next) return;
+    const day = dayNumber(next);
+    if (day - earlier > bounds.lastDay) return;
+    if (day + reach < bounds.firstDay) continue;
+    const details = event.getOccurrenceDetails(next);
+    // Moved and edited instances are listed on their own, at their own time.
+    if (details.item !== event && !details.item.modifiesFuture()) continue;
+    add(details.item, details.startDate, details.endDate);
+  }
+}
+
+/**
+ * A parsed feed's events (incl. recurrences, honouring RRULE/RDATE/EXDATE,
+ * moved instances and VTIMEZONE) within `[fromFloating, toFloating]`, as
+ * {@link BusyEvent}s. Pure (no network / DB) so it's directly unit-testable.
+ */
+export function busyEventsBetween(
+  feed: ParsedFeed,
   sub: { subscriptionId: number; color: string },
   fromFloating: string,
   toFloating: string,
   tz: string,
 ): BusyEvent[] {
-  let expander: IcalExpander;
-  try {
-    expander = new IcalExpander({
-      ics,
-      maxIterations: MAX_RECUR_ITERATIONS,
-      skipInvalidDates: true,
-    });
-  } catch {
-    throw new IcalFeedError("parse_error");
-  }
-
-  const after = zonedWallClockToUtc(fromFloating, tz);
-  const before = zonedWallClockToUtc(toFloating, tz);
-  const { events, occurrences } = expander.between(after, before);
+  const after = zonedWallClockToUtc(fromFloating, tz).getTime();
+  const before = zonedWallClockToUtc(toFloating, tz).getTime();
+  const bounds: TimeWindow = {
+    fromFloating,
+    toFloating,
+    after,
+    before,
+    firstDay: Math.floor(after / MS_PER_DAY) - 1,
+    lastDay: Math.floor(before / MS_PER_DAY) + 1,
+  };
 
   const out: BusyEvent[] = [];
-  const add = (event: ICAL.Event, start: ICAL.Time, end: ICAL.Time): void => {
-    if (out.length >= MAX_EVENTS_PER_FEED || isCancelled(event)) return;
+  const add = (item: ICAL.Event, start: ICAL.Time, end: ICAL.Time): void => {
+    if (out.length >= MAX_EVENTS_PER_FEED || isCancelled(item)) return;
     try {
-      pushEvent(
-        out,
-        sub.subscriptionId,
-        sub.color,
-        event.summary,
-        start,
-        end,
-        fromFloating,
-        toFloating,
-        tz,
-      );
+      pushEvent(out, sub, item, start, end, bounds, tz);
     } catch {
       // One malformed event must not sink the whole feed.
     }
   };
 
-  for (const event of events) add(event, event.startDate, event.endDate);
-  for (const occ of occurrences) add(occ.item, occ.startDate, occ.endDate);
+  for (const event of [...feed.singles, ...feed.instances]) {
+    try {
+      const { startDate, endDate } = event;
+      if (dayNumber(startDate) > bounds.lastDay) continue;
+      if (dayNumber(endDate) < bounds.firstDay) continue;
+      add(event, startDate, endDate);
+    } catch {
+      // One malformed event must not sink the whole feed.
+    }
+  }
+  for (const event of feed.series) {
+    try {
+      expandSeries(event, bounds, add);
+    } catch {
+      // A series whose rule can't be expanded contributes nothing.
+    }
+  }
   return out;
 }
 
@@ -391,9 +623,8 @@ export async function fetchBusyEvents(
   const now = Date.now();
   const settled = await Promise.allSettled(
     subs.map(async (sub) => {
-      const ics = await getIcs(sub.icalUrl, now);
-      return eventsFromIcs(
-        ics,
+      return busyEventsBetween(
+        await getFeed(sub.icalUrl, now),
         { subscriptionId: sub.id, color: sub.color },
         fromFloating,
         toFloating,
