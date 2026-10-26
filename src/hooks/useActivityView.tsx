@@ -118,11 +118,23 @@ function useActivityViewState() {
     reset: () => navigate({ viewId: view?.id }),
     acceptSaved: (saved: SavedActivityView) =>
       navigate({ viewId: saved.id }, true),
-    href: (path: string) =>
-      activityViewHref(
+    href: (path: string) => {
+      if (analysisRoute && !parsed) {
+        // Carry an invalid selection along so the target shows the same error
+        // instead of silently falling back to every activity.
+        const query = new URLSearchParams();
+        ACTIVITY_VIEW_PARAMS.forEach((key) =>
+          [router.query[key] ?? []]
+            .flat()
+            .forEach((value) => query.append(key, value)),
+        );
+        return `${path}?${query}`;
+      }
+      return activityViewHref(
         path,
         analysisRoute ? (parsed ?? {}) : lastSelection.current,
-      ),
+      );
+    },
     viewHref: (id: number, path = "/activities") =>
       activityViewHref(path, { viewId: id }),
   };

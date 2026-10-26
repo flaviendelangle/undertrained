@@ -569,6 +569,53 @@ for (const viewport of [
   });
 }
 
+test("Journal tabs preserve the selected week and ignore retired filters", async ({
+  page,
+  context,
+  viewsFixture: _fixture,
+}) => {
+  await context.addCookies(
+    Object.entries({
+      "activity-type": ["Swim"],
+      "workout-type": [11],
+      "hide-commutes": true,
+      "journal-date-from": "2099-01-01",
+    }).map(([name, value]) => ({
+      name,
+      value: encodeURIComponent(JSON.stringify(value)),
+      url: origin,
+    })),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/journal/month?week=2026-01-05`);
+  const header = page.getByRole("toolbar", { name: "Journal", exact: true });
+  await expect(
+    header.getByRole("heading", { name: "Journal", level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Filter", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "+2 more", exact: true }).click();
+  const dayActivities = page.getByRole("dialog");
+  for (const name of ["100% Alpine_ride", "Race: race", "commute"])
+    await expect(
+      dayActivities.getByRole("link", { name, exact: true }),
+    ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await header.getByRole("link", { name: "Month", exact: true }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    header.getByRole("link", { name: "Week", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(`${origin}/journal/week?week=2026-01-05`);
+  await expect(
+    header.getByRole("link", { name: "Week", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await header.getByRole("link", { name: "Month", exact: true }).click();
+  await expect(page).toHaveURL(`${origin}/journal/month?week=2026-01-05`);
+});
+
 test("Fitness keeps full history and exposes a selected day's details", async ({
   page,
   viewsFixture: f,

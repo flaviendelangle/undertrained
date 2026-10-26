@@ -157,9 +157,9 @@ const ViewsPage: NextPageWithLayout = () => {
         </aside>
         <main className="min-w-0 flex-1 p-4 md:p-6">
           <div className="mb-4 flex items-center gap-2">
-            <h1 className="min-w-0 flex-1 truncate text-xl font-semibold">
+            <h2 className="min-w-0 flex-1 truncate text-xl font-semibold">
               {folders.find((f) => f.id === folderId)?.name ?? t("views.title")}
-            </h1>
+            </h2>
             {typeof folderId === "number" && (
               <DropdownMenu>
                 <DropdownMenuTrigger

@@ -57,4 +57,31 @@ test("the toolbox works signed out", async ({ page }) => {
   await expect(
     page.getByRole("link", { name: "Race Predictor", exact: true }),
   ).toHaveAttribute("aria-current", "page");
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.getByRole("link", { name: "Race Predictor", exact: true }).focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  const lastTab = page.getByRole("link", {
+    name: "Gear Calculator",
+    exact: true,
+  });
+  await expect(lastTab).toBeFocused();
+  await expect(lastTab).toBeInViewport();
+  const overflow = await page
+    .getByRole("navigation", { name: "Toolbox", exact: true })
+    .evaluate((nav) => ({
+      left: nav.scrollLeft,
+      horizontal: nav.scrollWidth > nav.clientWidth,
+      vertical: nav.scrollHeight > nav.clientHeight,
+    }));
+  expect(overflow).toEqual({
+    left: expect.any(Number),
+    horizontal: true,
+    vertical: false,
+  });
+  expect(overflow.left).toBeGreaterThan(0);
+
+  await page.goto("/toolbox/gear-calculator");
+  await expect(lastTab).toHaveAttribute("aria-current", "page");
+  await expect(lastTab).toBeInViewport();
 });

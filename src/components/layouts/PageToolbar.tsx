@@ -1,4 +1,4 @@
-import type { ElementType, ReactNode } from "react";
+import { type ElementType, type ReactNode, useEffect, useRef } from "react";
 
 import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
@@ -32,6 +32,22 @@ export function PageToolbar({
   tabs?: { label: string; items: readonly PageToolbarTab[] };
 }) {
   const t = useT();
+  const navRef = useRef<HTMLElement>(null);
+  const activeHref = tabs?.items.find((tab) => tab.active)?.href;
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const revealActiveTab = () => {
+      nav
+        .querySelector<HTMLElement>('[aria-current="page"]')
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    };
+    revealActiveTab();
+    const observer = new ResizeObserver(revealActiveTab);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, [activeHref]);
+
   return (
     <Toolbar.Root
       render={<header />}
@@ -61,6 +77,7 @@ export function PageToolbar({
       </div>
       {tabs && (
         <nav
+          ref={navRef}
           aria-label={tabs.label}
           className="flex min-w-0 flex-1 [scrollbar-width:thin] items-stretch gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain md:gap-4"
         >

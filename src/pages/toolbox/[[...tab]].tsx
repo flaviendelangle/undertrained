@@ -1,9 +1,9 @@
 import * as React from "react";
 
 import {
-  ActivityIcon,
   CogIcon,
   GaugeIcon,
+  LogInIcon,
   TimerIcon,
   TrendingUpIcon,
   WrenchIcon,
@@ -70,10 +70,12 @@ const ToolboxPage: NextPageWithLayout = () => {
           status !== "authenticated" ? (
             <ToolbarPrimitive.Link
               render={<Link href="/login" />}
+              aria-label={t("toolbox.signIn")}
+              title={t("toolbox.signIn")}
               className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm font-medium transition-colors"
             >
-              <ActivityIcon className="size-4" />
-              {t("toolbox.signIn")}
+              <LogInIcon className="size-4" />
+              <span className="hidden sm:inline">{t("toolbox.signIn")}</span>
             </ToolbarPrimitive.Link>
           ) : undefined
         }
