@@ -3,7 +3,7 @@
  * `foldText` and the SQL in `activities.search` strip, so the query and the
  * titles fold alike.
  */
-export const COMBINING_ACCENTS = "[̀-ͯ]";
+export const COMBINING_ACCENTS = "[\u0300-\u036f]";
 const COMBINING_ACCENTS_REGEX = new RegExp(COMBINING_ACCENTS, "g");
 
 /** Lowercase and strip diacritics, so "velo" finds "Vélo". */
