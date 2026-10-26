@@ -314,14 +314,9 @@ for (const viewport of [
       .click();
     await expect(saveDialog).not.toBeVisible();
     await openViewOptions();
-    if (viewport.width < 768)
-      await expect(
-        page.getByRole("combobox", { name: "Saved views" }),
-      ).toHaveValue(/\d+/);
-    else
-      await expect(
-        page.getByRole("combobox", { name: "Saved views" }),
-      ).toContainText("Long activities");
+    await expect(
+      page.getByRole("combobox", { name: "Saved views" }),
+    ).toContainText("Long activities");
     await closeViewOptions();
     const [saved] = await f.client.views.list.query({ athleteId: f.athleteId });
     expect(saved.rules.children[0]).toMatchObject({
@@ -363,14 +358,9 @@ for (const viewport of [
       .click();
     await expect(page).toHaveURL(/\/activities\/charts\?/);
     await openViewOptions();
-    if (viewport.width < 768)
-      await expect(
-        page.getByRole("combobox", { name: "Saved views" }),
-      ).toHaveValue(String(saved.id));
-    else
-      await expect(
-        page.getByRole("combobox", { name: "Saved views" }),
-      ).toContainText(saved.name);
+    await expect(
+      page.getByRole("combobox", { name: "Saved views" }),
+    ).toContainText(saved.name);
     await expect(page.getByText("2 activities", { exact: true })).toBeVisible();
     await closeViewOptions();
     await page.getByRole("link", { name: "Map", exact: true }).last().click();
