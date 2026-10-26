@@ -2,7 +2,6 @@ import * as React from "react";
 
 import nextDynamic from "next/dynamic";
 
-import { TimelineInspectionLayout } from "~/components/charts/ActivitiesTimeline/TimelineInspectionLayout";
 import { getRelevantCharts } from "~/components/charts/relevantCharts";
 import { LoadingOverlay } from "~/components/primitives/LoadingOverlay";
 import { QueryState } from "~/components/primitives/QueryState";
@@ -102,39 +101,37 @@ const StatisticsPage: NextPageWithLayout = () => {
             {/* Mobile (< md): charts go full-bleed, flush under the toolbar and
             separated by hairline dividers. Desktop (md+): the familiar centered
             column of boxed cards with gaps. `md` matches useIsMobile. */}
-            <TimelineInspectionLayout>
-              <div className="flex min-w-0 flex-1 flex-col overflow-y-auto pb-3 md:items-center md:gap-4 md:p-4">
-                {activities?.length === 0 ? (
-                  <QueryState>
-                    {t(
-                      conditionCount(scope.rules) > 0
-                        ? "common.noResults"
-                        : "common.noActivities",
+            <div className="flex min-w-0 flex-1 flex-col overflow-y-auto pb-3 md:items-center md:gap-4 md:p-4">
+              {activities?.length === 0 ? (
+                <QueryState>
+                  {t(
+                    conditionCount(scope.rules) > 0
+                      ? "common.noResults"
+                      : "common.noActivities",
+                  )}
+                </QueryState>
+              ) : (
+                <ChartCardSurfaceProvider surface="responsive">
+                  <div className="divide-border border-border flex flex-col divide-y border-b md:w-full md:max-w-5xl md:gap-4 md:divide-y-0 md:border-0">
+                    {charts && (
+                      <>
+                        {charts.timeline && <ActivitiesTimeline />}
+                        {charts.powerCurve && (
+                          <PowerCurve activityTypes={POWER_ACTIVITY_TYPES} />
+                        )}
+                        <TimeInZones />
+                        {charts.cumulativeTimeline && (
+                          <ActivitiesCumulativeTimeline />
+                        )}
+                        {charts.eddingtonSports.length > 0 && (
+                          <EddingtonChart sports={charts.eddingtonSports} />
+                        )}
+                      </>
                     )}
-                  </QueryState>
-                ) : (
-                  <ChartCardSurfaceProvider surface="responsive">
-                    <div className="divide-border border-border flex flex-col divide-y border-b md:w-full md:max-w-5xl md:gap-4 md:divide-y-0 md:border-0">
-                      {charts && (
-                        <>
-                          {charts.timeline && <ActivitiesTimeline />}
-                          {charts.powerCurve && (
-                            <PowerCurve activityTypes={POWER_ACTIVITY_TYPES} />
-                          )}
-                          <TimeInZones />
-                          {charts.cumulativeTimeline && (
-                            <ActivitiesCumulativeTimeline />
-                          )}
-                          {charts.eddingtonSports.length > 0 && (
-                            <EddingtonChart sports={charts.eddingtonSports} />
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </ChartCardSurfaceProvider>
-                )}
-              </div>
-            </TimelineInspectionLayout>
+                  </div>
+                </ChartCardSurfaceProvider>
+              )}
+            </div>
             <LoadingOverlay hidden={ready} />
           </div>
         )}

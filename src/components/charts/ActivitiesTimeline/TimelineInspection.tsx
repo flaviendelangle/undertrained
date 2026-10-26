@@ -8,7 +8,6 @@ import {
   XIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { createPortal } from "react-dom";
 
 import { PreviewCard } from "@base-ui/react/preview-card";
 
@@ -20,15 +19,19 @@ import {
 } from "~/components/journal/journalPreview";
 import type { JournalActivity } from "~/components/journal/useJournalWeeks";
 import { Button } from "~/components/ui/button";
-import { Drawer, DrawerContent, DrawerTitle } from "~/components/ui/drawer";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerTitle,
+} from "~/components/ui/drawer";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { activityHref } from "~/utils/activityLinks";
 import { getSportConfig } from "~/utils/sportConfig";
-
-import { useTimelineInspectionContainer } from "./TimelineInspectionLayout";
 
 export interface TimelineContribution {
   activity: JournalActivity;
@@ -70,46 +73,23 @@ export function TimelineInspection({
 }) {
   const t = useT();
   const isMobile = useIsMobile();
-  const container = useTimelineInspectionContainer();
+  const [open, setOpen] = React.useState(true);
   const [handles] = React.useState<JournalPreviewHandles>(() => ({
     activity: PreviewCard.createHandle(),
   }));
   const total = rows.reduce((sum, row) => sum + (row.value ?? 0), 0);
   const missing = rows.filter((row) => row.value === null).length;
-  const close = () => {
-    onClose();
-    returnFocus.current?.focus({ preventScroll: true });
-  };
-  React.useEffect(() => {
-    if (isMobile) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key === "Escape" &&
-        !event.defaultPrevented &&
-        !(
-          event.target instanceof Element &&
-          event.target.closest(
-            '[role="dialog"], [role="listbox"], [role="menu"], [data-slot="select-content"], [data-slot="popover-content"], [data-slot="preview-card-content"]',
-          )
-        )
-      ) {
-        onClose();
-        returnFocus.current?.focus({ preventScroll: true });
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isMobile, onClose, returnFocus]);
 
   const body = (
     <JournalPreviewProvider value={handles}>
+      <DrawerDescription className="sr-only">
+        {t("charts.activitiesTimeline.inspection")}
+      </DrawerDescription>
       <div className="flex items-start gap-2 px-4 pt-4">
         <div className="min-w-0 flex-1">
-          {isMobile ? (
-            <DrawerTitle>{title}</DrawerTitle>
-          ) : (
-            <h2 className="font-semibold">{title}</h2>
-          )}
+          <DrawerTitle className="md:text-lg md:font-semibold">
+            {title}
+          </DrawerTitle>
           <p className="text-muted-foreground mt-1 text-xs">{source}</p>
         </div>
         <Button
@@ -132,15 +112,14 @@ export function TimelineInspection({
         >
           <ChevronRightIcon />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-11 md:size-8"
-          onClick={close}
+        <DrawerClose
+          render={
+            <Button variant="ghost" size="icon" className="size-11 md:size-8" />
+          }
           aria-label={t("common.close")}
         >
           <XIcon />
-        </Button>
+        </DrawerClose>
       </div>
       <div className="px-4 py-3">
         <p className="text-muted-foreground mb-1 text-xs">{metricLabel}</p>
@@ -208,7 +187,7 @@ export function TimelineInspection({
         formatValue={formatValue}
         returnHref={returnHref}
       />
-      <div className="border-border shrink-0 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-12">
+      <div className="border-border shrink-0 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <Button
           nativeButton={false}
           render={<Link href={listHref ?? "#"} />}
@@ -228,32 +207,25 @@ export function TimelineInspection({
     </JournalPreviewProvider>
   );
 
-  return isMobile ? (
+  return (
     <Drawer
-      open
-      onOpenChange={(open) => {
+      side={isMobile ? "bottom" : "right"}
+      open={open}
+      onOpenChange={setOpen}
+      onOpenChangeComplete={(open) => {
+        // Retain the period and its entries until the drawer finishes closing.
         if (!open) onClose();
       }}
     >
       <DrawerContent
-        className="max-h-[90svh] gap-0 overflow-hidden px-0 pb-0 [&>div:first-child]:mb-0 [&>div:last-child]:gap-0"
+        className="gap-0 overflow-hidden px-0 pb-0 md:pt-0 [&>div:first-child]:mb-0 [&>div:last-child]:gap-0"
         showCloseButton={false}
         finalFocus={returnFocus}
       >
         {body}
       </DrawerContent>
     </Drawer>
-  ) : container ? (
-    createPortal(
-      <section
-        aria-label={t("charts.activitiesTimeline.inspection")}
-        className="flex min-h-0 w-full flex-col"
-      >
-        {body}
-      </section>,
-      container,
-    )
-  ) : null;
+  );
 }
 
 function ContributionList({

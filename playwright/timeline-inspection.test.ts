@@ -26,11 +26,7 @@ test.beforeEach(async ({ viewsFixture: f }) => {
 
 const periodPicker = (page: Page) =>
   page.getByRole("combobox", { name: "Choose a period", exact: true });
-const inspector = (page: Page) =>
-  page.getByRole("region", {
-    name: "Activities behind this period",
-    exact: true,
-  });
+const inspector = (page: Page) => page.getByRole("dialog");
 const total = (panel: Locator) => panel.locator("strong");
 
 // The canvas covers the plot only. Clicking the bucket centre also works for an empty stack.
@@ -141,9 +137,25 @@ test("desktop inspection intersects a temporary root OR and returns with its cha
   await expect(
     page.getByRole("combobox", { name: "Saved views", exact: true }),
   ).toContainText(saved.name);
+  const plot = page.getByRole("group", {
+    name: "Activities Timeline",
+    exact: true,
+  });
+  await expect(plot.locator("canvas").first()).toBeVisible();
+  const plotBox = await plot.boundingBox();
   await clickBucket(page, 0, 7);
   const panel = inspector(page);
   await expect(panel).toBeVisible();
+  await expect.poll(async () => (await panel.boundingBox())?.x).toBe(992);
+  expect((await panel.boundingBox())?.height).toBe(1000);
+  expect((await plot.boundingBox())?.width).toBe(plotBox?.width);
+  await panel
+    .getByRole("button", { name: "Open in Activities", exact: true })
+    .focus();
+  await page.keyboard.press("Tab");
+  await expect
+    .poll(() => panel.evaluate((e) => e.contains(document.activeElement)))
+    .toBe(true);
   await expect(total(panel)).toHaveText("3h00");
   await expect(panel.getByRole("listitem")).toHaveCount(3);
   await expect(panel.getByText("10 Jan 2026", { exact: true })).toHaveCount(2);
@@ -158,7 +170,12 @@ test("desktop inspection intersects a temporary root OR and returns with its cha
   await panel.getByRole("button", { name: "Ride", exact: true }).click();
   await expect(total(panel)).toHaveText("1h00");
   await expect(panel.getByRole("listitem")).toHaveCount(1);
+  await panel.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(panel).toHaveCount(0);
   await changeMetric(page, "Distance (km)");
+  await periodPicker(page).click();
+  await page.getByRole("option", { name: "W2 2026", exact: true }).click();
+  await panel.getByRole("button", { name: "Ride", exact: true }).click();
   await expect(total(panel)).toHaveText("50 km");
   const chartUrl = page.url();
   await panel
@@ -221,6 +238,8 @@ test("desktop inspection intersects a temporary root OR and returns with its cha
     .getByRole("button", { name: "Previous period", exact: true })
     .click();
   await expect(total(inspector(page))).toHaveText("67 km");
+  await panel.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(panel).toHaveCount(0);
   const header = page
     .getByRole("heading", { name: "Activities Timeline", exact: true })
     .locator("..");
@@ -231,33 +250,28 @@ test("desktop inspection intersects a temporary root OR and returns with its cha
   await page.getByRole("option", { name: "Jan 2026", exact: true }).click();
   await expect(total(inspector(page))).toHaveText("67 km");
   await expect(inspector(page).getByRole("listitem")).toHaveCount(3);
-  // An expanded app nav and the inspector must still leave the chart controls usable.
+  await panel.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  // A narrow desktop gets an overlay too; the chart keeps its available width.
   await page.setViewportSize({ width: 768, height: 900 });
   await page.getByRole("button", { name: "Expand menu", exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (
-          await page
-            .getByRole("group", { name: "Activities Timeline", exact: true })
-            .boundingBox()
-        )?.width,
-    )
-    .toBeLessThan(250);
-  const options = header.getByRole("button", {
-    name: "Display options",
+  const chart = page.getByRole("group", {
+    name: "Activities Timeline",
     exact: true,
   });
-  await expect(options).toBeInViewport();
-  const optionsBox = await options.boundingBox();
-  const panelBox = await inspector(page).boundingBox();
-  expect(optionsBox!.x + optionsBox!.width).toBeLessThanOrEqual(panelBox!.x);
-  await options.click();
-  await expect(
-    page.getByRole("dialog", { name: "Display options", exact: true }),
-  ).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(total(inspector(page))).toHaveText("67 km");
+  await expect
+    .poll(async () => (await chart.boundingBox())?.width)
+    .toBeLessThan(550);
+  const narrowChartBox = await chart.boundingBox();
+  await periodPicker(page).click();
+  await page.getByRole("option", { name: "Jan 2026", exact: true }).click();
+  await expect(panel).toBeVisible();
+  await expect.poll(async () => (await panel.boundingBox())?.x).toBe(320);
+  expect((await chart.boundingBox())?.width).toBe(narrowChartBox?.width);
+  // Pressing the backdrop dismisses the drawer and returns focus to the period picker.
+  await page.mouse.click(280, 400);
+  await expect(panel).toHaveCount(0);
+  await expect(periodPicker(page)).toBeFocused();
   await page
     .getByRole("button", { name: "Collapse menu", exact: true })
     .click();
@@ -293,7 +307,11 @@ test("metric contributions follow legend visibility and keep missing load distin
   await clickBucket(page, 0, 7);
   const panel = inspector(page);
   await expect(total(panel)).toHaveText("5h00");
+  await panel.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(panel).toHaveCount(0);
   await changeMetric(page, "Load");
+  await periodPicker(page).click();
+  await page.getByRole("option", { name: "W2 2026", exact: true }).click();
   await expect(total(panel)).toHaveText("200");
   await expect(
     panel.getByText(
@@ -308,13 +326,21 @@ test("metric contributions follow legend visibility and keep missing load distin
     name: "Activities Timeline",
     exact: true,
   });
+  await panel.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(panel).toHaveCount(0);
   await chart.getByRole("button", { name: "Ride", exact: true }).click();
+  await periodPicker(page).click();
+  await page.getByRole("option", { name: "W2 2026", exact: true }).click();
   await expect(total(panel)).toHaveText("100");
   await expect(panel.getByRole("listitem")).toHaveCount(2);
   await expect(
     panel.getByRole("button", { name: "Ride", exact: true }),
   ).toHaveCount(0);
+  await panel.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(panel).toHaveCount(0);
   await chart.getByRole("button", { name: "Run", exact: true }).click();
+  await periodPicker(page).click();
+  await page.getByRole("option", { name: "W2 2026", exact: true }).click();
   await expect(panel.getByRole("listitem")).toHaveCount(0);
   await expect(
     panel.getByRole("button", { name: "Open in Activities", exact: true }),
@@ -323,22 +349,11 @@ test("metric contributions follow legend visibility and keep missing load distin
     .getByRole("button", { name: "Show all sports in the chart", exact: true })
     .click();
   await expect(total(panel)).toHaveText("200");
-  // Browser Back restores inspection as well as the explicit return links.
-  await expect
-    .poll(
-      () =>
-        JSON.parse(new URL(page.url()).searchParams.get("timeline") ?? "{}")
-          .hidden,
-    )
-    .toEqual([]);
-  const inspectedUrl = page.url();
-  await page
-    .getByRole("link", { name: "Activities", exact: true })
-    .first()
+  await panel
+    .getByRole("link", { name: "100% Alpine_ride", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/activities$/);
+  await expect(page).toHaveURL(/\/activities\/\d+\?/);
   await page.goBack();
-  await expect(page).toHaveURL(inspectedUrl);
   await expect(total(inspector(page))).toHaveText("200");
 });
 
