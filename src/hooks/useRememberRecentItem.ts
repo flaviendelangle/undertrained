@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { useAthleteId } from "~/hooks/useAthleteId";
 import { type RecentItem, rememberRecentItem } from "~/utils/recentItems";
 
 /**
@@ -7,9 +8,11 @@ import { type RecentItem, rememberRecentItem } from "~/utils/recentItems";
  * `null` until the page knows what it shows.
  */
 export function useRememberRecentItem(item: RecentItem | null) {
+  const athleteId = useAthleteId();
   // Compared by content: callers build a new object every render.
   const serialized = item && JSON.stringify(item);
   React.useEffect(() => {
-    if (serialized) rememberRecentItem(JSON.parse(serialized) as RecentItem);
-  }, [serialized]);
+    if (serialized)
+      rememberRecentItem(athleteId, JSON.parse(serialized) as RecentItem);
+  }, [athleteId, serialized]);
 }

@@ -121,7 +121,7 @@ export function useCommandGroups({
     },
   );
   // Read once per opening: what the athlete opens next is remembered for later.
-  const [recent] = React.useState(readRecentItems);
+  const [recent] = React.useState(() => readRecentItems(athleteId));
 
   const groups = React.useMemo((): CommandGroup[] => {
     const words = queryWords(query);

@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-const STORAGE_KEY = "undertrained:recent-items";
+// Per athlete, so an athlete signing in after another on the same browser
+// doesn't see their activities.
+const storageKey = (athleteId: number) =>
+  `undertrained:recent-items:${athleteId}`;
 const MAX_RECENT_ITEMS = 8;
 
 // Activities keep what their row shows, since the client has no list of every
@@ -21,12 +24,12 @@ const recentItemSchema = z.discriminatedUnion("kind", [
 /** Something the athlete opened, which the command palette offers again. */
 export type RecentItem = z.infer<typeof recentItemSchema>;
 
-/** The items opened on this device, most recent first. */
-export function readRecentItems(): RecentItem[] {
+/** The items `athleteId` opened on this device, most recent first. */
+export function readRecentItems(athleteId: number): RecentItem[] {
   if (typeof window === "undefined") return [];
   try {
     const stored: unknown = JSON.parse(
-      localStorage.getItem(STORAGE_KEY) ?? "[]",
+      localStorage.getItem(storageKey(athleteId)) ?? "[]",
     );
     if (!Array.isArray(stored)) return [];
     return stored.flatMap((entry) => {
@@ -40,13 +43,13 @@ export function readRecentItems(): RecentItem[] {
 }
 
 /** Moves `item` to the front of the recent items, dropping the oldest. */
-export function rememberRecentItem(item: RecentItem): void {
-  const rest = readRecentItems().filter(
+export function rememberRecentItem(athleteId: number, item: RecentItem): void {
+  const rest = readRecentItems(athleteId).filter(
     (other) => other.kind !== item.kind || other.id !== item.id,
   );
   try {
     localStorage.setItem(
-      STORAGE_KEY,
+      storageKey(athleteId),
       JSON.stringify([item, ...rest].slice(0, MAX_RECENT_ITEMS)),
     );
   } catch {

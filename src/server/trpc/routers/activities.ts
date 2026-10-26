@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
-import { queryWords } from "../../../utils/searchText";
+import { COMBINING_ACCENTS, queryWords } from "../../../utils/searchText";
 import {
   WORKOUT_CHOICES,
   workoutChoiceToValue,
@@ -18,10 +18,6 @@ import { activityIngestion } from "../../lib/sync";
 import { athleteProcedure, protectedProcedure, router } from "../index";
 
 const SEARCH_LIMIT = 20;
-// Accented letters and their base letters, so titles fold in SQL like
-// `foldText` folds the query.
-const ACCENTED = "ÀÁÂÃÄÅàáâãäåÇçÈÉÊËèéêëÌÍÎÏìíîïÑñÒÓÔÕÖòóôõöÙÚÛÜùúûüÝýÿ";
-const UNACCENTED = [...ACCENTED].map((c) => c.normalize("NFD")[0]).join("");
 
 /** Escapes LIKE wildcards so a typed "%" or "_" matches itself. */
 function escapeLike(text: string): string {
@@ -112,7 +108,8 @@ export const activitiesRouter = router({
     .query(({ ctx, input }) => {
       const words = queryWords(input.query);
       if (words.length === 0) return [];
-      const name = sql`lower(translate(${activities.name}, ${ACCENTED}, ${UNACCENTED}))`;
+      // Folded like `foldText` folds the query.
+      const name = sql`lower(regexp_replace(normalize(${activities.name}, NFD), ${COMBINING_ACCENTS}, '', 'g'))`;
       return ctx.db
         .select({
           stravaId: activities.stravaId,
