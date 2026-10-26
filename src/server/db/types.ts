@@ -18,7 +18,8 @@ export type Activity = InferSelectModel<typeof activities>;
  * Shape returned by `activities.list`. The heavy jsonb columns
  * (powerBests, heartrateBests, speedEfforts, laps) plus the long text fields
  * (description, privateNote) are omitted from the list projection for
- * performance — use `activities.get` when those are needed.
+ * performance — use `activities.get` when those are needed. `hasPowerBests`
+ * stands in for `powerBests`: whether the activity has a power curve.
  */
 export type ListActivity = Omit<
   Activity,
@@ -28,7 +29,7 @@ export type ListActivity = Omit<
   | "laps"
   | "description"
   | "privateNote"
->;
+> & { hasPowerBests: boolean };
 /** Fields used to draw routes and identify activities in map tooltips. */
 export type MapActivity = Pick<
   Activity,

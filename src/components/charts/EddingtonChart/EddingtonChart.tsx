@@ -15,57 +15,49 @@ import {
   formatCompact,
   useChartTokens,
 } from "~/lib/chartTokens";
-import {
-  getActivityTypesByCategory,
-  getSportConfig,
-} from "~/utils/sportConfig";
+import { getSportConfig } from "~/utils/sportConfig";
 
 import { ChartMessage } from "../ChartMessage";
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { ChartTooltip } from "../ChartTooltip";
-
-const TABS = {
-  riding: {
-    category: "cycling",
-    activityTypes: getActivityTypesByCategory("cycling"),
-  },
-  // Unlike riding, running leaves virtual (treadmill) runs out.
-  running: {
-    category: "running",
-    activityTypes: getActivityTypesByCategory("running", {
-      includeVirtual: false,
-    }),
-  },
-} as const;
-
-type TabKey = keyof typeof TABS;
+import { EDDINGTON_SPORTS, type EddingtonSport } from "./eddingtonSports";
 
 const RideIcon = getSportConfig("Ride").icon;
 const RunIcon = getSportConfig("Run").icon;
 
 const DISTANCE_DIVISOR = 1000;
 
-export default function EddingtonChart() {
+interface EddingtonChartProps {
+  /** The sports the selection has activities in; the toggle needs two. */
+  sports: readonly EddingtonSport[];
+}
+
+export default function EddingtonChart({ sports }: EddingtonChartProps) {
   const t = useT();
-  const [activeTab, setActiveTab] = React.useState<TabKey>("riding");
+  const [preferredTab, setPreferredTab] =
+    React.useState<EddingtonSport>("riding");
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
-  const tab = TABS[activeTab];
+  // Keep the picked sport for when a later selection has it again.
+  const activeTab = sports.includes(preferredTab)
+    ? preferredTab
+    : (sports[0] ?? preferredTab);
+  const tab = EDDINGTON_SPORTS[activeTab];
 
   const tabOptions: {
-    value: TabKey;
+    value: EddingtonSport;
     label: React.ReactNode;
     tooltip: string;
   }[] = [
     {
       value: "riding",
       label: <RideIcon className="size-3.5" />,
-      tooltip: sportCategoryLabel(TABS.riding.category, t),
+      tooltip: sportCategoryLabel(EDDINGTON_SPORTS.riding.category, t),
     },
     {
       value: "running",
       label: <RunIcon className="size-3.5" />,
-      tooltip: sportCategoryLabel(TABS.running.category, t),
+      tooltip: sportCategoryLabel(EDDINGTON_SPORTS.running.category, t),
     },
   ];
 
@@ -114,13 +106,15 @@ export default function EddingtonChart() {
           E = {eddington.eddingtonNumber}
         </span>
       )}
-      <div className="ml-auto">
-        <SegmentedToggle
-          value={activeTab}
-          onChange={setActiveTab}
-          options={tabOptions}
-        />
-      </div>
+      {sports.length > 1 && (
+        <div className="ml-auto">
+          <SegmentedToggle
+            value={activeTab}
+            onChange={setPreferredTab}
+            options={tabOptions}
+          />
+        </div>
+      )}
     </>
   );
 
