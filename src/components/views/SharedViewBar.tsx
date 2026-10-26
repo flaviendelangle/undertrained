@@ -132,7 +132,7 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
   const state = stateLabel && (
     <span
       role="status"
-      className="text-muted-foreground flex items-center gap-1.5 text-xs"
+      className="text-muted-foreground ml-auto flex items-center gap-1.5 text-xs"
     >
       <span className="size-1.5 rounded-full bg-amber-500" />
       {stateLabel}
@@ -237,7 +237,6 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
             className="flex flex-wrap items-center gap-2 px-4 py-3"
           >
             {picker}
-            {!scope.error && state}
             <ToolbarPrimitive.Group
               className="flex items-center gap-2"
               aria-label={t("views.filterTitle")}
@@ -256,6 +255,7 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
             </ToolbarPrimitive.Group>
             <ToolbarPrimitive.Separator className="bg-border mx-1 h-5 w-px self-center" />
             {actions}
+            {!scope.error && state}
           </ToolbarPrimitive.Root>
         )}
         {error}
