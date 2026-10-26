@@ -11,6 +11,7 @@ import {
   MoonIcon,
   RefreshCwIcon,
   RouteIcon,
+  SearchIcon,
   SettingsIcon,
   ShieldCheckIcon,
   SunIcon,
@@ -34,6 +35,10 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { PopoverTrigger } from "~/components/ui/popover";
 import { useActivityView } from "~/hooks/useActivityView";
+import {
+  COMMAND_PALETTE_SHORTCUT,
+  useCommandPalette,
+} from "~/hooks/useCommandPalette";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import {
   SYNC_TRIGGER_ID,
@@ -94,9 +99,11 @@ interface NavBarButtonProps {
   icon: React.ElementType;
   label: string;
   onClick: () => void;
+  /** Shown at the end of the expanded button, e.g. a keyboard shortcut. */
+  hint?: string;
 }
 
-function NavBarButton({ icon: Icon, label, onClick }: NavBarButtonProps) {
+function NavBarButton({ icon: Icon, label, onClick, hint }: NavBarButtonProps) {
   const { isMenuExpanded } = React.useContext(NavBarContext);
 
   return (
@@ -107,6 +114,9 @@ function NavBarButton({ icon: Icon, label, onClick }: NavBarButtonProps) {
     >
       <Icon className="size-4.5 shrink-0" />
       {isMenuExpanded && <span>{label}</span>}
+      {isMenuExpanded && hint && (
+        <span className="ml-auto text-xs font-normal">{hint}</span>
+      )}
     </button>
   );
 }
@@ -154,6 +164,7 @@ export function NavBar() {
   const t = useT();
   const scope = useActivityView();
   const syncHandle = useSyncPanelHandle();
+  const openCommandPalette = useCommandPalette();
   const [isMenuExpanded, setIsMenuExpanded] = React.useState(false);
 
   return (
@@ -189,6 +200,18 @@ export function NavBar() {
             </button>
           </TooltipIfMenuCollapsed>
 
+          <TooltipIfMenuCollapsed
+            label={t("commandPalette.shortcut", {
+              shortcut: COMMAND_PALETTE_SHORTCUT,
+            })}
+          >
+            <NavBarButton
+              icon={SearchIcon}
+              label={t("commandPalette.label")}
+              hint={COMMAND_PALETTE_SHORTCUT}
+              onClick={openCommandPalette}
+            />
+          </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label={t("nav.journal")}>
             <NavBarLink
               icon={CalendarDaysIcon}
@@ -327,9 +350,31 @@ function MobileTabLink({
   );
 }
 
+function MobileTabButton({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: React.ElementType;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-muted-foreground active:text-foreground flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors"
+    >
+      <Icon className="size-5" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
 export function MobileBottomBar() {
   const scope = useActivityView();
   const openSync = useSyncPanel();
+  const openCommandPalette = useCommandPalette();
   const pathname = usePathname() ?? "";
   const moreActive = [
     "/personal-bests",
@@ -360,6 +405,11 @@ export function MobileBottomBar() {
         icon={HeartPulseIcon}
         label={t("nav.fitness")}
         href="/fitness"
+      />
+      <MobileTabButton
+        icon={SearchIcon}
+        label={t("commandPalette.label")}
+        onClick={openCommandPalette}
       />
       <DropdownMenu>
         <DropdownMenuTrigger

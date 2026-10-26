@@ -72,6 +72,50 @@ function AutocompleteList({
   );
 }
 
+function AutocompleteEmpty({
+  className,
+  ...props
+}: AutocompletePrimitive.Empty.Props) {
+  return (
+    <AutocompletePrimitive.Empty
+      data-slot="autocomplete-empty"
+      className={cn(
+        "text-muted-foreground px-2 py-6 text-center text-sm empty:m-0 empty:p-0",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function AutocompleteGroup({
+  className,
+  ...props
+}: AutocompletePrimitive.Group.Props) {
+  return (
+    <AutocompletePrimitive.Group
+      data-slot="autocomplete-group"
+      className={cn("scroll-my-1", className)}
+      {...props}
+    />
+  );
+}
+
+function AutocompleteGroupLabel({
+  className,
+  ...props
+}: AutocompletePrimitive.GroupLabel.Props) {
+  return (
+    <AutocompletePrimitive.GroupLabel
+      data-slot="autocomplete-group-label"
+      className={cn("text-muted-foreground px-2 py-1.5 text-xs", className)}
+      {...props}
+    />
+  );
+}
+
+const AutocompleteCollection = AutocompletePrimitive.Collection;
+
 function AutocompleteItem({
   className,
   ...props
@@ -90,7 +134,11 @@ function AutocompleteItem({
 
 export {
   Autocomplete,
+  AutocompleteCollection,
   AutocompleteContent,
+  AutocompleteEmpty,
+  AutocompleteGroup,
+  AutocompleteGroupLabel,
   AutocompleteInput,
   AutocompleteItem,
   AutocompleteList,

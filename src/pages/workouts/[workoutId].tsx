@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { WorkoutBuilder } from "~/components/workouts/WorkoutBuilder";
 import { useStructuredWorkout } from "~/hooks/structuredWorkouts";
+import { useRememberRecentItem } from "~/hooks/useRememberRecentItem";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 
@@ -21,6 +22,9 @@ const EditWorkoutPage: NextPageWithLayout = () => {
 
   const { data: workout, isError } = useStructuredWorkout(
     Number.isFinite(workoutId) ? workoutId : null,
+  );
+  useRememberRecentItem(
+    workout && !isError ? { kind: "workout", id: workout.id } : null,
   );
 
   // The builder seeds its undo history from `workout`, so it must not mount

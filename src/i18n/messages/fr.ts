@@ -1384,6 +1384,37 @@ const fr: Messages = {
     Kayaking: "Kayak",
     Workout: "Entraînement",
   },
+  commandPalette: {
+    label: "Rechercher",
+    shortcut: "Rechercher ({shortcut})",
+    placeholder: "Rechercher activités, vues, séances, pages…",
+    ridePlaceholder: "Choisir la séance à lancer…",
+    back: "Revenir à tous les résultats",
+    noResults: "Aucun résultat",
+    searching: "Recherche des activités…",
+    searchError: "Impossible de rechercher les activités.",
+    keys: {
+      navigate: "Naviguer",
+      open: "Ouvrir",
+      close: "Fermer",
+    },
+    group: {
+      recent: "Récents",
+      bests: "Records personnels",
+      pages: "Pages",
+      actions: "Actions",
+      views: "Vues enregistrées",
+      workouts: "Séances",
+      routes: "Parcours",
+      activities: "Activités",
+      ride: "Lancer une séance",
+    },
+    activityMap: "Carte des activités",
+    activityCharts: "Graphiques des activités",
+    startRide: "Démarrer un entraînement en direct",
+    bestPower: "Puissance sur {duration}",
+    bestTime: "Meilleur temps sur {distance}",
+  },
 };
 
 export default fr;

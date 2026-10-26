@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
 
+import { queryWords } from "../../../utils/searchText";
 import {
   WORKOUT_CHOICES,
   workoutChoiceToValue,
@@ -15,6 +16,17 @@ import {
 import { getAccessToken, updateActivityOnStrava } from "../../lib/strava";
 import { activityIngestion } from "../../lib/sync";
 import { athleteProcedure, protectedProcedure, router } from "../index";
+
+const SEARCH_LIMIT = 20;
+// Accented letters and their base letters, so titles fold in SQL like
+// `foldText` folds the query.
+const ACCENTED = "ÀÁÂÃÄÅàáâãäåÇçÈÉÊËèéêëÌÍÎÏìíîïÑñÒÓÔÕÖòóôõöÙÚÛÜùúûüÝýÿ";
+const UNACCENTED = [...ACCENTED].map((c) => c.normalize("NFD")[0]).join("");
+
+/** Escapes LIKE wildcards so a typed "%" or "_" matches itself. */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
 
 export const activitiesRouter = router({
   list: athleteProcedure
@@ -89,6 +101,38 @@ export const activitiesRouter = router({
         .from(activities)
         .where(and(selected, isNotNull(activities.mapPolyline)))
         .orderBy(desc(activities.startDate));
+    }),
+
+  /**
+   * The newest activities whose title contains every word of `query`, ignoring
+   * case and accents. Backs the command palette.
+   */
+  search: athleteProcedure
+    .input(z.object({ query: z.string().max(100) }))
+    .query(({ ctx, input }) => {
+      const words = queryWords(input.query);
+      if (words.length === 0) return [];
+      const name = sql`lower(translate(${activities.name}, ${ACCENTED}, ${UNACCENTED}))`;
+      return ctx.db
+        .select({
+          stravaId: activities.stravaId,
+          name: activities.name,
+          type: activities.type,
+          startDateLocal: activities.startDateLocal,
+          distance: activities.distance,
+          movingTime: activities.movingTime,
+        })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.athlete, input.athleteId),
+            ...words.map(
+              (word) => sql`${name} LIKE ${`%${escapeLike(word)}%`}`,
+            ),
+          ),
+        )
+        .orderBy(desc(activities.startDate))
+        .limit(SEARCH_LIMIT);
     }),
 
   /**

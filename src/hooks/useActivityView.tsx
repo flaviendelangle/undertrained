@@ -28,6 +28,7 @@ import {
 import { trpc } from "~/utils/trpc";
 
 import { useAthleteId } from "./useAthleteId";
+import { useRememberRecentItem } from "./useRememberRecentItem";
 
 export type SavedActivityView =
   inferRouterOutputs<AppRouter>["views"]["list"][number];
@@ -61,6 +62,11 @@ function useActivityViewState() {
     [router.query, analysisRoute],
   );
   const view = viewsQuery.data?.find((v) => v.id === parsed?.viewId);
+  useRememberRecentItem(
+    view && ANALYSIS_PATHS.includes(router.pathname)
+      ? { kind: "view", id: view.id }
+      : null,
+  );
   const error: AppMessageKey | null = !parsed
     ? "views.errors.invalid"
     : viewsQuery.isError || foldersQuery.isError

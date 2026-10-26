@@ -81,3 +81,20 @@ describe("activity maps", () => {
     expect(statements).toHaveLength(0);
   });
 });
+
+describe("activity search", () => {
+  it("requires every folded word, with LIKE wildcards matched literally", async () => {
+    await caller.search({ athleteId: 7, query: " Vélo  50%_off " });
+    expect(statements).toHaveLength(1);
+    expect(statements[0].params).toEqual(
+      expect.arrayContaining([7, "%velo%", "%50\\%\\_off%"]),
+    );
+  });
+
+  it("returns nothing for a blank query without querying", async () => {
+    await expect(
+      caller.search({ athleteId: 7, query: "   " }),
+    ).resolves.toEqual([]);
+    expect(statements).toHaveLength(0);
+  });
+});
