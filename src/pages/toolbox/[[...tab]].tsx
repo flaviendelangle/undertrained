@@ -6,6 +6,7 @@ import {
   GaugeIcon,
   TimerIcon,
   TrendingUpIcon,
+  WrenchIcon,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -14,20 +15,12 @@ import { useRouter } from "next/router";
 import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
 
 import { LoggedInLayout } from "~/components/layouts/LoggedInLayout";
+import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { SharedLayout } from "~/components/layouts/SharedLayout";
-import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { GearCalculator } from "~/components/toolbox/GearCalculator";
 import { PaceCalculator } from "~/components/toolbox/PaceCalculator";
 import { RacePredictor } from "~/components/toolbox/RacePredictor";
 import { ZoneCalculator } from "~/components/toolbox/ZoneCalculator";
-import { Button } from "~/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import { type TFunction } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
@@ -70,8 +63,9 @@ const ToolboxPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar
-        label={t("nav.toolbox")}
+      <PageToolbar
+        title={t("nav.toolbox")}
+        icon={WrenchIcon}
         actions={
           status !== "authenticated" ? (
             <ToolbarPrimitive.Link
@@ -83,69 +77,16 @@ const ToolboxPage: NextPageWithLayout = () => {
             </ToolbarPrimitive.Link>
           ) : undefined
         }
-      >
-        {/* Mobile: select dropdown */}
-        <div className="md:hidden">
-          <Select
-            value={activeTool}
-            onValueChange={(val) => router.push(`/toolbox/${val}`)}
-          >
-            <SelectTrigger size="sm" render={<ToolbarPrimitive.Button />}>
-              <SelectValue>
-                {(() => {
-                  const tool = TOOLS.find((t) => t.id === activeTool)!;
-                  const Icon = tool.icon;
-                  return (
-                    <>
-                      <Icon className="size-4" />
-                      {toolLabels[tool.id]}
-                    </>
-                  );
-                })()}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {TOOLS.map((tool) => {
-                const Icon = tool.icon;
-                return (
-                  <SelectItem key={tool.id} value={tool.id}>
-                    <Icon className="size-4" />
-                    {toolLabels[tool.id]}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Desktop: button tabs */}
-        <div className="hidden gap-1 md:flex">
-          {TOOLS.map((tool) => {
-            const Icon = tool.icon;
-            return (
-              <Button
-                key={tool.id}
-                variant="ghost"
-                size="sm"
-                nativeButton={false}
-                className={
-                  activeTool === tool.id
-                    ? "bg-primary/10 text-primary"
-                    : undefined
-                }
-                render={
-                  <ToolbarPrimitive.Link
-                    render={<Link href={`/toolbox/${tool.id}`} />}
-                  />
-                }
-              >
-                <Icon className="size-4" />
-                {toolLabels[tool.id]}
-              </Button>
-            );
-          })}
-        </div>
-      </Toolbar>
+        tabs={{
+          label: t("nav.toolbox"),
+          items: TOOLS.map((tool) => ({
+            label: toolLabels[tool.id],
+            icon: tool.icon,
+            href: `/toolbox/${tool.id}`,
+            active: activeTool === tool.id,
+          })),
+        }}
+      />
       {/* Mobile (< md): the tool goes full-bleed, flush under the toolbar.
           Desktop (md+): padded, matching the Statistics page. */}
       <div className="flex flex-1 flex-col overflow-auto pb-4 md:p-4">

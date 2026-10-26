@@ -4,13 +4,12 @@ import { format } from "date-fns";
 import { flushSync } from "react-dom";
 
 import {
-  type DragLocationHistory,
-  type DragModifier,
-  type DragModifierContext,
-  type DragPosition,
-  type DragPreviewSettings,
+  type DraggableLocationHistory as DragLocationHistory,
+  type DraggableRootModifier as DragModifier,
+  type DraggableRootModifierContext as DragModifierContext,
+  type DraggablePosition as DragPosition,
+  type DraggablePreviewSettings as DragPreviewSettings,
   Draggable,
-  type DraggableViewportDragScrollEvent,
   type DraggableViewportDragScrollEventDetails,
 } from "@base-ui/react/draggable";
 import { clamp } from "@base-ui/utils/clamp";
@@ -95,7 +94,7 @@ function selectPreviewTime(state: RescheduleDragState): string | undefined {
  * the training's top edge select the slot, regardless of where it was grabbed.
  */
 function resolveSlot(location: DragLocationHistory): Slot | null {
-  const day = location.current.dropTargets.find((target) =>
+  const day = location.current.targets.find((target) =>
     dayKind.matches(target),
   );
   if (!day || !dayKind.matches(day)) {
@@ -227,11 +226,12 @@ export function useRescheduleDrag(weeks: JournalWeek[]): {
       slot?.minutes !== state.slot?.minutes
     ) {
       store.setState({ ...state, slot });
+      Draggable.updatePreview();
     }
   };
 
   // One monitor sees every planned-training drag, wherever it started.
-  Draggable.useDragMonitor({
+  Draggable.useMonitor({
     accept: trainingKind,
     onMoveStart: ({ source, location }) =>
       store.setState({
@@ -243,9 +243,9 @@ export function useRescheduleDrag(weeks: JournalWeek[]): {
     onTargetChange: ({ location }) => hover(location),
     // Escape, pointer cancellation and off-target release end the drag here
     // too, with no drop target.
-    onMoveEnd: ({ source, dropTarget, location }) => {
+    onMoveEnd: ({ source, target, location }) => {
       const training = source.payload;
-      const slot = dropTarget != null ? resolveSlot(location) : null;
+      const slot = target != null ? resolveSlot(location) : null;
       const plannedDate =
         slot && `${slot.dayKey}T${minutesToTimeLabel(slot.minutes)}:00`;
       if (plannedDate == null || plannedDate === training.plannedDate) {
@@ -373,10 +373,9 @@ interface RescheduleSurface {
 // is a full week, so the auto-scroller advances several weeks per second and
 // makes precise cross-week drops unusable.
 function scrollVerticallyOnly(
-  { direction }: DraggableViewportDragScrollEvent,
   details: DraggableViewportDragScrollEventDetails,
 ) {
-  if (direction === "horizontal") {
+  if (details.direction === "horizontal") {
     details.cancel();
   }
 }

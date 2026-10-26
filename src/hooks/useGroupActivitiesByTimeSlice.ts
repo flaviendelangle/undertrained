@@ -1,10 +1,10 @@
 import * as React from "react";
 
-import { isAfter, isValid } from "date-fns";
+import { isAfter, isValid, parseISO } from "date-fns";
 
 import type { ListActivity } from "@server/db/types";
 
-import { startOf } from "~/utils/dateUtils";
+import { activityLocalDay, startOf } from "~/utils/dateUtils";
 
 import { SlicePrecision } from "./useTimeSlices";
 
@@ -45,8 +45,8 @@ export const useGroupActivitiesByTimeSlice = ({
     }
 
     for (const activity of activities ?? []) {
-      const activityDate = new Date(activity.startDate);
-      // An unparseable `startDate` yields an Invalid Date whose `.toISOString()`
+      const activityDate = parseISO(activityLocalDay(activity));
+      // An unparseable local date yields an Invalid Date whose `.toISOString()`
       // throws "Invalid time value", crashing the Statistics page. Drop the row.
       if (!isValid(activityDate)) {
         continue;

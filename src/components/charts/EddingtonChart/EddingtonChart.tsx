@@ -69,9 +69,7 @@ export default function EddingtonChart() {
     },
   ];
 
-  // Share the full unfiltered activities query with the other statistics charts
-  // and filter to this tab's sports client-side (useEddingtonData is a pure
-  // client transform), instead of fetching a separate per-tab list.
+  // Eddington is defined per sport; each tab intersects the shared selection.
   const { activities } = useActivitiesFilteredByType(tab.activityTypes);
 
   const eddington = useEddingtonData(activities, DISTANCE_DIVISOR);

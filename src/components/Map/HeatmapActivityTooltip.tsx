@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import type { MapActivity } from "@server/db/types";
 
+import { useActivityView } from "~/hooks/useActivityView";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { formatElapsed, formatNumber } from "~/utils/format";
@@ -19,6 +20,7 @@ export function HeatmapActivityTooltip({
   onClose,
 }: HeatmapActivityTooltipProps) {
   const t = useT();
+  const scope = useActivityView();
   const sportConfig = getSportConfig(activity.type);
   const Icon = sportConfig.icon;
   const date = new Date(activity.startDateLocal).toLocaleDateString("en-US", {
@@ -60,7 +62,7 @@ export function HeatmapActivityTooltip({
           )}
         </div>
         <Link
-          href={`/activities/${activity.stravaId}`}
+          href={scope.href(`/activities/${activity.stravaId}`)}
           className="text-primary mt-2 block text-xs underline"
         >
           {t("map.viewActivity")}

@@ -16,7 +16,7 @@ test("the login page offers Strava sign-in", async ({ page }) => {
   expect(response?.status()).toBe(200);
 
   await expect(
-    page.getByRole("heading", { name: "Undertrained", level: 1 }),
+    page.getByRole("heading", { name: "Login", level: 1 }),
   ).toBeVisible();
   await expect(
     page.getByRole("img", { name: "Login with Strava" }),
@@ -30,7 +30,7 @@ test("the toolbox works signed out", async ({ page }) => {
   expect(response?.status()).toBe(200);
 
   await expect(
-    page.getByRole("button", { name: "Pace Calculator" }),
+    page.getByRole("link", { name: "Pace Calculator", exact: true }),
   ).toBeVisible();
 
   // The calculator computes on render, so a well-formed finish time means the
@@ -45,4 +45,16 @@ test("the toolbox works signed out", async ({ page }) => {
   // component returns null until `router.isReady`. Every assertion here already
   // implies the client tree came up.)
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+  await page
+    .getByRole("link", { name: "Pace Calculator", exact: true })
+    .focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.getByRole("link", { name: "Race Predictor", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/toolbox\/race-predictor$/);
+  await expect(
+    page.getByRole("link", { name: "Race Predictor", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
 });

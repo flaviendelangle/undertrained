@@ -116,13 +116,13 @@ export function RouteBuilder({ route }: { route?: Route }) {
   const createMutation = trpc.routes.create.useMutation({
     onSuccess: () => {
       void utils.routes.list.invalidate();
-      void router.push("/map/routes");
+      void router.push("/routes");
     },
   });
   const updateMutation = trpc.routes.update.useMutation({
     onSuccess: () => {
       void utils.routes.invalidate();
-      void router.push("/map/routes");
+      void router.push("/routes");
     },
   });
 

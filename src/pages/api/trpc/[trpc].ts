@@ -7,6 +7,8 @@ import { createNextApiHandler } from "@trpc/server/adapters/next";
 
 const handler = createNextApiHandler({
   router: appRouter,
+  // Nested rules travel in the request body rather than an oversized query URL.
+  allowMethodOverride: true,
   createContext,
   onError({ error, path, type, ctx }) {
     // Forward genuine server faults to PostHog error tracking. Expected,

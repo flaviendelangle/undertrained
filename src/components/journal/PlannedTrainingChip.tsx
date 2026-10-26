@@ -22,8 +22,10 @@ import {
  */
 export function PlannedTrainingChip({
   training,
+  variant = "chip",
 }: {
   training: PlannedTraining;
+  variant?: "chip" | "card";
 }) {
   const t = useT();
   const planner = useJournalPlanner();
@@ -41,10 +43,12 @@ export function PlannedTrainingChip({
       style={plannedBlockStyle(config.color)}
       className={cn(
         PLANNED_BLOCK_CLASS,
+        variant === "card" && "gap-1 rounded-md p-3",
         "cursor-pointer transition-[filter] hover:brightness-95 dark:hover:brightness-110",
       )}
     >
       <PlannedBlockBody
+        variant={variant}
         sportType={training.sportType}
         title={training.title}
         time={plannedTime(training.plannedDate)}

@@ -3,10 +3,10 @@ import * as React from "react";
 import { SettingsIcon } from "lucide-react";
 import { signOut } from "next-auth/react";
 
+import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { LanguageSelect } from "~/components/settings/LanguageSelect";
 import { ResetHintsButton } from "~/components/settings/ResetHintsButton";
-import { Toolbar } from "~/components/settings/SettingsToolbar";
 import {
   DangerZone,
   EquipmentFields,
@@ -41,8 +41,9 @@ const SettingsPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar
-        label={t("settings.title")}
+      <PageToolbar
+        title={t("settings.title")}
+        icon={SettingsIcon}
         actions={
           <div role="status" className="text-muted-foreground text-xs">
             {saveStatus === "pending"
@@ -52,10 +53,7 @@ const SettingsPage: NextPageWithLayout = () => {
                 : null}
           </div>
         }
-      >
-        <SettingsIcon className="size-4" />
-        <span className="font-semibold">{t("settings.title")}</span>
-      </Toolbar>
+      />
 
       {saveStatus === "error" && (
         <div

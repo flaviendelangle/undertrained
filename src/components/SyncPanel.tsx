@@ -12,15 +12,11 @@ import {
   SearchIcon,
 } from "lucide-react";
 
-import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
+import type { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import type { SyncJob } from "@server/db/types";
 
 import { Button } from "~/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent } from "~/components/ui/popover";
 import {
   ResponsiveDialog,
   ResponsiveDialogClose,
@@ -36,9 +32,9 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useIsMobile } from "~/hooks/useIsMobile";
 import { useI18n } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
-import { cn } from "~/lib/utils";
 import { trpc } from "~/utils/trpc";
 
 type SyncMode = NonNullable<SyncJob["mode"]>;
@@ -349,11 +345,19 @@ function IdleContent(props: {
 
 // ── Main SyncPanel ───────────────────────────────────────────────────
 
-export function SyncPanel() {
+export function SyncPanel({
+  open,
+  onOpenChange: setOpen,
+  handle,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  handle: PopoverPrimitive.Handle<unknown>;
+}) {
+  const mobile = useIsMobile();
   const t = useT();
   const { locale } = useI18n();
   const athleteId = useAthleteId();
-  const [open, setOpen] = React.useState(false);
   const { data: syncStatus } = trpc.sync.getStatus.useQuery(
     { athleteId },
     {
@@ -392,7 +396,9 @@ export function SyncPanel() {
       void utils.activities.get.invalidate();
       void utils.analytics.getPowerCurve.invalidate();
       void utils.analytics.getPowerCurveYears.invalidate();
-      void utils.timePeriods.getStats.invalidate();
+      void utils.analytics.getPowerDistribution.invalidate();
+      void utils.views.summary.invalidate();
+      void utils.views.counts.invalidate();
     }
   }, [syncJob, isInProgress, utils]);
 
@@ -415,93 +421,69 @@ export function SyncPanel() {
     start(mode);
   };
 
+  React.useEffect(() => {
+    if (open) void utils.sync.getStatus.invalidate();
+  }, [open, utils]);
+  const content = (
+    <>
+      {" "}
+      {isInProgress ? (
+        <SyncProgress syncJob={syncJob} />
+      ) : neverSynced ? (
+        <FirstSyncContent
+          onSync={() => handleAction("load_missing")}
+          loading={startSync.isPending}
+        />
+      ) : (
+        <IdleContent
+          syncJob={syncJob ?? null}
+          onAction={handleAction}
+          recomputing={startSync.isPending}
+        />
+      )}
+      {syncStatus && (
+        <p className="text-muted-foreground border-border mt-3 border-t pt-3 text-xs">
+          {t("sync.status.lastWebhookSynced")}{" "}
+          {syncStatus.lastWebhookSyncAt == null ? (
+            t("sync.status.noWebhookSync")
+          ) : (
+            <time
+              dateTime={new Date(syncStatus.lastWebhookSyncAt).toISOString()}
+            >
+              {new Date(syncStatus.lastWebhookSyncAt).toLocaleString(locale, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </time>
+          )}
+        </p>
+      )}
+    </>
+  );
   return (
     <>
-      <Popover
-        open={open}
-        onOpenChange={(nextOpen) => {
-          setOpen(nextOpen);
-          if (nextOpen) void utils.sync.getStatus.invalidate();
-        }}
-      >
-        <PopoverTrigger
-          render={
-            <ToolbarPrimitive.Button
-              render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={cn(
-                    "relative gap-1.5",
-                    neverSynced ? "text-primary/70" : "text-muted-foreground",
-                  )}
-                >
-                  {neverSynced && (
-                    <span className="absolute -top-1 -right-1 flex size-2.5">
-                      <span className="bg-primary absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" />
-                      <span className="bg-primary relative inline-flex size-2.5 rounded-full" />
-                    </span>
-                  )}
-                  {isInProgress ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCwIcon className="size-3.5" />
-                  )}
-                  <span>{t("sync.label")}</span>
-                  {isInProgress && (
-                    <span className="bg-primary/20 text-primary size-1.5 rounded-full" />
-                  )}
-                  {syncJob?.status === "failed" && (
-                    <span className="size-1.5 rounded-full bg-red-500" />
-                  )}
-                </Button>
-              }
-            />
-          }
-        />
-        <PopoverContent
-          align="end"
-          className="w-max max-w-(--available-width) p-3"
-        >
-          {isInProgress ? (
-            <SyncProgress syncJob={syncJob} />
-          ) : neverSynced ? (
-            <FirstSyncContent
-              onSync={() => handleAction("load_missing")}
-              loading={startSync.isPending}
-            />
-          ) : (
-            <IdleContent
-              syncJob={syncJob ?? null}
-              onAction={handleAction}
-              recomputing={startSync.isPending}
-            />
-          )}
-          {syncStatus && (
-            <p className="text-muted-foreground border-border mt-3 border-t pt-3 text-xs">
-              {t("sync.status.lastWebhookSynced")}{" "}
-              {syncStatus.lastWebhookSyncAt == null ? (
-                t("sync.status.noWebhookSync")
-              ) : (
-                <time
-                  dateTime={new Date(
-                    syncStatus.lastWebhookSyncAt,
-                  ).toISOString()}
-                >
-                  {new Date(syncStatus.lastWebhookSyncAt).toLocaleString(
-                    locale,
-                    {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    },
-                  )}
-                </time>
-              )}
-            </p>
-          )}
-        </PopoverContent>
-      </Popover>
-
+      {mobile ? (
+        <ResponsiveDialog open={open} onOpenChange={setOpen}>
+          <ResponsiveDialogContent className="sm:max-w-lg">
+            <ResponsiveDialogHeader>
+              <ResponsiveDialogTitle>{t("sync.label")}</ResponsiveDialogTitle>
+            </ResponsiveDialogHeader>
+            {content}
+          </ResponsiveDialogContent>
+        </ResponsiveDialog>
+      ) : (
+        <Popover handle={handle} open={open} onOpenChange={setOpen}>
+          <PopoverContent
+            aria-label={t("sync.label")}
+            side="right"
+            align="end"
+            sideOffset={12}
+            className="w-96 max-w-(--available-width)"
+          >
+            {content}
+          </PopoverContent>
+        </Popover>
+      )}
       <ReloadAllConfirmDialog
         open={confirmReloadOpen}
         onOpenChange={setConfirmReloadOpen}

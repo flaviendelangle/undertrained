@@ -12,6 +12,7 @@ export interface UseFitnessDataResult {
   /** The most recent point, i.e. today's Fitness / Fatigue / Form / Ramp. */
   current: FitnessPoint | null;
   isLoading: boolean;
+  isError: boolean;
 }
 
 /**
@@ -22,7 +23,7 @@ export interface UseFitnessDataResult {
 export function useFitnessData(): UseFitnessDataResult {
   // No sport filter: the fitness curve aggregates load across all sports on the
   // shared TSS scale.
-  const activitiesQuery = useActivitiesQuery("statistics");
+  const activitiesQuery = useActivitiesQuery("fitness");
   const { timeline } = useRiderSettingsTimeline();
 
   const preferences = React.useMemo(
@@ -42,7 +43,8 @@ export function useFitnessData(): UseFitnessDataResult {
       series,
       current: series.length > 0 ? series[series.length - 1] : null,
       isLoading: activitiesQuery.isLoading,
+      isError: activitiesQuery.isError,
     }),
-    [series, activitiesQuery.isLoading],
+    [series, activitiesQuery.isLoading, activitiesQuery.isError],
   );
 }

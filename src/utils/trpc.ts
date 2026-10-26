@@ -43,10 +43,12 @@ export const trpc = createTRPCNext<AppRouter>({
               op.path === "calendarSubscriptions.events"),
           true: httpLink({
             url: `${getBaseUrl()}/api/trpc`,
+            methodOverride: "POST",
             transformer: superjson,
           }),
           false: httpBatchLink({
             url: `${getBaseUrl()}/api/trpc`,
+            methodOverride: "POST",
             transformer: superjson,
           }),
         }),

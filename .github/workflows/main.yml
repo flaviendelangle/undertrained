@@ -93,6 +93,7 @@ jobs:
       STRAVA_CLIENT_ID: ci-not-a-real-client
       STRAVA_CLIENT_SECRET: ci-not-a-real-secret
       STRAVA_WEBHOOK_VERIFY_TOKEN: ci-not-a-real-token
+      ROUTES_ENABLED: "true"
     steps:
       - uses: actions/checkout@v7
 

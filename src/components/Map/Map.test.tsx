@@ -28,6 +28,9 @@ vi.hoisted(() => {
     value: () => ({}),
   });
 });
+vi.mock("~/hooks/useActivityView", () => ({
+  useActivityView: () => ({ href: (path: string) => path }),
+}));
 
 beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(800);

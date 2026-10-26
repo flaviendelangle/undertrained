@@ -1,10 +1,8 @@
 import * as React from "react";
 
 import { format } from "date-fns";
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import Link from "next/link";
 
-import { Toolbar } from "@base-ui/react/toolbar";
 import type { ListActivity } from "@server/db/types";
 import {
   type Row,
@@ -26,7 +24,6 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-import { SyncPanel } from "~/components/SyncPanel";
 import { QueryState } from "~/components/primitives/QueryState";
 import { Button } from "~/components/ui/button";
 import {
@@ -38,18 +35,20 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
-import { useActivityFilter } from "~/hooks/useActivityFilter";
+import { useActivityView } from "~/hooks/useActivityView";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
-import { type AppMessageKey, type TFunction } from "~/i18n/I18nProvider";
+import { useSyncPanel } from "~/hooks/useSyncPanel";
+import { type TFunction } from "~/i18n/I18nProvider";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import {
-  formatActivityType,
-  formatDuration,
-  formatMeters,
-} from "~/utils/format";
+  ACTIVITY_COLUMNS,
+  type ActivityDisplay,
+  conditionCount,
+} from "~/utils/activityFilters";
+import { formatDuration, formatMeters } from "~/utils/format";
 import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
 import { getSportConfig } from "~/utils/sportConfig";
 
@@ -79,13 +78,10 @@ function ActivityRow(props: {
   row: Row<typeof features, ActivityWithoutMap>;
   index: number;
   style?: React.CSSProperties;
-  timePeriodId?: number;
 }) {
-  const { row, index, style, timePeriodId } = props;
-  const activityHref =
-    timePeriodId != null
-      ? `/activities/${row.original.stravaId}?from=period&periodId=${timePeriodId}`
-      : `/activities/${row.original.stravaId}`;
+  const { row, index, style } = props;
+  const scope = useActivityView();
+  const activityHref = scope.href(`/activities/${row.original.stravaId}`);
 
   return (
     <TableRow
@@ -150,7 +146,7 @@ const createColumns = (t: TFunction) =>
     columnHelper.accessor("startDateLocal", {
       cell: (info) => (
         <span className="truncate">
-          {format(new Date(info.getValue()), "P p", {
+          {format(new Date(info.getValue().slice(0, 19)), "P p", {
             locale: getActiveDateLocale(),
           })}
         </span>
@@ -211,51 +207,16 @@ const ROW_HEIGHT = 48;
 const VIRTUALIZER_OVERSCAN = 20;
 const SKELETON_ROW_COUNT = 25;
 
-const createActivitySearchFilter =
-  (t: TFunction) =>
-  (
-    row: Row<typeof features, ActivityWithoutMap>,
-    _columnId: string,
-    filterValue: string,
-  ) => {
-    if (!filterValue) return true;
-    const activity = row.original;
-    const haystack = [
-      activity.name,
-      // Match both the raw enum name and the localised label so search works
-      // regardless of the active locale.
-      formatActivityType(activity.type),
-      sportTypeLabel(activity.type, t),
-      format(new Date(activity.startDateLocal), "P p", {
-        locale: getActiveDateLocale(),
-      }),
-    ]
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(filterValue.toLowerCase());
-  };
-
-export function ActivitiesTable(props: {
-  searchFilter?: string;
-  onClearSearch?: () => void;
-  timePeriodId?: number;
-}) {
+export function ActivitiesTable() {
   const t = useT();
+  const openSync = useSyncPanel();
   const isMobile = useIsMobile();
-  const filters = useActivityFilter();
-  const activitiesQuery = useActivitiesQuery(
-    props.timePeriodId != null ? "period" : "activities",
-    { timePeriodId: props.timePeriodId },
-  );
+  const scope = useActivityView();
+  const activitiesQuery = useActivitiesQuery("activities");
   const { timeline } = useRiderSettingsTimeline();
   const tableContainerRef = React.useRef<HTMLDivElement>(null);
 
   const columns = React.useMemo(() => createColumns(t), [t]);
-  const globalFilterFn = React.useMemo(
-    () => createActivitySearchFilter(t),
-    [t],
-  );
-
   const loadPreferences = React.useMemo(
     () => getLoadPreferences(timeline),
     [timeline],
@@ -271,36 +232,85 @@ export function ActivitiesTable(props: {
   );
 
   const table = useTable({
+    enableSortingRemoval: false,
     features,
     data,
     columns,
-    state: { globalFilter: props.searchFilter ?? "" },
-    globalFilterFn,
-    initialState: {
-      // A time period reads as a story, so it starts with the first activity.
-      sorting: [{ id: "startDateLocal", desc: props.timePeriodId == null }],
+    state: {
+      sorting: [scope.display.sort],
+      columnVisibility: Object.fromEntries(
+        ACTIVITY_COLUMNS.map((id) => [id, scope.display.columns.includes(id)]),
+      ),
+    },
+    onSortingChange: (updater) => {
+      const next =
+        typeof updater === "function" ? updater([scope.display.sort]) : updater;
+      if (next[0])
+        void scope.setDisplay({
+          ...scope.display,
+          sort: next[0] as ActivityDisplay["sort"],
+        });
     },
   });
-
-  const { rows } = table.getRowModel();
+  const sortedRows = table.getRowModel().rows;
+  type DisplayRow =
+    | { kind: "activity"; row: (typeof sortedRows)[number] }
+    | { kind: "group"; key: string; label: string; count: number };
+  const rows = React.useMemo<DisplayRow[]>(() => {
+    if (scope.display.groupBy === "none")
+      return sortedRows.map((row) => ({ kind: "activity", row }));
+    const groups = new Map<string, typeof sortedRows>();
+    for (const row of sortedRows) {
+      const key =
+        scope.display.groupBy === "sport"
+          ? row.original.type
+          : row.original.startDateLocal.slice(0, 7);
+      const group = groups.get(key);
+      if (group) group.push(row);
+      else groups.set(key, [row]);
+    }
+    return [...groups]
+      .sort(([a], [b]) =>
+        scope.display.groupBy === "month"
+          ? b.localeCompare(a)
+          : sportTypeLabel(a, t).localeCompare(sportTypeLabel(b, t)),
+      )
+      .flatMap(([key, group]) => [
+        {
+          kind: "group" as const,
+          key,
+          label:
+            scope.display.groupBy === "sport"
+              ? sportTypeLabel(key, t)
+              : format(new Date(`${key}-01T12:00:00`), "MMMM yyyy", {
+                  locale: getActiveDateLocale(),
+                }),
+          count: group.length,
+        },
+        ...group.map((row) => ({ kind: "activity" as const, row })),
+      ]);
+  }, [sortedRows, scope.display.groupBy, t]);
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
-    estimateSize: () => (isMobile ? 112 : ROW_HEIGHT),
+    estimateSize: (index) =>
+      rows[index]?.kind === "group" ? 40 : isMobile ? 112 : ROW_HEIGHT,
     getScrollElement: () => tableContainerRef.current,
     overscan: VIRTUALIZER_OVERSCAN,
+    getItemKey: (index) =>
+      rows[index].kind === "group"
+        ? `group-${rows[index].key}`
+        : rows[index].row.id,
   });
 
   React.useEffect(() => {
     rowVirtualizer.measure();
-  }, [isMobile, rowVirtualizer]);
+  }, [isMobile, scope.display.groupBy, rowVirtualizer]);
 
   if (activitiesQuery.isError)
     return <QueryState error onRetry={() => void activitiesQuery.refetch()} />;
   if (!activitiesQuery.isLoading && rows.length === 0) {
-    const filtered =
-      !!props.searchFilter ||
-      (props.timePeriodId == null && filters.activeFilterCount > 0);
+    const filtered = conditionCount(scope.rules) > 0;
     return (
       <QueryState>
         <p>{t(filtered ? "common.noResults" : "common.noActivities")}</p>
@@ -308,16 +318,15 @@ export function ActivitiesTable(props: {
           <Button
             variant="outline"
             onClick={() => {
-              props.onClearSearch?.();
-              if (props.timePeriodId == null) filters.clearAll();
+              void scope.selectView();
             }}
           >
             {t("settings.filter.clearAll")}
           </Button>
         ) : (
-          <Toolbar.Root aria-label={t("sync.label")}>
-            <SyncPanel />
-          </Toolbar.Root>
+          <Button variant="outline" onClick={openSync}>
+            {t("sync.label")}
+          </Button>
         )}
       </QueryState>
     );
@@ -325,52 +334,6 @@ export function ActivitiesTable(props: {
   if (isMobile)
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="border-border flex items-center gap-2 border-b px-4 py-2 text-xs">
-          <label className="flex items-center gap-2">
-            {t("common.sortBy")}
-            <select
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-              value={table.state.sorting[0]?.id ?? "startDateLocal"}
-              onChange={(event) =>
-                table.setSorting([{ id: event.target.value, desc: false }])
-              }
-            >
-              {Object.entries({
-                type: "sport",
-                name: "title",
-                startDateLocal: "date",
-                distance: "distance",
-                totalElevationGain: "elevation",
-                movingTime: "movingTime",
-                averageSpeed: "pace",
-                load: "load",
-              }).map(([id, key]) => (
-                <option key={id} value={id}>
-                  {t(`activities.columns.${key}` as AppMessageKey)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t(
-              table.state.sorting[0]?.desc
-                ? "activities.sortAscending"
-                : "activities.sortDescending",
-            )}
-            onClick={() =>
-              table.setSorting([
-                {
-                  id: table.state.sorting[0]?.id ?? "startDateLocal",
-                  desc: !table.state.sorting[0]?.desc,
-                },
-              ])
-            }
-          >
-            {table.state.sorting[0]?.desc ? <ArrowDownIcon /> : <ArrowUpIcon />}
-          </Button>
-        </div>
         <div ref={tableContainerRef} className="min-h-0 flex-1 overflow-y-auto">
           {activitiesQuery.isLoading ? (
             <QueryState loading />
@@ -383,10 +346,27 @@ export function ActivitiesTable(props: {
               }}
             >
               {rowVirtualizer.getVirtualItems().map((item) => {
-                const activity = rows[item.index].original;
+                const entry = rows[item.index];
+                if (entry.kind === "group")
+                  return (
+                    <div
+                      key={entry.key}
+                      className="bg-muted absolute left-0 w-full px-4 py-2 text-sm font-medium"
+                      style={{
+                        height: item.size,
+                        transform: `translateY(${item.start}px)`,
+                      }}
+                    >
+                      {entry.label}{" "}
+                      <span className="text-muted-foreground">
+                        ({entry.count})
+                      </span>
+                    </div>
+                  );
+                const activity = entry.row.original;
                 const sport = getSportConfig(activity.type);
                 const Icon = sport.icon;
-                const href = `/activities/${activity.stravaId}${props.timePeriodId != null ? `?from=period&periodId=${props.timePeriodId}` : ""}`;
+                const href = scope.href(`/activities/${activity.stravaId}`);
                 return (
                   <div
                     role="listitem"
@@ -405,18 +385,47 @@ export function ActivitiesTable(props: {
                         {activity.name}
                       </span>
                       <span className="text-muted-foreground flex items-center gap-2 text-xs">
-                        <Icon className="size-4 shrink-0" />
-                        {sportTypeLabel(activity.type, t)} ·{" "}
-                        {format(new Date(activity.startDateLocal), "P p", {
-                          locale: getActiveDateLocale(),
-                        })}
+                        {scope.display.columns.includes("type") && (
+                          <>
+                            <Icon className="size-4 shrink-0" />
+                            {sportTypeLabel(activity.type, t)}
+                          </>
+                        )}
+                        {scope.display.columns.includes("startDateLocal") &&
+                          format(
+                            new Date(activity.startDateLocal.slice(0, 19)),
+                            "P p",
+                            {
+                              locale: getActiveDateLocale(),
+                            },
+                          )}
                       </span>
-                      <span className="text-muted-foreground text-xs">
-                        {sport.formatDistance(activity.distance)} ·{" "}
-                        {formatDuration(activity.movingTime)}
-                        {activity.load != null
-                          ? ` · ${t("activities.columns.load")}: ${Math.round(activity.load)}`
-                          : ""}
+                      <span className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
+                        {scope.display.columns.includes("distance") && (
+                          <span>{sport.formatDistance(activity.distance)}</span>
+                        )}
+                        {scope.display.columns.includes("movingTime") && (
+                          <span>{formatDuration(activity.movingTime)}</span>
+                        )}
+                        {scope.display.columns.includes(
+                          "totalElevationGain",
+                        ) && (
+                          <span>
+                            {formatMeters(activity.totalElevationGain)}
+                          </span>
+                        )}
+                        {scope.display.columns.includes("averageSpeed") && (
+                          <span>
+                            {sport.formatSpeed(activity.averageSpeed)}
+                          </span>
+                        )}
+                        {scope.display.columns.includes("load") &&
+                          activity.load != null && (
+                            <span>
+                              {t("activities.columns.load")}:{" "}
+                              {Math.round(activity.load)}
+                            </span>
+                          )}
                       </span>
                     </Link>
                   </div>
@@ -507,13 +516,28 @@ export function ActivitiesTable(props: {
                 </TableRow>
               ))
             : rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const row = rows[virtualRow.index];
+                const entry = rows[virtualRow.index];
+                if (entry.kind === "group")
+                  return (
+                    <TableRow
+                      key={entry.key}
+                      className="bg-muted absolute left-0 flex w-full px-4 py-2 text-sm font-medium"
+                      style={{
+                        height: virtualRow.size,
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <TableCell>
+                        {entry.label} ({entry.count})
+                      </TableCell>
+                    </TableRow>
+                  );
+                const row = entry.row;
                 return (
                   <ActivityRow
                     key={row.id}
                     row={row}
                     index={virtualRow.index}
-                    timePeriodId={props.timePeriodId}
                     style={{
                       position: "absolute",
                       top: 0,

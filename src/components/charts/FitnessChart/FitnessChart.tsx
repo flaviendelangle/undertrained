@@ -35,7 +35,13 @@ const FORM_AXIS_ID = "form";
 const DEFAULT_ZOOM_DAYS = 90;
 const MIN_ZOOM_DAYS = 21;
 
-export default function FitnessChart() {
+export default function FitnessChart({
+  selectedDate,
+  onDateChange,
+}: {
+  selectedDate?: string;
+  onDateChange?: (date: string) => void;
+}) {
   const t = useT();
   const { series, current, isLoading } = useFitnessData();
   const tokens = useChartTokens();
@@ -125,6 +131,10 @@ export default function FitnessChart() {
     }
   }, [xData.length, defaultZoom]);
 
+  const selectedPoint = selectedDate
+    ? series.find((point) => format(point.date, "yyyy-MM-dd") === selectedDate)
+    : current;
+
   // Mirror the Fitness (CTL) series visibility so the "highest fitness ever"
   // reference line can hide alongside it when toggled off via the legend.
   const [fitnessHidden, setFitnessHidden] = React.useState(false);
@@ -142,12 +152,20 @@ export default function FitnessChart() {
 
   return (
     <ChartThemeProvider>
-      <ChartCard title={t("charts.fitness.title")} bodyClassName="flex">
+      <ChartCard
+        height="auto"
+        bodyClassName="flex h-[420px] flex-none md:h-[520px]"
+      >
         <div className="min-h-0 flex-1">
           {series.length === 0 ? (
             <EmptyState isLoading={isLoading} />
           ) : (
             <LineChartPro
+              aria-label={t("fitnessPage.chart")}
+              onAxisClick={(_event, data) => {
+                if (data?.dataIndex != null && xData[data.dataIndex])
+                  onDateChange?.(format(xData[data.dataIndex], "yyyy-MM-dd"));
+              }}
               zoomData={zoomData}
               onZoomChange={setZoomData}
               xAxis={[
@@ -254,6 +272,16 @@ export default function FitnessChart() {
                   }}
                 />
               )}
+              {selectedPoint && (
+                <ChartsReferenceLine
+                  axisId={TIME_AXIS_ID}
+                  x={selectedPoint.date}
+                  lineStyle={{
+                    stroke: tokens.axisLabel,
+                    strokeDasharray: "4 3",
+                  }}
+                />
+              )}
               {todayDate && (
                 <ChartsReferenceLine
                   axisId={TIME_AXIS_ID}
@@ -269,7 +297,7 @@ export default function FitnessChart() {
         </div>
 
         {/* Right-side readout (today's values). */}
-        {current && (
+        {current && !onDateChange && (
           <Readout
             current={current}
             fitnessColor={fitnessColor}

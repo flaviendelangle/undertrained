@@ -1,6 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { z } from "zod";
 
 import { activities, activityStreams } from "../../db/schema";
 import {
@@ -14,13 +13,9 @@ const a = alias(activities, "a");
 
 export const analyticsRouter = router({
   getPowerDistribution: athleteProcedure
-    .input(
-      activityFilterInput.extend({
-        timePeriodId: z.number().int().positive(),
-      }),
-    )
+    .input(activityFilterInput)
     .query(async ({ ctx, input }) => {
-      const selected = await selectActivities(ctx.db, input);
+      const selected = selectActivities(input);
       const rows = await ctx.db
         .select({ data: activityStreams.data })
         .from(activityStreams)
@@ -51,7 +46,7 @@ export const analyticsRouter = router({
   getPowerCurve: athleteProcedure
     .input(activityFilterInput)
     .query(async ({ ctx, input }) => {
-      const selected = await selectActivities(ctx.db, input, a);
+      const selected = selectActivities(input, a);
       const rows = await ctx.db.execute<{
         duration: string;
         watts: string;
@@ -101,9 +96,9 @@ export const analyticsRouter = router({
   getPowerCurveYears: athleteProcedure
     .input(activityFilterInput)
     .query(async ({ ctx, input }) => {
-      const selected = await selectActivities(ctx.db, input, a);
+      const selected = selectActivities(input, a);
       const rows = await ctx.db.execute<{ year: string }>(sql`
-        SELECT DISTINCT EXTRACT(YEAR FROM a.start_date::timestamp)::int AS year
+        SELECT DISTINCT EXTRACT(YEAR FROM a.start_date_local::timestamp)::int AS year
         FROM activities a
         WHERE ${selected}
           AND a.power_bests IS NOT NULL

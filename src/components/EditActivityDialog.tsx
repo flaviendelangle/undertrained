@@ -106,6 +106,11 @@ function EditActivityForm({
         utils.activities.get.invalidate({ stravaId: activity.stravaId }),
         utils.activities.list.invalidate(),
         utils.activities.maps.invalidate(),
+        utils.views.summary.invalidate(),
+        utils.views.counts.invalidate(),
+        utils.analytics.getPowerCurve.invalidate(),
+        utils.analytics.getPowerCurveYears.invalidate(),
+        utils.analytics.getPowerDistribution.invalidate(),
       ]);
       onClose();
     },

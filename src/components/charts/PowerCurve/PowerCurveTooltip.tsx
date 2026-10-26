@@ -2,6 +2,8 @@ import * as React from "react";
 
 import Link from "next/link";
 
+import { useActivityView } from "~/hooks/useActivityView";
+
 import {
   ChartTooltipHeader,
   ChartTooltipRow,
@@ -39,6 +41,7 @@ export const PowerCurveTooltip = React.memo(function PowerCurveTooltip({
   entries,
   frozen,
 }: PowerCurveTooltipProps) {
+  const scope = useActivityView();
   const [containerTop, setContainerTop] = React.useState(0);
   const tooltipRef = React.useRef<HTMLDivElement>(null);
   const [clampedLeft, setClampedLeft] = React.useState(clientX);
@@ -77,7 +80,9 @@ export const PowerCurveTooltip = React.memo(function PowerCurveTooltip({
                 trailing={
                   entry.activity && (
                     <Link
-                      href={`/activities/${entry.activity.activityStravaId}`}
+                      href={scope.href(
+                        `/activities/${entry.activity.activityStravaId}`,
+                      )}
                       className="text-muted-foreground hover:text-foreground text-xs underline"
                     >
                       {entry.activity.activityName}

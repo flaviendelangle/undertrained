@@ -4,6 +4,7 @@ import {
   ActivityIcon,
   CogIcon,
   GaugeIcon,
+  LogInIcon,
   TimerIcon,
   TrendingUpIcon,
 } from "lucide-react";
@@ -12,6 +13,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { useT } from "~/i18n/useT";
 
 import stravaButton from "../../public/strava-connect-button-orange.svg";
@@ -43,70 +45,73 @@ const LoginPage: NextPageWithLayout = () => {
   }
 
   return (
-    <main className="from-background via-background to-primary/10 relative flex h-screen items-center justify-center overflow-hidden bg-linear-to-br">
-      {/* Decorative background element */}
-      <ActivityIcon className="text-primary/3 absolute -right-20 -bottom-20 size-112 rotate-12" />
+    <main className="flex h-screen flex-col overflow-hidden">
+      <PageToolbar title={t("nav.login")} icon={LogInIcon} />
+      <div className="from-background via-background to-primary/10 relative flex min-h-0 flex-1 items-center justify-center overflow-y-auto bg-linear-to-br py-8">
+        {/* Decorative background element */}
+        <ActivityIcon className="text-primary/3 absolute -right-20 -bottom-20 size-112 rotate-12" />
 
-      <div className="relative z-10 flex flex-col items-center gap-10">
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex items-center gap-3">
-            <ActivityIcon className="text-primary size-10" />
-            <h1 className="text-foreground text-5xl font-black tracking-tight">
-              Undertrained
-            </h1>
+        <div className="relative z-10 flex flex-col items-center gap-10">
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex items-center gap-3">
+              <ActivityIcon className="text-primary size-10" />
+              <h2 className="text-foreground text-5xl font-black tracking-tight">
+                Undertrained
+              </h2>
+            </div>
+            <p className="text-muted-foreground text-lg">{t("auth.tagline")}</p>
           </div>
-          <p className="text-muted-foreground text-lg">{t("auth.tagline")}</p>
+
+          <button
+            className="group relative transition-transform hover:scale-105 active:scale-100"
+            onClick={() => signIn("strava", { callbackUrl })}
+          >
+            <div className="absolute -inset-1 rounded-lg bg-[#FC4C02]/20 opacity-0 blur-md transition-opacity group-hover:opacity-100" />
+            <Image
+              priority
+              src={stravaButton}
+              alt={t("auth.loginWithStrava")}
+              className="relative"
+            />
+          </button>
+
+          <Link
+            href="/toolbox"
+            className="border-border bg-card/50 hover:bg-card group/card w-full max-w-md rounded-sm border p-4 transition-colors"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-foreground text-sm font-semibold">
+                {t("auth.toolbox")}
+              </span>
+              <span className="text-muted-foreground bg-muted rounded-full px-2.5 py-0.5 text-xs">
+                {t("auth.noLoginRequired")}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { icon: TimerIcon, label: t("auth.tool.paceCalculator") },
+                { icon: TrendingUpIcon, label: t("auth.tool.racePredictor") },
+                { icon: GaugeIcon, label: t("auth.tool.zoneCalculator") },
+                { icon: CogIcon, label: t("auth.tool.gearCalculator") },
+              ].map(({ icon: Icon, label }) => (
+                <div
+                  key={label}
+                  className="text-muted-foreground flex items-center gap-2 text-sm"
+                >
+                  <Icon className="size-4 shrink-0" />
+                  {label}
+                </div>
+              ))}
+            </div>
+          </Link>
+
+          <Link
+            href="/privacy"
+            className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-3"
+          >
+            {t("auth.privacyPolicy")}
+          </Link>
         </div>
-
-        <button
-          className="group relative transition-transform hover:scale-105 active:scale-100"
-          onClick={() => signIn("strava", { callbackUrl })}
-        >
-          <div className="absolute -inset-1 rounded-lg bg-[#FC4C02]/20 opacity-0 blur-md transition-opacity group-hover:opacity-100" />
-          <Image
-            priority
-            src={stravaButton}
-            alt={t("auth.loginWithStrava")}
-            className="relative"
-          />
-        </button>
-
-        <Link
-          href="/toolbox"
-          className="border-border bg-card/50 hover:bg-card group/card w-full max-w-md rounded-sm border p-4 transition-colors"
-        >
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-foreground text-sm font-semibold">
-              {t("auth.toolbox")}
-            </span>
-            <span className="text-muted-foreground bg-muted rounded-full px-2.5 py-0.5 text-xs">
-              {t("auth.noLoginRequired")}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { icon: TimerIcon, label: t("auth.tool.paceCalculator") },
-              { icon: TrendingUpIcon, label: t("auth.tool.racePredictor") },
-              { icon: GaugeIcon, label: t("auth.tool.zoneCalculator") },
-              { icon: CogIcon, label: t("auth.tool.gearCalculator") },
-            ].map(({ icon: Icon, label }) => (
-              <div
-                key={label}
-                className="text-muted-foreground flex items-center gap-2 text-sm"
-              >
-                <Icon className="size-4 shrink-0" />
-                {label}
-              </div>
-            ))}
-          </div>
-        </Link>
-
-        <Link
-          href="/privacy"
-          className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-3"
-        >
-          {t("auth.privacyPolicy")}
-        </Link>
       </div>
     </main>
   );

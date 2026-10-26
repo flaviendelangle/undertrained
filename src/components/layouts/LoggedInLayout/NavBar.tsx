@@ -1,15 +1,16 @@
 import * as React from "react";
 
 import {
-  BarChart3Icon,
   BikeIcon,
   CalendarDaysIcon,
-  CalendarIcon,
   EllipsisIcon,
+  FolderOpenIcon,
+  HeartPulseIcon,
   ListIcon,
   LogOutIcon,
-  MapIcon,
   MoonIcon,
+  RefreshCwIcon,
+  RouteIcon,
   SettingsIcon,
   ShieldCheckIcon,
   SunIcon,
@@ -31,9 +32,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { PopoverTrigger } from "~/components/ui/popover";
+import { useActivityView } from "~/hooks/useActivityView";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import {
+  SYNC_TRIGGER_ID,
+  useSyncPanel,
+  useSyncPanelHandle,
+} from "~/hooks/useSyncPanel";
 import { useTheme } from "~/hooks/useTheme";
 import { useT } from "~/i18n/useT";
+import { isRoutesEnabled } from "~/lib/features";
 import { cn } from "~/lib/utils";
 
 import { NavBarContext } from "./NavBarContext";
@@ -54,6 +63,7 @@ function NavBarLink({
   badge,
 }: NavBarLinkProps) {
   const { isMenuExpanded } = React.useContext(NavBarContext);
+  const scope = useActivityView();
   const pathname = usePathname();
   const isActive = (pathname ?? "").startsWith(activeFor ?? href);
 
@@ -66,7 +76,7 @@ function NavBarLink({
           : "text-muted-foreground hover:bg-accent hover:text-foreground",
       )}
       aria-label={label}
-      href={href}
+      href={href === "/activities" ? scope.href(href) : href}
       aria-current={isActive ? "page" : undefined}
     >
       {isActive && (
@@ -143,6 +153,7 @@ function SettingsSetupDot() {
 /* ── Desktop sidebar ── */
 export function NavBar() {
   const t = useT();
+  const syncHandle = useSyncPanelHandle();
   const [isMenuExpanded, setIsMenuExpanded] = React.useState(false);
 
   return (
@@ -192,19 +203,11 @@ export function NavBar() {
               href="/activities"
             />
           </TooltipIfMenuCollapsed>
-          <TooltipIfMenuCollapsed label={t("nav.map")}>
+          <TooltipIfMenuCollapsed label={t("nav.fitness")}>
             <NavBarLink
-              icon={MapIcon}
-              label={t("nav.map")}
-              href="/map/heatmap"
-              activeFor="/map"
-            />
-          </TooltipIfMenuCollapsed>
-          <TooltipIfMenuCollapsed label={t("nav.statistics")}>
-            <NavBarLink
-              icon={BarChart3Icon}
-              label={t("nav.statistics")}
-              href="/statistics"
+              icon={HeartPulseIcon}
+              label={t("nav.fitness")}
+              href="/fitness"
             />
           </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label={t("nav.personalBests")}>
@@ -214,13 +217,22 @@ export function NavBar() {
               href="/personal-bests"
             />
           </TooltipIfMenuCollapsed>
-          <TooltipIfMenuCollapsed label={t("nav.timePeriods")}>
+          <TooltipIfMenuCollapsed label={t("nav.views")}>
             <NavBarLink
-              icon={CalendarIcon}
-              label={t("nav.timePeriods")}
-              href="/time-periods"
+              icon={FolderOpenIcon}
+              label={t("nav.views")}
+              href="/views"
             />
           </TooltipIfMenuCollapsed>
+          {isRoutesEnabled && (
+            <TooltipIfMenuCollapsed label={t("routes.myRoutes")}>
+              <NavBarLink
+                icon={RouteIcon}
+                label={t("routes.myRoutes")}
+                href="/routes"
+              />
+            </TooltipIfMenuCollapsed>
+          )}
           <TooltipIfMenuCollapsed label={t("nav.workouts")}>
             <NavBarLink
               icon={BikeIcon}
@@ -239,6 +251,17 @@ export function NavBar() {
 
         <div className="flex flex-col gap-0.5">
           <div className="border-sidebar-border mx-3 mb-1 border-t" />
+          <TooltipIfMenuCollapsed label={t("sync.label")}>
+            <PopoverTrigger
+              id={SYNC_TRIGGER_ID}
+              handle={syncHandle}
+              aria-label={t("sync.label")}
+              className="text-muted-foreground hover:bg-accent hover:text-foreground mx-2 flex h-10 items-center gap-3 rounded-lg px-2.5 text-sm font-medium whitespace-nowrap transition-colors"
+            >
+              <RefreshCwIcon className="size-4.5 shrink-0" />
+              {isMenuExpanded && <span>{t("sync.label")}</span>}
+            </PopoverTrigger>
+          </TooltipIfMenuCollapsed>
           <TooltipIfMenuCollapsed label={t("nav.settings")}>
             <NavBarLink
               icon={SettingsIcon}
@@ -283,12 +306,13 @@ function MobileTabLink({
   href,
   activeFor,
 }: MobileTabLinkProps) {
+  const scope = useActivityView();
   const pathname = usePathname();
   const isActive = (pathname ?? "").startsWith(activeFor ?? href);
 
   return (
     <Link
-      href={href}
+      href={href === "/activities" ? scope.href(href) : href}
       aria-current={isActive ? "page" : undefined}
       className={cn(
         "flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors",
@@ -304,13 +328,15 @@ function MobileTabLink({
 }
 
 export function MobileBottomBar() {
+  const openSync = useSyncPanel();
   const pathname = usePathname() ?? "";
   const moreActive = [
     "/personal-bests",
-    "/time-periods",
+    "/views",
     "/toolbox",
     "/settings",
     "/workouts",
+    "/routes",
     "/privacy",
   ].some((path) => pathname.startsWith(path));
   const t = useT();
@@ -329,15 +355,9 @@ export function MobileBottomBar() {
         href="/activities"
       />
       <MobileTabLink
-        icon={MapIcon}
-        label={t("nav.map")}
-        href="/map/heatmap"
-        activeFor="/map"
-      />
-      <MobileTabLink
-        icon={BarChart3Icon}
-        label={t("nav.statistics")}
-        href="/statistics"
+        icon={HeartPulseIcon}
+        label={t("nav.fitness")}
+        href="/fitness"
       />
       <DropdownMenu>
         <DropdownMenuTrigger
@@ -353,6 +373,17 @@ export function MobileBottomBar() {
           sideOffset={8}
           className="w-56 rounded-xl"
         >
+          {isRoutesEnabled && (
+            <DropdownMenuLinkItem closeOnClick render={<Link href="/routes" />}>
+              <RouteIcon />
+              {t("routes.myRoutes")}
+            </DropdownMenuLinkItem>
+          )}
+          <DropdownMenuItem onClick={openSync}>
+            <RefreshCwIcon />
+            {t("sync.label")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuLinkItem
             closeOnClick
             aria-current={
@@ -366,14 +397,12 @@ export function MobileBottomBar() {
           </DropdownMenuLinkItem>
           <DropdownMenuLinkItem
             closeOnClick
-            aria-current={
-              pathname.startsWith("/time-periods") ? "page" : undefined
-            }
+            aria-current={pathname.startsWith("/views") ? "page" : undefined}
             className="aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
-            render={<Link href="/time-periods" />}
+            render={<Link href="/views" />}
           >
-            <CalendarIcon className="size-4" />
-            {t("nav.timePeriods")}
+            <FolderOpenIcon className="size-4" />
+            {t("nav.views")}
           </DropdownMenuLinkItem>
           <DropdownMenuLinkItem
             closeOnClick

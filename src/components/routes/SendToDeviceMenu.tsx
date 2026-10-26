@@ -46,7 +46,7 @@ interface SendToDeviceMenuProps {
   distance: number;
   /**
    * Render the trigger as a Toolbar item — required when the menu lives inside
-   * a `<Toolbar>` (e.g. MapToolbar actions slot) so focus/roving keyboard
+   * a `<Toolbar>` (e.g. RouteToolbar actions slot) so focus/roving keyboard
    * navigation work. Plain `<Button>` otherwise.
    */
   inToolbar?: boolean;

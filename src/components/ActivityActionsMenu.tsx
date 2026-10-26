@@ -65,6 +65,11 @@ export function ActivityActionsMenu(props: ActivityActionsMenuProps) {
                 utils.activityStreams.getStreams.invalidate({ stravaId }),
                 utils.activities.list.invalidate(),
                 utils.activities.maps.invalidate(),
+                utils.views.summary.invalidate(),
+                utils.views.counts.invalidate(),
+                utils.analytics.getPowerCurve.invalidate(),
+                utils.analytics.getPowerCurveYears.invalidate(),
+                utils.analytics.getPowerDistribution.invalidate(),
               ]);
             } finally {
               setLoading(false);

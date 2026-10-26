@@ -1,11 +1,12 @@
 import * as React from "react";
 
-import { Redo2Icon, Undo2Icon } from "lucide-react";
+import { BikeIcon, Redo2Icon, Undo2Icon } from "lucide-react";
 import { useRouter } from "next/router";
 
 import { Draggable } from "@base-ui/react/draggable";
 import { useValueAsRef } from "@base-ui/utils/useValueAsRef";
 
+import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import {
@@ -164,129 +165,136 @@ export function WorkoutBuilder({ workout }: WorkoutBuilderProps) {
   );
 
   return (
-    // Capped and centered to match Statistics and the workouts list. Step rows
-    // are one line of small fields; stretched across an ultrawide monitor the
-    // duration and the watts end up a foot apart.
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col md:flex-row">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* Header */}
-        <div className="border-border bg-background sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b p-2">
-          <input
-            type="text"
-            aria-label={t("workouts.name")}
-            placeholder={t("workouts.namePlaceholder")}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            // Full width on its own row below `md`: sharing a row with the
-            // sport toggle squeezes the name down to a few characters at 390 px.
-            className="border-input bg-background focus-visible:ring-ring h-9 w-full min-w-0 rounded-md border px-3 text-sm outline-none focus-visible:ring-1 md:w-auto md:flex-1"
-          />
-          <WorkoutSportToggle value={editor.sport} onChange={editor.setSport} />
+    <>
+      <PageToolbar
+        title={workout?.name ?? t("workouts.newWorkout")}
+        icon={BikeIcon}
+        backHref="/workouts"
+      />
+      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col md:flex-row">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* Header */}
+          <div className="border-border bg-background sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b p-2">
+            <input
+              type="text"
+              aria-label={t("workouts.name")}
+              placeholder={t("workouts.namePlaceholder")}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              // Full width on its own row below `md`: sharing a row with the
+              // sport toggle squeezes the name down to a few characters at 390 px.
+              className="border-input bg-background focus-visible:ring-ring h-9 w-full min-w-0 rounded-md border px-3 text-sm outline-none focus-visible:ring-1 md:w-auto md:flex-1"
+            />
+            <WorkoutSportToggle
+              value={editor.sport}
+              onChange={editor.setSport}
+            />
 
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("workouts.undo")}
-            disabled={!editor.canUndo}
-            onClick={editor.undo}
-          >
-            <Undo2Icon />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("workouts.redo")}
-            disabled={!editor.canRedo}
-            onClick={editor.redo}
-          >
-            <Redo2Icon />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("workouts.undo")}
+              disabled={!editor.canUndo}
+              onClick={editor.undo}
+            >
+              <Undo2Icon />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("workouts.redo")}
+              disabled={!editor.canRedo}
+              onClick={editor.redo}
+            >
+              <Redo2Icon />
+            </Button>
 
-          <span className="min-w-0 flex-1" />
+            <span className="min-w-0 flex-1" />
 
-          {/* On a phone the details live in a drawer behind this chip, so the
+            {/* On a phone the details live in a drawer behind this chip, so the
               step list keeps the whole viewport. */}
-          {isMobile && (
-            <ResponsiveDialog>
-              <ResponsiveDialogTrigger
-                render={
-                  <Button variant="outline" size="sm">
-                    {formatCompactDuration(metrics.totalSeconds, {
-                      subHour: "min",
-                    })}
-                    {metrics.tss != null && ftp != null
-                      ? ` · ${metrics.tss}`
-                      : ""}
-                  </Button>
-                }
-              />
-              <ResponsiveDialogContent>
-                <ResponsiveDialogHeader>
-                  <ResponsiveDialogTitle>
-                    {t("workouts.summary.title")}
-                  </ResponsiveDialogTitle>
-                </ResponsiveDialogHeader>
-                <div className="p-4">{details}</div>
-              </ResponsiveDialogContent>
-            </ResponsiveDialog>
-          )}
+            {isMobile && (
+              <ResponsiveDialog>
+                <ResponsiveDialogTrigger
+                  render={
+                    <Button variant="outline" size="sm">
+                      {formatCompactDuration(metrics.totalSeconds, {
+                        subHour: "min",
+                      })}
+                      {metrics.tss != null && ftp != null
+                        ? ` · ${metrics.tss}`
+                        : ""}
+                    </Button>
+                  }
+                />
+                <ResponsiveDialogContent>
+                  <ResponsiveDialogHeader>
+                    <ResponsiveDialogTitle>
+                      {t("workouts.summary.title")}
+                    </ResponsiveDialogTitle>
+                  </ResponsiveDialogHeader>
+                  <div className="p-4">{details}</div>
+                </ResponsiveDialogContent>
+              </ResponsiveDialog>
+            )}
 
-          {/* Just "Save" on a phone: the full label is what pushes this row
+            {/* Just "Save" on a phone: the full label is what pushes this row
               over 390 px and wraps the header onto a third line. */}
-          <WorkoutExportButton
-            name={name}
-            description={description}
-            structure={editor.workout}
+            <WorkoutExportButton
+              name={name}
+              description={description}
+              structure={editor.workout}
+              ftp={ftp}
+            />
+            <Button size="sm" disabled={!canSave} onClick={save}>
+              {isSaving
+                ? t("workouts.saving")
+                : isMobile
+                  ? t("common.save")
+                  : workout
+                    ? t("workouts.updateWorkout")
+                    : t("workouts.saveWorkout")}
+            </Button>
+          </div>
+
+          <WorkoutPreviewChart
+            segments={segments}
+            spans={spans}
             ftp={ftp}
+            selectedStepId={editor.selectedId}
+            onSelectStep={(stepId) => editor.select(stepId)}
+            className="h-32 shrink-0 md:h-48"
           />
-          <Button size="sm" disabled={!canSave} onClick={save}>
-            {isSaving
-              ? t("workouts.saving")
-              : isMobile
-                ? t("common.save")
-                : workout
-                  ? t("workouts.updateWorkout")
-                  : t("workouts.saveWorkout")}
-          </Button>
+
+          <div
+            role="listbox"
+            aria-label={t("workouts.myWorkouts")}
+            className="min-h-0 flex-1 overflow-y-auto p-2"
+          >
+            {editor.nodes.length === 0 ? (
+              <p className="text-muted-foreground py-12 text-center text-sm">
+                {t("workouts.validation.empty")}
+              </p>
+            ) : (
+              <Draggable.Provider>
+                <StepList nodes={editor.nodes} editor={editor} ftp={ftp} />
+              </Draggable.Provider>
+            )}
+          </div>
+
+          <QuickAddBar editor={editor} />
         </div>
 
-        <WorkoutPreviewChart
-          segments={segments}
-          spans={spans}
-          ftp={ftp}
-          selectedStepId={editor.selectedId}
-          onSelectStep={(stepId) => editor.select(stepId)}
-          className="h-32 shrink-0 md:h-48"
-        />
-
-        <div
-          role="listbox"
-          aria-label={t("workouts.myWorkouts")}
-          className="min-h-0 flex-1 overflow-y-auto p-2"
-        >
-          {editor.nodes.length === 0 ? (
-            <p className="text-muted-foreground py-12 text-center text-sm">
-              {t("workouts.validation.empty")}
-            </p>
-          ) : (
-            <Draggable.Provider>
-              <StepList nodes={editor.nodes} editor={editor} ftp={ftp} />
-            </Draggable.Provider>
-          )}
-        </div>
-
-        <QuickAddBar editor={editor} />
-      </div>
-
-      {/* Rendered, not CSS-hidden: `details` owns a labelled `id`, and keeping
+        {/* Rendered, not CSS-hidden: `details` owns a labelled `id`, and keeping
           a hidden copy mounted alongside the drawer's would put that id in the
           document twice and break the label association in both. */}
-      {!isMobile && (
-        <aside className="border-border shrink-0 overflow-y-auto border-l p-4 md:w-72 lg:w-80">
-          {details}
-        </aside>
-      )}
-    </div>
+        {!isMobile && (
+          <aside className="border-border shrink-0 overflow-y-auto border-l p-4 md:w-72 lg:w-80">
+            {details}
+          </aside>
+        )}
+      </div>
+    </>
   );
 }
 
