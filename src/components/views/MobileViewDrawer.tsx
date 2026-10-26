@@ -28,6 +28,7 @@ import {
   viewInputClass,
 } from "./ActivityFilterEditor";
 import { ViewDetailsFields } from "./ViewDetailsDialog";
+import { groupViewsByFolder } from "./groupViewsByFolder";
 import { useSaveActivityView } from "./useSaveActivityView";
 
 /** One working copy and one drawer for editing, previewing, applying and saving. */
@@ -90,24 +91,24 @@ export function MobileViewDrawer({
               }}
             >
               <option value="">{t("views.allActivities")}</option>
-              {scope.folders.map((folder) => (
-                <optgroup key={folder.id} label={folder.name}>
-                  {scope.views
-                    .filter((view) => view.folderId === folder.id)
-                    .map((view) => (
-                      <option key={view.id} value={view.id}>
-                        {view.name}
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-              {scope.views
-                .filter((view) => view.folderId === null)
-                .map((view) => (
+              {groupViewsByFolder(
+                scope.views,
+                scope.folders,
+                t("views.ungrouped"),
+              ).map((group) => {
+                const options = group.views.map((view) => (
                   <option key={view.id} value={view.id}>
                     {view.name}
                   </option>
-                ))}
+                ));
+                return group.label === null ? (
+                  <React.Fragment key={group.key}>{options}</React.Fragment>
+                ) : (
+                  <optgroup key={group.key} label={group.label}>
+                    {options}
+                  </optgroup>
+                );
+              })}
             </select>
           </label>
           <div className="mt-2 flex items-center justify-between gap-2">
