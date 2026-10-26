@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { format } from "date-fns";
 import Link from "next/link";
+import { useRouter } from "next/router";
 
 import type { ListActivity } from "@server/db/types";
 import {
@@ -48,6 +49,10 @@ import {
   type ActivityDisplay,
   conditionCount,
 } from "~/utils/activityFilters";
+import {
+  activityHref as activityReturnHref,
+  readTimelineReturnTo,
+} from "~/utils/activityLinks";
 import { formatDuration, formatMeters } from "~/utils/format";
 import { getActivityLoad, getLoadPreferences } from "~/utils/getActivityLoad";
 import { getSportConfig } from "~/utils/sportConfig";
@@ -78,10 +83,10 @@ function ActivityRow(props: {
   row: Row<typeof features, ActivityWithoutMap>;
   index: number;
   style?: React.CSSProperties;
+  getActivityHref: (id: number) => string;
 }) {
   const { row, index, style } = props;
-  const scope = useActivityView();
-  const activityHref = scope.href(`/activities/${row.original.stravaId}`);
+  const activityHref = props.getActivityHref(row.original.stravaId);
 
   return (
     <TableRow
@@ -212,6 +217,12 @@ export function ActivitiesTable() {
   const openSync = useSyncPanel();
   const isMobile = useIsMobile();
   const scope = useActivityView();
+  const router = useRouter();
+  const returnTo = readTimelineReturnTo(router.query);
+  const getActivityHref = (id: number) =>
+    returnTo
+      ? activityReturnHref(id, router.asPath)
+      : scope.href(`/activities/${id}`);
   const activitiesQuery = useActivitiesQuery("activities");
   const { timeline } = useRiderSettingsTimeline();
   const tableContainerRef = React.useRef<HTMLDivElement>(null);
@@ -372,7 +383,7 @@ export function ActivitiesTable() {
                 const activity = entry.row.original;
                 const sport = getSportConfig(activity.type);
                 const Icon = sport.icon;
-                const href = scope.href(`/activities/${activity.stravaId}`);
+                const href = getActivityHref(activity.stravaId);
                 return (
                   <div
                     role="listitem"
@@ -543,6 +554,7 @@ export function ActivitiesTable() {
                   <ActivityRow
                     key={row.id}
                     row={row}
+                    getActivityHref={getActivityHref}
                     index={virtualRow.index}
                     style={{
                       position: "absolute",
