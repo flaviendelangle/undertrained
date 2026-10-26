@@ -11,6 +11,7 @@ import {
 import { activities } from "../../db/schema";
 import {
   activityFilterInput,
+  escapeLike,
   selectActivities,
 } from "../../lib/activitySelection";
 import { getAccessToken, updateActivityOnStrava } from "../../lib/strava";
@@ -18,11 +19,6 @@ import { activityIngestion } from "../../lib/sync";
 import { athleteProcedure, protectedProcedure, router } from "../index";
 
 const SEARCH_LIMIT = 20;
-
-/** Escapes LIKE wildcards so a typed "%" or "_" matches itself. */
-function escapeLike(text: string): string {
-  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
-}
 
 export const activitiesRouter = router({
   list: athleteProcedure
@@ -108,8 +104,12 @@ export const activitiesRouter = router({
     .query(({ ctx, input }) => {
       const words = queryWords(input.query);
       if (words.length === 0) return [];
-      // Folded like `foldText` folds the query.
+      // Folded like `foldText` folds the query, once per row for every word.
       const name = sql`lower(regexp_replace(normalize(${activities.name}, NFD), ${COMBINING_ACCENTS}, '', 'g'))`;
+      const patterns = sql.join(
+        words.map((word) => sql`${`%${escapeLike(word)}%`}`),
+        sql`, `,
+      );
       return ctx.db
         .select({
           stravaId: activities.stravaId,
@@ -123,9 +123,7 @@ export const activitiesRouter = router({
         .where(
           and(
             eq(activities.athlete, input.athleteId),
-            ...words.map(
-              (word) => sql`${name} LIKE ${`%${escapeLike(word)}%`}`,
-            ),
+            sql`${name} LIKE ALL (ARRAY[${patterns}])`,
           ),
         )
         .orderBy(desc(activities.startDate))

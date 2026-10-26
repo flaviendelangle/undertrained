@@ -30,11 +30,9 @@ vi.mock("./useCommandGroups", () => ({
   useCommandGroups: ({
     query,
     step,
-    onStartRide,
   }: {
     query: string;
     step: CommandStep;
-    onStartRide: () => void;
   }): { groups: CommandGroup[]; searching: boolean; searchError: boolean } => {
     const items =
       step === "ride"
@@ -44,14 +42,14 @@ vi.mock("./useCommandGroups", () => ({
               id: "action:start-ride",
               label: "Start a live ride",
               icon: PlayIcon,
-              run: onStartRide,
+              action: "start-ride" as const,
             },
           ];
     const words = query.toLowerCase();
     return {
       groups: [
         {
-          id: step,
+          id: step === "ride" ? "ride" : "actions",
           label: step,
           items: items.filter((item) =>
             item.label.toLowerCase().includes(words),

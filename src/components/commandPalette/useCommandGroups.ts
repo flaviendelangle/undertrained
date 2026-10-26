@@ -24,20 +24,21 @@ import { useRouter } from "next/router";
 import { keepPreviousData } from "@tanstack/react-query";
 
 import {
+  durationLabel,
   formatCyclingSpeed,
   formatPace,
+  speedLabel,
 } from "~/components/charts/Records/format";
 import { TOOLS, createToolLabels } from "~/components/toolbox/tools";
 import { useStructuredWorkoutList } from "~/hooks/structuredWorkouts";
 import { useActivityView } from "~/hooks/useActivityView";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import type { AppMessageKey, TFunction } from "~/i18n/I18nProvider";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { isRoutesEnabled } from "~/lib/features";
 import { activityHref } from "~/utils/activityLinks";
-import { CYCLING_POWER_DURATIONS } from "~/utils/cyclingPowerDurations";
-import { CYCLING_SPEED_DISTANCES } from "~/utils/cyclingRecordDistances";
 import { activityLocalDay } from "~/utils/dateUtils";
 import { formatCompactDuration, formatElapsed, formatKm } from "~/utils/format";
 import { readRecentItems } from "~/utils/recentItems";
@@ -49,10 +50,13 @@ import {
 } from "~/utils/structuredWorkout/builtIn";
 import { trpc } from "~/utils/trpc";
 
-import { matchPersonalBests } from "./personalBests";
+import { type PersonalBestMatch, matchPersonalBests } from "./personalBests";
+
+/** What an item does in the palette itself, rather than going to a page. */
+export type CommandAction = "plan-session" | "start-ride";
 
 export interface CommandItem {
-  /** Unique across every group. */
+  /** Unique within its group. */
   id: string;
   label: string;
   icon: LucideIcon;
@@ -61,13 +65,24 @@ export interface CommandItem {
   description?: string;
   /** Muted text at the end of the row. */
   detail?: string;
-  /** Where choosing the item goes, unless it runs `run` instead. */
+  /** Where choosing the item goes, unless it runs `action` instead. */
   href?: string;
-  run?: () => void;
+  action?: CommandAction;
 }
 
+type GroupId =
+  | "recent"
+  | "bests"
+  | "pages"
+  | "actions"
+  | "views"
+  | "workouts"
+  | "routes"
+  | "activities"
+  | "ride";
+
 export interface CommandGroup {
-  id: string;
+  id: GroupId;
   label: string;
   items: CommandItem[];
 }
@@ -81,6 +96,172 @@ const GROUP_LIMIT = 6;
 const RIDE = getSportConfig("Ride");
 const RUN = getSportConfig("Run");
 
+interface StaticItem {
+  id: string;
+  labelKey: AppMessageKey;
+  icon: LucideIcon;
+  path?: string;
+  /** Whether the page carries the current activity selection along. */
+  scoped?: boolean;
+  action?: CommandAction;
+  enabled?: boolean;
+}
+
+const PAGES: StaticItem[] = [
+  {
+    id: "journal",
+    labelKey: "nav.journal",
+    icon: CalendarDaysIcon,
+    path: "/journal",
+  },
+  {
+    id: "activities",
+    labelKey: "nav.activities",
+    icon: ListIcon,
+    path: "/activities",
+    scoped: true,
+  },
+  {
+    id: "activity-map",
+    labelKey: "commandPalette.activityMap",
+    icon: MapIcon,
+    path: "/activities/map",
+    scoped: true,
+  },
+  {
+    id: "activity-charts",
+    labelKey: "commandPalette.activityCharts",
+    icon: ChartColumnIcon,
+    path: "/activities/charts",
+    scoped: true,
+  },
+  {
+    id: "fitness",
+    labelKey: "nav.fitness",
+    icon: HeartPulseIcon,
+    path: "/fitness",
+  },
+  {
+    id: "personal-bests",
+    labelKey: "nav.personalBests",
+    icon: TrophyIcon,
+    path: "/personal-bests",
+  },
+  { id: "views", labelKey: "nav.views", icon: FolderOpenIcon, path: "/views" },
+  {
+    id: "routes",
+    labelKey: "routes.myRoutes",
+    icon: RouteIcon,
+    path: "/routes",
+    enabled: isRoutesEnabled,
+  },
+  {
+    id: "workouts",
+    labelKey: "nav.workouts",
+    icon: BikeIcon,
+    path: "/workouts",
+  },
+  {
+    id: "toolbox",
+    labelKey: "nav.toolbox",
+    icon: WrenchIcon,
+    path: "/toolbox",
+  },
+  {
+    id: "settings",
+    labelKey: "nav.settings",
+    icon: SettingsIcon,
+    path: "/settings",
+  },
+  {
+    id: "privacy",
+    labelKey: "nav.privacy",
+    icon: ShieldCheckIcon,
+    path: "/privacy",
+  },
+];
+
+const ACTIONS: StaticItem[] = [
+  {
+    id: "new-workout",
+    labelKey: "workouts.newWorkout",
+    icon: PlusIcon,
+    path: "/workouts/new",
+  },
+  {
+    id: "new-route",
+    labelKey: "routes.newRoute",
+    icon: PlusIcon,
+    path: "/routes/new",
+    enabled: isRoutesEnabled,
+  },
+  {
+    id: "plan-session",
+    labelKey: "journal.planTraining",
+    icon: CalendarPlusIcon,
+    action: "plan-session",
+  },
+  {
+    id: "start-ride",
+    labelKey: "commandPalette.startRide",
+    icon: PlayIcon,
+    action: "start-ride",
+  },
+];
+
+/** The local day an activity started on, e.g. "Sun 19 Apr 2026". */
+function activityDay(startDateLocal: string) {
+  return format(
+    parseISO(activityLocalDay({ startDateLocal })),
+    "EEE d MMM yyyy",
+    { locale: getActiveDateLocale() },
+  );
+}
+
+function bestToItem(
+  { kind, best }: PersonalBestMatch,
+  t: TFunction,
+  returnTo: string,
+): CommandItem {
+  const shared = {
+    description: `${best.activityName} · ${activityDay(best.startDateLocal)}`,
+    href: activityHref(best.stravaId, returnTo),
+  };
+  switch (kind) {
+    case "power":
+      return {
+        ...shared,
+        id: `power:${best.seconds}`,
+        label: t("commandPalette.bestPower", {
+          duration: durationLabel(best.seconds),
+        }),
+        icon: RIDE.icon,
+        iconColor: RIDE.color,
+        detail: `${best.value} W`,
+      };
+    case "ride":
+      return {
+        ...shared,
+        id: `ride:${best.meters}`,
+        label: t("commandPalette.bestTime", {
+          distance: speedLabel(best.meters),
+        }),
+        icon: RIDE.icon,
+        iconColor: RIDE.color,
+        detail: `${formatElapsed(best.value)} · ${formatCyclingSpeed(best.meters / best.value)}`,
+      };
+    case "run":
+      return {
+        ...shared,
+        id: `run:${best.effort}`,
+        label: t("commandPalette.bestTime", { distance: best.effort }),
+        icon: RUN.icon,
+        iconColor: RUN.color,
+        detail: `${formatElapsed(best.value)} · ${formatPace(best.meters / best.value)}`,
+      };
+  }
+}
+
 /**
  * The palette's results for `query`, grouped by source. Activities come from
  * the server, searched for `searchQuery`, which trails `query` while typing.
@@ -89,14 +270,10 @@ export function useCommandGroups({
   query,
   searchQuery,
   step,
-  onPlanSession,
-  onStartRide,
 }: {
   query: string;
   searchQuery: string;
   step: CommandStep;
-  onPlanSession: () => void;
-  onStartRide: () => void;
 }) {
   const t = useT();
   const athleteId = useAthleteId();
@@ -105,70 +282,74 @@ export function useCommandGroups({
   const workouts = useStructuredWorkoutList().data;
   const routes = trpc.routes.list.useQuery(
     { athleteId },
-    { enabled: isRoutesEnabled, meta: { background: true } },
+    { enabled: isRoutesEnabled },
   ).data;
-  const bests = trpc.records.getPersonalBests.useQuery(
-    { athleteId },
-    { meta: { background: true } },
-  ).data;
-  const searching = step === "root" && queryWords(searchQuery).length > 0;
+  const bests = trpc.records.getPersonalBests.useQuery({ athleteId }).data;
+  // Normalized, so "Col", "col" and "col " share one request and cache entry.
+  const searchWords = queryWords(searchQuery).join(" ");
+  const searching = step === "root" && searchWords !== "";
   const activitySearch = trpc.activities.search.useQuery(
-    { athleteId, query: searchQuery },
-    {
-      enabled: searching,
-      placeholderData: keepPreviousData,
-      meta: { background: true },
-    },
+    { athleteId, query: searchWords },
+    { enabled: searching, placeholderData: keepPreviousData },
   );
   // Read once per opening: what the athlete opens next is remembered for later.
   const [recent] = React.useState(() => readRecentItems(athleteId));
+
+  // Everything that doesn't depend on the query, built once per opening.
+  const { pages, tools, actions } = React.useMemo(() => {
+    const toolLabels = createToolLabels(t);
+    const toItems = (items: StaticItem[]) =>
+      items
+        .filter((item) => item.enabled !== false)
+        .map(({ id, labelKey, icon, path, scoped, action }): CommandItem => ({
+          id,
+          label: t(labelKey),
+          icon,
+          href: path && scoped ? scope.href(path) : path,
+          action,
+        }));
+    return {
+      pages: toItems(PAGES),
+      // Found by name, but left out of the page list shown before typing.
+      tools: TOOLS.map((tool): CommandItem => ({
+        id: `tool:${tool.id}`,
+        label: toolLabels[tool.id],
+        icon: tool.icon,
+        detail: t("nav.toolbox"),
+        href: `/toolbox/${tool.id}`,
+      })),
+      actions: toItems(ACTIONS),
+    };
+  }, [t, scope]);
 
   const groups = React.useMemo((): CommandGroup[] => {
     const words = queryWords(query);
     const matches = (...texts: (string | null | undefined)[]) =>
       matchesWords(texts.filter(Boolean).join(" "), words);
-    const groupLabels = {
-      recent: t("commandPalette.group.recent"),
-      bests: t("commandPalette.group.bests"),
-      pages: t("commandPalette.group.pages"),
-      actions: t("commandPalette.group.actions"),
-      views: t("commandPalette.group.views"),
-      workouts: t("commandPalette.group.workouts"),
-      routes: t("commandPalette.group.routes"),
-      activities: t("commandPalette.group.activities"),
-      ride: t("commandPalette.group.ride"),
-    };
     const group = (
-      id: keyof typeof groupLabels,
+      id: GroupId,
       items: CommandItem[],
       limit = GROUP_LIMIT,
     ): CommandGroup => ({
       id,
-      label: groupLabels[id],
+      label: t(`commandPalette.group.${id}`),
       items: items.slice(0, limit),
     });
-    const date = (startDateLocal: string) =>
-      format(parseISO(activityLocalDay({ startDateLocal })), "EEE d MMM yyyy", {
-        locale: getActiveDateLocale(),
-      });
-    const toActivity = (
-      activity: {
-        stravaId: number;
-        name: string;
-        type: string;
-        startDateLocal: string;
-        distance?: number;
-        movingTime?: number;
-      },
-      idPrefix: string,
-    ): CommandItem => {
+    const toActivity = (activity: {
+      stravaId: number;
+      name: string;
+      type: string;
+      startDateLocal: string;
+      distance?: number;
+      movingTime?: number;
+    }): CommandItem => {
       const config = getSportConfig(activity.type);
       return {
-        id: `${idPrefix}:${activity.stravaId}`,
+        id: `activity:${activity.stravaId}`,
         label: activity.name || sportTypeLabel(activity.type, t),
         icon: config.icon,
         iconColor: config.color,
-        description: date(activity.startDateLocal),
+        description: activityDay(activity.startDateLocal),
         detail: activity.distance
           ? config.formatDistance(activity.distance)
           : activity.movingTime
@@ -203,171 +384,38 @@ export function useCommandGroups({
     });
 
     if (step === "ride") {
-      const builtIns = BUILT_IN_WORKOUT_IDS.map((id) => ({
-        id,
-        name: builtInWorkout(id, 0, t).name,
-      }));
       return [
         group(
           "ride",
           [
-            ...builtIns
-              .filter((workout) => matches(workout.name))
-              .map((workout): CommandItem => ({
-                id: `ride:${workout.id}`,
-                label: workout.name,
-                icon: PlayIcon,
-                detail: t("workouts.builtIn.badge"),
-                href: `/workouts/live?builtinWorkout=${workout.id}`,
-              })),
-            ...(workouts ?? [])
-              .filter((workout) => matches(workout.name))
-              .map((workout) => ({
-                ...toWorkout(workout),
-                id: `ride:${workout.id}`,
-                href: `/workouts/live?workoutId=${workout.id}`,
-              })),
-          ],
+            ...BUILT_IN_WORKOUT_IDS.map((id): CommandItem => ({
+              id,
+              label: builtInWorkout(id, 0, t).name,
+              icon: PlayIcon,
+              detail: t("workouts.builtIn.badge"),
+              href: `/workouts/live?builtinWorkout=${id}`,
+            })),
+            ...(workouts ?? []).map((workout) => ({
+              ...toWorkout(workout),
+              href: `/workouts/live?workoutId=${workout.id}`,
+            })),
+          ].filter((item) => matches(item.label)),
           Infinity,
         ),
       ].filter((g) => g.items.length > 0);
     }
 
-    const toolLabels = createToolLabels(t);
-    const pages: CommandItem[] = [
-      {
-        id: "journal",
-        label: t("nav.journal"),
-        icon: CalendarDaysIcon,
-        href: "/journal",
-      },
-      {
-        id: "activities",
-        label: t("nav.activities"),
-        icon: ListIcon,
-        href: scope.href("/activities"),
-      },
-      {
-        id: "activity-map",
-        label: t("commandPalette.activityMap"),
-        icon: MapIcon,
-        href: scope.href("/activities/map"),
-      },
-      {
-        id: "activity-charts",
-        label: t("commandPalette.activityCharts"),
-        icon: ChartColumnIcon,
-        href: scope.href("/activities/charts"),
-      },
-      {
-        id: "fitness",
-        label: t("nav.fitness"),
-        icon: HeartPulseIcon,
-        href: "/fitness",
-      },
-      {
-        id: "personal-bests",
-        label: t("nav.personalBests"),
-        icon: TrophyIcon,
-        href: "/personal-bests",
-      },
-      {
-        id: "views",
-        label: t("nav.views"),
-        icon: FolderOpenIcon,
-        href: "/views",
-      },
-      ...(isRoutesEnabled
-        ? [
-            {
-              id: "routes",
-              label: t("routes.myRoutes"),
-              icon: RouteIcon,
-              href: "/routes",
-            },
-          ]
-        : []),
-      {
-        id: "workouts",
-        label: t("nav.workouts"),
-        icon: BikeIcon,
-        href: "/workouts",
-      },
-      {
-        id: "toolbox",
-        label: t("nav.toolbox"),
-        icon: WrenchIcon,
-        href: "/toolbox",
-      },
-      {
-        id: "settings",
-        label: t("nav.settings"),
-        icon: SettingsIcon,
-        href: "/settings",
-      },
-      {
-        id: "privacy",
-        label: t("nav.privacy"),
-        icon: ShieldCheckIcon,
-        href: "/privacy",
-      },
-    ].map((page) => ({ ...page, id: `page:${page.id}` }));
-    // Found by name, but left out of the page list shown before typing.
-    const tools: CommandItem[] = TOOLS.map((tool) => ({
-      id: `tool:${tool.id}`,
-      label: toolLabels[tool.id],
-      icon: tool.icon,
-      detail: t("nav.toolbox"),
-      href: `/toolbox/${tool.id}`,
-    }));
-    const actions: CommandItem[] = [
-      {
-        id: "action:new-workout",
-        label: t("workouts.newWorkout"),
-        icon: PlusIcon,
-        href: "/workouts/new",
-      },
-      ...(isRoutesEnabled
-        ? [
-            {
-              id: "action:new-route",
-              label: t("routes.newRoute"),
-              icon: PlusIcon,
-              href: "/routes/new",
-            },
-          ]
-        : []),
-      {
-        id: "action:plan-session",
-        label: t("journal.planTraining"),
-        icon: CalendarPlusIcon,
-        run: onPlanSession,
-      },
-      {
-        id: "action:start-ride",
-        label: t("commandPalette.startRide"),
-        icon: PlayIcon,
-        run: onStartRide,
-      },
-    ];
-
     if (words.length === 0) {
       const recentItems = recent.flatMap((item): CommandItem[] => {
         if (item.kind === "activity") {
-          return [
-            toActivity({ ...item, stravaId: item.id }, "recent:activity"),
-          ];
+          return [toActivity({ ...item, stravaId: item.id })];
         }
         if (item.kind === "view") {
           const view = scope.views.find((v) => v.id === item.id);
-          return view
-            ? [{ ...toView(view), id: `recent:view:${view.id}` }]
-            : [];
+          return view ? [toView(view)] : [];
         }
         const workout = workouts?.find((w) => w.id === item.id);
-        return workout
-          ? [{ ...toWorkout(workout), id: `recent:workout:${workout.id}` }]
-          : [];
+        return workout ? [toWorkout(workout)] : [];
       });
       return [
         group("recent", recentItems, Infinity),
@@ -376,53 +424,14 @@ export function useCommandGroups({
       ].filter((g) => g.items.length > 0);
     }
 
-    const bestItems = (bests ? matchPersonalBests(bests, query) : []).map(
-      (match): CommandItem => {
-        const { best } = match;
-        const shared = {
-          description: `${best.activityName} · ${date(best.startDateLocal)}`,
-          href: activityHref(best.stravaId, asPath),
-        };
-        if (match.kind === "power") {
-          const duration =
-            CYCLING_POWER_DURATIONS.find(
-              (d) => d.seconds === match.best.seconds,
-            )?.label ?? formatElapsed(match.best.seconds);
-          return {
-            ...shared,
-            id: `best:power:${match.best.seconds}`,
-            label: t("commandPalette.bestPower", { duration }),
-            icon: RIDE.icon,
-            iconColor: RIDE.color,
-            detail: `${best.value} W`,
-          };
-        }
-        if (match.kind === "ride") {
-          const distance =
-            CYCLING_SPEED_DISTANCES.find((d) => d.meters === match.best.meters)
-              ?.label ?? formatKm(match.best.meters);
-          return {
-            ...shared,
-            id: `best:ride:${match.best.meters}`,
-            label: t("commandPalette.bestTime", { distance }),
-            icon: RIDE.icon,
-            iconColor: RIDE.color,
-            detail: `${formatElapsed(best.value)} · ${formatCyclingSpeed(match.best.meters / best.value)}`,
-          };
-        }
-        return {
-          ...shared,
-          id: `best:run:${match.best.effort}`,
-          label: t("commandPalette.bestTime", { distance: match.best.effort }),
-          icon: RUN.icon,
-          iconColor: RUN.color,
-          detail: `${formatElapsed(best.value)} · ${formatPace(match.best.meters / best.value)}`,
-        };
-      },
-    );
-
     return [
-      group("bests", bestItems, Infinity),
+      group(
+        "bests",
+        (bests ? matchPersonalBests(bests, query) : []).map((match) =>
+          bestToItem(match, t, asPath),
+        ),
+        Infinity,
+      ),
       group(
         "pages",
         [...pages, ...tools].filter((page) => matches(page.label)),
@@ -461,7 +470,7 @@ export function useCommandGroups({
         // as the athlete types.
         (activitySearch.data ?? [])
           .filter((activity) => matches(activity.name))
-          .map((activity) => toActivity(activity, "activity")),
+          .map(toActivity),
         Infinity,
       ),
     ].filter((g) => g.items.length > 0);
@@ -471,13 +480,14 @@ export function useCommandGroups({
     step,
     asPath,
     scope,
+    pages,
+    tools,
+    actions,
     workouts,
     routes,
     bests,
     activitySearch.data,
     recent,
-    onPlanSession,
-    onStartRide,
   ]);
 
   return {

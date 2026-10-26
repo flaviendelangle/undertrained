@@ -2,6 +2,7 @@ import { BarChart3Icon, ListIcon, MapIcon } from "lucide-react";
 
 import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { useActivityView } from "~/hooks/useActivityView";
+import { useRememberRecentItem } from "~/hooks/useRememberRecentItem";
 import { useT } from "~/i18n/useT";
 import { ACTIVITY_PRESENTATION_PATHS } from "~/utils/activityViewState";
 
@@ -18,6 +19,9 @@ export function ActivityWorkspaceToolbar({
 }) {
   const t = useT();
   const scope = useActivityView();
+  useRememberRecentItem(
+    scope.view ? { kind: "view", id: scope.view.id } : null,
+  );
   return (
     <PageToolbar
       title={t("activities.pageTitle")}

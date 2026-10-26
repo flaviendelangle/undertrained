@@ -40,6 +40,7 @@ export const trpc = createTRPCNext<AppRouter>({
             op.type === "query" &&
             (op.path.startsWith("analytics.") ||
               op.path === "records.getRecordHolders" ||
+              op.path === "records.getPersonalBests" ||
               op.path === "calendarSubscriptions.events"),
           true: httpLink({
             url: `${getBaseUrl()}/api/trpc`,
@@ -91,15 +92,13 @@ export const trpc = createTRPCNext<AppRouter>({
 export function invalidateActivityData(
   utils: ReturnType<typeof trpc.useUtils>,
 ) {
+  // Whole routers, so a new activity-derived query is covered without being
+  // listed here. Only queries on screen refetch.
   return Promise.all([
-    utils.activities.list.invalidate(),
-    utils.activities.maps.invalidate(),
-    utils.activities.search.invalidate(),
+    utils.activities.invalidate(),
+    utils.analytics.invalidate(),
+    utils.records.invalidate(),
     utils.views.summary.invalidate(),
     utils.views.counts.invalidate(),
-    utils.analytics.getPowerCurve.invalidate(),
-    utils.analytics.getPowerCurveYears.invalidate(),
-    utils.analytics.getPowerDistribution.invalidate(),
-    utils.records.getPersonalBests.invalidate(),
   ]);
 }

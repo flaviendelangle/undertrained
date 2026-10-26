@@ -324,6 +324,9 @@ interface MobileTabLinkProps {
   activeFor?: string;
 }
 
+const MOBILE_TAB_CLASS =
+  "flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors";
+
 function MobileTabLink({
   icon: Icon,
   label,
@@ -338,7 +341,7 @@ function MobileTabLink({
       href={href}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors",
+        MOBILE_TAB_CLASS,
         isActive
           ? "text-primary"
           : "text-muted-foreground active:text-foreground",
@@ -363,7 +366,10 @@ function MobileTabButton({
     <button
       type="button"
       onClick={onClick}
-      className="text-muted-foreground active:text-foreground flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-medium transition-colors"
+      className={cn(
+        MOBILE_TAB_CLASS,
+        "text-muted-foreground active:text-foreground",
+      )}
     >
       <Icon className="size-5" />
       <span>{label}</span>

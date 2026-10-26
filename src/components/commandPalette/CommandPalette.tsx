@@ -5,7 +5,6 @@ import { ArrowLeftIcon, SearchIcon } from "lucide-react";
 import { useRouter } from "next/router";
 
 import { Autocomplete as AutocompletePrimitive } from "@base-ui/react/autocomplete";
-import { useStableCallback } from "@base-ui/utils/useStableCallback";
 import { useTimeout } from "@base-ui/utils/useTimeout";
 
 import {
@@ -102,8 +101,6 @@ function CommandSearch({
     query,
     searchQuery,
     step,
-    onPlanSession: useStableCallback(onPlanSession),
-    onStartRide: useStableCallback(() => goToStep("ride")),
   });
   const status = searching
     ? t("commandPalette.searching")
@@ -112,8 +109,10 @@ function CommandSearch({
       : null;
 
   const choose = (item: CommandItem) => {
-    if (item.run) {
-      item.run();
+    if (item.action === "start-ride") {
+      goToStep("ride");
+    } else if (item.action === "plan-session") {
+      onPlanSession();
     } else if (item.href) {
       void router.push(item.href);
       onClose();

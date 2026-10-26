@@ -22,10 +22,10 @@ const RUNNING_TYPES = getActivityTypesByCategory("running");
 // Speed/elevation records exclude virtual rides (simulated distance/altitude).
 const NON_VIRTUAL_CYCLING_TYPES = activityTypesFor("speedAndClimbing");
 
-/** Comma-joined SQL list of activity types, for `type IN (...)`. */
-function typeList(types: readonly string[]): SQL {
+/** Comma-joined SQL list of values, e.g. for `type IN (...)`. */
+function sqlList(values: readonly (string | number)[]): SQL {
   return sql.join(
-    types.map((t) => sql`${t}`),
+    values.map((value) => sql`${value}`),
     sql`, `,
   );
 }
@@ -132,7 +132,8 @@ interface PersonalBest {
 /**
  * The all-time best for each of `keys` in a jsonb `_bests` column, in a single
  * query: unnest the column once and rank per key (the windowed pattern from
- * analytics.getPowerCurve) instead of one LIMIT-1 query per key.
+ * analytics.getPowerCurve) instead of one LIMIT-1 query per key. Reading only
+ * `keys` with `->>` is slower: each lookup decompresses the whole column again.
  */
 async function bestPerKey(
   db: Database,
@@ -163,10 +164,7 @@ async function bestPerKey(
       LATERAL jsonb_each_text(${opts.column}) AS kv(key, value)
       WHERE a.athlete = ${opts.athleteId}
         AND ${opts.column} IS NOT NULL
-        AND (kv.key)::int IN (${sql.join(
-          opts.keys.map((k) => sql`${k}`),
-          sql`, `,
-        )})
+        AND (kv.key)::int IN (${sqlList(opts.keys)})
         ${opts.typeFilter ?? sql``}
     ),
     ranked AS (
@@ -195,7 +193,7 @@ function bestCyclingPower(db: Database, athleteId: number) {
     column: sql`a.power_bests`,
     keys: CYCLING_POWER_DURATION_SECONDS,
     order: sql`DESC`,
-    typeFilter: sql`AND a.type IN (${typeList(CYCLING_TYPES)})`,
+    typeFilter: sql`AND a.type IN (${sqlList(CYCLING_TYPES)})`,
   });
 }
 
@@ -301,10 +299,7 @@ async function rankJsonbBests(
   // change a kept duration's rank — ranking is partitioned per key.
   const keyFilter =
     opts.keys && opts.keys.length > 0
-      ? sql`AND (kv.key)::int IN (${sql.join(
-          opts.keys.map((k) => sql`${k}`),
-          sql`, `,
-        )})`
+      ? sql`AND (kv.key)::int IN (${sqlList(opts.keys)})`
       : sql``;
   const rows = await db.execute<{
     param: string;
@@ -353,7 +348,7 @@ export const recordsRouter = router({
    *   ordered shortest → longest.
    */
   getOptions: athleteProcedure.query(async ({ ctx, input }) => {
-    const cyclingTypes = typeList(CYCLING_TYPES);
+    const cyclingTypes = sqlList(CYCLING_TYPES);
     const [cyclingRows, runRows] = await Promise.all([
       ctx.db.execute<{ has_cycling: boolean; has_power: boolean }>(sql`
           SELECT
@@ -395,9 +390,9 @@ export const recordsRouter = router({
    * jsonb on the server: `activities.list` deliberately omits those columns.
    */
   getRecordHolders: athleteProcedure.query(async ({ ctx, input }) => {
-    const cycling = sql`AND a.type IN (${typeList(CYCLING_TYPES)})`;
-    const running = sql`AND a.type IN (${typeList(RUNNING_TYPES)})`;
-    const nonVirtualCycling = sql`AND a.type IN (${typeList(NON_VIRTUAL_CYCLING_TYPES)})`;
+    const cycling = sql`AND a.type IN (${sqlList(CYCLING_TYPES)})`;
+    const running = sql`AND a.type IN (${sqlList(RUNNING_TYPES)})`;
+    const nonVirtualCycling = sql`AND a.type IN (${sqlList(NON_VIRTUAL_CYCLING_TYPES)})`;
 
     // Each category's all-time leader (LIMIT 1), tagged with a display label.
     const single = (valueExpr: SQL, order: SQL, label: string, extra?: SQL) =>
@@ -542,7 +537,7 @@ export const recordsRouter = router({
       const isNonVirtualCycling = NON_VIRTUAL_CYCLING_TYPES.includes(
         activity.type,
       );
-      const sportTypes = typeList(isCycling ? CYCLING_TYPES : RUNNING_TYPES);
+      const sportTypes = sqlList(isCycling ? CYCLING_TYPES : RUNNING_TYPES);
 
       // `load` ranking mirrors getLongestActivityLeaderboard: rank by the
       // athlete's preferred per-sport score, falling back to the other, then
@@ -576,7 +571,7 @@ export const recordsRouter = router({
             target: number,
           ) => (enabled ? rankExpr(typesSql, valueExpr, target) : sql`NULL`);
 
-          const nonVirtual = typeList(NON_VIRTUAL_CYCLING_TYPES);
+          const nonVirtual = sqlList(NON_VIRTUAL_CYCLING_TYPES);
           const wantLoad = targetLoad != null && targetLoad > 0;
           const wantClimb =
             isNonVirtualCycling && (activity.biggestClimb ?? 0) > 0;
@@ -646,7 +641,7 @@ export const recordsRouter = router({
             stravaId: input.stravaId,
             column: sql`a.power_bests`,
             order: sql`DESC`,
-            typeFilter: sql`AND a.type IN (${typeList(CYCLING_TYPES)})`,
+            typeFilter: sql`AND a.type IN (${sqlList(CYCLING_TYPES)})`,
             keys: CYCLING_POWER_DURATION_SECONDS,
             limit,
           }),
@@ -761,7 +756,7 @@ export const recordsRouter = router({
         athleteId: input.athleteId,
         valueExpr: sql`(a.heartrate_bests ->> ${String(input.duration)})::int`,
         order: sql`DESC`,
-        extra: sql`AND a.type IN (${typeList(
+        extra: sql`AND a.type IN (${sqlList(
           input.sport === "cycling" ? CYCLING_TYPES : RUNNING_TYPES,
         )})`,
         limit: input.limit,
@@ -786,7 +781,7 @@ export const recordsRouter = router({
         athleteId: input.athleteId,
         valueExpr,
         order: sql`DESC`,
-        extra: sql`AND a.type IN (${typeList(NON_VIRTUAL_CYCLING_TYPES)}) AND ${valueExpr} > 0`,
+        extra: sql`AND a.type IN (${sqlList(NON_VIRTUAL_CYCLING_TYPES)}) AND ${valueExpr} > 0`,
         limit: input.limit,
       });
     }),
@@ -856,7 +851,7 @@ export const recordsRouter = router({
         athleteId: input.athleteId,
         valueExpr,
         order: sql`DESC`,
-        extra: sql`AND a.type IN (${typeList(
+        extra: sql`AND a.type IN (${sqlList(
           input.sport === "cycling" ? CYCLING_TYPES : RUNNING_TYPES,
         )}) AND ${valueExpr} > 0`,
         limit: input.limit,

@@ -37,11 +37,6 @@ function quantities(folded: string) {
   );
 }
 
-/** Strava's effort distances are rounded, e.g. 21097.5 m for a half marathon. */
-function sameDistance(meters: number, target: number) {
-  return Math.abs(meters - target) <= target * 0.01;
-}
-
 function letterWords(folded: string) {
   return folded.split(/[^a-z]+/).filter(Boolean);
 }
@@ -65,6 +60,12 @@ export function matchPersonalBests(
     const meters = METERS_PER_UNIT.get(unit);
     return meters ? [amount * meters] : [];
   });
+  // Within 1%: Strava's distances aren't round, e.g. 21097.5 m for a half
+  // marathon.
+  const atQueriedDistance = (best: { meters: number }) =>
+    distances.some(
+      (meters) => Math.abs(meters - best.meters) <= best.meters * 0.01,
+    );
   const words = found.length === 0 ? letterWords(folded) : [];
   const namesEffort = (effort: string) => {
     const effortWords = letterWords(foldText(effort));
@@ -79,16 +80,10 @@ export function matchPersonalBests(
       .filter((best) => durations.includes(best.seconds))
       .map((best) => ({ kind: "power" as const, best })),
     ...bests.runEfforts
-      .filter(
-        (best) =>
-          distances.some((meters) => sameDistance(meters, best.meters)) ||
-          namesEffort(best.effort),
-      )
+      .filter((best) => atQueriedDistance(best) || namesEffort(best.effort))
       .map((best) => ({ kind: "run" as const, best })),
     ...bests.speed
-      .filter((best) =>
-        distances.some((meters) => sameDistance(meters, best.meters)),
-      )
+      .filter(atQueriedDistance)
       .map((best) => ({ kind: "ride" as const, best })),
   ];
 }
