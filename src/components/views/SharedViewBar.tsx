@@ -143,24 +143,6 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
       className="flex items-center gap-2"
       aria-label={t("views.manage")}
     >
-      {scope.hasChanges && (
-        <ToolbarPrimitive.Button
-          render={<Button variant="outline" />}
-          onClick={() => void scope.reset()}
-        >
-          <RotateCcwIcon />
-          {t(scope.view ? "views.reset" : "views.clear")}
-        </ToolbarPrimitive.Button>
-      )}
-      {scope.modified && scope.view && (
-        <ToolbarPrimitive.Button
-          render={<Button />}
-          disabled={save.busy}
-          onClick={() => save.update(scope.view!, scope.rules, scope.display)}
-        >
-          {t("views.update")}
-        </ToolbarPrimitive.Button>
-      )}
       <ToolbarPrimitive.Button
         render={
           <Button
@@ -180,6 +162,24 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
         <FolderOpenIcon />
         {t("views.manage")}
       </ToolbarPrimitive.Link>
+      {scope.hasChanges && (
+        <ToolbarPrimitive.Button
+          render={<Button variant="outline" />}
+          onClick={() => void scope.reset()}
+        >
+          <RotateCcwIcon />
+          {t(scope.view ? "views.reset" : "views.clear")}
+        </ToolbarPrimitive.Button>
+      )}
+      {scope.modified && scope.view && (
+        <ToolbarPrimitive.Button
+          render={<Button />}
+          disabled={save.busy}
+          onClick={() => save.update(scope.view!, scope.rules, scope.display)}
+        >
+          {t("views.update")}
+        </ToolbarPrimitive.Button>
+      )}
     </ToolbarPrimitive.Group>
   );
   const error = scope.error && (
