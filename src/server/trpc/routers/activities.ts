@@ -1,4 +1,4 @@
-import { and, desc, eq, getTableColumns, isNotNull } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { TRPCError } from "@trpc/server";
@@ -38,10 +38,16 @@ export const activitiesRouter = router({
         privateNote: _privateNote,
         ...leanColumns
       } = getTableColumns(activities);
+      // Lets the statistics page hide the power card when no selected activity
+      // has a power curve, without shipping the curves themselves.
+      const listColumns = {
+        ...leanColumns,
+        hasPowerBests: sql<boolean>`(${activities.powerBests} IS NOT NULL AND ${activities.powerBests} <> '{}'::jsonb)`,
+      };
 
       if (input.includeMap) {
         const filtered = await ctx.db
-          .select({ ...leanColumns, mapPolyline: activities.mapPolyline })
+          .select({ ...listColumns, mapPolyline: activities.mapPolyline })
           .from(activities)
           .where(selected)
           .orderBy(desc(activities.startDate));
@@ -49,7 +55,7 @@ export const activitiesRouter = router({
       }
 
       const filtered = await ctx.db
-        .select(leanColumns)
+        .select(listColumns)
         .from(activities)
         .where(selected)
         .orderBy(desc(activities.startDate));
