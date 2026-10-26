@@ -53,6 +53,7 @@ describe("matchPersonalBests", () => {
     ["21,1 km", ["run Half-Marathon"]],
     // An amount picks by distance, so "1 mile" leaves out "1/2 mile".
     ["1 mile", ["run 1 mile"]],
+    ["1/2 mile", ["run 1/2 mile"]],
     ["half marathon", ["run Half-Marathon"]],
     ["mara", ["run Half-Marathon", "run Marathon"]],
     ["Morning ride", []],

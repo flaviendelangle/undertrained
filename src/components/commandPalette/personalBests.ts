@@ -26,11 +26,14 @@ const METERS_PER_UNIT = unitMap([
   [1609.344, ["mi", "mile", "miles"]],
 ]);
 
-/** Every amount followed by a unit in the query, e.g. "20 min" or "5k". */
+/** Every amount followed by a unit in the query, e.g. "20 min", "5k" or "1/2 mile". */
 function quantities(folded: string) {
   return Array.from(
-    folded.matchAll(/(\d+(?:[.,]\d+)?)\s*([a-z]+)/g),
-    ([, amount, unit]) => ({ amount: Number(amount.replace(",", ".")), unit }),
+    folded.matchAll(/(\d+(?:[.,]\d+)?)(?:\/(\d+))?\s*([a-z]+)/g),
+    ([, amount, denominator, unit]) => ({
+      amount: Number(amount.replace(",", ".")) / Number(denominator ?? 1),
+      unit,
+    }),
   );
 }
 

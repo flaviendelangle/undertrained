@@ -94,10 +94,12 @@ export function invalidateActivityData(
   return Promise.all([
     utils.activities.list.invalidate(),
     utils.activities.maps.invalidate(),
+    utils.activities.search.invalidate(),
     utils.views.summary.invalidate(),
     utils.views.counts.invalidate(),
     utils.analytics.getPowerCurve.invalidate(),
     utils.analytics.getPowerCurveYears.invalidate(),
     utils.analytics.getPowerDistribution.invalidate(),
+    utils.records.getPersonalBests.invalidate(),
   ]);
 }
