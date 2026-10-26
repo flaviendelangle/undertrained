@@ -430,11 +430,9 @@ export function ActivityFilterBuilder({
 export function ActivitySelectionPreview({
   rules,
   today,
-  coverage = false,
 }: {
   rules: ActivityFilterGroup;
   today: string;
-  coverage?: boolean;
 }) {
   const t = useT();
   const athleteId = useAthleteId();
@@ -444,7 +442,7 @@ export function ActivitySelectionPreview({
     return () => clearTimeout(timer);
   }, [rules]);
   const valid = activityRulesSchema.safeParse(rules).success;
-  // Canonical like the applied selection, whose summary then comes from cache.
+  // Canonical so equivalent rules share one cached summary.
   const previewRules = React.useMemo(() => canonicalRules(preview), [preview]);
   const summary = trpc.views.summary.useQuery(
     { athleteId, rules: previewRules, today },
@@ -465,17 +463,7 @@ export function ActivitySelectionPreview({
           {t("common.loadError")}
         </button>
       ) : summary.data ? (
-        <>
-          <span>{t("views.activities", { count: summary.data.count })}</span>
-          {coverage && (
-            <span>
-              {t("views.routeCoverage", {
-                count: summary.data.routes,
-                total: summary.data.count,
-              })}
-            </span>
-          )}
-        </>
+        <span>{t("views.activities", { count: summary.data.count })}</span>
       ) : (
         t("common.loading")
       )}

@@ -79,7 +79,6 @@ const fr: Messages = {
       "Aucune activité de cette sélection ne contient de données de puissance.",
     powerSource:
       "Les courbes utilisent les activités compatibles de cette sélection. Les périodes de comparaison affinent chaque série nommée.",
-    routeCoverage: "{count} parcours pour {total} activités sélectionnées",
     loadError: "Impossible de charger les vues enregistrées.",
     errors: {
       condition: "Choisissez une propriété et une comparaison compatibles.",

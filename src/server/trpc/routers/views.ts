@@ -165,7 +165,6 @@ export const viewsRouter = router({
       const [row] = await ctx.db
         .select({
           count: sql<number>`count(*)::int`,
-          routes: sql<number>`count(*) filter (where ${activities.mapPolyline} is not null and ${activities.mapPolyline} <> '')::int`,
         })
         .from(activities)
         .where(selected);

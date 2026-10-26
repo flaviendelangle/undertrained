@@ -32,11 +32,9 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { useActivityView } from "~/hooks/useActivityView";
-import { useAthleteId } from "~/hooks/useAthleteId";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useT } from "~/i18n/useT";
 import { type ActivityDisplay, conditionCount } from "~/utils/activityFilters";
-import { trpc } from "~/utils/trpc";
 
 import { ActivityDisplayEditor } from "./ActivityDisplayEditor";
 import { ActivityFilterEditor } from "./ActivityFilterEditor";
@@ -49,7 +47,6 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
   const t = useT();
   const router = useRouter();
   const scope = useActivityView();
-  const athleteId = useAthleteId();
   const isMobile = useIsMobile();
   const [panel, setPanel] = React.useState<
     "view" | "filters" | "save" | "display" | null
@@ -67,10 +64,6 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
     }
   };
   const save = useSaveActivityView(() => setPanel(null));
-  const summary = trpc.views.summary.useQuery(
-    { athleteId, rules: scope.rules, today: scope.today },
-    { enabled: scope.ready },
-  );
   const count = conditionCount(scope.rules);
   const title =
     scope.view?.name ??
@@ -137,7 +130,10 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
     </ToolbarPrimitive.Button>
   );
   const state = stateLabel && (
-    <span role="status" className="flex items-center gap-1.5 text-xs">
+    <span
+      role="status"
+      className="text-muted-foreground flex items-center gap-1.5 text-xs"
+    >
       <span className="size-1.5 rounded-full bg-amber-500" />
       {stateLabel}
     </span>
@@ -203,31 +199,6 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
       </button>
     </div>
   );
-  const totals = (
-    <div
-      className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs"
-      aria-live="polite"
-    >
-      <span>
-        {summary.data
-          ? t("views.activities", { count: summary.data.count })
-          : t("common.loading")}
-      </span>
-      {summary.data && (
-        <span>
-          {t("views.routeCoverage", {
-            count: summary.data.routes,
-            total: summary.data.count,
-          })}
-        </span>
-      )}
-      {summary.isError && (
-        <button className="underline" onClick={() => void summary.refetch()}>
-          {t("common.loadError")}
-        </button>
-      )}
-    </div>
-  );
   return (
     <>
       <div className="border-border bg-background shrink-0 border-b">
@@ -263,35 +234,28 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
         ) : (
           <ToolbarPrimitive.Root
             aria-label={t("views.viewOptions")}
-            className="flex flex-col gap-2 px-4 py-3"
+            className="flex flex-wrap items-center gap-2 px-4 py-3"
           >
-            <div className="flex flex-wrap items-center gap-2">
-              {picker}
-              <ToolbarPrimitive.Group
-                className="flex items-center gap-2"
-                aria-label={t("views.filterTitle")}
-              >
-                {filters}
-                {table && (
-                  <ToolbarPrimitive.Button
-                    render={<Button variant="outline" size="icon" />}
-                    aria-label={t("views.display")}
-                    disabled={!scope.ready}
-                    onClick={() => setPanel("display")}
-                  >
-                    <SlidersHorizontalIcon />
-                  </ToolbarPrimitive.Button>
-                )}
-              </ToolbarPrimitive.Group>
-              <ToolbarPrimitive.Separator className="bg-border mx-1 h-5 w-px self-center" />
-              {actions}
-            </div>
-            {!scope.error && (
-              <div className="text-muted-foreground flex items-center gap-4">
-                {state}
-                {totals}
-              </div>
-            )}
+            {picker}
+            {!scope.error && state}
+            <ToolbarPrimitive.Group
+              className="flex items-center gap-2"
+              aria-label={t("views.filterTitle")}
+            >
+              {filters}
+              {table && (
+                <ToolbarPrimitive.Button
+                  render={<Button variant="outline" size="icon" />}
+                  aria-label={t("views.display")}
+                  disabled={!scope.ready}
+                  onClick={() => setPanel("display")}
+                >
+                  <SlidersHorizontalIcon />
+                </ToolbarPrimitive.Button>
+              )}
+            </ToolbarPrimitive.Group>
+            <ToolbarPrimitive.Separator className="bg-border mx-1 h-5 w-px self-center" />
+            {actions}
           </ToolbarPrimitive.Root>
         )}
         {error}

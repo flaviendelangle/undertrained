@@ -164,11 +164,7 @@ export function MobileViewDrawer({
         </div>
         <ResponsiveDialogFooter className="border-border grid shrink-0 grid-cols-2 gap-2 border-t pt-3">
           <div className="col-span-2 pb-1">
-            <ActivitySelectionPreview
-              rules={rules}
-              today={scope.today}
-              coverage
-            />
+            <ActivitySelectionPreview rules={rules} today={scope.today} />
           </div>
           {!saving && scope.view && dirty ? (
             <Button

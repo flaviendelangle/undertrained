@@ -80,7 +80,6 @@ const en = {
     noPower: "No activities in this selection have power data.",
     powerSource:
       "Power curves use eligible activities within this selection. Comparison ranges narrow each labelled series.",
-    routeCoverage: "{count} routes from {total} selected activities",
     loadError: "Could not load saved views.",
     errors: {
       condition: "Choose a supported property and comparison.",
