@@ -101,7 +101,7 @@ const StatisticsPage: NextPageWithLayout = () => {
             {/* Mobile (< md): charts go full-bleed, flush under the toolbar and
             separated by hairline dividers. Desktop (md+): the familiar centered
             column of boxed cards with gaps. `md` matches useIsMobile. */}
-            <div className="flex flex-1 flex-col overflow-y-auto pb-3 md:items-center md:gap-4 md:p-4">
+            <div className="flex min-w-0 flex-1 flex-col overflow-y-auto pb-3 md:items-center md:gap-4 md:p-4">
               {activities?.length === 0 ? (
                 <QueryState>
                   {t(

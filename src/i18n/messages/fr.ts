@@ -580,6 +580,24 @@ const fr: Messages = {
     },
     activitiesTimeline: {
       title: "Chronologie des activités",
+      inspection: "Activités de cette période",
+      previous: "Période précédente",
+      next: "Période suivante",
+      unavailable: "Indisponible",
+      sports: "Sports de cette sélection",
+      allSports: "Tous les sports affichés",
+      restoreSports: "Afficher tous les sports du graphique",
+      missing: {
+        one: "{count} activité sans estimation de charge. Elle est exclue du total.",
+        other:
+          "{count} activités sans estimation de charge. Elles sont exclues du total.",
+      },
+      openList: "Ouvrir dans les activités",
+      cannotOpen:
+        "Affichez un sport ou simplifiez les filtres pour ouvrir cette sélection dans les activités.",
+      empty: "Aucune activité correspondante sur cette période.",
+      more: "Afficher plus · {count} restantes",
+      back: "Revenir au graphique",
     },
     cumulativeTimeline: {
       title: "Progression d'année en année",

@@ -7,8 +7,21 @@ import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
-function Drawer({ ...props }: DrawerPrimitive.Root.Props) {
-  return <DrawerPrimitive.Root data-slot="drawer" {...props} />;
+const DrawerSideContext = React.createContext<"bottom" | "right">("bottom");
+
+function Drawer({
+  side = "bottom",
+  ...props
+}: DrawerPrimitive.Root.Props & { side?: "bottom" | "right" }) {
+  return (
+    <DrawerSideContext value={side}>
+      <DrawerPrimitive.Root
+        data-slot="drawer"
+        swipeDirection={side === "right" ? "right" : "down"}
+        {...props}
+      />
+    </DrawerSideContext>
+  );
 }
 
 function DrawerTrigger({ ...props }: DrawerPrimitive.Trigger.Props) {
@@ -47,20 +60,36 @@ function DrawerContent({
 }: DrawerPrimitive.Popup.Props & {
   showCloseButton?: boolean;
 }) {
+  const side = React.useContext(DrawerSideContext);
   return (
     <DrawerPortal>
       <DrawerOverlay />
-      <DrawerPrimitive.Viewport className="pointer-events-none fixed inset-0 z-50 flex items-end">
+      <DrawerPrimitive.Viewport
+        className={cn(
+          "pointer-events-none fixed inset-0 z-50 flex",
+          side === "right" ? "items-stretch justify-end" : "items-end",
+        )}
+      >
         <DrawerPrimitive.Popup
           data-slot="drawer-content"
           className={cn(
-            "bg-background ring-foreground/10 pointer-events-auto relative flex max-h-[90svh] w-full [transform:translateY(var(--drawer-swipe-movement-y))] flex-col overflow-y-auto rounded-t-xl px-6 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-sm ring-1 transition-transform duration-200 outline-none data-ending-style:[transform:translateY(100%)] data-starting-style:[transform:translateY(100%)] data-swiping:duration-0",
+            "bg-background ring-foreground/10 pointer-events-auto relative flex flex-col overflow-y-auto px-6 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-sm ring-1 transition-transform duration-200 outline-none data-swiping:duration-0",
+            side === "right"
+              ? "h-full w-[min(28rem,100vw)] [transform:translateX(var(--drawer-swipe-movement-x))] data-ending-style:[transform:translateX(100%)] data-starting-style:[transform:translateX(100%)]"
+              : "max-h-[90svh] w-full [transform:translateY(var(--drawer-swipe-movement-y))] rounded-t-xl data-ending-style:[transform:translateY(100%)] data-starting-style:[transform:translateY(100%)]",
             className,
           )}
           {...props}
         >
-          <div className="bg-muted mx-auto mb-6 h-1.5 w-12 shrink-0 rounded-full" />
-          <DrawerPrimitive.Content className="flex min-h-0 flex-col gap-6">
+          {side === "bottom" && (
+            <div className="bg-muted mx-auto mb-6 h-1.5 w-12 shrink-0 rounded-full" />
+          )}
+          <DrawerPrimitive.Content
+            className={cn(
+              "flex min-h-0 flex-col gap-6",
+              side === "right" && "flex-1",
+            )}
+          >
             {children}
             {showCloseButton && (
               <DrawerPrimitive.Close

@@ -1,7 +1,8 @@
 /**
  * Link to an activity page whose back link returns to `returnTo`, the app path
- * (with its query) of the page linking to it. Pages in the Activities section
- * link with the current selection instead (see `useActivityView().href`).
+ * (with its query) of the page linking to it. Activity lists usually link with the
+ * current selection instead (see `useActivityView().href`). Inspections name
+ * their full return path to preserve chart settings as well.
  */
 export function activityHref(stravaId: number, returnTo: string): string {
   // Slashes are valid in a query value and keep the URL readable.
@@ -25,4 +26,15 @@ export function readReturnTo(
     return null;
   }
   return url.origin === BASE ? url.pathname + url.search + url.hash : null;
+}
+
+/** The timeline inspection to return to after browsing its full activity list. */
+export function readTimelineReturnTo(
+  query: Record<string, string | string[] | undefined>,
+) {
+  const href = readReturnTo(query);
+  return href &&
+    new URL(href, "https://app.invalid").pathname === "/activities/charts"
+    ? href
+    : null;
 }

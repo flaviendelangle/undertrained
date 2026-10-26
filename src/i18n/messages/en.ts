@@ -568,6 +568,24 @@ const en = {
     },
     activitiesTimeline: {
       title: "Activities Timeline",
+      inspection: "Activities behind this period",
+      previous: "Previous period",
+      next: "Next period",
+      unavailable: "Unavailable",
+      sports: "Sports in this inspection",
+      allSports: "All shown sports",
+      restoreSports: "Show all sports in the chart",
+      missing: {
+        one: "{count} activity has no load estimate. It is excluded from the total.",
+        other:
+          "{count} activities have no load estimate. They are excluded from the total.",
+      },
+      openList: "Open in Activities",
+      cannotOpen:
+        "Show a sport or simplify the filters to open this selection in Activities.",
+      empty: "No matching activities in this period.",
+      more: "Show more · {count} remaining",
+      back: "Back to chart",
     },
     cumulativeTimeline: {
       title: "Year-over-Year Progress",
