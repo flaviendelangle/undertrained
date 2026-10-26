@@ -4,7 +4,6 @@ import {
   ActivityIcon,
   BarChart3Icon,
   LayersIcon,
-  SlidersHorizontalIcon,
   TrendingUpIcon,
   X,
 } from "lucide-react";
@@ -29,6 +28,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { useActivitySelection } from "~/hooks/useActivitySelection";
+import { useActivityView } from "~/hooks/useActivityView";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
@@ -132,33 +132,20 @@ function buildRangeSeries(
 
 interface PowerCurveProps {
   activityTypes?: string[];
-  workoutTypes?: number[];
   stravaId?: number;
-  defaultRanges?: DateRange[];
-  timePeriodId?: number;
 }
 
 // --- Component ---
 
 const PowerCurve = React.memo(function PowerCurve({
   activityTypes,
-  workoutTypes,
   stravaId,
-  defaultRanges,
-  timePeriodId,
 }: PowerCurveProps) {
   if (stravaId != null) {
     return <SingleActivityPowerCurve stravaId={stravaId} />;
   }
 
-  return (
-    <AggregatedPowerCurve
-      activityTypes={activityTypes}
-      workoutTypes={workoutTypes}
-      defaultRanges={defaultRanges}
-      timePeriodId={timePeriodId}
-    />
-  );
+  return <AggregatedPowerCurve activityTypes={activityTypes} />;
 });
 
 export default PowerCurve;
@@ -346,7 +333,7 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
     <ChartCard title={cardTitle} actions={actions}>
       {tab === "curve" &&
         (xData.length === 0 ? (
-          <ChartMessage>{t("charts.powerCurve.empty")}</ChartMessage>
+          <ChartMessage>{t("views.noPower")}</ChartMessage>
         ) : (
           <PowerCurveWebGLChart
             xData={xData}
@@ -590,64 +577,52 @@ function PowerSliceWidthSettings() {
 
 // --- Aggregated mode with multi-range support ---
 
-function AggregatedPowerCurve({
-  activityTypes,
-  workoutTypes: workoutTypesProp,
-  defaultRanges,
-  timePeriodId,
-}: {
-  activityTypes?: string[];
-  workoutTypes?: number[];
-  defaultRanges?: DateRange[];
-  timePeriodId?: number;
-}) {
+// The range covering the whole selection, labelled with the view's name.
+const SELECTION_RANGE_ID = "selection";
+const LOCKED_RANGE_IDS = new Set([SELECTION_RANGE_ID]);
+
+function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
   const t = useT();
   const tokens = useChartTokens();
   const athleteId = useAthleteId();
-  // Which parts of the global filter each tab honours is decided per view in
-  // `useActivitySelection`. The curve and its year list only forward sports
-  // and workout types.
-  const { workoutTypes } = useActivitySelection(
-    timePeriodId != null ? "periodPowerCurve" : "statisticsPowerCurve",
-    { activityTypes, workoutTypes: workoutTypesProp },
-  );
-  const zonesSelection = useActivitySelection("periodPowerZones", {
+  const scope = useActivityView();
+  const selection = useActivitySelection("statisticsPowerCurve", {
     activityTypes,
-    timePeriodId,
   });
-  const distributionSelection = useActivitySelection(
-    "periodPowerDistribution",
-    { activityTypes, timePeriodId },
-  );
-  const { ranges, addRange, removeRange } = useDateRanges(
-    () => defaultRanges ?? [presetToRange("1y", t)],
-  );
-  const lockedRangeIds = React.useMemo(
-    () => (defaultRanges ? new Set(defaultRanges.map((r) => r.id)) : undefined),
-    [defaultRanges],
+  const {
+    ranges: rawRanges,
+    addRange,
+    removeRange,
+  } = useDateRanges(() => [{ id: SELECTION_RANGE_ID, label: "" }]);
+  const selectionLabel = scope.view?.name ?? t("views.allActivities");
+  // Stable while the ranges and label are: the chart-data memo depends on it.
+  const ranges = React.useMemo(
+    () =>
+      rawRanges.map((range) =>
+        range.id === SELECTION_RANGE_ID
+          ? { ...range, label: selectionLabel }
+          : range,
+      ),
+    [rawRanges, selectionLabel],
   );
   const [mode, setMode] = React.useState<PowerCurveMode>("watts");
   const [tab, setTab] = React.useState<Exclude<PowerTab, "timeline">>("curve");
   const [sliceWidth] = powerSliceWidth.useSliceWidth();
   const { resolveForDate } = useRiderSettingsTimeline();
 
-  const periodActivities = trpc.activities.list.useQuery(
-    { athleteId, ...zonesSelection },
-    { enabled: timePeriodId != null && tab === "zones" },
+  const selectedActivities = trpc.activities.list.useQuery(
+    { athleteId, ...selection },
+    { enabled: scope.ready && tab === "zones" },
   );
-  const periodDistribution = trpc.analytics.getPowerDistribution.useQuery(
-    {
-      athleteId,
-      ...distributionSelection,
-      timePeriodId: timePeriodId!,
-    },
-    { enabled: timePeriodId != null && tab === "distribution" },
+  const selectedDistribution = trpc.analytics.getPowerDistribution.useQuery(
+    { athleteId, ...selection },
+    { enabled: scope.ready && tab === "distribution" },
   );
 
-  const periodZones = React.useMemo(() => {
+  const selectedZones = React.useMemo(() => {
     const seconds = new Array<number>(7).fill(0);
     let coastingSeconds = 0;
-    for (const activity of periodActivities.data?.activities ?? []) {
+    for (const activity of selectedActivities.data?.activities ?? []) {
       const power = activity.zoneSeconds?.power;
       if (!power) continue;
       for (let i = 0; i < seconds.length; i++) {
@@ -656,12 +631,12 @@ function AggregatedPowerCurve({
       coastingSeconds += activity.zoneSeconds?.powerCoastingSeconds ?? 0;
     }
     return { seconds, coastingSeconds };
-  }, [periodActivities.data]);
+  }, [selectedActivities.data]);
 
-  const periodFtp = React.useMemo(() => {
-    const date = defaultRanges?.[0]?.dateTo ?? formatDateOnly(new Date());
-    return resolveForDate(date).ftp;
-  }, [defaultRanges, resolveForDate]);
+  const selectedFtp = React.useMemo(
+    () => resolveForDate(formatDateOnly(new Date())).ftp,
+    [resolveForDate],
+  );
 
   // One query per range. `combine` reduces the results to their data arrays and
   // React Query memoizes that output (replaceEqualDeep), so `queryResults` stays
@@ -671,13 +646,15 @@ function AggregatedPowerCurve({
   const queryResults = trpc.useQueries(
     (t) =>
       ranges.map((range) =>
-        t.analytics.getPowerCurve({
-          athleteId,
-          activityTypes,
-          workoutTypes,
-          dateFrom: range.dateFrom,
-          dateTo: range.dateTo,
-        }),
+        t.analytics.getPowerCurve(
+          {
+            athleteId,
+            ...selection,
+            dateFrom: range.dateFrom,
+            dateTo: range.dateTo,
+          },
+          { enabled: scope.ready },
+        ),
       ),
     { combine: (results) => results.map((r) => r.data ?? []) },
   );
@@ -728,39 +705,30 @@ function AggregatedPowerCurve({
     };
   }, [queryResults, ranges, tokens.palette, resolveForDate, t]);
 
-  const toolbar = timePeriodId ? (
-    <PeriodPowerToolbar
+  const toolbar = (
+    <SelectionPowerToolbar
       tab={tab}
       onTabChange={setTab}
       ranges={ranges}
       onAddRange={addRange}
       onRemoveRange={removeRange}
-      lockedRangeIds={lockedRangeIds}
+      lockedRangeIds={LOCKED_RANGE_IDS}
       athleteId={athleteId}
       activityTypes={activityTypes}
-      workoutTypes={workoutTypes}
-      mode={mode}
-      onModeChange={setMode}
-    />
-  ) : (
-    <Toolbar
-      ranges={ranges}
-      onAddRange={addRange}
-      onRemoveRange={removeRange}
-      lockedRangeIds={lockedRangeIds}
-      athleteId={athleteId}
-      activityTypes={activityTypes}
-      workoutTypes={workoutTypes}
       mode={mode}
       onModeChange={setMode}
     />
   );
 
   return (
-    <ChartCard title={t("charts.powerCurve.cardTitle")} actions={toolbar}>
-      {(!timePeriodId || tab === "curve") &&
+    <ChartCard
+      title={t("charts.powerCurve.cardTitle")}
+      info={t("views.powerSource")}
+      actions={toolbar}
+    >
+      {tab === "curve" &&
         (xData.length === 0 ? (
-          <ChartMessage>{t("charts.powerCurve.empty")}</ChartMessage>
+          <ChartMessage>{t("views.noPower")}</ChartMessage>
         ) : (
           <PowerCurveWebGLChart
             xData={xData}
@@ -769,30 +737,28 @@ function AggregatedPowerCurve({
             mode={mode}
           />
         ))}
-      {timePeriodId &&
-        tab === "zones" &&
-        (periodActivities.isLoading ? (
+      {tab === "zones" &&
+        (selectedActivities.isLoading ? (
           <StreamLoading />
         ) : (
           <MetricZoneDistribution
             metric={POWER_METRIC}
             values={[]}
-            threshold={periodFtp}
-            zoneSeconds={periodZones.seconds}
-            zeroSeconds={periodZones.coastingSeconds}
+            threshold={selectedFtp}
+            zoneSeconds={selectedZones.seconds}
+            zeroSeconds={selectedZones.coastingSeconds}
             aggregate
           />
         ))}
-      {timePeriodId &&
-        tab === "distribution" &&
-        (periodDistribution.isLoading ? (
+      {tab === "distribution" &&
+        (selectedDistribution.isLoading ? (
           <StreamLoading />
         ) : (
           <MetricSliceDistribution
             metric={POWER_METRIC}
             values={[]}
-            frequency={periodDistribution.data ?? []}
-            threshold={periodFtp}
+            frequency={selectedDistribution.data ?? []}
+            threshold={selectedFtp}
             sliceWidth={powerSliceWidth.clampSliceWidth(sliceWidth)}
             reference={null}
           />
@@ -801,7 +767,7 @@ function AggregatedPowerCurve({
   );
 }
 
-function PeriodPowerToolbar(props: {
+function SelectionPowerToolbar(props: {
   tab: Exclude<PowerTab, "timeline">;
   onTabChange: (tab: Exclude<PowerTab, "timeline">) => void;
   ranges: DateRange[];
@@ -810,7 +776,6 @@ function PeriodPowerToolbar(props: {
   lockedRangeIds?: Set<string>;
   athleteId: number;
   activityTypes?: string[];
-  workoutTypes?: number[];
   mode: PowerCurveMode;
   onModeChange: (mode: PowerCurveMode) => void;
 }) {
@@ -844,7 +809,6 @@ function PeriodPowerToolbar(props: {
               onSelect={props.onAddRange}
               athleteId={props.athleteId}
               activityTypes={props.activityTypes}
-              workoutTypes={props.workoutTypes}
             />
             <CustomRangePopover onAdd={props.onAddRange} />
           </div>
@@ -906,89 +870,6 @@ function ModeToggle({
 
 // --- Toolbar ---
 
-function Toolbar({
-  ranges,
-  onAddRange,
-  onRemoveRange,
-  lockedRangeIds,
-  athleteId,
-  activityTypes,
-  workoutTypes,
-  mode,
-  onModeChange,
-}: {
-  ranges: DateRange[];
-  onAddRange: (range: DateRange) => void;
-  onRemoveRange: (id: string) => void;
-  lockedRangeIds?: Set<string>;
-  athleteId: number;
-  activityTypes?: string[];
-  workoutTypes?: number[];
-  mode: PowerCurveMode;
-  onModeChange: (mode: PowerCurveMode) => void;
-}) {
-  const t = useT();
-  const tokens = useChartTokens();
-
-  const rangeControls = (
-    <>
-      {ranges.map((range, i) => (
-        <RangeChip
-          key={range.id}
-          range={range}
-          color={tokens.palette[i % tokens.palette.length]}
-          onRemove={() => onRemoveRange(range.id)}
-          removable={!lockedRangeIds?.has(range.id)}
-        />
-      ))}
-      <PresetSelect
-        onSelect={onAddRange}
-        athleteId={athleteId}
-        activityTypes={activityTypes}
-        workoutTypes={workoutTypes}
-      />
-      <CustomRangePopover onAdd={onAddRange} />
-    </>
-  );
-
-  return (
-    <>
-      {/* Desktop: range controls inline */}
-      <div className="hidden items-center gap-2 sm:flex">
-        <div className="bg-border mx-1 h-4 w-px" />
-        {rangeControls}
-      </div>
-
-      <div className="flex-1" />
-
-      {/* Mobile: range controls in popover (drawer on mobile) */}
-      <ResponsivePopover>
-        <ResponsivePopoverTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground sm:hidden"
-            >
-              <SlidersHorizontalIcon className="size-4" />
-            </Button>
-          }
-        />
-        <ResponsivePopoverContent align="end" className="flex flex-col gap-2">
-          <ResponsivePopoverHeader>
-            <ResponsivePopoverTitle>
-              {t("charts.powerCurve.dateRanges")}
-            </ResponsivePopoverTitle>
-          </ResponsivePopoverHeader>
-          {rangeControls}
-        </ResponsivePopoverContent>
-      </ResponsivePopover>
-
-      <ModeToggle mode={mode} onModeChange={onModeChange} />
-    </>
-  );
-}
-
 function RangeChip({
   range,
   color,
@@ -1024,20 +905,21 @@ function PresetSelect({
   onSelect,
   athleteId,
   activityTypes,
-  workoutTypes,
 }: {
   onSelect: (range: DateRange) => void;
   athleteId: number;
   activityTypes?: string[];
-  workoutTypes?: number[];
 }) {
   const t = useT();
-  const presetOptions = React.useMemo(() => createPresetOptions(t), [t]);
-  const { data: years } = trpc.analytics.getPowerCurveYears.useQuery({
-    athleteId,
+  const scope = useActivityView();
+  const selection = useActivitySelection("statisticsPowerCurve", {
     activityTypes,
-    workoutTypes,
   });
+  const presetOptions = React.useMemo(() => createPresetOptions(t), [t]);
+  const { data: years } = trpc.analytics.getPowerCurveYears.useQuery(
+    { athleteId, ...selection },
+    { enabled: scope.ready },
+  );
 
   return (
     <Select

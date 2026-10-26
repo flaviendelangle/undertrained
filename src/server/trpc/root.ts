@@ -10,8 +10,8 @@ import { riderSettingsRouter } from "./routers/riderSettings";
 import { routesRouter } from "./routers/routes";
 import { structuredWorkoutsRouter } from "./routers/structuredWorkouts";
 import { syncRouter } from "./routers/sync";
-import { timePeriodsRouter } from "./routers/timePeriods";
 import { uploadRouter } from "./routers/upload";
+import { viewsRouter } from "./routers/views";
 
 export const appRouter = router({
   account: accountRouter,
@@ -25,8 +25,8 @@ export const appRouter = router({
   routes: routesRouter,
   structuredWorkouts: structuredWorkoutsRouter,
   sync: syncRouter,
-  timePeriods: timePeriodsRouter,
   upload: uploadRouter,
+  views: viewsRouter,
 });
 
 export type AppRouter = typeof appRouter;

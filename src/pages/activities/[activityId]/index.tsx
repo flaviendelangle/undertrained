@@ -1,10 +1,13 @@
 import * as React from "react";
 
-import { ArrowLeftIcon, FlagIcon, Maximize2, Minimize2 } from "lucide-react";
-import Link from "next/link";
+import {
+  ActivityIcon,
+  FlagIcon,
+  ListIcon,
+  Maximize2,
+  Minimize2,
+} from "lucide-react";
 import { useRouter } from "next/router";
-
-import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
 
 import { ActivityActionsMenu } from "~/components/ActivityActionsMenu";
 import { ActivityMap } from "~/components/ActivityMap";
@@ -17,14 +20,16 @@ import { ActivityStreams } from "~/components/charts/ActivityStreams";
 import { PaceCard } from "~/components/charts/PaceCard";
 import { ActivityPersonalRecords } from "~/components/charts/PersonalRecords/ActivityPersonalRecords";
 import { PowerCurve } from "~/components/charts/PowerCurve";
-import { Toolbar } from "~/components/settings/SettingsToolbar";
+import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
+import { useActivityView } from "~/hooks/useActivityView";
 import { useTypedParams } from "~/hooks/useTypedParams";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { useActivityRecording } from "~/lib/activityRecording";
 import { NextPageWithLayout } from "~/pages/_app";
+import { readReturnTo } from "~/utils/activityLinks";
 import {
   getSportConfig,
   supportsAnalysis,
@@ -52,21 +57,8 @@ const ActivityPage: NextPageWithLayout = () => {
 function ActivityPageContent({ stravaId }: { stravaId: number }) {
   const t = useT();
   const router = useRouter();
-  // Coming from the journal, rebuild its URL from the `view`/`week` recorded on
-  // the link so back returns to the right view and week (independent of how the
-  // calendar was scrolled).
-  const journalBackHref = (() => {
-    const view = router.query.view === "week" ? "week" : "month";
-    const week =
-      typeof router.query.week === "string" ? router.query.week : null;
-    return `/journal/${view}${week ? `?week=${week}` : ""}`;
-  })();
-  const backHref =
-    router.query.from === "period" && router.query.periodId
-      ? `/time-periods/${String(router.query.periodId)}`
-      : router.query.from === "journal"
-        ? journalBackHref
-        : "/activities";
+  const scope = useActivityView();
+  const backHref = readReturnTo(router.query) ?? scope.href("/activities");
 
   const [hoverPosition, setHoverPosition] = React.useState<
     [number, number] | null
@@ -101,9 +93,16 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
 
   if (!activity) {
     return (
-      <div className="flex h-full w-full items-center justify-center">
-        <p className="text-muted-foreground">{t("activities.notFound")}</p>
-      </div>
+      <>
+        <PageToolbar
+          title={t("activities.pageTitle")}
+          icon={ListIcon}
+          backHref={backHref}
+        />
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-muted-foreground">{t("activities.notFound")}</p>
+        </div>
+      </>
     );
   }
 
@@ -123,8 +122,10 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   return (
     <>
       <PageTitle title={activity.name} />
-      <Toolbar
-        label={activity.name}
+      <PageToolbar
+        title={activity.name}
+        icon={getSportConfig(activity.type).icon}
+        backHref={backHref}
         actions={
           <>
             <EditActivityButton activity={activity} />
@@ -132,14 +133,6 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
           </>
         }
       >
-        <ToolbarPrimitive.Link
-          render={<Link href={backHref} />}
-          aria-label={t("common.back")}
-          className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 items-center justify-center rounded-lg transition-colors"
-        >
-          <ArrowLeftIcon className="size-4" />
-        </ToolbarPrimitive.Link>
-        <span className="min-w-0 truncate font-semibold">{activity.name}</span>
         <span className="bg-accent text-accent-foreground hidden shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium uppercase sm:inline-flex">
           {React.createElement(getSportConfig(activity.type).icon, {
             className: "size-3.5",
@@ -168,7 +161,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             },
           )}
         </span>
-      </Toolbar>
+      </PageToolbar>
 
       <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-4 py-2 sm:hidden">
         <span className="bg-accent text-accent-foreground inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium uppercase">
@@ -306,12 +299,7 @@ function ActivityPageSkeleton() {
   const t = useT();
   return (
     <>
-      <Toolbar label={t("common.loading")}>
-        <div className="bg-accent size-8 animate-pulse rounded-lg" />
-        <div className="bg-accent h-6 w-48 animate-pulse rounded" />
-        <div className="bg-accent hidden h-5 w-20 animate-pulse rounded-md sm:block" />
-        <div className="bg-accent hidden h-5 w-40 animate-pulse rounded sm:block" />
-      </Toolbar>
+      <PageToolbar title={t("common.loading")} icon={ActivityIcon} />
 
       <div className="border-border flex items-center gap-1.5 border-b px-4 py-2 sm:hidden">
         <div className="bg-accent h-5 w-20 animate-pulse rounded-md" />

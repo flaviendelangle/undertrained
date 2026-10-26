@@ -1,11 +1,15 @@
 import * as React from "react";
 
 import { useActivitiesWithMapQuery } from "~/hooks/useActivitiesWithMapQuery";
+import { useActivityView } from "~/hooks/useActivityView";
+import { conditionCount } from "~/utils/activityFilters";
 
 import { Map } from "./Map";
 import { LoadingOverlay } from "./primitives/LoadingOverlay";
+import { QueryState } from "./primitives/QueryState";
 
 export function ActivitiesMap() {
+  const scope = useActivityView();
   const activitiesQuery = useActivitiesWithMapQuery();
   const [ready, setReady] = React.useState(false);
 
@@ -22,17 +26,20 @@ export function ActivitiesMap() {
     return () => clearTimeout(timeout);
   }, [hasData, ready]);
 
+  if (activitiesQuery.isError)
+    return <QueryState error onRetry={() => void activitiesQuery.refetch()} />;
+
   return (
     <>
       {activities != null && (
         <Map
           activities={activities}
           enableExplorerTiles
-          fitMode="last"
+          fitMode={scope.view || conditionCount(scope.rules) ? "all" : "last"}
           onReady={() => setReady(true)}
         />
       )}
-      <LoadingOverlay hidden={ready} />
+      <LoadingOverlay hidden={ready && !activitiesQuery.isLoading} />
     </>
   );
 }

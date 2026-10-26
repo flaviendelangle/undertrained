@@ -20,6 +20,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from "@testing-library/react";
 
 import { startOf } from "~/utils/dateUtils";
@@ -342,7 +343,7 @@ describe("dropping a planned training", () => {
     // Registered after the module's own monitor (parent effects run last), so
     // it runs just before Base UI tears the drag clone down.
     function CloneRemovalProbe({ children }: { children: React.ReactNode }) {
-      Draggable.useDragMonitor({
+      Draggable.useMonitor({
         accept: Draggable.anyKind,
         onMoveEnd: () => {
           shownWhenCloneRemoved = shown("Tempo");
@@ -412,8 +413,10 @@ describe("the dropped training's placement", () => {
 
     expect(dimmed("Easy")).toEqual([true]);
     await dragTopTo(5, "06:30");
-    expect(screen.getByText(/^Moving Easy/).textContent).toBe(
-      "Moving Easy to 06:30",
+    await waitFor(() =>
+      expect(screen.getByText(/^Moving Easy/).textContent).toBe(
+        "Moving Easy to 06:30",
+      ),
     );
   });
 });
@@ -488,19 +491,25 @@ describe("the drag preview", () => {
 
     await pickUp(screen.getByRole("button", { name: "Tempo" }));
     await dragTopTo(2, "07:45");
-    expect(screen.getByText(/^Moving Tempo/).textContent).toBe(
-      "Moving Tempo to 07:45",
+    await waitFor(() =>
+      expect(screen.getByText(/^Moving Tempo/).textContent).toBe(
+        "Moving Tempo to 07:45",
+      ),
     );
 
     // Within the same column, so only the move itself reports it.
     await dragTopTo(2, "09:30");
-    expect(screen.getByText(/^Moving Tempo/).textContent).toBe(
-      "Moving Tempo to 09:30",
+    await waitFor(() =>
+      expect(screen.getByText(/^Moving Tempo/).textContent).toBe(
+        "Moving Tempo to 09:30",
+      ),
     );
 
     await moveTo(GRAB.x, DAY_HEIGHT + 100);
-    expect(screen.getByText(/^Moving Tempo/).textContent).toBe(
-      "Moving Tempo to nowhere",
+    await waitFor(() =>
+      expect(screen.getByText(/^Moving Tempo/).textContent).toBe(
+        "Moving Tempo to nowhere",
+      ),
     );
   });
 });

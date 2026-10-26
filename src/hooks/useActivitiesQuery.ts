@@ -6,8 +6,10 @@ import { useActivityFilterOptions } from "./useActivityFilterOptions";
 import {
   type ActivitySelection,
   type ActivityView,
+  isAnalysisView,
   useActivitySelection,
 } from "./useActivitySelection";
+import { useActivityView } from "./useActivityView";
 import { useAthleteId } from "./useAthleteId";
 
 export function useActivitiesQuery(
@@ -15,11 +17,16 @@ export function useActivitiesQuery(
   own?: Partial<ActivitySelection>,
 ) {
   const selection = useActivitySelection(view, own);
+  const scope = useActivityView();
+  const scoped = isAnalysisView(view);
   const athleteId = useAthleteId();
 
   const result = trpc.activities.list.useQuery(
     { athleteId, ...selection },
-    { placeholderData: keepPreviousData },
+    {
+      placeholderData: scoped ? undefined : keepPreviousData,
+      enabled: !scoped || scope.ready,
+    },
   );
 
   const filterOptions = useActivityFilterOptions();

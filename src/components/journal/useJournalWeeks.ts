@@ -183,6 +183,7 @@ export function useJournalWeeks(
   loadPreferences: LoadAlgorithmPreferences,
   plannedTrainings?: PlannedTraining[],
   busyEvents?: BusyEvent[],
+  fitnessActivities: JournalActivity[] | undefined = activities,
 ): JournalWeeksResult {
   const plannedByDay = React.useMemo(
     () => bucketPlannedTrainingsByDay(plannedTrainings ?? []),
@@ -249,17 +250,19 @@ export function useJournalWeeks(
     return map;
   }, [activities, loadByStravaId]);
 
-  // Performance Management Chart (Fitness / Fatigue / Form) for the same
-  // activities, keyed by local calendar day so weeks can read their boundary
+  // Performance Management Chart uses full athlete history, keyed by local calendar day so weeks can read their boundary
   // CTL/TSB. Shares the load model with the rest of the app via `fitness.ts`.
   const fitnessByDay = React.useMemo(() => {
-    const series = computeFitnessSeries(activities ?? [], loadPreferences);
+    const series = computeFitnessSeries(
+      fitnessActivities ?? [],
+      loadPreferences,
+    );
     const map = new Map<string, FitnessPoint>();
     for (const point of series) {
       map.set(format(point.date, DAY_KEY), point);
     }
     return { map, last: series.length > 0 ? series[series.length - 1] : null };
-  }, [activities, loadPreferences]);
+  }, [fitnessActivities, loadPreferences]);
 
   return React.useMemo(() => {
     // The grid spans back to the earliest activity *or* planned training, so a

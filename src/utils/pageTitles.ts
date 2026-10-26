@@ -7,11 +7,13 @@ const APP_NAME = "Undertrained";
 // sync with the sidebar and follows the active locale.
 const ROUTE_TITLE_KEYS: Record<string, AppMessageKey> = {
   "/activities": "nav.activities",
+  "/activities/charts": "views.charts",
+  "/activities/map": "views.map",
   "/journal": "nav.journal",
-  "/map": "nav.map",
-  "/statistics": "nav.statistics",
+  "/routes": "routes.myRoutes",
   "/personal-bests": "nav.personalBests",
-  "/time-periods": "nav.timePeriods",
+  "/views": "nav.views",
+  "/fitness": "nav.fitness",
   "/workouts/live": "nav.liveTraining",
   "/workouts": "nav.workouts",
   "/settings": "nav.settings",

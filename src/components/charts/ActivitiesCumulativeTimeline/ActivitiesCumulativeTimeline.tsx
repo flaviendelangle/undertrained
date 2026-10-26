@@ -1,6 +1,13 @@
 import * as React from "react";
 
-import { addDays, format, getDayOfYear, getYear, isValid } from "date-fns";
+import {
+  addDays,
+  format,
+  getDayOfYear,
+  getYear,
+  isValid,
+  parseISO,
+} from "date-fns";
 import { enGB } from "date-fns/locale/en-GB";
 import { SlidersHorizontalIcon } from "lucide-react";
 
@@ -25,13 +32,13 @@ import {
   formatCompact,
   useChartTokens,
 } from "~/lib/chartTokens";
+import { activityLocalDay } from "~/utils/dateUtils";
 import { formatCompactDuration } from "~/utils/format";
 import { getLoadPreferences } from "~/utils/getActivityLoad";
 
 import { METRICS, type MetricContext, MetricSelect } from "../../MetricSelect";
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { ChartTooltip } from "../ChartTooltip";
-import { SportFilterPopover, SportTypeFilter } from "../SportTypeFilter";
 
 // Every year is plotted against the same 366 day slots so that the curves can
 // be compared day by day. The slots are dated in a leap year: a common year
@@ -51,10 +58,9 @@ const getDayIndex = (date: Date) =>
 export default function ActivitiesCumulativeTimeline() {
   const t = useT();
   const [metric, setMetric] = React.useState("distance");
-  const [selectedTypes, setSelectedTypes] = React.useState<string[]>([]);
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
-  const activitiesQuery = useActivitiesFilteredByType(selectedTypes);
+  const activitiesQuery = useActivitiesFilteredByType([]);
   const activities = activitiesQuery.activities;
   const { timeline } = useRiderSettingsTimeline();
 
@@ -91,8 +97,8 @@ export default function ActivitiesCumulativeTimeline() {
 
     const dailyDataPerYear = new Map<number, number[]>();
     for (const activity of activities ?? []) {
-      const date = new Date(activity.startDate);
-      // An unparseable `startDate` would land on a NaN day index and poison the
+      const date = parseISO(activityLocalDay(activity));
+      // An unparseable local date would land on a NaN day index and poison the
       // whole year's cumulative curve. Drop the row.
       if (!isValid(date)) {
         continue;
@@ -199,20 +205,8 @@ export default function ActivitiesCumulativeTimeline() {
             </span>
             <MetricSelect value={metric} onValueChange={setMetric} />
           </div>
-          <SportTypeFilter
-            allTypes={activitiesQuery.allTypes}
-            selectedTypes={selectedTypes}
-            setSelectedTypes={setSelectedTypes}
-          />
         </ResponsivePopoverContent>
       </ResponsivePopover>
-
-      {/* Desktop: sport filter */}
-      <SportFilterPopover
-        allTypes={activitiesQuery.allTypes}
-        selectedTypes={selectedTypes}
-        setSelectedTypes={setSelectedTypes}
-      />
     </>
   );
 

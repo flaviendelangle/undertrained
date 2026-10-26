@@ -4,10 +4,12 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 import { LinkActivityPrompt } from "~/components/journal/LinkActivityPrompt";
+import { ActivityViewProvider } from "~/hooks/useActivityView";
 import { AthleteIdContext } from "~/hooks/useAthleteId";
 import { DismissedHintsProvider } from "~/hooks/useDismissedHints";
 import { ExplorerTilesProvider } from "~/hooks/useExplorerTilesToggle";
 import { RiderSettingsProvider } from "~/hooks/useRiderSettings";
+import { SyncPanelProvider } from "~/hooks/useSyncPanel";
 import { TileStyleProvider } from "~/hooks/useTileStyle";
 
 import { SharedLayout } from "../SharedLayout";
@@ -42,27 +44,31 @@ export const LoggedInLayout = (props: LoggedInLayoutProps) => {
   return (
     <SharedLayout>
       <AthleteIdContext value={session.athleteId}>
-        <ExplorerTilesProvider>
-          <TileStyleProvider>
-            <RiderSettingsProvider>
-              <DismissedHintsProvider>
-                <div className="flex h-screen">
-                  <NavBar />
-                  <main className="flex flex-1 flex-col overflow-hidden pb-14 md:pb-0">
-                    {children}
-                  </main>
-                  <MobileBottomBar />
-                </div>
-                {/* Opens itself on load when a newly imported activity matches a
+        <SyncPanelProvider>
+          <ActivityViewProvider>
+            <ExplorerTilesProvider>
+              <TileStyleProvider>
+                <RiderSettingsProvider>
+                  <DismissedHintsProvider>
+                    <div className="flex h-screen">
+                      <NavBar />
+                      <main className="flex flex-1 flex-col overflow-hidden pb-14 md:pb-0">
+                        {children}
+                      </main>
+                      <MobileBottomBar />
+                    </div>
+                    {/* Opens itself on load when a newly imported activity matches a
                     planned training — the app's only self-opening dialog. Note
                     `/toolbox` and `/privacy` nest this layout inside their own,
                     so it remounts on the way there and back; the prompt latches
                     outside React to stay shown-once across that. */}
-                <LinkActivityPrompt />
-              </DismissedHintsProvider>
-            </RiderSettingsProvider>
-          </TileStyleProvider>
-        </ExplorerTilesProvider>
+                    <LinkActivityPrompt />
+                  </DismissedHintsProvider>
+                </RiderSettingsProvider>
+              </TileStyleProvider>
+            </ExplorerTilesProvider>
+          </ActivityViewProvider>
+        </SyncPanelProvider>
       </AthleteIdContext>
     </SharedLayout>
   );

@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import Link from "next/link";
+import { useRouter } from "next/router";
 
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import {
@@ -20,6 +21,7 @@ import {
 } from "~/components/ui/table";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
+import { activityHref } from "~/utils/activityLinks";
 
 import { formatShortDate } from "./format";
 import { RecordsEmptyState, getMedalClasses } from "./shared";
@@ -33,6 +35,7 @@ import { RecordControl, useRecordsExplorer } from "./useRecordsExplorer";
  */
 export function Records() {
   const t = useT();
+  const { asPath } = useRouter();
   const {
     sportControl,
     metricControl,
@@ -88,7 +91,7 @@ export function Records() {
         >
           {best && (
             <Link
-              href={`/activities/${best.stravaId}`}
+              href={activityHref(best.stravaId, asPath)}
               className="bg-muted/40 hover:bg-muted/70 flex min-h-22 flex-col justify-center gap-3 px-5 py-4 transition-colors sm:flex-row sm:items-center sm:gap-4 sm:rounded-xl"
             >
               <div className="flex items-center gap-4">
@@ -155,7 +158,7 @@ export function Records() {
                       )}
                       <TableCell className="max-w-none min-w-52 sm:w-full sm:max-w-0 sm:min-w-0 sm:truncate">
                         <Link
-                          href={`/activities/${e.stravaId}`}
+                          href={activityHref(e.stravaId, asPath)}
                           className="text-foreground hover:text-primary font-medium"
                         >
                           {e.name}

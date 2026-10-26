@@ -1,9 +1,8 @@
 import { TrophyIcon } from "lucide-react";
 import nextDynamic from "next/dynamic";
 
-import { SyncPanel } from "~/components/SyncPanel";
+import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { LoadingOverlay } from "~/components/primitives/LoadingOverlay";
-import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useInitialLoadComplete } from "~/hooks/useInitialLoadComplete";
 import { useModuleLoaded } from "~/hooks/useModuleLoaded";
@@ -35,10 +34,7 @@ const RecordsPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar label={t("nav.personalBests")} actions={<SyncPanel />}>
-        <TrophyIcon className="size-4" />
-        <span className="font-semibold">{t("nav.personalBests")}</span>
-      </Toolbar>
+      <PageToolbar title={t("nav.personalBests")} icon={TrophyIcon} />
 
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <div className="flex flex-1 flex-col overflow-y-auto p-3 max-sm:px-0 sm:p-6">

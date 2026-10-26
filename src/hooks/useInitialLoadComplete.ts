@@ -5,7 +5,7 @@ import { useIsFetching } from "@tanstack/react-query";
 /** Reveal once the page's essential queries and modules are ready. */
 export function useInitialLoadComplete(
   dependenciesReady = true,
-  timeoutMs = 10000,
+  timeoutMs: number | null = 10000,
   queryPaths?: readonly string[],
 ): boolean {
   const fetching = useIsFetching({
@@ -38,7 +38,7 @@ export function useInitialLoadComplete(
   }, [done, dependenciesReady, fetching]);
 
   React.useEffect(() => {
-    if (done) {
+    if (done || timeoutMs === null) {
       return;
     }
     const timeout = setTimeout(() => setDone(true), timeoutMs);

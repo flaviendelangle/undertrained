@@ -114,9 +114,13 @@ function ActivityPreviewCardBody({
             </span>
           </span>
           <span className="text-muted-foreground text-xs">
-            {format(new Date(activity.startDateLocal), "EEE d MMM, HH:mm", {
-              locale: getActiveDateLocale(),
-            })}
+            {format(
+              new Date(activity.startDateLocal.slice(0, 19)),
+              "EEE d MMM, HH:mm",
+              {
+                locale: getActiveDateLocale(),
+              },
+            )}
           </span>
         </div>
 

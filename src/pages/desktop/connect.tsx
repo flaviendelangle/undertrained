@@ -13,6 +13,7 @@ import type { GetServerSideProps } from "next";
 import { getServerSession } from "next-auth/next";
 
 import { PageTitle } from "~/components/PageTitle";
+import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { SharedLayout } from "~/components/layouts/SharedLayout";
 import { Button } from "~/components/ui/button";
 import { useT } from "~/i18n/useT";
@@ -128,26 +129,37 @@ export const getServerSideProps: GetServerSideProps<
 };
 
 const DesktopConnectPage: NextPageWithLayout<DesktopConnectProps> = (props) => {
+  const t = useT();
   return (
-    <main className="from-background via-background to-primary/10 relative flex min-h-screen items-center justify-center overflow-hidden bg-linear-to-br px-4 py-12">
-      {/* Decorative background element, as on the login page */}
-      <ActivityIcon className="text-primary/3 absolute -right-20 -bottom-20 size-112 rotate-12" />
+    <main className="flex h-screen flex-col overflow-hidden">
+      <PageToolbar
+        title={
+          props.kind === "consent"
+            ? t("auth.desktop.title")
+            : t(`auth.desktop.error.${props.error}.title`)
+        }
+        icon={props.kind === "consent" ? MonitorIcon : CircleAlertIcon}
+      />
+      <div className="from-background via-background to-primary/10 relative flex min-h-0 flex-1 items-center justify-center overflow-y-auto bg-linear-to-br px-4 py-12">
+        {/* Decorative background element, as on the login page */}
+        <ActivityIcon className="text-primary/3 absolute -right-20 -bottom-20 size-112 rotate-12" />
 
-      <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-8">
-        <div className="flex items-center gap-2.5">
-          <ActivityIcon className="text-primary size-8" />
-          <span className="text-foreground text-4xl font-black tracking-tight">
-            Undertrained
-          </span>
+        <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-8">
+          <div className="flex items-center gap-2.5">
+            <ActivityIcon className="text-primary size-8" />
+            <span className="text-foreground text-4xl font-black tracking-tight">
+              Undertrained
+            </span>
+          </div>
+
+          <section className="border-border bg-card flex w-full flex-col gap-5 rounded-sm border p-6">
+            {props.kind === "consent" ? (
+              <Consent name={props.name} approval={props.approval} />
+            ) : (
+              <ConsentFailure error={props.error} />
+            )}
+          </section>
         </div>
-
-        <section className="border-border bg-card flex w-full flex-col gap-5 rounded-sm border p-6">
-          {props.kind === "consent" ? (
-            <Consent name={props.name} approval={props.approval} />
-          ) : (
-            <ConsentFailure error={props.error} />
-          )}
-        </section>
       </div>
     </main>
   );
@@ -164,21 +176,11 @@ function Consent({
   return (
     <>
       <PageTitle title={t("auth.desktop.title")} />
-      <div className="flex items-center gap-3">
-        <span className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-sm">
-          <MonitorIcon className="size-5" />
-        </span>
-        <div className="flex min-w-0 flex-col">
-          <h1 className="text-foreground text-lg font-semibold">
-            {t("auth.desktop.title")}
-          </h1>
-          <p className="text-muted-foreground truncate text-sm">
-            {name
-              ? t("auth.desktop.signedInAs", { name })
-              : t("auth.desktop.signedIn")}
-          </p>
-        </div>
-      </div>
+      <p className="text-muted-foreground truncate text-sm">
+        {name
+          ? t("auth.desktop.signedInAs", { name })
+          : t("auth.desktop.signedIn")}
+      </p>
 
       <div className="flex flex-col gap-2.5 text-sm">
         <p className="text-muted-foreground">{t("auth.desktop.scopeIntro")}</p>
@@ -241,22 +243,10 @@ function ConsentFailure({ error }: { error: ConsentError }) {
   return (
     <>
       <PageTitle title={t(`auth.desktop.error.${error}.title`)} />
-      <div className="flex items-start gap-3">
-        <span className="bg-destructive/10 text-destructive flex size-10 shrink-0 items-center justify-center rounded-sm">
-          <CircleAlertIcon className="size-5" />
-        </span>
-        <div className="flex flex-col gap-1">
-          <h1 className="text-foreground text-lg font-semibold">
-            {t(`auth.desktop.error.${error}.title`)}
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {t(`auth.desktop.error.${error}.body`)}
-          </p>
-          <p className="text-muted-foreground mt-2 text-xs">
-            {t("auth.desktop.close")}
-          </p>
-        </div>
-      </div>
+      <p className="text-muted-foreground text-sm">
+        {t(`auth.desktop.error.${error}.body`)}
+      </p>
+      <p className="text-muted-foreground text-xs">{t("auth.desktop.close")}</p>
     </>
   );
 }

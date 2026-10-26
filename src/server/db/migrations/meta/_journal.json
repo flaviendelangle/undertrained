@@ -190,6 +190,20 @@
       "when": 1792943660600,
       "tag": "0026_webhook_sync_timestamp",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792951785094,
+      "tag": "0027_melodic_preak",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1793001999377,
+      "tag": "0028_activity_local_day_index",
+      "breakpoints": true
     }
   ]
 }

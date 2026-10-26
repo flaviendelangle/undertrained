@@ -2,7 +2,7 @@ import { useCookies } from "react-cookie";
 
 /**
  * Show/hide state for the external-calendar busy overlay, persisted in cookies
- * (per-browser, instant — no server round-trip), mirroring {@link useActivityFilter}.
+ * (per-browser, instant, with no server round-trip).
  * The *existence* of a calendar lives in the DB; whether it's currently shown is
  * pure view state, so toggling never writes to the database or refetches.
  *

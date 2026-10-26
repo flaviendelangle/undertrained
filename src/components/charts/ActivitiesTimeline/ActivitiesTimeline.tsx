@@ -36,7 +36,6 @@ import { METRICS, type MetricContext, MetricSelect } from "../../MetricSelect";
 import { PrecisionSelect } from "../../PrecisionSelect";
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { ChartTooltip, ChartTooltipTotalProvider } from "../ChartTooltip";
-import { SportFilterPopover, SportTypeFilter } from "../SportTypeFilter";
 
 const TIME_AXIS_ID = "time";
 const DEFAULT_ZOOM_STEPS = 12;
@@ -44,11 +43,10 @@ const DEFAULT_ZOOM_STEPS = 12;
 export default function ActivitiesTimeline() {
   const t = useT();
   const [metric, setMetric] = React.useState("movingTime");
-  const [selectedTypes, setSelectedTypes] = React.useState<string[]>([]);
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
   const [precision, setPrecision] = React.useState<SlicePrecision>("week");
-  const activitiesQuery = useActivitiesFilteredByType(selectedTypes);
+  const activitiesQuery = useActivitiesFilteredByType([]);
   const activities = activitiesQuery.activities;
   const { timeline } = useRiderSettingsTimeline();
 
@@ -218,20 +216,8 @@ export default function ActivitiesTimeline() {
             </span>
             <PrecisionSelect value={precision} onValueChange={setPrecision} />
           </div>
-          <SportTypeFilter
-            allTypes={activitiesQuery.allTypes}
-            selectedTypes={selectedTypes}
-            setSelectedTypes={setSelectedTypes}
-          />
         </ResponsivePopoverContent>
       </ResponsivePopover>
-
-      {/* Desktop: sport filter */}
-      <SportFilterPopover
-        allTypes={activitiesQuery.allTypes}
-        selectedTypes={selectedTypes}
-        setSelectedTypes={setSelectedTypes}
-      />
     </>
   );
 

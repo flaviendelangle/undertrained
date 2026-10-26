@@ -223,9 +223,9 @@ export function HudConnectionWizard(props: HudConnectionWizardProps) {
   return (
     <div className="bg-background/95 absolute inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="flex flex-col items-center gap-4 sm:gap-8">
-        <h1 className="text-foreground text-xl font-bold sm:text-3xl">
+        <h2 className="text-foreground text-xl font-bold sm:text-3xl">
           {t("liveTraining.connectDevices")}
-        </h1>
+        </h2>
         <p className="text-muted-foreground text-sm sm:text-base">
           {t("liveTraining.pairSensors")}
         </p>

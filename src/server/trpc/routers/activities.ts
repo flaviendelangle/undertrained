@@ -20,7 +20,7 @@ export const activitiesRouter = router({
   list: athleteProcedure
     .input(activityFilterInput.extend({ includeMap: z.boolean().optional() }))
     .query(async ({ ctx, input }) => {
-      const selected = await selectActivities(ctx.db, input);
+      const selected = selectActivities(input);
 
       // Omit the heavy jsonb columns (and mapPolyline unless requested) from the
       // list projection — none of the list consumers read them, so shipping them
@@ -66,7 +66,7 @@ export const activitiesRouter = router({
   maps: athleteProcedure
     .input(activityFilterInput)
     .query(async ({ ctx, input }) => {
-      const selected = await selectActivities(ctx.db, input);
+      const selected = selectActivities(input);
       return ctx.db
         .select({
           id: activities.id,

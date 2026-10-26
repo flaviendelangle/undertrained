@@ -14,7 +14,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useT } from "~/i18n/useT";
-import { trpc } from "~/utils/trpc";
+import { invalidateActivityData, trpc } from "~/utils/trpc";
 
 export function ActivityActionsMenu(props: ActivityActionsMenuProps) {
   const { stravaId } = props;
@@ -63,8 +63,7 @@ export function ActivityActionsMenu(props: ActivityActionsMenuProps) {
               await Promise.all([
                 utils.activities.get.invalidate({ stravaId }),
                 utils.activityStreams.getStreams.invalidate({ stravaId }),
-                utils.activities.list.invalidate(),
-                utils.activities.maps.invalidate(),
+                invalidateActivityData(utils),
               ]);
             } finally {
               setLoading(false);

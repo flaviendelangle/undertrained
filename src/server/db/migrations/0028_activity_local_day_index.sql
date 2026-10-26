@@ -1,0 +1,1 @@
+CREATE INDEX "activities_athlete_local_day_idx" ON "activities" USING btree ("athlete",left("start_date_local", 10));

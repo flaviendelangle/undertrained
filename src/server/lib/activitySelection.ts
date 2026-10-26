@@ -1,13 +1,40 @@
-import { type SQL, and, eq, gte, inArray, is, lte, sql } from "drizzle-orm";
-import { type BuildAliasTable, PgTable } from "drizzle-orm/pg-core";
+import {
+  type SQL,
+  and,
+  eq,
+  gt,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  ne,
+  not,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
+import { type BuildAliasTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import type { Database } from "../db";
-import { activities, timePeriods } from "../db/schema";
+import { TRPCError } from "@trpc/server";
 
-const calendarDate = z
+import {
+  type ActivityFilterNode,
+  FILTER_FIELDS,
+  activityRulesSchema,
+  isCalendarDate,
+  rollingDateRange,
+} from "~/utils/activityFilters";
+import { type WorkoutKind, workoutTypesOfKind } from "~/utils/sportConfig";
+
+import { activities } from "../db/schema";
+
+export const calendarDate = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD format");
+  .refine(isCalendarDate, "Expected a valid YYYY-MM-DD date");
 
 /**
  * The filter every endpoint that selects activities accepts, next to the
@@ -16,10 +43,9 @@ const calendarDate = z
  * thing everywhere: that is {@link selectActivities}' job.
  */
 export const activityFilterInput = z.object({
+  rules: activityRulesSchema.optional(),
+  today: calendarDate.optional(),
   activityTypes: z.array(z.string().max(50)).optional(),
-  workoutTypes: z.array(z.number().int()).optional(),
-  hideCommutes: z.boolean().optional(),
-  timePeriodId: z.number().int().positive().optional(),
   dateFrom: calendarDate.optional(),
   dateTo: calendarDate.optional(),
 });
@@ -27,102 +53,128 @@ export const activityFilterInput = z.object({
 type ActivitiesTable =
   typeof activities | BuildAliasTable<typeof activities, string>;
 
-type TimePeriodsTable =
-  typeof timePeriods | BuildAliasTable<typeof timePeriods, string>;
-
-interface TimePeriodBounds {
-  startDate: string;
-  endDate: string;
-  sportTypes: string[] | null;
-}
-
 export type ActivitySelection = z.infer<typeof activityFilterInput> & {
   athleteId: number;
-  /**
-   * Replaces the `timePeriodId` lookup for callers that already hold the
-   * period: its row, or the `time_periods` table (or an alias) when the query
-   * joins every period and each row bounds its own activities.
-   */
-  timePeriod?: TimePeriodBounds | TimePeriodsTable;
 };
 
 /**
  * The SQL condition matching the athlete's activities that `selection`
  * describes, for a Drizzle `.where()` or a raw `sql` template.
  *
- * Dates are calendar days (YYYY-MM-DD) compared with the UTC `start_date`, and
- * both ends are inclusive: `dateTo: "2024-12-31"` keeps activities started up
- * to 23:59:59 UTC that day. A time period contributes its dates and its sports;
- * `dateFrom` and `dateTo` replace the matching period date. A `timePeriodId`
- * that isn't one of the athlete's periods is ignored.
+ * Dates compare each activity's local calendar day, with inclusive bounds.
+ * Nested rules always intersect the athlete, sport and explicit date inputs.
  *
  * Raw SQL that names the table (`FROM activities a`) passes
  * `alias(activities, "a")` as `t`, so the condition refers to it by that name.
  */
-export async function selectActivities(
-  db: Database,
+export function selectActivities(
   selection: ActivitySelection,
   t: ActivitiesTable = activities,
-): Promise<SQL> {
-  const period =
-    selection.timePeriod ??
-    (selection.timePeriodId
-      ? await findTimePeriod(db, selection.timePeriodId, selection.athleteId)
-      : undefined);
-
+): SQL {
   const conditions = [eq(t.athlete, selection.athleteId)];
+  if (selection.rules)
+    conditions.push(activityRuleCondition(selection.rules, t, selection.today));
   if (selection.activityTypes && selection.activityTypes.length > 0) {
     conditions.push(inArray(t.type, selection.activityTypes));
   }
-  const periodSports = period && periodSportsCondition(period, t);
-  if (periodSports) {
-    conditions.push(periodSports);
-  }
-  if (selection.workoutTypes && selection.workoutTypes.length > 0) {
-    conditions.push(inArray(t.workoutType, selection.workoutTypes));
-  }
-  if (selection.hideCommutes) {
-    conditions.push(eq(t.commute, false));
-  }
-  const dateFrom = selection.dateFrom ?? period?.startDate;
+  const dateFrom = selection.dateFrom;
   if (dateFrom) {
-    conditions.push(gte(t.startDate, dateFrom));
+    conditions.push(gte(sql<string>`left(${t.startDateLocal}, 10)`, dateFrom));
   }
-  const dateTo = selection.dateTo ?? period?.endDate;
+  const dateTo = selection.dateTo;
   if (dateTo) {
-    conditions.push(lte(t.startDate, endOfDay(dateTo)));
+    conditions.push(lte(sql<string>`left(${t.startDateLocal}, 10)`, dateTo));
   }
   return and(...conditions)!;
 }
 
-function findTimePeriod(db: Database, id: number, athleteId: number) {
-  return db.query.timePeriods.findFirst({
-    where: and(eq(timePeriods.id, id), eq(timePeriods.athlete, athleteId)),
-  });
-}
-
-/** The last second of `day`, which `start_date` (ISO UTC text) is compared with. */
-function endOfDay(day: string | TimePeriodsTable["endDate"]): string | SQL {
-  return typeof day === "string"
-    ? `${day}T23:59:59Z`
-    : sql`(${day} || 'T23:59:59Z')`;
-}
-
-/** A period with no sports (null or empty) keeps every sport. */
-function periodSportsCondition(
-  period: TimePeriodBounds | TimePeriodsTable,
-  t: ActivitiesTable,
-): SQL | undefined {
-  if (isTable(period)) {
-    const sports = period.sportTypes;
-    return sql`(${sports} IS NULL OR ${sports} = '[]'::jsonb OR ${t.type} IN (SELECT jsonb_array_elements_text(${sports})))`;
+/** Compiles validated rules; every OR remains inside the athlete's condition. */
+export function activityRuleCondition(
+  node: ActivityFilterNode,
+  t: ActivitiesTable = activities,
+  today = new Date().toISOString().slice(0, 10),
+): SQL {
+  if (node.kind === "group") {
+    const conditions = node.children.map((child) =>
+      activityRuleCondition(child, t, today),
+    );
+    return (
+      (node.join === "AND" ? and(...conditions) : or(...conditions)) ??
+      sql`true`
+    );
   }
-  const sports = period.sportTypes;
-  return sports && sports.length > 0 ? inArray(t.type, sports) : undefined;
-}
-
-function isTable(
-  period: TimePeriodBounds | TimePeriodsTable,
-): period is TimePeriodsTable {
-  return is(period, PgTable);
+  const { field, operator, value, valueTo, values } = node;
+  if (field === "workoutKind") {
+    const types = values.flatMap((kind) =>
+      workoutTypesOfKind(kind as WorkoutKind),
+    );
+    const kinds = [inArray(t.workoutType, types)];
+    if (values.includes("none")) kinds.push(isNull(t.workoutType));
+    const condition = or(...kinds)!;
+    // COALESCE makes an unclassified workout a real non-match under NOT.
+    return operator === "notIn"
+      ? sql`not coalesce(${condition}, false)`
+      : condition;
+  }
+  if (field === "sport")
+    return operator === "notIn"
+      ? notInArray(t.type, values)
+      : inArray(t.type, values);
+  if (field === "commute") return eq(t.commute, value === "true");
+  const columns = {
+    name: t.name,
+    date: sql<string>`left(${t.startDateLocal}, 10)`,
+    distance: t.distance,
+    duration: t.movingTime,
+    elevation: t.totalElevationGain,
+    heartrate: t.averageHeartrate,
+    power: t.averageWatts,
+    route: t.mapPolyline,
+  };
+  const column = sql`${columns[field]}`;
+  if (operator === "blank")
+    return field === "route"
+      ? or(isNull(column), eq(column, ""))!
+      : isNull(column);
+  if (operator === "notBlank")
+    return field === "route"
+      ? and(isNotNull(column), ne(column, ""))!
+      : isNotNull(column);
+  if (operator === "last") {
+    const [from, to] = rollingDateRange(Number(value), today);
+    return and(gte(column, from), lte(column, to))!;
+  }
+  const definition = FILTER_FIELDS.find((f) => f.id === field)!;
+  const operand = (input: string) =>
+    definition.kind === "number" ? Number(input) * definition.scale : input;
+  const escapeLike = (input: string) => input.replace(/[\\%_]/g, "\\$&");
+  switch (operator) {
+    case "eq":
+      return eq(column, operand(value));
+    case "ne":
+      return ne(column, operand(value));
+    case "gt":
+      return gt(column, operand(value));
+    case "ge":
+      return gte(column, operand(value));
+    case "lt":
+      return lt(column, operand(value));
+    case "le":
+      return lte(column, operand(value));
+    case "between":
+      return and(gte(column, operand(value)), lte(column, operand(valueTo)))!;
+    case "contains":
+      return ilike(column, `%${escapeLike(value)}%`);
+    case "notContains":
+      return not(ilike(column, `%${escapeLike(value)}%`));
+    case "startsWith":
+      return ilike(column, `${escapeLike(value)}%`);
+    case "endsWith":
+      return ilike(column, `%${escapeLike(value)}`);
+    default:
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Unsupported filter operator",
+      });
+  }
 }

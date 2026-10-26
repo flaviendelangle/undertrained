@@ -80,8 +80,12 @@ export function ActivityBlock({
   className,
   backdrop = "transparent",
   compact,
+  href: hrefProp,
+  variant = "chip",
 }: {
   activity: JournalActivity;
+  href?: string;
+  variant?: "chip" | "card";
   /** Sizing / transition classes for where the block sits. */
   className?: string;
   /** What the sport tint is mixed over (opaque in the week time-grid). */
@@ -98,7 +102,7 @@ export function ActivityBlock({
   const activityRecords = records.get(activity.stravaId);
   const isRace = workoutKind(activity.workoutType) === "race";
   const isPr = activityRecords != null && activityRecords.length > 0;
-  const href = useJournalActivityHref(
+  const journalHref = useJournalActivityHref(
     activity.startDateLocal,
     activity.stravaId,
   );
@@ -114,7 +118,7 @@ export function ActivityBlock({
       onPointerLeave={prefetch.onPointerLeave}
       render={
         <Link
-          href={href}
+          href={hrefProp ?? journalHref}
           aria-label={
             isRace
               ? t("journal.activity.race", { name: activity.name })
@@ -122,6 +126,7 @@ export function ActivityBlock({
           }
           className={cn(
             "flex min-w-0 flex-col gap-0.5 rounded px-1 py-0.5 leading-tight hover:brightness-95 dark:hover:brightness-110",
+            variant === "card" && "gap-1 rounded-md p-3",
             className,
             // Races get a gold ring so they stand out from training days.
             isRace && "ring-1 ring-amber-400/80 ring-inset",
@@ -132,7 +137,12 @@ export function ActivityBlock({
         >
           <span className="flex min-w-0 items-center gap-1">
             <Icon className="size-3 shrink-0" style={{ color: config.color }} />
-            <span className="text-foreground truncate text-xs font-medium">
+            <span
+              className={cn(
+                "text-foreground truncate font-medium",
+                variant === "card" ? "text-sm" : "text-xs",
+              )}
+            >
               {activity.name || sportTypeLabel(activity.type, t)}
             </span>
             {isRace && (
@@ -151,7 +161,12 @@ export function ActivityBlock({
             )}
           </span>
           {stats && !compact && (
-            <span className="text-muted-foreground truncate text-[11px] tabular-nums">
+            <span
+              className={cn(
+                "text-muted-foreground truncate tabular-nums",
+                variant === "card" ? "text-xs" : "text-[11px]",
+              )}
+            >
               {stats}
             </span>
           )}

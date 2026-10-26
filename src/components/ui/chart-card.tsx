@@ -37,7 +37,7 @@ export function ChartCardSurfaceProvider({
 
 interface ChartCardProps {
   /** Card heading. */
-  title: React.ReactNode;
+  title?: React.ReactNode;
   /** Optional info tooltip rendered as an icon next to the title. */
   info?: string;
   /**
@@ -87,28 +87,30 @@ export function ChartCard({
         surface === "card" ? "bg-card rounded-sm" : "md:bg-card md:rounded-sm",
       )}
     >
-      <div
-        className={cn(
-          "flex items-center gap-2 p-4",
-          surface === "card"
-            ? "border-border border-b"
-            : "md:border-border md:border-b",
-        )}
-      >
-        <h3 className="shrink-0 text-lg font-semibold">{title}</h3>
-        {info && (
-          <Tooltip label={info}>
-            <button
-              type="button"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <InfoIcon className="size-3.5" />
-            </button>
-          </Tooltip>
-        )}
-        {headerSlot}
-        {actions}
-      </div>
+      {(title || info || headerSlot || actions) && (
+        <div
+          className={cn(
+            "flex items-center gap-2 p-4",
+            surface === "card"
+              ? "border-border border-b"
+              : "md:border-border md:border-b",
+          )}
+        >
+          <h3 className="shrink-0 text-lg font-semibold">{title}</h3>
+          {info && (
+            <Tooltip label={info}>
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <InfoIcon className="size-3.5" />
+              </button>
+            </Tooltip>
+          )}
+          {headerSlot}
+          {actions}
+        </div>
+      )}
       {/* One calm fade-up on mount, shared by every chart (gated on
           prefers-reduced-motion inside the utility). */}
       <div className={cn("animate-chart-in min-h-0 flex-1", bodyClassName)}>

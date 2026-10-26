@@ -43,10 +43,12 @@ export const trpc = createTRPCNext<AppRouter>({
               op.path === "calendarSubscriptions.events"),
           true: httpLink({
             url: `${getBaseUrl()}/api/trpc`,
+            methodOverride: "POST",
             transformer: superjson,
           }),
           false: httpBatchLink({
             url: `${getBaseUrl()}/api/trpc`,
+            methodOverride: "POST",
             transformer: superjson,
           }),
         }),
@@ -84,3 +86,18 @@ export const trpc = createTRPCNext<AppRouter>({
   ssr: false,
   transformer: superjson,
 });
+
+/** Refreshes every query derived from the athlete's activities. */
+export function invalidateActivityData(
+  utils: ReturnType<typeof trpc.useUtils>,
+) {
+  return Promise.all([
+    utils.activities.list.invalidate(),
+    utils.activities.maps.invalidate(),
+    utils.views.summary.invalidate(),
+    utils.views.counts.invalidate(),
+    utils.analytics.getPowerCurve.invalidate(),
+    utils.analytics.getPowerCurveYears.invalidate(),
+    utils.analytics.getPowerDistribution.invalidate(),
+  ]);
+}

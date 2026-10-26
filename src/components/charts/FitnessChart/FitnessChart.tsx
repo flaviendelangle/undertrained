@@ -9,10 +9,8 @@ import {
 } from "@mui/x-charts-pro";
 
 import { ChartCard } from "~/components/ui/chart-card";
-import { useFitnessData } from "~/hooks/useFitnessData";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
-import { formZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import {
   AXIS_SIZE,
@@ -20,9 +18,8 @@ import {
   REFERENCE_LINE,
   useChartTokens,
 } from "~/lib/chartTokens";
-import { classifyForm } from "~/lib/fitness";
+import type { FitnessPoint } from "~/lib/fitness";
 
-import { ChartMessage } from "../ChartMessage";
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { ChartTooltip } from "../ChartTooltip";
 
@@ -35,9 +32,17 @@ const FORM_AXIS_ID = "form";
 const DEFAULT_ZOOM_DAYS = 90;
 const MIN_ZOOM_DAYS = 21;
 
-export default function FitnessChart() {
+/** The fitness series (never empty), with the selected day marked. */
+export default function FitnessChart({
+  series,
+  selectedPoint,
+  onDateChange,
+}: {
+  series: FitnessPoint[];
+  selectedPoint: FitnessPoint | undefined;
+  onDateChange: (date: string) => void;
+}) {
   const t = useT();
-  const { series, current, isLoading } = useFitnessData();
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
 
@@ -142,217 +147,138 @@ export default function FitnessChart() {
 
   return (
     <ChartThemeProvider>
-      <ChartCard title={t("charts.fitness.title")} bodyClassName="flex">
+      <ChartCard
+        height="auto"
+        bodyClassName="flex h-[420px] flex-none md:h-[520px]"
+      >
         <div className="min-h-0 flex-1">
-          {series.length === 0 ? (
-            <EmptyState isLoading={isLoading} />
-          ) : (
-            <LineChartPro
-              zoomData={zoomData}
-              onZoomChange={setZoomData}
-              xAxis={[
-                {
-                  id: TIME_AXIS_ID,
-                  scaleType: "point",
-                  data: xData,
-                  // One tick per month keeps the daily series readable; the
-                  // tooltip still shows the exact day on hover.
-                  tickInterval: (value: Date) => value.getDate() === 1,
-                  valueFormatter: (value: Date, ctx) =>
-                    !isValid(value)
-                      ? ""
-                      : ctx?.location === "tick"
-                        ? format(value, "MMM yyyy", {
-                            locale: getActiveDateLocale(),
-                          })
-                        : format(value, "d MMM yyyy", {
-                            locale: getActiveDateLocale(),
-                          }),
-                  zoom: {
-                    filterMode: "keep",
-                    minSpan: minZoomSpan,
-                    slider: { enabled: true },
-                  },
-                  height: xAxisHeight,
+          <LineChartPro
+            aria-label={t("fitnessPage.chart")}
+            onAxisClick={(_event, data) => {
+              if (data?.dataIndex != null && xData[data.dataIndex])
+                onDateChange(format(xData[data.dataIndex], "yyyy-MM-dd"));
+            }}
+            zoomData={zoomData}
+            onZoomChange={setZoomData}
+            xAxis={[
+              {
+                id: TIME_AXIS_ID,
+                scaleType: "point",
+                data: xData,
+                // One tick per month keeps the daily series readable; the
+                // tooltip still shows the exact day on hover.
+                tickInterval: (value: Date) => value.getDate() === 1,
+                valueFormatter: (value: Date, ctx) =>
+                  !isValid(value)
+                    ? ""
+                    : ctx?.location === "tick"
+                      ? format(value, "MMM yyyy", {
+                          locale: getActiveDateLocale(),
+                        })
+                      : format(value, "d MMM yyyy", {
+                          locale: getActiveDateLocale(),
+                        }),
+                zoom: {
+                  filterMode: "keep",
+                  minSpan: minZoomSpan,
+                  slider: { enabled: true },
                 },
-              ]}
-              yAxis={[
-                {
-                  id: LOAD_AXIS_ID,
-                  position: "left",
-                  min: 0,
-                  width: yAxisWidth,
-                  valueFormatter: (v: number) => Math.round(v).toString(),
-                },
-                {
-                  id: FORM_AXIS_ID,
-                  position: "right",
-                  width: yAxisWidth,
-                  valueFormatter: (v: number) =>
-                    `${v > 0 ? "+" : ""}${Math.round(v)}`,
-                },
-              ]}
-              series={seriesConfig}
-              margin={CHART_MARGINS.standard}
-              grid={{ horizontal: true }}
-              skipAnimation
-              slots={{ tooltip: ChartTooltip }}
-              slotProps={{ legend: { toggleVisibilityOnClick: true } }}
-              sx={{
-                [`& .MuiAreaElement-series-ctl`]: {
-                  fill: `url(#${FITNESS_AREA_GRADIENT})`,
-                },
-              }}
-              onHiddenItemsChange={(hiddenItems) => {
-                setFitnessHidden(
-                  hiddenItems.some((item) => item.seriesId === "ctl"),
-                );
-                setFormHidden(
-                  hiddenItems.some((item) => item.seriesId === "tsb"),
-                );
-              }}
-            >
-              <defs>
-                <linearGradient
-                  id={FITNESS_AREA_GRADIENT}
-                  x1="0"
-                  x2="0"
-                  y1="0"
-                  y2="1"
-                >
-                  <stop
-                    offset="0%"
-                    stopColor={fitnessColor}
-                    stopOpacity={0.25}
-                  />
-                  <stop
-                    offset="100%"
-                    stopColor={fitnessColor}
-                    stopOpacity={0}
-                  />
-                </linearGradient>
-              </defs>
-              {targetFitness > 0 && !fitnessHidden && (
-                <ChartsReferenceLine
-                  axisId={LOAD_AXIS_ID}
-                  y={targetFitness}
-                  lineStyle={{
-                    stroke: fitnessColor,
-                    strokeDasharray: REFERENCE_LINE.dash,
-                    strokeOpacity: REFERENCE_LINE.opacity,
-                  }}
-                />
-              )}
-              {!formHidden && (
-                <ChartsReferenceLine
-                  axisId={FORM_AXIS_ID}
-                  y={0}
-                  lineStyle={{
-                    stroke: formColor,
-                    strokeDasharray: REFERENCE_LINE.dash,
-                    strokeOpacity: REFERENCE_LINE.opacity,
-                  }}
-                />
-              )}
-              {todayDate && (
-                <ChartsReferenceLine
-                  axisId={TIME_AXIS_ID}
-                  x={todayDate}
-                  lineStyle={{
-                    stroke: tokens.gridStrong.hex,
-                    strokeWidth: 1.5,
-                  }}
-                />
-              )}
-            </LineChartPro>
-          )}
+                height: xAxisHeight,
+              },
+            ]}
+            yAxis={[
+              {
+                id: LOAD_AXIS_ID,
+                position: "left",
+                min: 0,
+                width: yAxisWidth,
+                valueFormatter: (v: number) => Math.round(v).toString(),
+              },
+              {
+                id: FORM_AXIS_ID,
+                position: "right",
+                width: yAxisWidth,
+                valueFormatter: (v: number) =>
+                  `${v > 0 ? "+" : ""}${Math.round(v)}`,
+              },
+            ]}
+            series={seriesConfig}
+            margin={CHART_MARGINS.standard}
+            grid={{ horizontal: true }}
+            skipAnimation
+            slots={{ tooltip: ChartTooltip }}
+            slotProps={{ legend: { toggleVisibilityOnClick: true } }}
+            sx={{
+              [`& .MuiAreaElement-series-ctl`]: {
+                fill: `url(#${FITNESS_AREA_GRADIENT})`,
+              },
+            }}
+            onHiddenItemsChange={(hiddenItems) => {
+              setFitnessHidden(
+                hiddenItems.some((item) => item.seriesId === "ctl"),
+              );
+              setFormHidden(
+                hiddenItems.some((item) => item.seriesId === "tsb"),
+              );
+            }}
+          >
+            <defs>
+              <linearGradient
+                id={FITNESS_AREA_GRADIENT}
+                x1="0"
+                x2="0"
+                y1="0"
+                y2="1"
+              >
+                <stop offset="0%" stopColor={fitnessColor} stopOpacity={0.25} />
+                <stop offset="100%" stopColor={fitnessColor} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            {targetFitness > 0 && !fitnessHidden && (
+              <ChartsReferenceLine
+                axisId={LOAD_AXIS_ID}
+                y={targetFitness}
+                lineStyle={{
+                  stroke: fitnessColor,
+                  strokeDasharray: REFERENCE_LINE.dash,
+                  strokeOpacity: REFERENCE_LINE.opacity,
+                }}
+              />
+            )}
+            {!formHidden && (
+              <ChartsReferenceLine
+                axisId={FORM_AXIS_ID}
+                y={0}
+                lineStyle={{
+                  stroke: formColor,
+                  strokeDasharray: REFERENCE_LINE.dash,
+                  strokeOpacity: REFERENCE_LINE.opacity,
+                }}
+              />
+            )}
+            {selectedPoint && (
+              <ChartsReferenceLine
+                axisId={TIME_AXIS_ID}
+                x={selectedPoint.date}
+                lineStyle={{
+                  stroke: tokens.axisLabel,
+                  strokeDasharray: "4 3",
+                }}
+              />
+            )}
+            {todayDate && (
+              <ChartsReferenceLine
+                axisId={TIME_AXIS_ID}
+                x={todayDate}
+                lineStyle={{
+                  stroke: tokens.gridStrong.hex,
+                  strokeWidth: 1.5,
+                }}
+              />
+            )}
+          </LineChartPro>
         </div>
-
-        {/* Right-side readout (today's values). */}
-        {current && (
-          <Readout
-            current={current}
-            fitnessColor={fitnessColor}
-            fatigueColor={fatigueColor}
-          />
-        )}
       </ChartCard>
     </ChartThemeProvider>
-  );
-}
-
-function Readout({
-  current,
-  fitnessColor,
-  fatigueColor,
-}: {
-  current: { ctl: number; atl: number; tsb: number; ramp: number };
-  fitnessColor: string;
-  fatigueColor: string;
-}) {
-  const t = useT();
-  const zone = classifyForm(current.tsb);
-  return (
-    <div className="hidden w-36 shrink-0 flex-col justify-center gap-4 border-l px-4 sm:flex">
-      <Stat
-        label={t("charts.fitness.series.fitness")}
-        value={Math.round(current.ctl)}
-        color={fitnessColor}
-      />
-      <Stat
-        label={t("charts.fitness.series.fatigue")}
-        value={Math.round(current.atl)}
-        color={fatigueColor}
-      />
-      <div className="flex flex-col gap-0.5">
-        <span className="text-muted-foreground text-xs">
-          {t("charts.fitness.series.form")}
-        </span>
-        <span
-          className="text-2xl font-semibold tabular-nums"
-          style={{ color: zone.color }}
-        >
-          {current.tsb > 0 ? "+" : ""}
-          {Math.round(current.tsb)}
-        </span>
-        <span
-          className="text-[10px] leading-tight"
-          style={{ color: zone.color }}
-        >
-          {formZoneLabel(zone.key, t)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number | string;
-  color?: string;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-muted-foreground text-xs">{label}</span>
-      <span
-        className="text-xl font-semibold tabular-nums"
-        style={color ? { color } : undefined}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function EmptyState({ isLoading }: { isLoading: boolean }) {
-  const t = useT();
-  return (
-    <ChartMessage>
-      {isLoading ? t("common.loading") : t("charts.fitness.empty")}
-    </ChartMessage>
   );
 }

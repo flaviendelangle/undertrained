@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { cn } from "~/lib/utils";
 import { formatCompactDuration } from "~/utils/format";
 import { getSportConfig } from "~/utils/sportConfig";
 
@@ -32,6 +33,7 @@ export function PlannedBlockBody({
   durationSeconds,
   compact,
   trailing,
+  variant = "chip",
 }: {
   sportType: string;
   title: string;
@@ -42,6 +44,7 @@ export function PlannedBlockBody({
   compact?: boolean;
   /** Optional element pinned after the title (e.g. the month view's clock). */
   trailing?: React.ReactNode;
+  variant?: "chip" | "card";
 }) {
   const config = getSportConfig(sportType);
   const Icon = config.icon;
@@ -49,13 +52,23 @@ export function PlannedBlockBody({
     <>
       <span className="flex min-w-0 items-center gap-1">
         <Icon className="size-3 shrink-0" style={{ color: config.color }} />
-        <span className="text-foreground truncate text-xs font-medium">
+        <span
+          className={cn(
+            "text-foreground truncate font-medium",
+            variant === "card" ? "text-sm" : "text-xs",
+          )}
+        >
           {title}
         </span>
         {trailing}
       </span>
       {!compact && (
-        <span className="text-muted-foreground truncate text-[11px] tabular-nums">
+        <span
+          className={cn(
+            "text-muted-foreground truncate tabular-nums",
+            variant === "card" ? "text-xs" : "text-[11px]",
+          )}
+        >
           {time != null && <>{time} · </>}
           {formatCompactDuration(durationSeconds, { subHour: "min" })}
         </span>

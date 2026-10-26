@@ -15,6 +15,10 @@ import {
 import type { ActivityStats } from "strava-v3";
 
 import type {
+  ActivityDisplay,
+  ActivityFilterGroup,
+} from "~/utils/activityFilters";
+import type {
   LoadAlgorithmPreferences,
   RiderSettingsChangePoint,
   RiderSettingsTimeline,
@@ -163,6 +167,12 @@ export const activities = pgTable(
     // well and the single-column index was pure write amplification.
     index("activities_athlete_id_idx").on(t.athlete, t.id),
     index("activities_athlete_start_date_idx").on(t.athlete, t.startDate),
+    // Activity selections filter dates by local calendar day; the expression
+    // must match `selectActivities`' exactly for the planner to use it.
+    index("activities_athlete_local_day_idx").on(
+      t.athlete,
+      sql`left(${t.startDateLocal}, 10)`,
+    ),
     index("activities_athlete_streams_loaded_idx").on(
       t.athlete,
       t.areStreamsLoaded,
@@ -273,6 +283,7 @@ export const riderSettings = pgTable(
   (t) => [uniqueIndex("rider_settings_athlete_idx").on(t.athlete)],
 );
 
+// Archived source for the saved-view migration. Application queries use activityViews.
 export const timePeriods = pgTable(
   "time_periods",
   {
@@ -286,6 +297,35 @@ export const timePeriods = pgTable(
     sportTypes: jsonb("sport_types").$type<string[]>(),
   },
   (t) => [index("time_periods_athlete_idx").on(t.athlete)],
+);
+
+export const viewFolders = pgTable(
+  "view_folders",
+  {
+    id: serial("id").primaryKey(),
+    athlete: integer("athlete")
+      .notNull()
+      .references(() => athletes.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+  },
+  (t) => [index("view_folders_athlete_idx").on(t.athlete)],
+);
+
+export const activityViews = pgTable(
+  "activity_views",
+  {
+    id: serial("id").primaryKey(),
+    athlete: integer("athlete")
+      .notNull()
+      .references(() => athletes.id, { onDelete: "cascade" }),
+    folderId: integer("folder_id").references(() => viewFolders.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    rules: jsonb("rules").$type<ActivityFilterGroup>().notNull(),
+    display: jsonb("display").$type<ActivityDisplay>().notNull(),
+  },
+  (t) => [index("activity_views_athlete_idx").on(t.athlete)],
 );
 
 export const syncJobs = pgTable(

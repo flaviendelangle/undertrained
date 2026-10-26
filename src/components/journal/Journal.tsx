@@ -20,7 +20,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { usePlannedTrainingList } from "~/hooks/plannedTrainings";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useBusyEvents } from "~/hooks/useBusyEvents";
@@ -48,24 +47,23 @@ import {
   type JournalPreviewHandles,
   JournalPreviewProvider,
 } from "./journalPreview";
-import { type JournalView, JournalViewContext } from "./journalView";
+import {
+  type JournalView,
+  JournalViewContext,
+  journalHref,
+  readJournalLocation,
+} from "./journalView";
 import { useJournalWeeks } from "./useJournalWeeks";
-
-const VIEW_OPTIONS: JournalView[] = ["month", "week"];
 
 /** URL date key (yyyy-MM-dd) for a week's Monday, stored in `?week=`. */
 function weekParamOf(weekStart: Date): string {
   return format(weekStart, "yyyy-MM-dd");
 }
 
-/** Build the journal location `/journal/<view>` (+ `?week=`), used for routing. */
-function journalHref(view: JournalView, weekParam: string | null): string {
-  return weekParam ? `/journal/${view}?week=${weekParam}` : `/journal/${view}`;
-}
-
 export function Journal() {
   const t = useT();
   const { data: activities, isError } = useActivitiesQuery("journal");
+  const { data: fitnessActivities } = useActivitiesQuery("fitness");
   const { data: plannedTrainings } = usePlannedTrainingList();
   const { data: busyEvents, showAllDayRow } = useBusyEvents();
   const { timeline } = useRiderSettingsTimeline();
@@ -83,18 +81,14 @@ export function Journal() {
     loadPreferences,
     plannedTrainings,
     busyEvents,
+    fitnessActivities ?? [],
   );
 
   // View and current week live in the URL (`/journal/<view>?week=<yyyy-MM-dd>`)
   // so that returning from an activity restores the same view, and the right
   // scroll (month) / page (week). Both are read here and written on change.
   const router = useRouter();
-  const viewParam = Array.isArray(router.query.view)
-    ? router.query.view[0]
-    : router.query.view;
-  const view: JournalView = viewParam === "week" ? "week" : "month";
-  const weekParam =
-    typeof router.query.week === "string" ? router.query.week : null;
+  const { view, weekParam } = readJournalLocation(router.query);
   const urlAnchor = React.useMemo(
     () =>
       weekParam ? startOf(new Date(`${weekParam}T00:00:00`), "week") : null,
@@ -154,8 +148,6 @@ export function Journal() {
     [routerRef, weekParamRef],
   );
 
-  const setView = (nextView: JournalView) =>
-    navigate(nextView, effectiveAnchor);
   const onVisibleWeekChange = React.useCallback(
     (weekStart: Date) => navigate("month", weekStart),
     [navigate],
@@ -242,19 +234,6 @@ export function Journal() {
                 </div>
 
                 <div className="flex items-center gap-1 max-md:shrink-0 md:flex-wrap md:gap-2">
-                  <SegmentedToggle
-                    ariaLabel={t("journal.view.label")}
-                    value={view}
-                    onChange={setView}
-                    options={VIEW_OPTIONS.map((value) => ({
-                      value,
-                      label: t(
-                        value === "week"
-                          ? "journal.view.week"
-                          : "journal.view.month",
-                      ),
-                    }))}
-                  />
                   {isMobile ? (
                     <Button
                       size="icon-sm"

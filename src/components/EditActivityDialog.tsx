@@ -26,7 +26,7 @@ import {
   coerceWorkoutChoice,
   workoutValueToChoice,
 } from "~/utils/sportConfig";
-import { trpc } from "~/utils/trpc";
+import { invalidateActivityData, trpc } from "~/utils/trpc";
 
 const NATIVE_INPUT_CLASS =
   "border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none";
@@ -104,8 +104,7 @@ function EditActivityForm({
     onSuccess: async () => {
       await Promise.all([
         utils.activities.get.invalidate({ stravaId: activity.stravaId }),
-        utils.activities.list.invalidate(),
-        utils.activities.maps.invalidate(),
+        invalidateActivityData(utils),
       ]);
       onClose();
     },

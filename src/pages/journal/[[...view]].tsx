@@ -1,10 +1,13 @@
-import { CalendarDaysIcon } from "lucide-react";
+import { CalendarDaysIcon, CalendarRangeIcon } from "lucide-react";
 import nextDynamic from "next/dynamic";
+import { useRouter } from "next/router";
 
-import { SyncPanel } from "~/components/SyncPanel";
+import {
+  journalHref,
+  readJournalLocation,
+} from "~/components/journal/journalView";
+import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { LoadingOverlay } from "~/components/primitives/LoadingOverlay";
-import { ActivityFilterPopover } from "~/components/settings/ActivityFilterPopover";
-import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { useActivitiesQuery } from "~/hooks/useActivitiesQuery";
 import { useInitialLoadComplete } from "~/hooks/useInitialLoadComplete";
 import { useModuleLoaded } from "~/hooks/useModuleLoaded";
@@ -20,6 +23,8 @@ const Journal = nextDynamic(loadJournal, { ssr: false });
 
 const JournalPage: NextPageWithLayout = () => {
   const t = useT();
+  const router = useRouter();
+  const { view, weekParam } = readJournalLocation(router.query);
   // Prefetch the journal's primary dataset from the (non-lazy) page itself so
   // the request overlaps with the Journal module loading; the component then
   // mounts already populated. Harmless on SPA navigation — the cache is warm,
@@ -38,18 +43,32 @@ const JournalPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar
-        label={t("nav.journal")}
-        actions={
-          <>
-            <ActivityFilterPopover />
-            <SyncPanel />
-          </>
-        }
-      >
-        <CalendarDaysIcon className="size-4" />
-        <span className="font-semibold">{t("nav.journal")}</span>
-      </Toolbar>
+      <PageToolbar
+        title={t("nav.journal")}
+        icon={CalendarDaysIcon}
+        tabs={{
+          label: t("journal.view.label"),
+          items: (
+            [
+              {
+                value: "month",
+                icon: CalendarDaysIcon,
+                label: t("journal.view.month"),
+              },
+              {
+                value: "week",
+                icon: CalendarRangeIcon,
+                label: t("journal.view.week"),
+              },
+            ] as const
+          ).map((item) => ({
+            label: item.label,
+            icon: item.icon,
+            href: journalHref(item.value, weekParam),
+            active: view === item.value,
+          })),
+        }}
+      />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         <Journal />

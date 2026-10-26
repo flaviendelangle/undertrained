@@ -1,51 +1,20 @@
 import * as React from "react";
 
-import { isValid } from "date-fns";
-import { SlidersHorizontalIcon } from "lucide-react";
-
-import { Button } from "~/components/ui/button";
 import { ChartCard } from "~/components/ui/chart-card";
-import {
-  ResponsivePopover,
-  ResponsivePopoverContent,
-  ResponsivePopoverHeader,
-  ResponsivePopoverTitle,
-  ResponsivePopoverTrigger,
-} from "~/components/ui/responsive-popover";
-import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useActivitiesFilteredByType } from "~/hooks/useActivitiesFilteredByType";
 import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
-import { startOf } from "~/utils/dateUtils";
 import { formatElapsed } from "~/utils/format";
-import { getSportConfig } from "~/utils/sportConfig";
 
 import { ChartMessage } from "../ChartMessage";
 import { ChartThemeProvider } from "../ChartThemeProvider";
-import { SportFilterPopover, SportTypeFilter } from "../SportTypeFilter";
-import {
-  type ZoneTimeSpan,
-  aggregateTimeInZones,
-  buildZoneRows,
-} from "./timeInZones";
+import { aggregateTimeInZones, buildZoneRows } from "./timeInZones";
 
 export default function TimeInZones() {
   const t = useT();
   const tokens = useChartTokens();
-  const [selectedTypes, setSelectedTypes] = React.useState<string[]>([]);
-  const [timeSpan, setTimeSpan] = React.useState<ZoneTimeSpan>("week");
-  const activitiesQuery = useActivitiesFilteredByType(selectedTypes);
-
-  // Sports without a zone system (swimming) are excluded from the chart, so
-  // offering them in the filter would only produce an empty card.
-  const zoneTypes = React.useMemo(
-    () =>
-      activitiesQuery.allTypes?.filter(
-        (type) => getSportConfig(type).zoneModel != null,
-      ),
-    [activitiesQuery.allTypes],
-  );
+  const activitiesQuery = useActivitiesFilteredByType([]);
 
   const {
     rows,
@@ -55,13 +24,7 @@ export default function TimeInZones() {
     totalSeconds,
     maxSeconds,
   } = React.useMemo(() => {
-    const spanStart = startOf(new Date(), timeSpan);
-    const spanActivities = (activitiesQuery.activities ?? []).filter((a) => {
-      const date = new Date(a.startDate);
-      return isValid(date) && date >= spanStart;
-    });
-
-    const agg = aggregateTimeInZones(spanActivities);
+    const agg = aggregateTimeInZones(activitiesQuery.activities ?? []);
     const rows = buildZoneRows(agg);
     const maxSeconds = Math.max(
       1,
@@ -77,76 +40,7 @@ export default function TimeInZones() {
       totalSeconds: agg.totalSeconds,
       maxSeconds,
     };
-  }, [activitiesQuery.activities, timeSpan]);
-
-  const timeSpanOptions = React.useMemo(
-    () =>
-      (["week", "month", "year"] as const).map((value) => ({
-        value,
-        label: t(`charts.timeInZones.timeSpan.${value}`),
-      })),
-    [t],
-  );
-
-  const timeSpanToggle = (
-    <SegmentedToggle
-      value={timeSpan}
-      onChange={setTimeSpan}
-      options={timeSpanOptions}
-    />
-  );
-
-  const actions = (
-    <>
-      {/* Desktop: inline controls */}
-      <div className="hidden items-center gap-2 sm:flex">{timeSpanToggle}</div>
-
-      <div className="flex-1" />
-
-      {/* Mobile: all controls in popover (drawer on mobile) */}
-      <ResponsivePopover>
-        <ResponsivePopoverTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground sm:hidden"
-            >
-              <SlidersHorizontalIcon className="size-4" />
-            </Button>
-          }
-        />
-        <ResponsivePopoverContent
-          align="end"
-          className="flex flex-col gap-3 sm:w-56"
-        >
-          <ResponsivePopoverHeader>
-            <ResponsivePopoverTitle>
-              {t("charts.displayOptions")}
-            </ResponsivePopoverTitle>
-          </ResponsivePopoverHeader>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-muted-foreground text-xs font-medium">
-              {t("charts.timeInZones.timeSpanLabel")}
-            </span>
-            {timeSpanToggle}
-          </div>
-          <SportTypeFilter
-            allTypes={zoneTypes}
-            selectedTypes={selectedTypes}
-            setSelectedTypes={setSelectedTypes}
-          />
-        </ResponsivePopoverContent>
-      </ResponsivePopover>
-
-      {/* Desktop: sport filter */}
-      <SportFilterPopover
-        allTypes={zoneTypes}
-        selectedTypes={selectedTypes}
-        setSelectedTypes={setSelectedTypes}
-      />
-    </>
-  );
+  }, [activitiesQuery.activities]);
 
   const renderRow = (
     key: string,
@@ -197,7 +91,6 @@ export default function TimeInZones() {
       <ChartCard
         title={t("charts.timeInZones.title")}
         info={t("charts.timeInZones.info")}
-        actions={actions}
       >
         {totalSeconds === 0 ? (
           <ChartMessage>{t("charts.timeInZones.empty")}</ChartMessage>

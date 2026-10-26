@@ -1,8 +1,10 @@
 import { useMemo } from "react";
 
+import { BikeIcon } from "lucide-react";
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
 
+import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { BrowserCompatibilityBanner } from "~/components/liveTraining/BrowserCompatibilityBanner";
 import { FtpTestResult } from "~/components/liveTraining/FtpTestResult";
 import { RideNavigationDialog } from "~/components/liveTraining/RideNavigationDialog";
@@ -74,24 +76,33 @@ export default function LiveTrainingPage({
   const detail = useStructuredWorkout(initialWorkoutId, { enabled: !builtIn });
   const workout =
     builtIn ?? (detail.data?.id === initialWorkoutId ? detail.data : null);
-  if (!workout)
-    return (
-      <div className="flex h-full flex-col items-center justify-center">
-        <QueryState
-          loading={!detail.isError}
-          error={detail.isError}
-          onRetry={() => void detail.refetch()}
-        />
-        <Button
-          nativeButton={false}
-          render={<Link href="/workouts" />}
-          variant="outline"
-        >
-          {t("nav.workouts")}
-        </Button>
-      </div>
-    );
-  return <LiveWorkout key={workout.id} workout={workout} />;
+  return (
+    <>
+      <PageToolbar
+        title={t("nav.liveTraining")}
+        icon={BikeIcon}
+        backHref="/workouts"
+      />
+      {workout ? (
+        <LiveWorkout key={workout.id} workout={workout} />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+          <QueryState
+            loading={!detail.isError}
+            error={detail.isError}
+            onRetry={() => void detail.refetch()}
+          />
+          <Button
+            nativeButton={false}
+            render={<Link href="/workouts" />}
+            variant="outline"
+          >
+            {t("nav.workouts")}
+          </Button>
+        </div>
+      )}
+    </>
+  );
 }
 
 function LiveWorkout({ workout }: { workout: RideWorkout }) {
@@ -112,7 +123,7 @@ function LiveWorkout({ workout }: { workout: RideWorkout }) {
   const hudWorkout = { name: workout.name, player };
 
   return (
-    <div className="relative h-full overflow-hidden">
+    <div className="relative min-h-0 flex-1 overflow-hidden">
       <RideNavigationDialog
         enabled={ride.hasRide}
         onSave={() => {

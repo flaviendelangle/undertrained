@@ -73,18 +73,3 @@ export function makeCustomRange(from: string, to: string): DateRange {
     dateTo: to,
   };
 }
-
-/** A time period's start and end dates are inclusive already. */
-export function makePeriodRange(period: {
-  id: number;
-  name: string;
-  startDate: string;
-  endDate: string;
-}): DateRange {
-  return {
-    id: `period-${period.id}`,
-    label: period.name,
-    dateFrom: period.startDate,
-    dateTo: period.endDate,
-  };
-}

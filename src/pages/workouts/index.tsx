@@ -1,14 +1,14 @@
 import * as React from "react";
 
-import { PlusIcon, RepeatIcon } from "lucide-react";
+import { BikeIcon, PlusIcon, RepeatIcon } from "lucide-react";
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
 
 import type { ListStructuredWorkout } from "@server/db/types";
 
+import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { QueryState } from "~/components/primitives/QueryState";
 import { SearchInput } from "~/components/primitives/SearchInput";
-import { Toolbar } from "~/components/settings/SettingsToolbar";
 import { Button } from "~/components/ui/button";
 import {
   ResponsiveDialog,
@@ -141,12 +141,12 @@ const WorkoutsPage: NextPageWithLayout = () => {
 
   return (
     <>
-      <Toolbar
-        label={t("nav.workouts")}
-        contentClassName="mx-auto max-w-5xl"
+      <PageToolbar
+        title={t("nav.workouts")}
+        icon={BikeIcon}
         actions={
           <>
-            <div className="w-36 min-w-0 sm:w-56">
+            <div className="w-32 min-w-0 sm:w-56">
               <SearchInput
                 value={search}
                 onChange={setSearch}
@@ -166,9 +166,7 @@ const WorkoutsPage: NextPageWithLayout = () => {
             </Button>
           </>
         }
-      >
-        <h1 className="text-base font-semibold">{t("nav.workouts")}</h1>
-      </Toolbar>
+      />
 
       {/* Capped and centered like Statistics: a three-column grid stretched
           across an ultrawide monitor turns the cards into letterboxes. */}

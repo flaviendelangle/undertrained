@@ -2,10 +2,31 @@ import * as React from "react";
 
 import { addMonths, endOfMonth, format, startOfMonth } from "date-fns";
 
+import { activityHref } from "~/utils/activityLinks";
 import { startOf } from "~/utils/dateUtils";
 
 /** Which Journal layout is active; mirrored in the route (`/journal/<view>`). */
 export type JournalView = "month" | "week";
+
+/** Reads the journal location (`/journal/<view>?week=<yyyy-MM-dd>`) from a query. */
+export function readJournalLocation(
+  query: Record<string, string | string[] | undefined>,
+): {
+  view: JournalView;
+  weekParam: string | null;
+} {
+  return {
+    view: [query.view].flat()[0] === "week" ? "week" : "month",
+    weekParam: typeof query.week === "string" ? query.week : null,
+  };
+}
+
+/** Builds the journal location `/journal/<view>` (+ `?week=`). */
+export function journalHref(view: JournalView, weekParam: string | null) {
+  return weekParam
+    ? `/journal/${view}?week=${encodeURIComponent(weekParam)}`
+    : `/journal/${view}`;
+}
 
 /** A year and its months (newest first) — one section of the corner picker. */
 export interface MonthGroup {
@@ -84,10 +105,8 @@ export function weekIndexForMonth(
 export const JournalViewContext = React.createContext<JournalView>("month");
 
 /**
- * Link to an activity that records where to come back to: the current view and
- * the week containing the activity. The activity page rebuilds the journal URL
- * from these, so returning lands on the right view and week regardless of how
- * the calendar was scrolled.
+ * Link to an activity that comes back to the current view, at the week
+ * containing the activity, regardless of how the calendar was scrolled.
  */
 export function useJournalActivityHref(
   startDateLocal: string,
@@ -95,5 +114,5 @@ export function useJournalActivityHref(
 ): string {
   const view = React.useContext(JournalViewContext);
   const week = format(startOf(new Date(startDateLocal), "week"), "yyyy-MM-dd");
-  return `/activities/${stravaId}?from=journal&view=${view}&week=${week}`;
+  return activityHref(stravaId, journalHref(view, week));
 }
