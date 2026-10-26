@@ -13,6 +13,7 @@ it("returns from an activity to the linking page, never off the app", () => {
     "/\\evil.test",
     "/\t/evil.test",
     "https://evil.test",
+    "//[",
   ])
     expect(readReturnTo({ returnTo })).toBeNull();
 });

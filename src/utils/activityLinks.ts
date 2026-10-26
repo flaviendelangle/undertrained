@@ -17,7 +17,12 @@ export function readReturnTo(
   const value = query.returnTo;
   if (typeof value !== "string" || !value.startsWith("/")) return null;
   // Resolved like a browser would, so "//host", "/\host" or "/\t/host" can't
-  // leave the app.
-  const url = new URL(value, BASE);
+  // leave the app. Malformed values like "//[" don't resolve at all.
+  let url: URL;
+  try {
+    url = new URL(value, BASE);
+  } catch {
+    return null;
+  }
   return url.origin === BASE ? url.pathname + url.search + url.hash : null;
 }
