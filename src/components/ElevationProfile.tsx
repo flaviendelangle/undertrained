@@ -7,16 +7,31 @@ import { Slider } from "@base-ui/react/slider";
 import { useElementSize } from "~/hooks/useElementSize";
 import { useT } from "~/i18n/useT";
 import {
+  type DetectedClimb,
+  detectClimbs,
+} from "~/lib/activityRecording/climbs";
+import {
   type RecordingSegment,
   sampleIndexAtTime,
 } from "~/lib/activityRecording/segment";
-import { formatElapsed, formatKm, formatMeters } from "~/utils/format";
+import {
+  formatElapsed,
+  formatKm,
+  formatMeters,
+  formatNumber,
+} from "~/utils/format";
 
 const LEFT = 42;
 const RIGHT = 18;
 const TOP = 12;
 const PLOT_HEIGHT = 100;
 const HEIGHT = 136;
+const CLIMB_COLORS = {
+  "3": "#d97706",
+  "2": "#ea580c",
+  "1": "#dc2626",
+  HC: "#9333ea",
+};
 
 interface ElevationProfileProps {
   altitudeData: number[];
@@ -68,6 +83,10 @@ export function ElevationProfile({
         ? distanceData
         : null,
     [distanceData, n],
+  );
+  const climbs = React.useMemo(
+    () => detectClimbs(altitudeData, distances),
+    [altitudeData, distances],
   );
   const xData = distances ?? sampleTimes;
   const min = xData[0] ?? 0,
@@ -145,6 +164,31 @@ export function ElevationProfile({
   const formatX = (value: number) =>
     distances ? formatKm(value, 2) : formatElapsed(value);
   const values = selection ? selection.map((i) => xData[i]) : [min, max];
+  const climbLabel = (climb: DetectedClimb, index: number) =>
+    t("activities.inspection.climbLabel", {
+      number: index + 1,
+      category: climb.category,
+      distance: formatKm(climb.distance, 2),
+      gain: formatMeters(climb.gain),
+      grade: formatNumber(climb.grade, 1),
+    });
+  const selectClimb = (climb: DetectedClimb) => {
+    drag.current = null;
+    setPreviewSegment(null);
+    onCursorChange(null);
+    selectIndices(climb.startIndex, climb.endIndex);
+  };
+  const climbLabels = React.useMemo(() => {
+    const rowEnds: number[] = [];
+    return climbs.map((climb) => {
+      const center = (x(climb.startIndex) + x(climb.endIndex)) / 2;
+      const labelX = Math.max(LEFT + 10, Math.min(width - RIGHT - 10, center));
+      let row = rowEnds.findIndex((end) => end + 4 < labelX - 10);
+      if (row === -1) row = rowEnds.length;
+      rowEnds[row] = labelX + 10;
+      return { x: labelX, row };
+    });
+  }, [climbs, width, x]);
   const resetSegment = () => {
     drag.current = null;
     setPreviewSegment(null);
@@ -159,7 +203,11 @@ export function ElevationProfile({
       className="bg-card border-border shrink-0 border-t"
       aria-label={t("activities.inspection.elevation")}
       onKeyDownCapture={(event) => {
-        if (event.key === "Enter" && segment) {
+        if (
+          event.key === "Enter" &&
+          segment &&
+          !(event.target as Element).closest("[data-climb]")
+        ) {
           event.preventDefault();
           onSegmentChange(segment, "commit");
           return;
@@ -219,7 +267,13 @@ export function ElevationProfile({
           if (!current) return;
           const index = eventIndex(event);
           if (current.moved) selectIndices(current.index, index);
-          else onPinTime(sampleTimes[index]);
+          else {
+            const climb = climbs.find(
+              (climb) => index >= climb.startIndex && index <= climb.endIndex,
+            );
+            if (climb) selectClimb(climb);
+            else onPinTime(sampleTimes[index]);
+          }
           drag.current = null;
           setPreviewSegment(null);
           event.currentTarget.releasePointerCapture(event.pointerId);
@@ -273,6 +327,52 @@ export function ElevationProfile({
             fill={`url(#${id})`}
           />
         )}
+        {climbs.map((climb, index) => (
+          <g
+            key={climb.startIndex}
+            data-climb=""
+            role="button"
+            tabIndex={0}
+            aria-label={climbLabel(climb, index)}
+            aria-pressed={
+              segment?.[0] === sampleTimes[climb.startIndex] &&
+              segment?.[1] === sampleTimes[climb.endIndex]
+            }
+            className="[&:focus-visible>rect]:stroke-foreground cursor-pointer outline-none [&:focus-visible>rect]:stroke-2"
+            onClick={(event) => {
+              if (event.detail === 0) selectClimb(climb);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                selectClimb(climb);
+              }
+            }}
+          >
+            <title>{climbLabel(climb, index)}</title>
+            <rect
+              x={x(climb.startIndex)}
+              y={TOP}
+              width={Math.max(1, x(climb.endIndex) - x(climb.startIndex))}
+              height={PLOT_HEIGHT}
+              fill={CLIMB_COLORS[climb.category]}
+              fillOpacity={0.12}
+              stroke={CLIMB_COLORS[climb.category]}
+              strokeOpacity={0.6}
+              strokeDasharray="3 3"
+            />
+            <text
+              x={climbLabels[index].x}
+              y={TOP + 12 + climbLabels[index].row * 13}
+              textAnchor="middle"
+              fill={CLIMB_COLORS[climb.category]}
+              className="text-[10px] font-semibold"
+            >
+              {climb.category === "HC" ? "HC" : `C${climb.category}`}
+            </text>
+          </g>
+        ))}
         {selection && (
           <rect
             x={x(selection[0])}

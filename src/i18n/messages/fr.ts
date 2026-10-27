@@ -362,6 +362,8 @@ const fr: Messages = {
   },
   activities: {
     inspection: {
+      climbLabel:
+        "Montée {number}, cat. {category}, {distance}, {gain} de dénivelé, {grade} %",
       details: "Détails",
       segmentProfile: "Profil du segment",
       profileDescription:

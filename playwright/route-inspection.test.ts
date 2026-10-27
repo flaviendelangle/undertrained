@@ -158,6 +158,85 @@ async function expectDetails(page: Page) {
   ).toBeVisible();
 }
 
+async function seedClimbs(
+  athleteId: number,
+  stravaId: number,
+  routeDistance = 12_000,
+) {
+  const distance = Array.from(
+    { length: routeDistance / 100 + 1 },
+    (_, i) => i * 100,
+  );
+  const altitude = distance.map((d) =>
+    d <= 1000
+      ? 100
+      : d <= 5000
+        ? 100 + (d - 1000) * 0.06
+        : d <= 6500
+          ? 340 - (d - 5000) * 0.08
+          : d <= 10500
+            ? 220 + (d - 6500) * 0.06
+            : 460,
+  );
+  const streams = {
+    time: distance.map((_, i) => i * 20),
+    distance,
+    altitude,
+    latlng: distance.map((_, i) => [45 + i * 0.001, 5 + i * 0.001]),
+    watts: distance.map(() => 200),
+    heartrate: distance.map(() => 150),
+  };
+  const db = postgres(process.env.DATABASE_URL!);
+  try {
+    for (const [type, data] of Object.entries(streams))
+      await db`update activity_streams set data=${JSON.stringify(data)},original_size=${data.length} where type=${type} and activity_id=(select id from activities where athlete=${athleteId} and strava_id=${stravaId})`;
+  } finally {
+    await db.end();
+  }
+}
+
+test("selects detected climbs from the profile or keyboard without preventing manual segment selection", async ({
+  page,
+  viewsFixture: f,
+}) => {
+  await seedClimbs(f.athleteId, f.ids.long);
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto(`${origin}/activities/${f.ids.long}`);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  const climbs = profile(page).getByRole("button", { name: /^Climb / });
+  await expect(climbs).toHaveCount(2);
+  await expect(climbs.first()).toHaveAccessibleName(/^Climb 1, Cat\. 3,/);
+  await expect(climbs.last()).toHaveAccessibleName(/^Climb 2, Cat\. 3,/);
+  const svg = profile(page);
+  const box = (await svg.boundingBox())!;
+  await svg.click({
+    position: { x: 42 + ((box.width - 60) * 3000) / 12000, y: 60 },
+  });
+  const start = explorer(page).getByRole("slider", { name: "Segment start" });
+  const end = explorer(page).getByRole("slider", { name: "Segment end" });
+  await expect(start).toHaveAttribute("aria-valuenow", "1000");
+  await expect(end).toHaveAttribute("aria-valuenow", "5000");
+  await expect(climbs.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(card(page)).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("climbs-desktop.png") });
+  // Enter on another climb must not recommit the existing segment in the profile's capture handler.
+  await climbs.last().focus();
+  await page.keyboard.press("Enter");
+  await expect(start).toHaveAttribute("aria-valuenow", "6500");
+  await expect(end).toHaveAttribute("aria-valuenow", "10500");
+  await expect(climbs.last()).toHaveAttribute("aria-pressed", "true");
+  await dragProfile(page);
+  await expect(start).toHaveAttribute("aria-valuenow", "2000");
+  await expect(end).toHaveAttribute("aria-valuenow", "8000");
+  await expect(climbs.first()).toHaveAttribute("aria-pressed", "false");
+  await expect(climbs.last()).toHaveAttribute("aria-pressed", "false");
+  await svg.focus();
+  await page.keyboard.press("Escape");
+  await expect(segment(page)).toHaveCount(0);
+  await expect(climbs).toHaveCount(2);
+  await expect(svg).toBeVisible();
+});
+
 async function routePoint(page: Page, index: number) {
   return explorer(page)
     .locator("path.leaflet-interactive")
@@ -455,6 +534,47 @@ test("links a profile segment, route picking and stream selection while preservi
 
 test.describe("mobile", () => {
   test.use({ hasTouch: true });
+
+  test("a profile tap selects a detected climb and immediately opens its segment drawer", async ({
+    page,
+    viewsFixture: f,
+  }) => {
+    await seedClimbs(f.athleteId, f.ids.long, 120_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${origin}/activities/${f.ids.long}`);
+    await page.getByRole("button", { name: "Expand map", exact: true }).click();
+    const svg = profile(page);
+    await expect(svg).toBeVisible();
+    await expect(svg.getByText("C3", { exact: true })).toHaveCount(2);
+    await expect(svg.getByText("C3", { exact: true }).first()).toBeVisible();
+    await expect(svg.getByText("C3", { exact: true }).last()).toBeVisible();
+    const box = (await svg.boundingBox())!;
+    await svg.tap({
+      position: { x: 42 + ((box.width - 60) * 3000) / 120000, y: 60 },
+    });
+    await expect(metric(page, "Distance")).toHaveText("4.00 km");
+    await expect(metric(page, "Elapsed Time")).toHaveText("13:20");
+    await waitForDrawer(page);
+    await page.screenshot({
+      path: test.info().outputPath("climbs-mobile.png"),
+    });
+    await details(page)
+      .getByRole("button", { name: "Close", exact: true })
+      .click();
+    await expect(segment(page)).toHaveCount(0);
+    await expect(svg).toBeVisible();
+    const climbs = profile(page).getByRole("button", { name: /^Climb / });
+    await climbs.last().tap();
+    await expect(metric(page, "Distance")).toHaveText("4.00 km");
+    await expect(
+      details(page).getByText("21:40 – 35:00", { exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      )
+      .toBe(true);
+  });
 
   test("mobile segment drawers reset selection on close, Escape and swipe without closing fullscreen", async ({
     page,

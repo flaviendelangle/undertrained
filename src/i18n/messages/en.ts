@@ -358,6 +358,8 @@ const en = {
   },
   activities: {
     inspection: {
+      climbLabel:
+        "Climb {number}, Cat. {category}, {distance}, {gain} ascent, {grade}%",
       details: "Details",
       segmentProfile: "Segment elevation profile",
       profileDescription:
