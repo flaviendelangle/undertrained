@@ -1,0 +1,356 @@
+import { describe, expect, it } from "vitest";
+
+import { detectClimbs } from "./climbs";
+
+/** Independent piecewise-linear terrain, sampled by distance rather than time. */
+function terrain(knots: [distance: number, altitude: number][], step = 25) {
+  const distance: number[] = [],
+    altitude: number[] = [];
+  for (let k = 0; k < knots.length - 1; k++) {
+    const [a, h] = knots[k],
+      [b, next] = knots[k + 1];
+    const count = Math.ceil((b - a) / step);
+    for (let i = 0; i < count; i++) {
+      const d = Math.min(b, a + i * step);
+      distance.push(d);
+      altitude.push(h + ((next - h) * (d - a)) / (b - a));
+    }
+  }
+  distance.push(knots.at(-1)![0]);
+  altitude.push(knots.at(-1)![1]);
+  return { altitude, distance };
+}
+
+describe("noteworthy climbs", () => {
+  it.each([
+    [160.01, "3"],
+    [320, "3"],
+    [320.01, "2"],
+    [640, "2"],
+    [640.01, "1"],
+    [800, "1"],
+    [800.01, "HC"],
+  ] as const)(
+    "classifies a sustained %i m climb by Garmin's published categories",
+    (gain, category) => {
+      const length = gain / 0.06;
+      const p = terrain([
+        [0, 100],
+        [500, 100],
+        [500 + length, 100 + gain],
+        [1000 + length, 100 + gain],
+      ]);
+      const climbs = detectClimbs(p.altitude, p.distance);
+      expect(climbs).toHaveLength(1);
+      expect(climbs[0].category).toBe(category);
+      expect(climbs[0].gain).toBeCloseTo(gain, 0);
+      expect(climbs[0].distance).toBeGreaterThan(length - 100);
+      expect(climbs[0].distance).toBeLessThan(length + 100);
+      expect(p.distance[climbs[0].startIndex]).toBeGreaterThanOrEqual(450);
+      expect(p.distance[climbs[0].endIndex]).toBeLessThanOrEqual(550 + length);
+    },
+  );
+
+  it.each([
+    {
+      name: "Cat 4",
+      knots: [
+        [0, 100],
+        [2000, 250],
+      ],
+    },
+    {
+      name: "exactly the Cat 3 cutoff",
+      knots: [
+        [0, 100],
+        [500, 100],
+        [4500, 260],
+        [5000, 260],
+      ],
+    },
+    {
+      name: "long but only 2%",
+      knots: [
+        [0, 100],
+        [10_000, 300],
+      ],
+    },
+    {
+      name: "short regardless of ascent",
+      knots: [
+        [0, 100],
+        [400, 400],
+      ],
+    },
+  ])("excludes hills that are $name", ({ knots }) => {
+    const p = terrain(knots as [number, number][]);
+    expect(detectClimbs(p.altitude, p.distance)).toEqual([]);
+  });
+
+  it("bridges short dips and plateaus into one climb rather than returning nested climbs", () => {
+    const p = terrain([
+      [0, 100],
+      [4000, 340],
+      [4250, 330],
+      [8250, 570],
+      [8450, 570],
+      [12_450, 810],
+    ]);
+    const climbs = detectClimbs(p.altitude, p.distance);
+    expect(climbs).toHaveLength(1);
+    expect(climbs[0].category).toBe("1");
+    expect(p.distance[climbs[0].startIndex]).toBeLessThan(100);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(12_350);
+  });
+
+  it.each(["descent", "plateau"])(
+    "splits on a substantial %s and never overlaps consecutive climbs",
+    (kind) => {
+      const bottom = kind === "descent" ? 240 : 340;
+      const restart = kind === "descent" ? 5500 : 14_000;
+      const p = terrain([
+        [0, 100],
+        [4000, 340],
+        [restart, bottom],
+        [restart + 4000, bottom + 240],
+      ]);
+      const climbs = detectClimbs(p.altitude, p.distance);
+      expect(climbs).toHaveLength(2);
+      expect(climbs.map((c) => c.category)).toEqual(["3", "3"]);
+      expect(climbs[0].endIndex).toBeLessThan(climbs[1].startIndex);
+      expect(p.distance[climbs[0].endIndex]).toBeLessThan(4100);
+      expect(p.distance[climbs[1].startIndex]).toBeGreaterThan(restart - 100);
+    },
+  );
+
+  it.each([
+    {
+      name: "a long plateau",
+      knots: [
+        [0, 100],
+        [4000, 340],
+        [5500, 340],
+        [9500, 580],
+      ],
+      category: "2",
+    },
+    {
+      name: "a shallow saddle after a gradual approach",
+      knots: [
+        [0, 500],
+        [6000, 690],
+        [6500, 680],
+        [21_000, 1510],
+      ],
+      category: "HC",
+    },
+    {
+      name: "a flatter approach before the main ascent",
+      knots: [
+        [0, 820],
+        [7000, 1060],
+        [7750, 1050],
+        [24_500, 2200],
+      ],
+      category: "HC",
+    },
+    {
+      name: "several saddles that are small relative to the complete ascent",
+      knots: [
+        [0, 100],
+        [3000, 300],
+        [3500, 260],
+        [6500, 460],
+        [7000, 420],
+        [10_000, 620],
+      ],
+      category: "2",
+    },
+    {
+      name: "a saddle between ramps that only qualify together",
+      knots: [
+        [0, 100],
+        [2000, 250],
+        [2500, 225],
+        [4500, 375],
+      ],
+      category: "3",
+    },
+  ])("keeps one qualifying ascent across $name", ({ knots, category }) => {
+    const p = terrain(knots as [number, number][]);
+    const climbs = detectClimbs(p.altitude, p.distance);
+    expect(climbs).toHaveLength(1);
+    expect(climbs[0].category).toBe(category);
+    expect(p.distance[climbs[0].startIndex]).toBeLessThan(100);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(
+      p.distance.at(-1)! - 100,
+    );
+  });
+
+  it.each([10, 100])(
+    "trims shallow approaches and runouts before categorizing the climb at %i m sampling",
+    (step) => {
+      const p = terrain(
+        [
+          [0, 100],
+          [2000, 120],
+          [2250, 140],
+          [10_000, 200],
+          [20_000, 900],
+          [30_000, 1000],
+        ],
+        step,
+      );
+      const climbs = detectClimbs(p.altitude, p.distance);
+      expect(climbs).toHaveLength(1);
+      expect(p.distance[climbs[0].startIndex]).toBeCloseTo(10_000, -2);
+      expect(p.distance[climbs[0].endIndex]).toBeCloseTo(20_000, -2);
+      expect(climbs[0].category).toBe("1");
+      expect(climbs[0].gain).toBeCloseTo(700, 0);
+      expect(climbs[0].grade).toBeCloseTo(7, 1);
+    },
+  );
+
+  it("keeps a qualifying first ramp across an internal flat when trimming the outer edges", () => {
+    const p = terrain([
+      [0, 100],
+      [4000, 340],
+      [14_000, 340],
+      [30_000, 1300],
+    ]);
+    const climbs = detectClimbs(p.altitude, p.distance);
+    expect(climbs).toHaveLength(1);
+    expect(p.distance[climbs[0].startIndex]).toBeLessThan(100);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(29_900);
+  });
+
+  it("does not let a shallow approach hide a qualifying sustained climb", () => {
+    const p = terrain([
+      [0, 100],
+      [10_000, 200],
+      [14_000, 440],
+    ]);
+    const climbs = detectClimbs(p.altitude, p.distance);
+    expect(climbs).toHaveLength(1);
+    expect(p.distance[climbs[0].startIndex]).toBeCloseTo(10_000, -2);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(13_900);
+    expect(climbs[0].category).toBe("3");
+  });
+
+  it("keeps a ramp that falls below Cat 3 after trimming when it joins the main ascent", () => {
+    const p = terrain([
+      [0, 100],
+      [4000, 180],
+      [6000, 300],
+      [6500, 290],
+      [15_500, 830],
+    ]);
+    const climbs = detectClimbs(p.altitude, p.distance);
+    expect(climbs).toHaveLength(1);
+    expect(p.distance[climbs[0].startIndex]).toBeCloseTo(4000, -2);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(15_400);
+    expect(climbs[0].category).toBe("1");
+  });
+
+  it("excludes a climb whose sustained core falls below Cat 3 after trimming its shallow approach", () => {
+    const p = terrain([
+      [0, 100],
+      [2000, 130],
+      [4500, 280],
+      [5000, 280],
+    ]);
+    expect(detectClimbs(p.altitude, p.distance)).toEqual([]);
+  });
+
+  it("ends a sustained climb before a shallow uphill tail", () => {
+    const p = terrain([
+      [0, 100],
+      [4000, 340],
+      [15_000, 450],
+    ]);
+    const climbs = detectClimbs(p.altitude, p.distance);
+    expect(climbs).toHaveLength(1);
+    expect(climbs[0].category).toBe("3");
+    expect(climbs[0].grade).toBeGreaterThanOrEqual(3);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(3900);
+    expect(p.distance[climbs[0].endIndex]).toBeLessThan(4100);
+  });
+
+  it("removes isolated altitude spikes, including at the end of a flat recording", () => {
+    const p = terrain([
+      [0, 100],
+      [10_000, 100],
+    ]);
+    p.altitude[200] = 1000;
+    p.altitude[p.altitude.length - 1] = 1000;
+    expect(detectClimbs(p.altitude, p.distance)).toEqual([]);
+  });
+
+  it("ignores repeated small rolling hills even when accumulated ascent is large", () => {
+    const knots: [number, number][] = Array.from({ length: 31 }, (_, i) => [
+      i * 500,
+      i % 2 ? 120 : 100,
+    ]);
+    const p = terrain(knots);
+    expect(detectClimbs(p.altitude, p.distance)).toEqual([]);
+  });
+
+  it.each([10, 100])(
+    "finds the same climb at %i m sampling, including stops and no descent after the summit",
+    (step) => {
+      const p = terrain(
+        [
+          [0, 100],
+          [1000, 100],
+          [5000, 340],
+        ],
+        step,
+      );
+      // A stop duplicates distance and altitude, not the terrain.
+      p.altitude.splice(12, 0, ...Array<number>(100).fill(p.altitude[12]));
+      p.distance.splice(12, 0, ...Array<number>(100).fill(p.distance[12]));
+      const climbs = detectClimbs(p.altitude, p.distance);
+      expect(climbs).toHaveLength(1);
+      expect(climbs[0].category).toBe("3");
+      expect(p.distance[climbs[0].startIndex]).toBeGreaterThanOrEqual(900);
+      expect(p.distance[climbs[0].endIndex]).toBeGreaterThanOrEqual(4900);
+    },
+  );
+
+  it("does not bridge missing altitude or distance and rejects unusable distance", () => {
+    const p = terrain([
+      [0, 100],
+      [4000, 340],
+    ]);
+    expect(detectClimbs(p.altitude, null)).toEqual([]);
+    expect(detectClimbs(p.altitude, [])).toEqual([]);
+    expect(
+      detectClimbs(
+        p.altitude,
+        p.distance.map(() => 0),
+      ),
+    ).toEqual([]);
+    const middle = Math.floor(p.altitude.length / 2);
+    const missingAltitude = [...p.altitude];
+    missingAltitude[middle] = NaN;
+    expect(detectClimbs(missingAltitude, p.distance)).toEqual([]);
+    const missingDistance = [...p.distance];
+    missingDistance[middle] = NaN;
+    expect(detectClimbs(p.altitude, missingDistance)).toEqual([]);
+  });
+
+  it.each(["altitude", "distance"] as const)(
+    "does not group qualifying climbs across missing %s",
+    (channel) => {
+      const p = terrain([
+        [0, 100],
+        [8000, 580],
+      ]);
+      p[channel][Math.floor(p[channel].length / 2)] = NaN;
+      const climbs = detectClimbs(p.altitude, p.distance);
+      expect(climbs).toHaveLength(2);
+      expect(climbs.map((climb) => climb.category)).toEqual(["3", "3"]);
+      expect(climbs[0].endIndex).toBeLessThan(climbs[1].startIndex);
+    },
+  );
+});

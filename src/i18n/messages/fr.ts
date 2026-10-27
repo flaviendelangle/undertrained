@@ -362,6 +362,32 @@ const fr: Messages = {
     },
   },
   activities: {
+    inspection: {
+      climbLabel:
+        "Montée {number}, cat. {category}, {distance}, {gain} de dénivelé, {grade} %",
+      details: "Détails",
+      segmentProfile: "Profil du segment",
+      profileDescription:
+        "Altitude sur le segment sélectionné. Les couleurs indiquent la pente moyenne de chaque segment de distance.",
+      gradientLegend: "Légende des pentes",
+      noElevation: "Aucune donnée d'altitude pour ce segment.",
+      noGradient: "Pente indisponible sans distance enregistrée.",
+      title: "Exploration du parcours",
+      elevation: "Profil d'altitude",
+      drag: "Glissez pour sélectionner un segment",
+      keyboard:
+        "Utilisez les flèches pour examiner un point. Ajustez les poignées de début et de fin pour sélectionner un segment. Sur mobile, appuyez sur Entrée pour ouvrir les détails après avoir ajusté les poignées. Double-cliquez ou appuyez sur Échap pour effacer la sélection. Échap garde la carte en plein écran lorsque le profil a le focus.",
+      start: "Début du segment",
+      end: "Fin du segment",
+      showDetails: "Voir les détails du segment",
+      selected: "Segment",
+      clear: "Effacer",
+      ascent: "Dénivelé positif",
+      grade: "Pente moyenne",
+      focus: "Zoomer sur le segment",
+      wholeRoute: "Afficher tout le parcours",
+      resetZoom: "Réinitialiser le zoom",
+    },
     pageTitle: "Activités",
     name: "Nom",
     notFound: "Activité introuvable",
@@ -751,7 +777,7 @@ const fr: Messages = {
     },
     streams: {
       title: "Chronologie",
-      hint: "Fréquence cardiaque, puissance, cadence, vitesse, altitude et température tracées en fonction du temps ou de la distance. Survolez pour voir toutes les métriques à un point précis. Basculez l'axe X entre temps et distance.",
+      hint: "Fréquence cardiaque, puissance, cadence, vitesse, altitude et température tracées en fonction du temps ou de la distance. Survolez pour voir toutes les métriques à un point précis. Basculez l'axe X entre temps et distance. Double-cliquez ou appuyez sur Échap pour effacer la sélection et réinitialiser le zoom.",
       loading: "Chargement des données…",
       empty: "Aucune donnée disponible pour cette activité.",
       loadError: "Échec du chargement des données : {error}",

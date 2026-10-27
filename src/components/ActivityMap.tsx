@@ -5,21 +5,14 @@ import type { Activity } from "@server/db/types";
 import { Map } from "./Map";
 
 export function ActivityMap(props: ActivityMapProps) {
-  const { activity, highlightPosition, interactive, routePositions } = props;
+  const { activity, ...mapProps } = props;
 
   const activities = React.useMemo(
     () => (activity == null ? [] : [activity]),
     [activity],
   );
 
-  return (
-    <Map
-      activities={activities}
-      highlightPosition={highlightPosition}
-      interactive={interactive}
-      routePositions={routePositions}
-    />
-  );
+  return <Map activities={activities} {...mapProps} />;
 }
 
 interface ActivityMapProps {
@@ -27,4 +20,16 @@ interface ActivityMapProps {
   highlightPosition?: [number, number] | null;
   interactive?: boolean;
   routePositions?: [number, number][] | null;
+  segmentRoute?: [number, number][][] | null;
+  segmentIndices?: [number, number] | null;
+  onSegmentChange?: (
+    indices: [number, number],
+    phase: "preview" | "commit",
+  ) => void;
+  onSegmentDraggingChange?: (dragging: boolean) => void;
+  onSegmentCancel?: () => void;
+  onRouteHover?: (index: number | null) => void;
+  onRouteSelect?: (index: number) => void;
+  fitSegment?: boolean;
+  scrollWheelZoom?: boolean;
 }

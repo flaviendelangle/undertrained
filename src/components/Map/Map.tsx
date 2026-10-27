@@ -19,14 +19,21 @@ import { useExplorerTilesToggle } from "~/hooks/useExplorerTilesToggle";
 import { TILE_PROVIDERS, useTileStyle } from "~/hooks/useTileStyle";
 import { useChartTokens } from "~/lib/chartTokens";
 import { type LatLngTuple, decode } from "~/utils/polyline";
+import { nearestRouteIndex, routeSegments } from "~/utils/routeGeometry";
 
 import { ExplorerTilesLayer } from "./ExplorerTilesLayer";
 import { ExplorerTilesStats } from "./ExplorerTilesStats";
 import { HeatmapActivityTooltip } from "./HeatmapActivityTooltip";
+import {
+  type SegmentChangePhase,
+  SegmentHandles,
+  type SegmentIndices,
+} from "./SegmentHandles";
 
 interface FitBoundsProps {
   polylines: { id: string; polyline: [number, number][] }[];
   onFitted?: () => void;
+  paused?: boolean;
 }
 
 function DismissOnMapMove({ onDismiss }: { onDismiss: () => void }) {
@@ -45,11 +52,16 @@ const NO_POLYLINES: LatLngTuple[][] = [];
 const LABELS_PANE = "satellite-labels";
 
 function FitBounds(props: FitBoundsProps) {
-  const { polylines, onFitted } = props;
+  const { polylines, onFitted, paused } = props;
   const map = useMap();
   const notifyFitted = React.useEffectEvent(() => onFitted?.());
+  const fittedPolylines = React.useRef<FitBoundsProps["polylines"] | null>(
+    null,
+  );
 
   React.useEffect(() => {
+    if (paused || fittedPolylines.current === polylines) return;
+    fittedPolylines.current = polylines;
     const allPositions: [number, number][] = [];
     for (const entry of polylines) {
       for (const pos of entry.polyline) {
@@ -68,7 +80,7 @@ function FitBounds(props: FitBoundsProps) {
       });
     }
     notifyFitted();
-  }, [polylines, map]);
+  }, [polylines, map, paused]);
 
   return null;
 }
@@ -84,8 +96,25 @@ export default function Map(props: MapProps) {
     interactive = true,
     onReady,
     routePositions,
+    segmentRoute,
+    segmentIndices,
+    onSegmentChange,
+    onSegmentDraggingChange,
+    onSegmentCancel,
+    onRouteHover,
+    onRouteSelect,
+    fitSegment = false,
+    scrollWheelZoom = true,
     zoomControl = true,
   } = props;
+  const [draggingSegment, setDraggingSegment] = React.useState(false);
+  const changeDraggingSegment = React.useCallback(
+    (dragging: boolean) => {
+      setDraggingSegment(dragging);
+      onSegmentDraggingChange?.(dragging);
+    },
+    [onSegmentDraggingChange],
+  );
   const { showExplorerTiles } = useExplorerTilesToggle();
   const { tileStyle } = useTileStyle();
   const tileProvider = TILE_PROVIDERS[tileStyle];
@@ -139,7 +168,10 @@ export default function Map(props: MapProps) {
 
   const polylines = React.useMemo(() => {
     if (routePositions) {
-      return [{ id: "latlng", polyline: routePositions }];
+      return routeSegments(routePositions).map((polyline, index) => ({
+        id: `latlng-${index}`,
+        polyline,
+      }));
     }
     return decodedActivityPolylines ?? [];
   }, [decodedActivityPolylines, routePositions]);
@@ -147,6 +179,11 @@ export default function Map(props: MapProps) {
   // Which polylines drive the initial zoom/position. "all" fits every route;
   // "last" fits only the most recent activity so it's fully visible.
   const fitPolylines = React.useMemo(() => {
+    if (fitSegment && segmentRoute?.length)
+      return segmentRoute.map((polyline, index) => ({
+        id: `segment-${index}`,
+        polyline,
+      }));
     if (fitMode !== "last") {
       return polylines;
     }
@@ -161,7 +198,7 @@ export default function Map(props: MapProps) {
       }
     }
     return latest ? [latest] : polylines;
-  }, [fitMode, polylines, decodedActivityPolylines]);
+  }, [fitMode, polylines, decodedActivityPolylines, fitSegment, segmentRoute]);
 
   // Clicking a route opens a tooltip identifying which activity it belongs to.
   // That's only meaningful when several routes are drawn together (e.g. the
@@ -199,7 +236,7 @@ export default function Map(props: MapProps) {
         attributionControl={false}
         dragging={interactive && dragging}
         zoomControl={interactive && zoomControl}
-        scrollWheelZoom={interactive}
+        scrollWheelZoom={interactive && scrollWheelZoom}
         doubleClickZoom={interactive}
         touchZoom={interactive}
         boxZoom={interactive}
@@ -240,32 +277,92 @@ export default function Map(props: MapProps) {
               pathOptions={{
                 color,
                 weight: heatmapStyle ? 2 : 4,
-                opacity: heatmapStyle ? 0.5 : 1,
-                className: enableActivityClick ? "cursor-pointer" : undefined,
+                opacity: segmentRoute ? 0.3 : heatmapStyle ? 0.5 : 1,
+                className:
+                  enableActivityClick || onRouteSelect
+                    ? "cursor-pointer"
+                    : undefined,
               }}
               eventHandlers={
-                enableActivityClick && "activity" in entry
+                routePositions && (onRouteHover || onRouteSelect)
                   ? {
+                      mousemove: (e) =>
+                        onRouteHover?.(
+                          nearestRouteIndex(
+                            routePositions,
+                            e.latlng.lat,
+                            e.latlng.lng,
+                          ),
+                        ),
+                      mouseout: () => onRouteHover?.(null),
                       click: (e) => {
-                        const { clientX, clientY } = e.originalEvent;
-                        setSelectedActivity({
-                          activity: (entry as { activity: MapActivity })
-                            .activity,
-                          position: { x: clientX, y: clientY },
-                        });
+                        const index = nearestRouteIndex(
+                          routePositions,
+                          e.latlng.lat,
+                          e.latlng.lng,
+                        );
+                        if (index != null) onRouteSelect?.(index);
                       },
                     }
-                  : undefined
+                  : enableActivityClick && "activity" in entry
+                    ? {
+                        click: (e) => {
+                          const { clientX, clientY } = e.originalEvent;
+                          setSelectedActivity({
+                            activity: (entry as { activity: MapActivity })
+                              .activity,
+                            position: { x: clientX, y: clientY },
+                          });
+                        },
+                      }
+                    : undefined
               }
             />
           );
         })}
+        {segmentRoute?.map((positions, index) => (
+          <Polyline
+            key={`segment-${index}`}
+            positions={positions}
+            interactive={false}
+            pathOptions={{ color: tokens.accent, weight: 6, opacity: 1 }}
+          />
+        ))}
+        {interactive && routePositions && segmentIndices && onSegmentChange ? (
+          <SegmentHandles
+            positions={routePositions}
+            indices={segmentIndices}
+            onChange={onSegmentChange}
+            onDraggingChange={changeDraggingSegment}
+            onCancel={() => onSegmentCancel?.()}
+          />
+        ) : (
+          segmentRoute &&
+          [segmentRoute[0]?.[0], segmentRoute.at(-1)?.at(-1)].map(
+            (position, index) =>
+              position && (
+                <CircleMarker
+                  key={`boundary-${index}`}
+                  center={position}
+                  radius={5}
+                  interactive={false}
+                  pathOptions={{
+                    color: tokens.cardBg,
+                    fillColor: tokens.accent,
+                    fillOpacity: 1,
+                    weight: 2,
+                  }}
+                />
+              ),
+          )
+        )}
         {highlightPosition && (
           // "You are here" marker — brand teal fill with a card-colored ring,
           // the same treatment as the WebGL charts' crosshair dot.
           <CircleMarker
             center={highlightPosition}
             radius={6}
+            interactive={false}
             pathOptions={{
               color: tokens.cardBg,
               fillColor: tokens.accent,
@@ -277,7 +374,11 @@ export default function Map(props: MapProps) {
         {selectedActivity && (
           <DismissOnMapMove onDismiss={() => setSelectedActivity(null)} />
         )}
-        <FitBounds polylines={fitPolylines} onFitted={handleFitted} />
+        <FitBounds
+          polylines={fitPolylines}
+          onFitted={handleFitted}
+          paused={draggingSegment}
+        />
       </MapContainer>
       {enableExplorerTiles && (
         <ExplorerTilesStats
@@ -322,6 +423,19 @@ interface MapProps {
   /** Called once the view is fitted and its tiles have finished loading. */
   onReady?: () => void;
   routePositions?: [number, number][] | null;
+  /** An inspected segment, drawn above the full route. Gaps remain separate. */
+  segmentRoute?: [number, number][][] | null;
+  segmentIndices?: SegmentIndices | null;
+  onSegmentChange?: (
+    indices: SegmentIndices,
+    phase: SegmentChangePhase,
+  ) => void;
+  onSegmentDraggingChange?: (dragging: boolean) => void;
+  onSegmentCancel?: () => void;
+  onRouteHover?: (index: number | null) => void;
+  onRouteSelect?: (index: number) => void;
+  fitSegment?: boolean;
+  scrollWheelZoom?: boolean;
   /** Whether to show Leaflet's zoom +/- buttons. Defaults to `true`. */
   zoomControl?: boolean;
 }

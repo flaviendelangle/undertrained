@@ -56,14 +56,16 @@ function DrawerContent({
   className,
   children,
   showCloseButton = true,
+  backdropProps,
   ...props
 }: DrawerPrimitive.Popup.Props & {
   showCloseButton?: boolean;
+  backdropProps?: DrawerPrimitive.Backdrop.Props;
 }) {
   const side = React.useContext(DrawerSideContext);
   return (
     <DrawerPortal>
-      <DrawerOverlay />
+      <DrawerOverlay {...backdropProps} />
       <DrawerPrimitive.Viewport
         className={cn(
           "pointer-events-none fixed inset-0 z-50 flex",

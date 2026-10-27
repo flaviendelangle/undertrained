@@ -1,273 +1,527 @@
 import * as React from "react";
 
-import { bisector } from "d3-array";
+import { bisectCenter } from "d3-array";
+
+import { Slider } from "@base-ui/react/slider";
 
 import { useElementSize } from "~/hooks/useElementSize";
-import { formatKm, formatMeters } from "~/utils/format";
+import { useT } from "~/i18n/useT";
+import {
+  type DetectedClimb,
+  detectClimbs,
+} from "~/lib/activityRecording/climbs";
+import {
+  type RecordingSegment,
+  type SegmentSelectionPhase,
+  sampleIndexAtTime,
+} from "~/lib/activityRecording/segment";
+import {
+  formatElapsed,
+  formatKm,
+  formatMeters,
+  formatNumber,
+} from "~/utils/format";
 
-const TOTAL_HEIGHT = 96;
-const X_AXIS_HEIGHT = 16;
-const CHART_HEIGHT = TOTAL_HEIGHT - X_AXIS_HEIGHT;
-const PADDING_TOP = 4;
-const LABEL_MARGIN = 40;
-
-const d3BisectorObj = bisector<number, number>((d: number) => d);
-const d3Bisector = (arr: ArrayLike<number>, x: number) =>
-  d3BisectorObj.left(arr, x);
+const LEFT = 42;
+const RIGHT = 18;
+const TOP = 12;
+const PLOT_HEIGHT = 100;
+const HEIGHT = 136;
+const CLIMB_COLORS = {
+  "3": "#d97706",
+  "2": "#ea580c",
+  "1": "#dc2626",
+  HC: "#9333ea",
+};
 
 interface ElevationProfileProps {
   altitudeData: number[];
   distanceData: number[] | null;
-  latlngData: [number, number][] | null;
-  onHoverPositionChange?: (position: [number, number] | null) => void;
+  sampleTimes: number[];
+  cursorTime: number | null;
+  segment: RecordingSegment | null;
+  onCursorChange: (time: number | null) => void;
+  onPinTime: (time: number) => void;
+  onSegmentChange: (
+    segment: RecordingSegment,
+    phase?: SegmentSelectionPhase,
+  ) => void;
+  onClear: () => void;
 }
 
 export function ElevationProfile({
   altitudeData,
   distanceData,
-  latlngData,
-  onHoverPositionChange,
+  sampleTimes,
+  cursorTime,
+  segment,
+  onCursorChange,
+  onPinTime,
+  onSegmentChange,
+  onClear,
 }: ElevationProfileProps) {
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const { width } = useElementSize(containerRef);
-  const [hoverIndex, setHoverIndex] = React.useState<number | null>(null);
-
-  const chartWidth = Math.max(0, width - LABEL_MARGIN);
-  const drawHeight = CHART_HEIGHT - PADDING_TOP;
-
-  const n = altitudeData.length;
-  const xMin = distanceData ? (distanceData[0] ?? 0) : 0;
-  const xMax = distanceData ? (distanceData[n - 1] ?? n - 1) : n - 1;
-  const xRange = xMax - xMin || 1;
-
-  const pxToIndex = React.useCallback(
-    (px: number) => {
-      if (chartWidth === 0 || n === 0) return null;
-      const fraction = (px - LABEL_MARGIN) / chartWidth;
-      if (fraction < 0 || fraction > 1) return null;
-
-      if (distanceData) {
-        const distValue = xMin + fraction * xRange;
-        const idx = d3Bisector(distanceData, distValue);
-        return Math.max(0, Math.min(idx, n - 1));
-      }
-      return Math.max(0, Math.min(Math.round(fraction * (n - 1)), n - 1));
-    },
-    [chartWidth, n, distanceData, xMin, xRange],
+  const t = useT();
+  const ref = React.useRef<HTMLDivElement>(null);
+  const { width } = useElementSize(ref);
+  const id = React.useId();
+  const [previewSegment, setPreviewSegment] = React.useState<number[] | null>(
+    null,
   );
-
-  const handleMouseMove = React.useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const svgX = e.clientX - rect.left;
-      const idx = pxToIndex(svgX);
-
-      if (idx === null) {
-        setHoverIndex(null);
-        onHoverPositionChange?.(null);
-        return;
-      }
-
-      setHoverIndex(idx);
-      if (latlngData) {
-        onHoverPositionChange?.(latlngData[idx] ?? null);
-      }
-    },
-    [pxToIndex, latlngData, onHoverPositionChange],
+  const drag = React.useRef<{
+    index: number;
+    x: number;
+    moved: boolean;
+  } | null>(null);
+  const n = Math.min(altitudeData.length, sampleTimes.length);
+  // Distance must be cumulative. Fall back to elapsed time for unusable distance streams.
+  const distances = React.useMemo(
+    () =>
+      distanceData?.length === n &&
+      distanceData.every(
+        (v, i) => Number.isFinite(v) && (i === 0 || v >= distanceData[i - 1]),
+      ) &&
+      distanceData[n - 1] > distanceData[0]
+        ? distanceData
+        : null,
+    [distanceData, n],
   );
-
-  const handleMouseLeave = React.useCallback(() => {
-    setHoverIndex(null);
-    onHoverPositionChange?.(null);
-  }, [onHoverPositionChange]);
-
-  const { paths, yLabels, xLabels, hoverPoint } = React.useMemo(() => {
-    if (chartWidth === 0 || n === 0)
-      return { paths: null, yLabels: [], xLabels: [], hoverPoint: null };
-
-    let yMin = Infinity;
-    let yMax = -Infinity;
-    for (const v of altitudeData) {
-      if (v < yMin) yMin = v;
-      if (v > yMax) yMax = v;
-    }
-    if (!Number.isFinite(yMin)) yMin = 0;
-    if (!Number.isFinite(yMax)) yMax = 1;
-    const yRng = yMax - yMin || 1;
-
-    const toX = (i: number) =>
-      LABEL_MARGIN +
-      (((distanceData ? (distanceData[i] ?? i) : i) - xMin) / xRange) *
-        chartWidth;
-    const toY = (i: number) =>
-      PADDING_TOP + drawHeight - ((altitudeData[i] - yMin) / yRng) * drawHeight;
-
-    // Downsample to ~1 point per 2 pixels
-    const step = Math.max(1, Math.floor(n / (chartWidth / 2)));
-    const parts: string[] = [];
-    for (let i = 0; i < n; i += step) {
-      parts.push(i === 0 ? `M${toX(i)},${toY(i)}` : `L${toX(i)},${toY(i)}`);
-    }
-    if ((n - 1) % step !== 0) {
-      parts.push(`L${toX(n - 1)},${toY(n - 1)}`);
-    }
-
-    const linePath = parts.join("");
-    const areaPath = `${linePath}L${toX(n - 1)},${CHART_HEIGHT}L${toX(0)},${CHART_HEIGHT}Z`;
-
-    // Y labels — only max at top, min at bottom-left above X labels
-    const yLbls = [
-      { label: formatMeters(yMax), y: PADDING_TOP + 4 },
-      { label: formatMeters(yMin), y: CHART_HEIGHT - 2 },
-    ];
-
-    // X labels — start after LABEL_MARGIN to avoid Y label overlap
-    const xLbls: { label: string; x: number }[] = [];
-    if (distanceData) {
-      const totalKm = (xMax - xMin) / 1000;
-      const tickCount = Math.min(8, Math.max(3, Math.floor(chartWidth / 100)));
-      const tickStep = totalKm / tickCount;
-      const nice =
-        tickStep > 10
-          ? Math.ceil(tickStep / 10) * 10
-          : tickStep > 5
-            ? Math.ceil(tickStep / 5) * 5
-            : Math.ceil(tickStep);
-      for (let km = nice; km <= totalKm; km += nice) {
-        const px = LABEL_MARGIN + ((km * 1000) / xRange) * chartWidth;
-        if (px >= LABEL_MARGIN + 30 && px <= width - 20) {
-          xLbls.push({ label: formatKm(km * 1000, 0), x: px });
-        }
+  // The detector splits runs at missing or decreasing distance on its own.
+  const climbs = React.useMemo(
+    () =>
+      detectClimbs(
+        altitudeData,
+        distanceData?.length === n ? distanceData : null,
+      ),
+    [altitudeData, distanceData, n],
+  );
+  const xData = distances ?? sampleTimes;
+  const min = xData[0] ?? 0,
+    max = xData[n - 1] ?? 0;
+  const plotWidth = Math.max(0, width - LEFT - RIGHT);
+  const x = React.useCallback(
+    (i: number) => LEFT + ((xData[i] - min) / (max - min || 1)) * plotWidth,
+    [xData, min, max, plotWidth],
+  );
+  const extent = React.useMemo(() => {
+    let min = Infinity,
+      max = -Infinity;
+    for (const value of altitudeData)
+      if (Number.isFinite(value)) {
+        min = Math.min(min, value);
+        max = Math.max(max, value);
       }
+    return Number.isFinite(min) ? [min, max] : [0, 1];
+  }, [altitudeData]);
+  const y = React.useCallback(
+    (i: number) =>
+      TOP +
+      PLOT_HEIGHT -
+      ((altitudeData[i] - extent[0]) / (extent[1] - extent[0] || 1)) *
+        PLOT_HEIGHT,
+    [altitudeData, extent],
+  );
+  const paths = React.useMemo(() => {
+    if (!n || !plotWidth) return [];
+    const parts: string[][] = [];
+    let segment: string[] = [];
+    const step = Math.max(1, Math.floor(n / (plotWidth * 2)));
+    for (let i = 0; i < n; i++) {
+      if (!Number.isFinite(altitudeData[i])) {
+        if (segment.length) parts.push(segment);
+        segment = [];
+        continue;
+      }
+      if (i % step && i !== n - 1 && Number.isFinite(altitudeData[i + 1]))
+        continue;
+      segment.push(`${segment.length ? "L" : "M"}${x(i)},${y(i)}`);
     }
+    if (segment.length) parts.push(segment);
+    return parts.map((p) => p.join(" "));
+  }, [altitudeData, n, plotWidth, x, y]);
+  const indexForValue = (value: number) =>
+    Math.min(n - 1, bisectCenter(xData, value, 0, n));
+  const eventIndex = (event: React.PointerEvent<SVGSVGElement>) => {
+    const px = Math.max(
+      0,
+      Math.min(
+        plotWidth,
+        event.clientX - event.currentTarget.getBoundingClientRect().left - LEFT,
+      ),
+    );
+    return indexForValue(min + (px / (plotWidth || 1)) * (max - min));
+  };
+  const selectIndices = (
+    a: number,
+    b: number,
+    phase: SegmentSelectionPhase = "commit",
+  ) => {
+    const start = sampleTimes[Math.min(a, b)],
+      end = sampleTimes[Math.max(a, b)];
+    if (end > start) onSegmentChange([start, end], phase);
+  };
+  const cursor =
+    cursorTime == null
+      ? null
+      : Math.min(n - 1, sampleIndexAtTime(sampleTimes, cursorTime));
+  const selectedIndices = segment?.map((time) =>
+    Math.min(n - 1, sampleIndexAtTime(sampleTimes, time)),
+  );
+  const selection = previewSegment ?? selectedIndices;
+  const formatX = (value: number) =>
+    distances ? formatKm(value, 2) : formatElapsed(value);
+  const values = selection ? selection.map((i) => xData[i]) : [min, max];
+  const climbLabel = (climb: DetectedClimb, index: number) =>
+    t("activities.inspection.climbLabel", {
+      number: index + 1,
+      category: climb.category,
+      distance: formatKm(climb.distance, 2),
+      gain: formatMeters(climb.gain),
+      grade: formatNumber(climb.grade, 1),
+    });
+  const selectClimb = (climb: DetectedClimb) => {
+    drag.current = null;
+    setPreviewSegment(null);
+    onCursorChange(null);
+    selectIndices(climb.startIndex, climb.endIndex, "inspect");
+  };
+  const climbLabels = React.useMemo(() => {
+    const rowEnds: number[] = [];
+    return climbs.map((climb) => {
+      const center = (x(climb.startIndex) + x(climb.endIndex)) / 2;
+      const labelX = Math.max(LEFT + 10, Math.min(width - RIGHT - 10, center));
+      let row = rowEnds.findIndex((end) => end + 4 < labelX - 10);
+      if (row === -1) row = rowEnds.length;
+      rowEnds[row] = labelX + 10;
+      return { x: labelX, row };
+    });
+  }, [climbs, width, x]);
+  const resetSegment = () => {
+    drag.current = null;
+    setPreviewSegment(null);
+    onClear();
+  };
 
-    // Hover point
-    let hp: { x: number; y: number; value: number } | null = null;
-    if (hoverIndex !== null && hoverIndex >= 0 && hoverIndex < n) {
-      hp = {
-        x: toX(hoverIndex),
-        y: toY(hoverIndex),
-        value: altitudeData[hoverIndex],
-      };
-    }
-
-    return {
-      paths: { linePath, areaPath },
-      yLabels: yLbls,
-      xLabels: xLbls,
-      hoverPoint: hp,
-    };
-  }, [
-    altitudeData,
-    distanceData,
-    chartWidth,
-    width,
-    n,
-    xMin,
-    xMax,
-    xRange,
-    drawHeight,
-    hoverIndex,
-  ]);
+  if (n < 2 || max <= min) return <div ref={ref} />;
 
   return (
     <div
-      ref={containerRef}
+      ref={ref}
       className="bg-card border-border shrink-0 border-t"
-      style={{ height: TOTAL_HEIGHT }}
+      aria-label={t("activities.inspection.elevation")}
+      onKeyDownCapture={(event) => {
+        if (
+          event.key === "Enter" &&
+          segment &&
+          !(event.target as Element).closest("[data-climb]")
+        ) {
+          event.preventDefault();
+          onSegmentChange(segment, "commit");
+          return;
+        }
+        if (event.key !== "Escape") return;
+        // The profile owns Escape, including when a segment handle has focus.
+        // Keep it out of the surrounding fullscreen dialog's dismissal handler.
+        event.preventDefault();
+        event.stopPropagation();
+        resetSegment();
+      }}
     >
-      {paths && width > 0 && (
-        <svg
-          width={width}
-          height={TOTAL_HEIGHT}
-          className="block"
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-        >
-          <defs>
-            <linearGradient id="elev-gradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="currentColor" stopOpacity={0.3} />
-              <stop offset="100%" stopColor="currentColor" stopOpacity={0.05} />
-            </linearGradient>
-          </defs>
+      <div
+        className="text-muted-foreground grid min-h-10 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 pt-2 text-xs tabular-nums"
+        aria-live="off"
+      >
+        <span>{t("activities.inspection.elevation")}</span>
+        <span className="text-right">
+          {cursor != null
+            ? `${formatX(xData[cursor])} · ${formatElapsed(sampleTimes[cursor])} · ${Number.isFinite(altitudeData[cursor]) ? formatMeters(altitudeData[cursor]) : "—"}`
+            : t("activities.inspection.drag")}
+        </span>
+      </div>
+      <svg
+        width={width}
+        height={HEIGHT}
+        role="group"
+        tabIndex={0}
+        aria-label={t("activities.inspection.elevation")}
+        aria-describedby={id + "-help"}
+        aria-keyshortcuts="Escape Enter"
+        className="focus-visible:ring-ring block touch-pan-y outline-none select-none focus-visible:ring-2 focus-visible:ring-inset"
+        onPointerDown={(event) => {
+          if (event.button !== 0 || !plotWidth) return;
+          event.currentTarget.focus({ preventScroll: true });
+          const index = eventIndex(event);
+          drag.current = { index, x: event.clientX, moved: false };
+          event.currentTarget.setPointerCapture(event.pointerId);
+          onCursorChange(sampleTimes[index]);
+        }}
+        onPointerMove={(event) => {
+          const index = eventIndex(event);
+          if (drag.current) {
+            if (Math.abs(event.clientX - drag.current.x) >= 6)
+              drag.current.moved = true;
+            if (drag.current.moved)
+              setPreviewSegment([
+                Math.min(drag.current.index, index),
+                Math.max(drag.current.index, index),
+              ]);
+            // Commit on release so a cancelled vertical touch scroll leaves the selection intact.
+          }
+          onCursorChange(sampleTimes[index]);
+        }}
+        onPointerUp={(event) => {
+          const current = drag.current;
+          if (!current) return;
+          const index = eventIndex(event);
+          if (current.moved) selectIndices(current.index, index);
+          else {
+            const climb = climbs.find(
+              (climb) => index >= climb.startIndex && index <= climb.endIndex,
+            );
+            if (climb) selectClimb(climb);
+            else onPinTime(sampleTimes[index]);
+          }
+          drag.current = null;
+          setPreviewSegment(null);
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }}
+        onPointerCancel={() => {
+          drag.current = null;
+          setPreviewSegment(null);
+          onCursorChange(null);
+        }}
+        onPointerLeave={() => {
+          if (!drag.current) onCursorChange(null);
+        }}
+        onDoubleClick={resetSegment}
+        onKeyDown={(event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+            return;
+          event.preventDefault();
+          const index =
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? n - 1
+                : Math.max(
+                    0,
+                    Math.min(
+                      n - 1,
+                      (cursor ?? 0) + (event.key === "ArrowRight" ? 1 : -1),
+                    ),
+                  );
+          onPinTime(sampleTimes[index]);
+        }}
+      >
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="currentColor" stopOpacity={0.25} />
+            <stop offset="100%" stopColor="currentColor" stopOpacity={0.03} />
+          </linearGradient>
+        </defs>
+        {paths.map((path, i) => (
           <path
-            d={paths.areaPath}
-            fill="url(#elev-gradient)"
-            className="text-foreground"
-          />
-          <path
-            d={paths.linePath}
+            key={i}
+            d={path}
             fill="none"
-            stroke="currentColor"
+            className="stroke-foreground/50"
             strokeWidth={1.5}
-            className="text-foreground/50"
           />
-          {yLabels.map(({ label, y }) => (
-            <text
-              key={label}
-              x={LABEL_MARGIN - 4}
-              y={y}
-              textAnchor="end"
-              dominantBaseline={y < CHART_HEIGHT / 2 ? "hanging" : "auto"}
-              className="fill-muted-foreground text-[10px]"
-            >
-              {label}
-            </text>
-          ))}
-          {/* X axis line */}
-          <line
-            x1={LABEL_MARGIN}
-            y1={CHART_HEIGHT}
-            x2={width}
-            y2={CHART_HEIGHT}
-            className="stroke-border"
-            strokeWidth={1}
+        ))}
+        {paths.length === 1 && (
+          <path
+            d={`${paths[0]} L${x(n - 1)},${TOP + PLOT_HEIGHT} L${x(0)},${TOP + PLOT_HEIGHT} Z`}
+            fill={`url(#${id})`}
           />
-          {xLabels.map(({ label, x }) => (
+        )}
+        {climbs.map((climb, index) => (
+          <g
+            key={climb.startIndex}
+            data-climb=""
+            role="button"
+            tabIndex={0}
+            aria-label={climbLabel(climb, index)}
+            aria-pressed={
+              segment?.[0] === sampleTimes[climb.startIndex] &&
+              segment?.[1] === sampleTimes[climb.endIndex]
+            }
+            className="[&:focus-visible>rect]:stroke-foreground cursor-pointer outline-none [&:focus-visible>rect]:stroke-2"
+            onClick={(event) => {
+              if (event.detail === 0) selectClimb(climb);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                selectClimb(climb);
+              }
+            }}
+          >
+            <title>{climbLabel(climb, index)}</title>
+            <rect
+              x={x(climb.startIndex)}
+              y={TOP}
+              width={Math.max(1, x(climb.endIndex) - x(climb.startIndex))}
+              height={PLOT_HEIGHT}
+              fill={CLIMB_COLORS[climb.category]}
+              fillOpacity={0.12}
+              stroke={CLIMB_COLORS[climb.category]}
+              strokeOpacity={0.6}
+              strokeDasharray="3 3"
+            />
             <text
-              key={label}
-              x={x}
-              y={CHART_HEIGHT + 12}
+              x={climbLabels[index].x}
+              y={TOP + 12 + climbLabels[index].row * 13}
               textAnchor="middle"
-              className="fill-muted-foreground text-[10px]"
+              fill={CLIMB_COLORS[climb.category]}
+              className="text-[10px] font-semibold"
             >
-              {label}
+              {climb.category === "HC" ? "HC" : `C${climb.category}`}
             </text>
-          ))}
-          {/* Hover crosshair + dot */}
-          {hoverPoint && (
-            <>
-              <line
-                x1={hoverPoint.x}
-                y1={PADDING_TOP}
-                x2={hoverPoint.x}
-                y2={CHART_HEIGHT}
-                className="stroke-foreground/30"
-                strokeWidth={1}
-                strokeDasharray="3,3"
-                pointerEvents="none"
-              />
+          </g>
+        ))}
+        {selection && (
+          <rect
+            x={x(selection[0])}
+            y={TOP}
+            width={Math.max(1, x(selection[1]) - x(selection[0]))}
+            height={PLOT_HEIGHT}
+            className="fill-primary/15 stroke-primary"
+            strokeWidth={1}
+            pointerEvents="none"
+          />
+        )}
+        {[0, 1].map((i) => (
+          <text
+            key={i}
+            x={LEFT - 6}
+            y={i ? TOP + PLOT_HEIGHT : TOP + 8}
+            textAnchor="end"
+            className="fill-muted-foreground text-[10px]"
+          >
+            {formatMeters(extent[1 - i])}
+          </text>
+        ))}
+        {[0, 1, 2, 3, 4].map((i) => (
+          <text
+            key={i}
+            x={LEFT + (plotWidth * i) / 4}
+            y={HEIGHT - 6}
+            textAnchor={i === 0 ? "start" : i === 4 ? "end" : "middle"}
+            className="fill-muted-foreground text-[10px]"
+          >
+            {formatX(min + ((max - min) * i) / 4)}
+          </text>
+        ))}
+        {cursor != null && (
+          <g pointerEvents="none">
+            <line
+              x1={x(cursor)}
+              x2={x(cursor)}
+              y1={TOP}
+              y2={TOP + PLOT_HEIGHT}
+              className="stroke-primary"
+              strokeDasharray="3 3"
+            />
+            {Number.isFinite(altitudeData[cursor]) && (
               <circle
-                cx={hoverPoint.x}
-                cy={hoverPoint.y}
+                cx={x(cursor)}
+                cy={y(cursor)}
                 r={4}
-                className="fill-foreground stroke-card"
+                className="fill-primary stroke-card"
                 strokeWidth={2}
-                pointerEvents="none"
               />
-              <text
-                x={hoverPoint.x}
-                y={PADDING_TOP + 10}
-                textAnchor="middle"
-                className="fill-foreground text-[10px] font-medium"
-                pointerEvents="none"
-              >
-                {formatMeters(hoverPoint.value)}
-              </text>
-            </>
-          )}
-        </svg>
-      )}
+            )}
+          </g>
+        )}
+      </svg>
+      <p id={id + "-help"} className="sr-only">
+        {t("activities.inspection.keyboard")}
+      </p>
+      <div style={{ paddingLeft: LEFT, paddingRight: RIGHT }}>
+        <Slider.Root
+          value={values}
+          min={min}
+          max={max}
+          step={0.001}
+          largeStep={(max - min) / 10}
+          thumbCollisionBehavior="none"
+          onValueChange={(value) =>
+            selectIndices(
+              indexForValue(value[0]),
+              indexForValue(value[1]),
+              "preview",
+            )
+          }
+          onValueCommitted={(value) =>
+            selectIndices(indexForValue(value[0]), indexForValue(value[1]))
+          }
+        >
+          <Slider.Control className="relative flex h-8 w-full touch-none items-center select-none">
+            <Slider.Track className="bg-muted relative h-1 w-full rounded-full">
+              <Slider.Indicator className="bg-primary/60 rounded-full" />
+            </Slider.Track>
+            {[0, 1].map((index) => (
+              <Slider.Thumb
+                key={index}
+                index={index}
+                aria-label={t(
+                  index === 0
+                    ? "activities.inspection.start"
+                    : "activities.inspection.end",
+                )}
+                onKeyDown={(event) => {
+                  if (
+                    ![
+                      "ArrowLeft",
+                      "ArrowRight",
+                      "ArrowUp",
+                      "ArrowDown",
+                      "Home",
+                      "End",
+                      "PageUp",
+                      "PageDown",
+                    ].includes(event.key)
+                  )
+                    return;
+                  event.preventDefault();
+                  const indices = selectedIndices ?? [0, n - 1];
+                  const next = [...indices];
+                  const delta = ["ArrowRight", "ArrowUp", "PageUp"].includes(
+                    event.key,
+                  )
+                    ? 1
+                    : -1;
+                  next[index] =
+                    event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? n - 1
+                        : next[index] +
+                          delta *
+                            (event.key.startsWith("Page")
+                              ? Math.max(1, Math.floor(n / 10))
+                              : 1);
+                  if (event.key.startsWith("Arrow")) {
+                    while (
+                      next[index] >= 0 &&
+                      next[index] < n &&
+                      sampleTimes[next[index]] === sampleTimes[indices[index]]
+                    )
+                      next[index] += delta;
+                  }
+                  if (next[0] >= 0 && next[1] < n && next[0] < next[1])
+                    selectIndices(next[0], next[1], "preview");
+                }}
+                aria-describedby={id + "-help"}
+                getAriaValueText={(_, value) =>
+                  `${formatX(value)}, ${formatElapsed(sampleTimes[indexForValue(value)])}`
+                }
+                className="border-primary bg-card outline-ring h-5 w-3 rounded-sm border-2 before:absolute before:-inset-2 focus-visible:outline-2 focus-visible:outline-offset-2"
+              />
+            ))}
+          </Slider.Control>
+        </Slider.Root>
+      </div>
     </div>
   );
 }

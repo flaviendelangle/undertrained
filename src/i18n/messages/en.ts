@@ -357,6 +357,32 @@ const en = {
     },
   },
   activities: {
+    inspection: {
+      climbLabel:
+        "Climb {number}, Cat. {category}, {distance}, {gain} ascent, {grade}%",
+      details: "Details",
+      segmentProfile: "Segment elevation profile",
+      profileDescription:
+        "Elevation over the selected segment. Colors show the average gradient of each distance segment.",
+      gradientLegend: "Gradient legend",
+      noElevation: "No elevation data for this segment.",
+      noGradient: "Gradient unavailable without recorded distance.",
+      title: "Route exploration",
+      elevation: "Elevation profile",
+      drag: "Drag to select a segment",
+      keyboard:
+        "Use arrow keys to inspect a point. Adjust the start and end handles to select a segment. On mobile, press Enter to open the segment details after adjusting the handles. Double-click or press Escape to clear the selection. Escape keeps the fullscreen map open while the profile has focus.",
+      start: "Segment start",
+      end: "Segment end",
+      showDetails: "Show segment details",
+      selected: "Segment",
+      clear: "Clear",
+      ascent: "Ascent",
+      grade: "Avg gradient",
+      focus: "Zoom to segment",
+      wholeRoute: "Show whole route",
+      resetZoom: "Reset zoom",
+    },
     pageTitle: "Activities",
     name: "Name",
     notFound: "Activity not found",
@@ -733,7 +759,7 @@ const en = {
     },
     streams: {
       title: "Time Series",
-      hint: "Heart rate, power, cadence, speed, altitude, and temperature plotted over time or distance. Hover to see all metrics at a specific point. Toggle the X-axis between time and distance.",
+      hint: "Heart rate, power, cadence, speed, altitude, and temperature plotted over time or distance. Hover to see all metrics at a specific point. Toggle the X-axis between time and distance. Double-click or press Escape to clear the selection and reset zoom.",
       loading: "Loading stream data...",
       empty: "No stream data available for this activity.",
       loadError: "Failed to load streams: {error}",

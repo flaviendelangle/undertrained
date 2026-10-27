@@ -6,8 +6,10 @@ import { scaleLinear } from "d3-scale";
 import { clamp } from "@base-ui/utils/clamp";
 import { useAnimationFrame } from "@base-ui/utils/useAnimationFrame";
 
+import { Button } from "~/components/ui/button";
 import { useElementSize } from "~/hooks/useElementSize";
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { useT } from "~/i18n/useT";
 import {
   filterVisibleLabels,
   measureTickLabels,
@@ -117,7 +119,13 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     xAxisMode,
     sportConfig,
     onHoverIndexChange,
+    cursorIndex,
+    selectedSegment,
+    onInspectTime,
+    onSegmentChange,
+    onClear,
   } = props;
+  const t = useT();
   const tokens = useChartTokens();
   // On small (touch) screens the hover readout in the right gutter is unusable,
   // so we drop it and reclaim that width for the plot.
@@ -148,6 +156,17 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   const [dragStart, setDragStart] = React.useState<number | null>(null);
   const [dragCurrent, setDragCurrent] = React.useState<number | null>(null);
   const hoverFrame = useAnimationFrame();
+  const displayIndex =
+    dragStart !== null
+      ? null
+      : cursorIndex !== undefined
+        ? cursorIndex
+        : hoverIndex;
+  const [previousSegment, setPreviousSegment] = React.useState(selectedSegment);
+  if (previousSegment !== selectedSegment) {
+    setPreviousSegment(selectedSegment);
+    if (!selectedSegment) setZoomDomain(null);
+  }
 
   // Compute panel layouts
   const panels = React.useMemo<PanelLayout[]>(() => {
@@ -282,7 +301,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
 
   // Mouse handling
   /** Pointer x relative to the drawing area's left edge (un-clamped). */
-  const getSvgX = React.useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+  const getSvgX = React.useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
     if (!svg) return null;
     const rect = svg.getBoundingClientRect();
@@ -290,9 +309,12 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   }, []);
 
   const handleMouseDown = React.useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+    (e: React.PointerEvent<SVGSVGElement>) => {
       const svgX = getSvgX(e);
-      if (svgX === null) return;
+      if (e.button !== 0 || svgX === null || svgX < 0 || svgX > drawingWidth)
+        return;
+      e.currentTarget.focus({ preventScroll: true });
+      e.currentTarget.setPointerCapture(e.pointerId);
       hoverFrame.cancel();
       const x = clamp(svgX, 0, drawingWidth);
       setDragStart(x);
@@ -305,7 +327,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
   );
 
   const handleMouseMove = React.useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+    (e: React.PointerEvent<SVGSVGElement>) => {
       // While selecting a zoom range, track the drag instead of the crosshair.
       if (dragStart !== null) {
         const svgX = getSvgX(e);
@@ -322,6 +344,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
 
         if (svgX < 0 || svgX > drawingWidth) {
           setHoverIndex(null);
+          onHoverIndexChange?.(null);
           return;
         }
 
@@ -358,18 +381,42 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     ],
   );
 
-  const handleMouseUp = React.useCallback(() => {
-    if (dragStart !== null && dragCurrent !== null) {
-      const lo = Math.min(dragStart, dragCurrent);
-      const hi = Math.max(dragStart, dragCurrent);
-      // Ignore clicks / negligible drags so a double-click never zooms.
+  const handleMouseUp = React.useCallback(
+    (event: React.PointerEvent<SVGSVGElement>) => {
+      if (dragStart === null) return;
+      const current = clamp(getSvgX(event) ?? dragStart, 0, drawingWidth);
+      const lo = Math.min(dragStart, current),
+        hi = Math.max(dragStart, current);
+      const indexAt = (pixel: number) =>
+        clamp(
+          xAxisMode === "distance" && distanceData
+            ? d3Bisector(distanceData, xScale.invert(pixel))
+            : Math.round(xScale.invert(pixel)),
+          0,
+          xData.length - 1,
+        );
       if (hi - lo >= MIN_DRAG_PX) {
         setZoomDomain([xScale.invert(lo), xScale.invert(hi)]);
-      }
-    }
-    setDragStart(null);
-    setDragCurrent(null);
-  }, [dragStart, dragCurrent, xScale]);
+        const start = indexAt(lo),
+          end = indexAt(hi);
+        if (end > start) onSegmentChange?.([start, end]);
+      } else onInspectTime?.(indexAt(current));
+      setDragStart(null);
+      setDragCurrent(null);
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    },
+    [
+      dragStart,
+      getSvgX,
+      drawingWidth,
+      xAxisMode,
+      distanceData,
+      xScale,
+      xData.length,
+      onSegmentChange,
+      onInspectTime,
+    ],
+  );
 
   const handleMouseLeave = React.useCallback(() => {
     hoverFrame.cancel();
@@ -380,9 +427,15 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     onHoverIndexChange?.(null);
   }, [hoverFrame, onHoverIndexChange]);
 
-  const handleDoubleClick = React.useCallback(() => {
+  const resetSelection = React.useCallback(() => {
+    hoverFrame.cancel();
+    setDragStart(null);
+    setDragCurrent(null);
+    setHoverIndex(null);
     setZoomDomain(null);
-  }, []);
+    onHoverIndexChange?.(null);
+    onClear?.();
+  }, [hoverFrame, onHoverIndexChange, onClear]);
 
   // Format x-axis value
   const formatX = React.useCallback(
@@ -427,10 +480,33 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
 
   // Compute crosshair x position
   const crosshairX =
-    hoverIndex !== null ? xScale(activeXData[hoverIndex] ?? hoverIndex) : null;
+    displayIndex !== null &&
+    displayIndex >= 0 &&
+    displayIndex < activeXData.length
+      ? xScale(activeXData[displayIndex])
+      : null;
 
   return (
-    <div ref={containerRef} className="relative w-full">
+    <div
+      ref={containerRef}
+      className="relative w-full"
+      onKeyDownCapture={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        resetSelection();
+      }}
+    >
+      {zoomDomain && (
+        <Button
+          variant="ghost"
+          size="xs"
+          className="absolute top-0 right-4 z-10"
+          onClick={() => setZoomDomain(null)}
+        >
+          {t("activities.inspection.resetZoom")}
+        </Button>
+      )}
       {/* Layer 1: WebGL canvas for data-intensive rendering */}
       {webglAvailable && (
         <canvas
@@ -445,12 +521,17 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
         ref={svgRef}
         width={width}
         height={totalHeight}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        onDoubleClick={handleDoubleClick}
-        className="relative select-none"
+        onPointerDown={handleMouseDown}
+        onPointerMove={handleMouseMove}
+        onPointerUp={handleMouseUp}
+        onPointerLeave={handleMouseLeave}
+        onPointerCancel={handleMouseLeave}
+        onDoubleClick={resetSelection}
+        tabIndex={0}
+        role="group"
+        aria-label={t("charts.streams.title")}
+        aria-keyshortcuts="Escape"
+        className="relative touch-pan-y select-none"
         style={{ background: "transparent" }}
       >
         {/* SVG fallback: render data paths when WebGL is not available */}
@@ -513,7 +594,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
             )}
 
             {/* Title + summary stats (left gutter, always visible) — memoized so
-                a hover (which updates hoverIndex every frame) doesn't re-render
+                a hover (which updates displayIndex every frame) doesn't re-render
                 them. */}
             <PanelStaticLabels
               panel={panel}
@@ -530,19 +611,19 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
                 textAnchor="end"
                 dominantBaseline="middle"
                 fontSize={CHART_FONT.readout}
-                fontWeight={hoverIndex !== null ? 600 : 400}
+                fontWeight={displayIndex !== null ? 600 : 400}
                 style={{ fontVariantNumeric: "tabular-nums" }}
                 fill={
-                  hoverIndex !== null &&
-                  panel.stream.yData[hoverIndex] !== undefined
+                  displayIndex !== null &&
+                  panel.stream.yData[displayIndex] !== undefined
                     ? panel.stream.config.color
                     : tokens.axisLabel
                 }
               >
-                {hoverIndex !== null &&
-                panel.stream.yData[hoverIndex] !== undefined
+                {displayIndex !== null &&
+                panel.stream.yData[displayIndex] !== undefined
                   ? formatStreamValue(
-                      panel.stream.yData[hoverIndex],
+                      panel.stream.yData[displayIndex],
                       panel.stream.config.unit,
                       sportConfig,
                     )
@@ -564,6 +645,31 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
             axisLabelColor={tokens.axisLabel}
           />
         </g>
+
+        {selectedSegment &&
+          (() => {
+            const lo = Math.max(
+              0,
+              xScale(activeXData[selectedSegment[0]] ?? baseDomain[0]),
+            );
+            const hi = Math.min(
+              drawingWidth,
+              xScale(activeXData[selectedSegment[1]] ?? baseDomain[1]),
+            );
+            return hi > lo ? (
+              <rect
+                x={MARGIN.left + lo}
+                y={MARGIN.top}
+                width={hi - lo}
+                height={drawingHeight}
+                fill={tokens.accent}
+                fillOpacity={0.12}
+                stroke={tokens.accent}
+                strokeOpacity={0.5}
+                pointerEvents="none"
+              />
+            ) : null;
+          })()}
 
         {/* Drag-to-zoom selection band. Spans the full chart height down to the
             x-axis; only the vertical edges are stroked (the card already frames
@@ -607,7 +713,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
         )}
 
         {/* Crosshair (always SVG) */}
-        {crosshairX !== null && hoverIndex !== null && (
+        {crosshairX !== null && displayIndex !== null && (
           <g transform={`translate(${MARGIN.left}, ${MARGIN.top})`}>
             <CrosshairLine
               x={crosshairX}
@@ -615,7 +721,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
               color={tokens.crosshair}
             />
             {panels.map((panel, i) => {
-              const value = panel.stream.yData[hoverIndex];
+              const value = panel.stream.yData[displayIndex];
               if (value === undefined) return null;
               const cy = panel.top + yScales[i](value);
               return (
@@ -644,7 +750,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
               }}
               pointerEvents="none"
             >
-              {formatX(activeXData[hoverIndex] ?? hoverIndex)}
+              {formatX(activeXData[displayIndex] ?? displayIndex)}
             </text>
           </g>
         )}
