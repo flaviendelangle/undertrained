@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { startOfToday } from "date-fns";
 import { ArrowLeftIcon, SearchIcon } from "lucide-react";
-import { useRouter } from "next/router";
+import Link from "next/link";
 
 import { Autocomplete as AutocompletePrimitive } from "@base-ui/react/autocomplete";
 import { useTimeout } from "@base-ui/utils/useTimeout";
@@ -81,7 +81,6 @@ function CommandSearch({
   onPlanSession: () => void;
 }) {
   const t = useT();
-  const router = useRouter();
   const [query, setQuery] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [step, setStep] = React.useState<CommandStep>("root");
@@ -114,7 +113,6 @@ function CommandSearch({
     } else if (item.action === "plan-session") {
       onPlanSession();
     } else if (item.href) {
-      void router.push(item.href);
       onClose();
     }
   };
@@ -220,7 +218,12 @@ function CommandRow({
   return (
     <AutocompleteItem
       value={item}
-      onClick={() => onChoose(item)}
+      render={
+        item.href ? (
+          <Link href={item.href} onNavigate={() => onChoose(item)} />
+        ) : undefined
+      }
+      onClick={item.href ? undefined : () => onChoose(item)}
       className="gap-3 py-2"
     >
       <Icon
