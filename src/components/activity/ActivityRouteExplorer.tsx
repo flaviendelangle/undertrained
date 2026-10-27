@@ -193,7 +193,7 @@ export function ActivityRouteExplorer({
         </div>
       </div>
       <div className={cn(expanded && "max-h-[55svh] shrink-0 overflow-y-auto")}>
-        {hasProfile && (
+        {expanded && hasProfile && (
           <ElevationProfile
             altitudeData={recording.samples.altitude!}
             distanceData={recording.samples.distance ?? null}

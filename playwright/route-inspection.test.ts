@@ -93,6 +93,11 @@ test("links a profile section, route picking and stream selection while preservi
 }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto(`${origin}/activities/${f.ids.long}`);
+  await expect(
+    page.getByRole("button", { name: "Expand map", exact: true }),
+  ).toBeVisible();
+  await expect(profile(page)).toHaveCount(0);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
   await expect(profile(page)).toBeVisible();
   await dragProfile(page);
   await expectSection(page);
@@ -131,6 +136,8 @@ test("links a profile section, route picking and stream selection while preservi
     .getByRole("button", { name: "Clear", exact: true })
     .click();
   await expect(section(page)).toHaveCount(0);
+  await page.getByRole("button", { name: "Collapse map", exact: true }).click();
+  await expect(profile(page)).toHaveCount(0);
   const streams = page
     .getByRole("heading", { name: "Time Series", exact: true })
     .locator("..")
@@ -149,14 +156,14 @@ test("links a profile section, route picking and stream selection while preservi
     streams.getByRole("button", { name: "Reset zoom" }),
   ).toBeVisible();
   await streams.getByRole("button", { name: "Distance", exact: true }).click();
-  await profile(page).scrollIntoViewIfNeeded();
-  await expectSection(page);
   await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  await expect(profile(page)).toBeVisible();
   await expectSection(page);
   await expect(
     page.getByRole("dialog", { name: "Route exploration" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(profile(page)).toHaveCount(0);
   await expectSection(page);
   await expect(
     page.getByRole("button", { name: "Expand map", exact: true }),
@@ -174,6 +181,11 @@ test("supports mobile touch selection and keyboard range handles", async ({
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${origin}/activities/${f.ids.long}`);
+  await expect(
+    page.getByRole("button", { name: "Expand map", exact: true }),
+  ).toBeVisible();
+  await expect(profile(page)).toHaveCount(0);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
   await expect(profile(page)).toBeVisible();
   await dragProfile(page, true);
   await expectSection(page);
@@ -190,6 +202,8 @@ test("supports mobile touch selection and keyboard range handles", async ({
       page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     )
     .toBe(true);
+  await page.setViewportSize({ width: 390, height: 568 });
+  await profile(page).scrollIntoViewIfNeeded();
   const scrollPosition = () =>
     profile(page).evaluate((element) => {
       for (
@@ -227,13 +241,15 @@ test("supports mobile touch selection and keyboard range handles", async ({
   await cdp.detach();
   await expect.poll(scrollPosition).toBeGreaterThan(beforeScroll);
   await expectSection(page);
-  await page.getByRole("button", { name: "Expand map", exact: true }).click();
-  await expectSection(page);
   const collapse = page.getByRole("button", {
     name: "Collapse map",
     exact: true,
   });
   await collapse.click();
+  await expect(profile(page)).toHaveCount(0);
+  await expectSection(page);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  await expect(profile(page)).toBeVisible();
   await expectSection(page);
 });
 
@@ -257,6 +273,7 @@ test("keeps a flat profile usable without GPS, distance or effort sensors", asyn
   }
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto(`${origin}/activities/${f.ids.race}`);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
   await expect(profile(page)).toBeVisible();
   await explorer(page).getByRole("slider", { name: "Section start" }).focus();
   await page.keyboard.press("ArrowRight");
