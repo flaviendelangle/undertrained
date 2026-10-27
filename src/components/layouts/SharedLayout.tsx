@@ -7,6 +7,7 @@ import { LocalizationProvider, enUS, frFR } from "@base-ui/plus/localization";
 
 import { PageTitle } from "~/components/PageTitle";
 import { ToastProvider } from "~/components/ui/toast";
+import { useTheme } from "~/hooks/useTheme";
 import { I18nProvider, useI18n } from "~/i18n/I18nProvider";
 
 import stravaBanner from "../../../public/strava-banner.svg";
@@ -18,7 +19,9 @@ export const SharedLayout = ({ children }: SharedLayoutProps) => {
         <ToastProvider>
           <Head>
             <link rel="icon" href="/favicon.svg" />
+            <link rel="manifest" href="/manifest.webmanifest" />
           </Head>
+          <ThemeColor />
           <PageTitle />
 
           <div className="h-screen">{children}</div>
@@ -34,6 +37,45 @@ export const SharedLayout = ({ children }: SharedLayoutProps) => {
     </I18nProvider>
   );
 };
+
+// The `--background` colors from globals.css in hex, for the browser chrome.
+// public/manifest.webmanifest uses the dark one.
+const THEME_COLORS = { light: "#f9fafb", dark: "#25292e" };
+
+/**
+ * Tints the browser UI (the Android status bar once installed) with the page
+ * background. The server doesn't know the theme, so it falls back to the
+ * system preference; the client then follows the theme picked in the app.
+ */
+function ThemeColor() {
+  const { resolvedTheme } = useTheme();
+
+  if (resolvedTheme !== "light" && resolvedTheme !== "dark") {
+    // Keys stop next/head from deduping the two metas by name.
+    return (
+      <Head>
+        <meta
+          key="theme-color-light"
+          name="theme-color"
+          media="(prefers-color-scheme: light)"
+          content={THEME_COLORS.light}
+        />
+        <meta
+          key="theme-color-dark"
+          name="theme-color"
+          media="(prefers-color-scheme: dark)"
+          content={THEME_COLORS.dark}
+        />
+      </Head>
+    );
+  }
+
+  return (
+    <Head>
+      <meta name="theme-color" content={THEME_COLORS[resolvedTheme]} />
+    </Head>
+  );
+}
 
 function BaseUiPlusProvider({ children }: { children: ReactNode }) {
   const { locale, dateLocale } = useI18n();
