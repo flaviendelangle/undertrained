@@ -15,6 +15,8 @@ interface Props {
   indices: SegmentIndices;
   onChange: (indices: SegmentIndices, phase: SegmentChangePhase) => void;
   onDraggingChange: (dragging: boolean) => void;
+  /** Restore the segment from before the drag. Indices cannot round-trip a chart selection. */
+  onCancel: () => void;
 }
 
 /** Keep the captured handle attached to the pointer, even when it crosses its partner. */
@@ -23,6 +25,7 @@ export function SegmentHandles({
   indices,
   onChange,
   onDraggingChange,
+  onCancel,
 }: Props) {
   const map = useMap();
   const t = useT();
@@ -35,7 +38,6 @@ export function SegmentHandles({
     boundary: number;
     anchor: number;
     index: number;
-    initial: SegmentIndices;
     target: HTMLButtonElement;
     pointerId: number;
     restorePanning: boolean;
@@ -81,10 +83,8 @@ export function SegmentHandles({
     if (current.restorePanning) map.dragging.enable();
     setMoving(null);
     onDraggingChange(false);
-    onChange(
-      cancel ? current.initial : [current.index, current.anchor],
-      cancel ? "preview" : "commit",
-    );
+    if (cancel) onCancel();
+    else onChange([current.index, current.anchor], "commit");
   };
   React.useEffect(
     () => () => {
@@ -136,7 +136,6 @@ export function SegmentHandles({
             boundary,
             index,
             anchor: indices[1 - boundary],
-            initial: [...indices],
             target: event.currentTarget,
             pointerId: event.pointerId,
             restorePanning: map.dragging.enabled(),
@@ -173,7 +172,8 @@ export function SegmentHandles({
           ) {
             event.preventDefault();
             event.stopPropagation();
-            const direction = event.key === "ArrowLeft" ? -1 : 1;
+            const direction =
+              event.key === "ArrowLeft" || event.key === "End" ? -1 : 1;
             let next =
               event.key === "Home"
                 ? 0

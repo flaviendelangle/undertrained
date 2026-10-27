@@ -416,6 +416,93 @@ test("resizes either map endpoint to the nearest route sample, including crossin
     .toBeGreaterThan(40);
 });
 
+test("cancelling a map endpoint drag restores a stream selection between samples", async ({
+  page,
+  viewsFixture: f,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto(`${origin}/activities/${f.ids.long}`);
+  const streams = page
+    .getByRole("heading", { name: "Time Series", exact: true })
+    .locator("..")
+    .locator("..");
+  const chart = streams.locator("svg").last();
+  await chart.scrollIntoViewIfNeeded();
+  const box = (await chart.boundingBox())!;
+  // Samples are 10 s apart. Select 0:11 – 0:39 so neither boundary is a sample.
+  const at = (time: number) => box.x + 84 + ((box.width - 156) * time) / 60;
+  await page.mouse.move(at(11), box.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(at(39), box.y + 40, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  const duration = card(page)
+    .locator("dl > div")
+    .filter({ has: page.locator("dt", { hasText: "Elapsed Time" }) })
+    .locator("dd");
+  const selected = await duration.textContent();
+  expect(selected).not.toMatch(/0$/);
+  const handle = explorer(page).getByRole("button", {
+    name: "Segment end",
+    exact: true,
+  });
+  const handleBox = (await handle.boundingBox())!;
+  const target = await routePoint(page, 5);
+  await page.mouse.move(
+    handleBox.x + handleBox.width / 2,
+    handleBox.y + handleBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await expect(duration).not.toHaveText(selected!);
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(duration).toHaveText(selected!);
+});
+
+test("End moves a map endpoint to the last recorded GPS point", async ({
+  page,
+  viewsFixture: f,
+}) => {
+  const db = postgres(process.env.DATABASE_URL!);
+  try {
+    await db`update activity_streams set data=jsonb_set(data::jsonb,'{6}','null')::text where type='latlng' and activity_id=(select id from activities where athlete=${f.athleteId} and strava_id=${f.ids.long})`;
+  } finally {
+    await db.end();
+  }
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto(`${origin}/activities/${f.ids.long}`);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  await dragProfile(page);
+  const end = explorer(page).getByRole("slider", { name: "Segment end" });
+  await expect(end).toHaveAttribute("aria-valuenow", "400");
+  await explorer(page)
+    .getByRole("button", { name: "Segment end", exact: true })
+    .focus();
+  await page.keyboard.press("End");
+  await expect(end).toHaveAttribute("aria-valuenow", "500");
+});
+
+test("detects climbs around a missing distance sample", async ({
+  page,
+  viewsFixture: f,
+}) => {
+  await seedClimbs(f.athleteId, f.ids.long);
+  const db = postgres(process.env.DATABASE_URL!);
+  try {
+    // A single gap in the flat start disables the distance axis, not climb detection.
+    await db`update activity_streams set data=jsonb_set(data::jsonb,'{5}','null')::text where type='distance' and activity_id=(select id from activities where athlete=${f.athleteId} and strava_id=${f.ids.long})`;
+  } finally {
+    await db.end();
+  }
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto(`${origin}/activities/${f.ids.long}`);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  await expect(
+    profile(page).getByRole("button", { name: /^Climb / }),
+  ).toHaveCount(2);
+});
+
 test("links fullscreen segment inspection to stream selection and clears it on exit", async ({
   page,
   viewsFixture: f,

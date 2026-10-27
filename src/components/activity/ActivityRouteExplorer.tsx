@@ -3,6 +3,7 @@ import * as React from "react";
 import { FocusIcon, Maximize2, Minimize2, PanelBottomIcon } from "lucide-react";
 
 import { Dialog } from "@base-ui/react/dialog";
+import { useStableCallback } from "@base-ui/utils/useStableCallback";
 import type { Activity } from "@server/db/types";
 
 import { ActivityMap } from "~/components/ActivityMap";
@@ -102,6 +103,20 @@ export function ActivityRouteExplorer({
     },
     [recording, onSegmentChange],
   );
+  // Sample indices cannot round-trip a chart selection. Restore the exact segment.
+  const dragOrigin = React.useRef<{
+    segment: RecordingSegment;
+    phase: SegmentSelectionPhase;
+  } | null>(null);
+  const changeMapDragging = useStableCallback((dragging: boolean) => {
+    if (dragging && selectedSegment)
+      dragOrigin.current = { segment: selectedSegment, phase: segmentPhase };
+  });
+  const cancelMapSegment = useStableCallback(() => {
+    const origin = dragOrigin.current;
+    dragOrigin.current = null;
+    if (origin) onSegmentChange(origin.segment, origin.phase);
+  });
   const segmentPositions = React.useMemo(() => {
     if (!recording || !positions || !segment) return null;
     const [start, end] = segment.map((time) =>
@@ -200,6 +215,8 @@ export function ActivityRouteExplorer({
           segmentRoute={segmentPositions}
           segmentIndices={segmentIndices}
           onSegmentChange={changeMapSegment}
+          onSegmentDraggingChange={changeMapDragging}
+          onSegmentCancel={cancelMapSegment}
           onRouteHover={onRouteHover}
           onRouteSelect={onRouteSelect}
         />

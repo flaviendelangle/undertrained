@@ -99,6 +99,8 @@ export default function Map(props: MapProps) {
     segmentRoute,
     segmentIndices,
     onSegmentChange,
+    onSegmentDraggingChange,
+    onSegmentCancel,
     onRouteHover,
     onRouteSelect,
     fitSegment = false,
@@ -106,6 +108,13 @@ export default function Map(props: MapProps) {
     zoomControl = true,
   } = props;
   const [draggingSegment, setDraggingSegment] = React.useState(false);
+  const changeDraggingSegment = React.useCallback(
+    (dragging: boolean) => {
+      setDraggingSegment(dragging);
+      onSegmentDraggingChange?.(dragging);
+    },
+    [onSegmentDraggingChange],
+  );
   const { showExplorerTiles } = useExplorerTilesToggle();
   const { tileStyle } = useTileStyle();
   const tileProvider = TILE_PROVIDERS[tileStyle];
@@ -324,7 +333,8 @@ export default function Map(props: MapProps) {
             positions={routePositions}
             indices={segmentIndices}
             onChange={onSegmentChange}
-            onDraggingChange={setDraggingSegment}
+            onDraggingChange={changeDraggingSegment}
+            onCancel={() => onSegmentCancel?.()}
           />
         ) : (
           segmentRoute &&
@@ -420,6 +430,8 @@ interface MapProps {
     indices: SegmentIndices,
     phase: SegmentChangePhase,
   ) => void;
+  onSegmentDraggingChange?: (dragging: boolean) => void;
+  onSegmentCancel?: () => void;
   onRouteHover?: (index: number | null) => void;
   onRouteSelect?: (index: number) => void;
   fitSegment?: boolean;

@@ -85,9 +85,14 @@ export function ElevationProfile({
         : null,
     [distanceData, n],
   );
+  // The detector splits runs at missing or decreasing distance on its own.
   const climbs = React.useMemo(
-    () => detectClimbs(altitudeData, distances),
-    [altitudeData, distances],
+    () =>
+      detectClimbs(
+        altitudeData,
+        distanceData?.length === n ? distanceData : null,
+      ),
+    [altitudeData, distanceData, n],
   );
   const xData = distances ?? sampleTimes;
   const min = xData[0] ?? 0,

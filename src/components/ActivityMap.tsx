@@ -26,6 +26,8 @@ interface ActivityMapProps {
     indices: [number, number],
     phase: "preview" | "commit",
   ) => void;
+  onSegmentDraggingChange?: (dragging: boolean) => void;
+  onSegmentCancel?: () => void;
   onRouteHover?: (index: number | null) => void;
   onRouteSelect?: (index: number) => void;
   fitSegment?: boolean;
