@@ -23,9 +23,9 @@ import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { useActivityRecording } from "~/lib/activityRecording";
 import {
-  type RecordingRange,
-  recordingRange,
-} from "~/lib/activityRecording/selection";
+  type RecordingSegment,
+  recordingSegment,
+} from "~/lib/activityRecording/segment";
 import { NextPageWithLayout } from "~/pages/_app";
 import { readReturnTo } from "~/utils/activityLinks";
 import { isRoutePosition } from "~/utils/routeGeometry";
@@ -61,7 +61,8 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
 
   const [hoverTime, setHoverTime] = React.useState<number | null>(null);
   const [pinnedTime, setPinnedTime] = React.useState<number | null>(null);
-  const [range, setRange] = React.useState<RecordingRange | null>(null);
+  const [segment, setSegment] = React.useState<RecordingSegment | null>(null);
+  const [segmentCommitted, setSegmentCommitted] = React.useState(false);
   const cursorTime = hoverTime ?? pinnedTime;
   const pinTime = React.useCallback((time: number) => {
     setHoverTime(null);
@@ -73,7 +74,8 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
     React.useState(recording);
   if (inspectionRecording !== recording) {
     setInspectionRecording(recording);
-    setRange(null);
+    setSegment(null);
+    setSegmentCommitted(false);
     setHoverTime(null);
     setPinnedTime(null);
   }
@@ -86,14 +88,18 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
       startDateLocal: activity.startDateLocal,
     },
   );
-  const selectRange = React.useCallback(
-    (value: RecordingRange) => {
-      if (recording) setRange(recordingRange(recording, ...value));
+  const selectSegment = React.useCallback(
+    (value: RecordingSegment, phase: "preview" | "commit" = "commit") => {
+      if (!recording) return;
+      const next = recordingSegment(recording, ...value);
+      setSegment(next);
+      setSegmentCommitted(next != null && phase === "commit");
     },
     [recording],
   );
   const clearInspection = React.useCallback(() => {
-    setRange(null);
+    setSegment(null);
+    setSegmentCommitted(false);
     setHoverTime(null);
     setPinnedTime(null);
   }, []);
@@ -217,10 +223,11 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             activity={activity}
             recording={recording}
             cursorTime={cursorTime}
-            range={range}
+            segment={segment}
+            showDetails={segmentCommitted}
             onCursorChange={setHoverTime}
             onPinTime={pinTime}
-            onRangeChange={selectRange}
+            onSegmentChange={selectSegment}
             onClear={clearInspection}
           />
         )}
@@ -256,10 +263,10 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             <ActivityStreams
               stravaId={activity.stravaId}
               cursorTime={cursorTime}
-              selectedRange={range}
+              selectedSegment={segment}
               onHoverTimeChange={setHoverTime}
               onInspectTime={pinTime}
-              onRangeChange={selectRange}
+              onSegmentChange={selectSegment}
               onClear={clearInspection}
               hiddenStreams={hiddenStreams}
             />

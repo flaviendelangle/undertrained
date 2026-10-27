@@ -3,26 +3,26 @@ import { bisectRight } from "d3-array";
 import type { ActivityRecording } from "./recording";
 
 /** Elapsed-second boundaries. Metrics count [start, end), GPS includes both endpoints. */
-export type RecordingRange = [start: number, end: number];
+export type RecordingSegment = [start: number, end: number];
 
 export function sampleIndexAtTime(times: number[], second: number): number {
   return Math.max(0, bisectRight(times, second) - 1);
 }
 
-export function recordingRange(
+export function recordingSegment(
   recording: ActivityRecording,
   a: number,
   b: number,
-): RecordingRange | null {
+): RecordingSegment | null {
   const last = recording.sampleTimes.at(-1) ?? 0;
   const start = Math.max(0, Math.min(last, Math.round(Math.min(a, b))));
   const end = Math.max(0, Math.min(last, Math.round(Math.max(a, b))));
   return Number.isFinite(start) && end > start ? [start, end] : null;
 }
 
-export function selectionStats(
+export function segmentStats(
   recording: ActivityRecording,
-  [start, end]: RecordingRange,
+  [start, end]: RecordingSegment,
 ) {
   const channels = recording.perSecond;
   const firstSample = sampleIndexAtTime(recording.sampleTimes, start);

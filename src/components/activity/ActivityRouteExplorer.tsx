@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { FocusIcon, Maximize2, Minimize2, XIcon } from "lucide-react";
+import { FocusIcon, Maximize2, Minimize2, PanelBottomIcon } from "lucide-react";
 
 import { Dialog } from "@base-ui/react/dialog";
 import type { Activity } from "@server/db/types";
@@ -8,26 +8,33 @@ import type { Activity } from "@server/db/types";
 import { ActivityMap } from "~/components/ActivityMap";
 import { ElevationProfile } from "~/components/ElevationProfile";
 import { Button } from "~/components/ui/button";
+import { useIsMobile } from "~/hooks/useIsMobile";
 import { useT } from "~/i18n/useT";
 import type { ActivityRecording } from "~/lib/activityRecording";
 import {
-  type RecordingRange,
+  type RecordingSegment,
   sampleIndexAtTime,
-  selectionStats,
-} from "~/lib/activityRecording/selection";
+  segmentStats,
+} from "~/lib/activityRecording/segment";
 import { cn } from "~/lib/utils";
 import { formatElapsed, formatMeters, formatNumber } from "~/utils/format";
 import { isRoutePosition, routeSegments } from "~/utils/routeGeometry";
 import { getSportConfig } from "~/utils/sportConfig";
 
+import { ActivitySegmentDetails } from "./ActivitySegmentDetails";
+
 interface Props {
   activity: Activity;
   recording: ActivityRecording | null;
   cursorTime: number | null;
-  range: RecordingRange | null;
+  segment: RecordingSegment | null;
   onCursorChange: (time: number | null) => void;
   onPinTime: (time: number) => void;
-  onRangeChange: (range: RecordingRange) => void;
+  onSegmentChange: (
+    segment: RecordingSegment,
+    phase?: "preview" | "commit",
+  ) => void;
+  showDetails: boolean;
   onClear: () => void;
 }
 
@@ -35,19 +42,21 @@ export function ActivityRouteExplorer({
   activity,
   recording,
   cursorTime,
-  range,
+  segment,
   onCursorChange,
   onPinTime,
-  onRangeChange,
+  onSegmentChange,
+  showDetails,
   onClear,
 }: Props) {
   const t = useT();
+  const isMobile = useIsMobile();
   const [expanded, setExpanded] = React.useState(false);
-  const [fitSelection, setFitSelection] = React.useState(false);
-  // A reset from the stream charts also leaves the section-fitting mode.
-  if (!range && fitSelection) setFitSelection(false);
-  const clearSelection = React.useCallback(() => {
-    setFitSelection(false);
+  const [fitSegment, setFitSegment] = React.useState(false);
+  // A reset from the stream charts also leaves the segment-fitting mode.
+  if (!segment && fitSegment) setFitSegment(false);
+  const clearSegment = React.useCallback(() => {
+    setFitSegment(false);
     onClear();
   }, [onClear]);
   const expandButton = React.useRef<HTMLButtonElement>(null);
@@ -60,13 +69,36 @@ export function ActivityRouteExplorer({
       ? sampleIndexAtTime(recording.sampleTimes, cursorTime)
       : null;
   const position = cursorIndex != null ? positions?.[cursorIndex] : null;
-  const selectedPositions = React.useMemo(() => {
-    if (!recording || !positions || !range) return null;
-    const [start, end] = range.map((time) =>
+  const segmentIndices = React.useMemo<[number, number] | null>(
+    () =>
+      recording && segment
+        ? [
+            sampleIndexAtTime(recording.sampleTimes, segment[0]),
+            sampleIndexAtTime(recording.sampleTimes, segment[1]),
+          ]
+        : null,
+    [recording, segment],
+  );
+  const changeMapSegment = React.useCallback(
+    (indices: [number, number], phase: "preview" | "commit") => {
+      if (recording)
+        onSegmentChange(
+          [
+            recording.sampleTimes[indices[0]],
+            recording.sampleTimes[indices[1]],
+          ],
+          phase,
+        );
+    },
+    [recording, onSegmentChange],
+  );
+  const segmentPositions = React.useMemo(() => {
+    if (!recording || !positions || !segment) return null;
+    const [start, end] = segment.map((time) =>
       sampleIndexAtTime(recording.sampleTimes, time),
     );
     return routeSegments(positions.slice(start, end + 1));
-  }, [recording, positions, range]);
+  }, [recording, positions, segment]);
   const onRouteHover = React.useCallback(
     (index: number | null) =>
       onCursorChange(
@@ -82,8 +114,8 @@ export function ActivityRouteExplorer({
     [recording, onPinTime],
   );
   const stats = React.useMemo(
-    () => (recording && range ? selectionStats(recording, range) : null),
-    [recording, range],
+    () => (recording && segment ? segmentStats(recording, segment) : null),
+    [recording, segment],
   );
   const sport = getSportConfig(activity.type);
   const metricRows = stats
@@ -151,32 +183,56 @@ export function ActivityRouteExplorer({
         <ActivityMap
           key={String(expanded)}
           activity={activity}
-          fitSelectedRoute={fitSelection && range != null}
+          fitSegment={fitSegment && segment != null}
           scrollWheelZoom={expanded}
           routePositions={positions}
           highlightPosition={isRoutePosition(position) ? position : null}
-          selectedRoute={selectedPositions}
+          segmentRoute={segmentPositions}
+          segmentIndices={segmentIndices}
+          onSegmentChange={changeMapSegment}
           onRouteHover={onRouteHover}
           onRouteSelect={onRouteSelect}
         />
+        {segment && recording && (!isMobile || showDetails) && (
+          <ActivitySegmentDetails
+            key={isMobile ? "mobile" : "desktop"}
+            segment={segment}
+            recording={recording}
+            metrics={metricRows}
+            mobile={isMobile}
+            onClear={clearSegment}
+          />
+        )}
         <div className="absolute top-3 right-3 z-20 flex gap-2">
-          {selectedPositions?.some((segment) => segment.length > 1) && (
+          {isMobile && segment && !showDetails && (
             <Button
               variant="outline"
               size="icon"
-              onClick={() => setFitSelection(!fitSelection)}
+              onClick={() => onSegmentChange(segment, "commit")}
+              className="bg-background/90 backdrop-blur-sm"
+              aria-label={t("activities.inspection.showDetails")}
+              title={t("activities.inspection.showDetails")}
+            >
+              <PanelBottomIcon />
+            </Button>
+          )}
+          {segmentPositions?.some((segment) => segment.length > 1) && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setFitSegment(!fitSegment)}
               className="bg-background/90 backdrop-blur-sm"
               aria-label={t(
-                fitSelection
+                fitSegment
                   ? "activities.inspection.wholeRoute"
                   : "activities.inspection.focus",
               )}
               title={t(
-                fitSelection
+                fitSegment
                   ? "activities.inspection.wholeRoute"
                   : "activities.inspection.focus",
               )}
-              aria-pressed={fitSelection}
+              aria-pressed={fitSegment}
             >
               <FocusIcon />
             </Button>
@@ -205,47 +261,12 @@ export function ActivityRouteExplorer({
             distanceData={recording.samples.distance ?? null}
             sampleTimes={recording.sampleTimes}
             cursorTime={cursorTime}
-            range={range}
+            segment={segment}
             onCursorChange={onCursorChange}
             onPinTime={onPinTime}
-            onRangeChange={onRangeChange}
-            onClear={clearSelection}
+            onSegmentChange={onSegmentChange}
+            onClear={clearSegment}
           />
-        )}
-        {range && (
-          <div
-            className="border-border border-t px-4 py-3"
-            aria-label={t("activities.inspection.selected")}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-                <h2 className="font-medium">
-                  {t("activities.inspection.selected")}
-                </h2>
-                <span className="text-muted-foreground text-xs tabular-nums">
-                  {`${formatElapsed(range[0])} – ${formatElapsed(range[1])}`}
-                </span>
-              </div>
-              <Button variant="ghost" size="sm" onClick={clearSelection}>
-                <XIcon />
-                {t("activities.inspection.clear")}
-              </Button>
-            </div>
-            {stats && (
-              <dl className="mt-3 grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4 lg:grid-cols-7">
-                {metricRows.map((row) => (
-                  <div key={row.label}>
-                    <dt className="text-muted-foreground text-xs">
-                      {row.label}
-                    </dt>
-                    <dd className="mt-0.5 text-sm font-semibold tabular-nums">
-                      {row.value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </div>
         )}
       </div>
     </section>

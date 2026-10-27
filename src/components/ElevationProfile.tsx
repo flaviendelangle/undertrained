@@ -7,9 +7,9 @@ import { Slider } from "@base-ui/react/slider";
 import { useElementSize } from "~/hooks/useElementSize";
 import { useT } from "~/i18n/useT";
 import {
-  type RecordingRange,
+  type RecordingSegment,
   sampleIndexAtTime,
-} from "~/lib/activityRecording/selection";
+} from "~/lib/activityRecording/segment";
 import { formatElapsed, formatKm, formatMeters } from "~/utils/format";
 
 const LEFT = 42;
@@ -23,10 +23,13 @@ interface ElevationProfileProps {
   distanceData: number[] | null;
   sampleTimes: number[];
   cursorTime: number | null;
-  range: RecordingRange | null;
+  segment: RecordingSegment | null;
   onCursorChange: (time: number | null) => void;
   onPinTime: (time: number) => void;
-  onRangeChange: (range: RecordingRange) => void;
+  onSegmentChange: (
+    segment: RecordingSegment,
+    phase?: "preview" | "commit",
+  ) => void;
   onClear: () => void;
 }
 
@@ -35,17 +38,19 @@ export function ElevationProfile({
   distanceData,
   sampleTimes,
   cursorTime,
-  range,
+  segment,
   onCursorChange,
   onPinTime,
-  onRangeChange,
+  onSegmentChange,
   onClear,
 }: ElevationProfileProps) {
   const t = useT();
   const ref = React.useRef<HTMLDivElement>(null);
   const { width } = useElementSize(ref);
   const id = React.useId();
-  const [previewRange, setPreviewRange] = React.useState<number[] | null>(null);
+  const [previewSegment, setPreviewSegment] = React.useState<number[] | null>(
+    null,
+  );
   const drag = React.useRef<{
     index: number;
     x: number;
@@ -120,25 +125,29 @@ export function ElevationProfile({
     );
     return indexForValue(min + (px / (plotWidth || 1)) * (max - min));
   };
-  const selectIndices = (a: number, b: number) => {
+  const selectIndices = (
+    a: number,
+    b: number,
+    phase: "preview" | "commit" = "commit",
+  ) => {
     const start = sampleTimes[Math.min(a, b)],
       end = sampleTimes[Math.max(a, b)];
-    if (end > start) onRangeChange([start, end]);
+    if (end > start) onSegmentChange([start, end], phase);
   };
   const cursor =
     cursorTime == null
       ? null
       : Math.min(n - 1, sampleIndexAtTime(sampleTimes, cursorTime));
-  const selectedIndices = range?.map((time) =>
+  const selectedIndices = segment?.map((time) =>
     Math.min(n - 1, sampleIndexAtTime(sampleTimes, time)),
   );
-  const selection = previewRange ?? selectedIndices;
+  const selection = previewSegment ?? selectedIndices;
   const formatX = (value: number) =>
     distances ? formatKm(value, 2) : formatElapsed(value);
   const values = selection ? selection.map((i) => xData[i]) : [min, max];
-  const resetSelection = () => {
+  const resetSegment = () => {
     drag.current = null;
-    setPreviewRange(null);
+    setPreviewSegment(null);
     onClear();
   };
 
@@ -150,12 +159,17 @@ export function ElevationProfile({
       className="bg-card border-border shrink-0 border-t"
       aria-label={t("activities.inspection.elevation")}
       onKeyDownCapture={(event) => {
+        if (event.key === "Enter" && segment) {
+          event.preventDefault();
+          onSegmentChange(segment, "commit");
+          return;
+        }
         if (event.key !== "Escape") return;
-        // The profile owns Escape, including when a range handle has focus.
+        // The profile owns Escape, including when a segment handle has focus.
         // Keep it out of the surrounding fullscreen dialog's dismissal handler.
         event.preventDefault();
         event.stopPropagation();
-        resetSelection();
+        resetSegment();
       }}
     >
       <div
@@ -176,7 +190,7 @@ export function ElevationProfile({
         tabIndex={0}
         aria-label={t("activities.inspection.elevation")}
         aria-describedby={id + "-help"}
-        aria-keyshortcuts="Escape"
+        aria-keyshortcuts="Escape Enter"
         className="focus-visible:ring-ring block touch-pan-y outline-none select-none focus-visible:ring-2 focus-visible:ring-inset"
         onPointerDown={(event) => {
           if (event.button !== 0 || !plotWidth) return;
@@ -192,7 +206,7 @@ export function ElevationProfile({
             if (Math.abs(event.clientX - drag.current.x) >= 6)
               drag.current.moved = true;
             if (drag.current.moved)
-              setPreviewRange([
+              setPreviewSegment([
                 Math.min(drag.current.index, index),
                 Math.max(drag.current.index, index),
               ]);
@@ -207,18 +221,18 @@ export function ElevationProfile({
           if (current.moved) selectIndices(current.index, index);
           else onPinTime(sampleTimes[index]);
           drag.current = null;
-          setPreviewRange(null);
+          setPreviewSegment(null);
           event.currentTarget.releasePointerCapture(event.pointerId);
         }}
         onPointerCancel={() => {
           drag.current = null;
-          setPreviewRange(null);
+          setPreviewSegment(null);
           onCursorChange(null);
         }}
         onPointerLeave={() => {
           if (!drag.current) onCursorChange(null);
         }}
-        onDoubleClick={resetSelection}
+        onDoubleClick={resetSegment}
         onKeyDown={(event) => {
           if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
             return;
@@ -326,6 +340,13 @@ export function ElevationProfile({
           largeStep={(max - min) / 10}
           thumbCollisionBehavior="none"
           onValueChange={(value) =>
+            selectIndices(
+              indexForValue(value[0]),
+              indexForValue(value[1]),
+              "preview",
+            )
+          }
+          onValueCommitted={(value) =>
             selectIndices(indexForValue(value[0]), indexForValue(value[1]))
           }
         >
@@ -351,13 +372,17 @@ export function ElevationProfile({
                       "ArrowDown",
                       "Home",
                       "End",
+                      "PageUp",
+                      "PageDown",
                     ].includes(event.key)
                   )
                     return;
                   event.preventDefault();
                   const indices = selectedIndices ?? [0, n - 1];
                   const next = [...indices];
-                  const delta = ["ArrowRight", "ArrowUp"].includes(event.key)
+                  const delta = ["ArrowRight", "ArrowUp", "PageUp"].includes(
+                    event.key,
+                  )
                     ? 1
                     : -1;
                   next[index] =
@@ -365,7 +390,11 @@ export function ElevationProfile({
                       ? 0
                       : event.key === "End"
                         ? n - 1
-                        : next[index] + delta;
+                        : next[index] +
+                          delta *
+                            (event.key.startsWith("Page")
+                              ? Math.max(1, Math.floor(n / 10))
+                              : 1);
                   if (event.key.startsWith("Arrow")) {
                     while (
                       next[index] >= 0 &&
@@ -375,8 +404,9 @@ export function ElevationProfile({
                       next[index] += delta;
                   }
                   if (next[0] >= 0 && next[1] < n && next[0] < next[1])
-                    selectIndices(next[0], next[1]);
+                    selectIndices(next[0], next[1], "preview");
                 }}
+                aria-describedby={id + "-help"}
                 getAriaValueText={(_, value) =>
                   `${formatX(value)}, ${formatElapsed(sampleTimes[indexForValue(value)])}`
                 }

@@ -120,9 +120,9 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     sportConfig,
     onHoverIndexChange,
     cursorIndex,
-    selectedRange,
+    selectedSegment,
     onInspectTime,
-    onRangeChange,
+    onSegmentChange,
     onClear,
   } = props;
   const t = useT();
@@ -162,10 +162,10 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
       : cursorIndex !== undefined
         ? cursorIndex
         : hoverIndex;
-  const [previousRange, setPreviousRange] = React.useState(selectedRange);
-  if (previousRange !== selectedRange) {
-    setPreviousRange(selectedRange);
-    if (!selectedRange) setZoomDomain(null);
+  const [previousSegment, setPreviousSegment] = React.useState(selectedSegment);
+  if (previousSegment !== selectedSegment) {
+    setPreviousSegment(selectedSegment);
+    if (!selectedSegment) setZoomDomain(null);
   }
 
   // Compute panel layouts
@@ -399,7 +399,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
         setZoomDomain([xScale.invert(lo), xScale.invert(hi)]);
         const start = indexAt(lo),
           end = indexAt(hi);
-        if (end > start) onRangeChange?.([start, end]);
+        if (end > start) onSegmentChange?.([start, end]);
       } else onInspectTime?.(indexAt(current));
       setDragStart(null);
       setDragCurrent(null);
@@ -413,7 +413,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
       distanceData,
       xScale,
       xData.length,
-      onRangeChange,
+      onSegmentChange,
       onInspectTime,
     ],
   );
@@ -646,15 +646,15 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
           />
         </g>
 
-        {selectedRange &&
+        {selectedSegment &&
           (() => {
             const lo = Math.max(
               0,
-              xScale(activeXData[selectedRange[0]] ?? baseDomain[0]),
+              xScale(activeXData[selectedSegment[0]] ?? baseDomain[0]),
             );
             const hi = Math.min(
               drawingWidth,
-              xScale(activeXData[selectedRange[1]] ?? baseDomain[1]),
+              xScale(activeXData[selectedSegment[1]] ?? baseDomain[1]),
             );
             return hi > lo ? (
               <rect

@@ -24,10 +24,16 @@ import { nearestRouteIndex, routeSegments } from "~/utils/routeGeometry";
 import { ExplorerTilesLayer } from "./ExplorerTilesLayer";
 import { ExplorerTilesStats } from "./ExplorerTilesStats";
 import { HeatmapActivityTooltip } from "./HeatmapActivityTooltip";
+import {
+  type SegmentChangePhase,
+  SegmentHandles,
+  type SegmentIndices,
+} from "./SegmentHandles";
 
 interface FitBoundsProps {
   polylines: { id: string; polyline: [number, number][] }[];
   onFitted?: () => void;
+  paused?: boolean;
 }
 
 function DismissOnMapMove({ onDismiss }: { onDismiss: () => void }) {
@@ -46,11 +52,16 @@ const NO_POLYLINES: LatLngTuple[][] = [];
 const LABELS_PANE = "satellite-labels";
 
 function FitBounds(props: FitBoundsProps) {
-  const { polylines, onFitted } = props;
+  const { polylines, onFitted, paused } = props;
   const map = useMap();
   const notifyFitted = React.useEffectEvent(() => onFitted?.());
+  const fittedPolylines = React.useRef<FitBoundsProps["polylines"] | null>(
+    null,
+  );
 
   React.useEffect(() => {
+    if (paused || fittedPolylines.current === polylines) return;
+    fittedPolylines.current = polylines;
     const allPositions: [number, number][] = [];
     for (const entry of polylines) {
       for (const pos of entry.polyline) {
@@ -69,7 +80,7 @@ function FitBounds(props: FitBoundsProps) {
       });
     }
     notifyFitted();
-  }, [polylines, map]);
+  }, [polylines, map, paused]);
 
   return null;
 }
@@ -85,13 +96,16 @@ export default function Map(props: MapProps) {
     interactive = true,
     onReady,
     routePositions,
-    selectedRoute,
+    segmentRoute,
+    segmentIndices,
+    onSegmentChange,
     onRouteHover,
     onRouteSelect,
-    fitSelectedRoute = false,
+    fitSegment = false,
     scrollWheelZoom = true,
     zoomControl = true,
   } = props;
+  const [draggingSegment, setDraggingSegment] = React.useState(false);
   const { showExplorerTiles } = useExplorerTilesToggle();
   const { tileStyle } = useTileStyle();
   const tileProvider = TILE_PROVIDERS[tileStyle];
@@ -156,9 +170,9 @@ export default function Map(props: MapProps) {
   // Which polylines drive the initial zoom/position. "all" fits every route;
   // "last" fits only the most recent activity so it's fully visible.
   const fitPolylines = React.useMemo(() => {
-    if (fitSelectedRoute && selectedRoute?.length)
-      return selectedRoute.map((polyline, index) => ({
-        id: `selection-${index}`,
+    if (fitSegment && segmentRoute?.length)
+      return segmentRoute.map((polyline, index) => ({
+        id: `segment-${index}`,
         polyline,
       }));
     if (fitMode !== "last") {
@@ -175,13 +189,7 @@ export default function Map(props: MapProps) {
       }
     }
     return latest ? [latest] : polylines;
-  }, [
-    fitMode,
-    polylines,
-    decodedActivityPolylines,
-    fitSelectedRoute,
-    selectedRoute,
-  ]);
+  }, [fitMode, polylines, decodedActivityPolylines, fitSegment, segmentRoute]);
 
   // Clicking a route opens a tooltip identifying which activity it belongs to.
   // That's only meaningful when several routes are drawn together (e.g. the
@@ -260,7 +268,7 @@ export default function Map(props: MapProps) {
               pathOptions={{
                 color,
                 weight: heatmapStyle ? 2 : 4,
-                opacity: selectedRoute ? 0.3 : heatmapStyle ? 0.5 : 1,
+                opacity: segmentRoute ? 0.3 : heatmapStyle ? 0.5 : 1,
                 className:
                   enableActivityClick || onRouteSelect
                     ? "cursor-pointer"
@@ -303,16 +311,24 @@ export default function Map(props: MapProps) {
             />
           );
         })}
-        {selectedRoute?.map((positions, index) => (
+        {segmentRoute?.map((positions, index) => (
           <Polyline
-            key={`selection-${index}`}
+            key={`segment-${index}`}
             positions={positions}
             interactive={false}
             pathOptions={{ color: tokens.accent, weight: 6, opacity: 1 }}
           />
         ))}
-        {selectedRoute &&
-          [selectedRoute[0]?.[0], selectedRoute.at(-1)?.at(-1)].map(
+        {interactive && routePositions && segmentIndices && onSegmentChange ? (
+          <SegmentHandles
+            positions={routePositions}
+            indices={segmentIndices}
+            onChange={onSegmentChange}
+            onDraggingChange={setDraggingSegment}
+          />
+        ) : (
+          segmentRoute &&
+          [segmentRoute[0]?.[0], segmentRoute.at(-1)?.at(-1)].map(
             (position, index) =>
               position && (
                 <CircleMarker
@@ -328,7 +344,8 @@ export default function Map(props: MapProps) {
                   }}
                 />
               ),
-          )}
+          )
+        )}
         {highlightPosition && (
           // "You are here" marker — brand teal fill with a card-colored ring,
           // the same treatment as the WebGL charts' crosshair dot.
@@ -347,7 +364,11 @@ export default function Map(props: MapProps) {
         {selectedActivity && (
           <DismissOnMapMove onDismiss={() => setSelectedActivity(null)} />
         )}
-        <FitBounds polylines={fitPolylines} onFitted={handleFitted} />
+        <FitBounds
+          polylines={fitPolylines}
+          onFitted={handleFitted}
+          paused={draggingSegment}
+        />
       </MapContainer>
       {enableExplorerTiles && (
         <ExplorerTilesStats
@@ -392,11 +413,16 @@ interface MapProps {
   /** Called once the view is fitted and its tiles have finished loading. */
   onReady?: () => void;
   routePositions?: [number, number][] | null;
-  /** An inspected section, drawn above the full route. Gaps remain separate. */
-  selectedRoute?: [number, number][][] | null;
+  /** An inspected segment, drawn above the full route. Gaps remain separate. */
+  segmentRoute?: [number, number][][] | null;
+  segmentIndices?: SegmentIndices | null;
+  onSegmentChange?: (
+    indices: SegmentIndices,
+    phase: SegmentChangePhase,
+  ) => void;
   onRouteHover?: (index: number | null) => void;
   onRouteSelect?: (index: number) => void;
-  fitSelectedRoute?: boolean;
+  fitSegment?: boolean;
   scrollWheelZoom?: boolean;
   /** Whether to show Leaflet's zoom +/- buttons. Defaults to `true`. */
   zoomControl?: boolean;

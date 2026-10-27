@@ -20,9 +20,14 @@ interface ActivityMapProps {
   highlightPosition?: [number, number] | null;
   interactive?: boolean;
   routePositions?: [number, number][] | null;
-  selectedRoute?: [number, number][][] | null;
+  segmentRoute?: [number, number][][] | null;
+  segmentIndices?: [number, number] | null;
+  onSegmentChange?: (
+    indices: [number, number],
+    phase: "preview" | "commit",
+  ) => void;
   onRouteHover?: (index: number | null) => void;
   onRouteSelect?: (index: number) => void;
-  fitSelectedRoute?: boolean;
+  fitSegment?: boolean;
   scrollWheelZoom?: boolean;
 }

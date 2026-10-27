@@ -31,16 +31,55 @@ test.beforeEach(async ({ viewsFixture: f }) => {
 });
 
 const explorer = (page: Page) =>
-  page.getByRole("region", { name: "Route exploration", exact: true });
+  page.getByRole("region", {
+    name: "Route exploration",
+    exact: true,
+    includeHidden: true,
+  });
 const profile = (page: Page) =>
-  explorer(page).getByRole("group", { name: "Elevation profile", exact: true });
-const section = (page: Page) =>
-  explorer(page).getByLabel("Selected section", { exact: true });
+  explorer(page).getByRole("group", {
+    name: "Elevation profile",
+    exact: true,
+    includeHidden: true,
+  });
+const details = (page: Page) =>
+  page.getByRole("dialog", { name: "Segment", exact: true });
+const card = (page: Page) =>
+  page.getByRole("region", { name: "Segment", exact: true });
+const segment = (page: Page) => card(page).or(details(page));
 const metric = (page: Page, label: string) =>
-  section(page)
+  details(page)
     .locator("dl > div")
     .filter({ has: page.locator("dt", { hasText: label }) })
     .locator("dd");
+async function touchDrag(
+  page: Page,
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  beforeRelease?: () => Promise<void>,
+) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [start],
+  });
+  for (let i = 1; i <= 8 && (start.x !== end.x || start.y !== end.y); i++)
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [
+        {
+          x: start.x + ((end.x - start.x) * i) / 8,
+          y: start.y + ((end.y - start.y) * i) / 8,
+        },
+      ],
+    });
+  await beforeRelease?.();
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await cdp.detach();
+}
 async function dragProfile(page: Page, touch = false, release = true) {
   const svg = profile(page);
   await svg.scrollIntoViewIfNeeded();
@@ -49,21 +88,7 @@ async function dragProfile(page: Page, touch = false, release = true) {
   const start = { x: box.x + 42 + (box.width - 60) / 6, y: box.y + 55 };
   const end = { x: box.x + 42 + ((box.width - 60) * 4) / 6, y: start.y };
   if (touch) {
-    const cdp = await page.context().newCDPSession(page);
-    await cdp.send("Input.dispatchTouchEvent", {
-      type: "touchStart",
-      touchPoints: [start],
-    });
-    for (let i = 1; i <= 8; i++)
-      await cdp.send("Input.dispatchTouchEvent", {
-        type: "touchMove",
-        touchPoints: [{ x: start.x + ((end.x - start.x) * i) / 8, y: start.y }],
-      });
-    await cdp.send("Input.dispatchTouchEvent", {
-      type: "touchEnd",
-      touchPoints: [],
-    });
-    await cdp.detach();
+    await touchDrag(page, start, end);
   } else {
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
@@ -71,13 +96,18 @@ async function dragProfile(page: Page, touch = false, release = true) {
     if (release) await page.mouse.up();
   }
 }
-async function expectSection(page: Page) {
-  await expect(metric(page, "Distance")).toHaveText("0.30 km");
-  await expect(metric(page, "Elapsed Time")).toHaveText("0:30");
-  await expect(metric(page, "Ascent")).toHaveText("30 m");
-  await expect(metric(page, "Avg gradient")).toHaveText("8.3 %");
-  await expect(metric(page, "Avg HR")).toHaveText("140 bpm");
-  await expect(metric(page, "Avg Power")).toHaveText("200 W");
+async function expectSegment(page: Page) {
+  for (const [label, value] of [
+    ["Distance", "0.30 km"],
+    ["Elapsed Time", "0:30"],
+  ]) {
+    await expect(
+      segment(page)
+        .locator("dl > div")
+        .filter({ has: page.locator("dt", { hasText: label }) })
+        .locator("dd"),
+    ).toHaveText(value);
+  }
   const highlight = explorer(page).locator('path[stroke-width="6"]');
   await expect(highlight).toBeVisible();
   const selected = await highlight.boundingBox();
@@ -86,8 +116,169 @@ async function expectSection(page: Page) {
     .boundingBox();
   expect(selected!.height).toBeLessThan(route!.height);
 }
+async function waitForDrawer(page: Page) {
+  await expect
+    .poll(async () => {
+      const box = await details(page).boundingBox();
+      return box
+        ? Math.max(
+            box.x + box.width - page.viewportSize()!.width,
+            box.y + box.height - page.viewportSize()!.height,
+          )
+        : Infinity;
+    })
+    .toBeLessThanOrEqual(1);
+  await details(page).evaluate(async (element) => {
+    await Promise.all(
+      element.getAnimations().map((animation) => animation.finished),
+    );
+  });
+}
+async function expectDetails(page: Page) {
+  await waitForDrawer(page);
+  await expect(metric(page, "Distance")).toHaveText("0.30 km");
+  await expect(metric(page, "Elapsed Time")).toHaveText("0:30");
+  await expect(metric(page, "Ascent")).toHaveText("30 m");
+  await expect(metric(page, "Avg gradient")).toHaveText("8.3 %");
+  await expect(metric(page, "Avg HR")).toHaveText("140 bpm");
+  await expect(metric(page, "Avg Power")).toHaveText("200 W");
+  const chart = details(page).getByRole("img", {
+    name: "Segment elevation profile",
+    exact: true,
+  });
+  await expect(chart).toBeVisible();
+  const colors = await chart
+    .locator("rect[fill]")
+    .evaluateAll((elements) => [
+      ...new Set(elements.map((element) => element.getAttribute("fill"))),
+    ]);
+  expect(colors.length).toBeGreaterThan(1);
+  await expect(
+    details(page).getByRole("list", { name: "Gradient legend" }),
+  ).toBeVisible();
+}
 
-test("links a profile section, route picking and stream selection while preserving the selected section", async ({
+async function routePoint(page: Page, index: number) {
+  return explorer(page)
+    .locator("path.leaflet-interactive")
+    .evaluate((element, index) => {
+      const path = element as SVGPathElement;
+      // The fixture's seven samples lie on a straight route, in recording order.
+      const point = path.getPointAtLength((path.getTotalLength() * index) / 6);
+      const screen = new DOMPoint(point.x, point.y).matrixTransform(
+        path.getScreenCTM()!,
+      );
+      return { x: screen.x, y: screen.y };
+    }, index);
+}
+
+test("resizes either map endpoint to the nearest route sample, including crossing and cancelled drags", async ({
+  page,
+  viewsFixture: f,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto(`${origin}/activities/${f.ids.long}`);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  await dragProfile(page);
+  const mapBox = (await explorer(page)
+    .locator(".leaflet-container")
+    .boundingBox())!;
+  await page.mouse.move(mapBox.x + 60, mapBox.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(mapBox.x + 90, mapBox.y + 75, { steps: 8 });
+  await page.mouse.up();
+  const pannedRoute = (await explorer(page)
+    .locator("path.leaflet-interactive")
+    .boundingBox())!;
+  const handle = (boundary: string) =>
+    explorer(page).getByRole("button", {
+      name: `Segment ${boundary}`,
+      exact: true,
+    });
+  const moveHandle = async (
+    boundary: string,
+    index: number,
+    release = true,
+  ) => {
+    const box = (await handle(boundary).boundingBox())!;
+    const target = await routePoint(page, index);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    // Deliberately leave the route. The endpoint still snaps to its nearest sample.
+    await page.mouse.move(target.x + 24, target.y + 24, { steps: 8 });
+    if (release) await page.mouse.up();
+  };
+  const duration = card(page)
+    .locator("dl > div")
+    .filter({ has: page.locator("dt", { hasText: "Elapsed Time" }) })
+    .locator("dd");
+  const start = explorer(page).getByRole("slider", { name: "Segment start" });
+  const end = explorer(page).getByRole("slider", { name: "Segment end" });
+  await moveHandle("end", 6);
+  await expect(duration).toHaveText("0:50");
+  expect(
+    (await explorer(page).locator("path.leaflet-interactive").boundingBox())!.x,
+  ).toBeCloseTo(pannedRoute.x, -1);
+  await expect(end).toHaveAttribute("aria-valuenow", "600");
+  await moveHandle("start", 2);
+  await expect(duration).toHaveText("0:40");
+  await expect(start).toHaveAttribute("aria-valuenow", "200");
+  await moveHandle("start", 4, false);
+  await expect(duration).toHaveText("0:20");
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(duration).toHaveText("0:40");
+  await expect(profile(page)).toBeVisible();
+  // Cross the other endpoint without losing pointer capture or swapping the moving handle.
+  await moveHandle("end", 1);
+  await expect(duration).toHaveText("0:10");
+  await expect(start).toHaveAttribute("aria-valuenow", "100");
+  await expect(end).toHaveAttribute("aria-valuenow", "200");
+  await moveHandle("end", 5);
+  await explorer(page)
+    .getByRole("button", { name: "Zoom to segment", exact: true })
+    .click();
+  const route = explorer(page).locator("path.leaflet-interactive");
+  const before = (await route.boundingBox())!;
+  const a = (await handle("start").boundingBox())!;
+  const b = (await handle("end").boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.mouse.move((a.x + b.x) / 2 + 20, (a.y + b.y) / 2 + 20, {
+    steps: 8,
+  });
+  await expect(duration).toHaveText("0:20");
+  const during = (await route.boundingBox())!;
+  expect(during.x).toBeCloseTo(before.x, 0);
+  expect(during.y).toBeCloseTo(before.y, 0);
+  expect(during.width).toBeCloseTo(before.width, 0);
+  await page.mouse.up();
+  await expect(end).toHaveAttribute("aria-valuenow", "300");
+  // Releasing on the other endpoint clears the empty segment, then map panning works again.
+  await explorer(page)
+    .getByRole("button", { name: "Show whole route", exact: true })
+    .click();
+  const anchor = (await handle("start").boundingBox())!;
+  const edge = (await handle("end").boundingBox())!;
+  await page.mouse.move(edge.x + 20, edge.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(anchor.x + 20, anchor.y + 20, { steps: 8 });
+  await page.mouse.up();
+  await expect(segment(page)).toHaveCount(0);
+  const map = (await explorer(page)
+    .locator(".leaflet-container")
+    .boundingBox())!;
+  const original = (await route.boundingBox())!;
+  await page.mouse.move(map.x + 50, map.y + 50);
+  await page.mouse.down();
+  await page.mouse.move(map.x + 100, map.y + 80, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await route.boundingBox())!.x - original.x)
+    .toBeGreaterThan(40);
+});
+
+test("links a profile segment, route picking and stream selection while preserving the selected segment", async ({
   page,
   viewsFixture: f,
 }) => {
@@ -99,14 +290,53 @@ test("links a profile section, route picking and stream selection while preservi
   await expect(profile(page)).toHaveCount(0);
   await page.getByRole("button", { name: "Expand map", exact: true }).click();
   await expect(profile(page)).toBeVisible();
+  const mapBefore = await explorer(page)
+    .locator(".leaflet-container")
+    .boundingBox();
+  const profileBefore = await profile(page).boundingBox();
   await dragProfile(page);
-  await expectSection(page);
+  await expectSegment(page);
+  const mapAfter = await explorer(page)
+    .locator(".leaflet-container")
+    .boundingBox();
+  const profileAfter = await profile(page).boundingBox();
+  const cardBox = await segment(page).boundingBox();
+  expect(mapAfter!.height).toBeCloseTo(mapBefore!.height, 0);
+  expect(profileAfter!.y).toBeCloseTo(profileBefore!.y, 0);
+  expect(cardBox!.x).toBeGreaterThan(mapAfter!.x);
+  expect(cardBox!.x + cardBox!.width).toBeLessThan(
+    mapAfter!.x + mapAfter!.width,
+  );
+  expect(cardBox!.y).toBeGreaterThan(mapAfter!.y + mapAfter!.height / 2);
+  expect(cardBox!.y + cardBox!.height).toBeLessThan(
+    mapAfter!.y + mapAfter!.height,
+  );
+  await expect(card(page).locator("dt")).toHaveCount(2);
+  await expect(card(page).getByRole("heading")).toHaveCount(0);
+  await expect(
+    card(page).getByText("0:10 – 0:40", { exact: true }),
+  ).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath("desktop.png") });
+  await card(page)
+    .getByRole("button", { name: "Details", exact: true })
+    .click();
+  await expectDetails(page);
+  await page.screenshot({
+    path: test.info().outputPath("desktop-details.png"),
+  });
+  await details(page)
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await expect(details(page)).toHaveCount(0);
+  await expectSegment(page);
+  await expect(
+    card(page).getByRole("button", { name: "Details", exact: true }),
+  ).toBeFocused();
   await page.mouse.move(2, 2);
   const selectedBeforeZoom = await explorer(page)
     .locator('path[stroke-width="6"]')
     .boundingBox();
-  await explorer(page).getByRole("button", { name: "Zoom to section" }).click();
+  await explorer(page).getByRole("button", { name: "Zoom to segment" }).click();
   await expect
     .poll(
       async () =>
@@ -133,23 +363,22 @@ test("links a profile section, route picking and stream selection while preservi
     explorer(page).getByText("0.40 km · 0:40 · 135 m", { exact: true }),
   ).toBeVisible();
   await profile(page).dblclick({ position: { x: 100, y: 55 } });
-  await expect(section(page)).toHaveCount(0);
+  await expect(segment(page)).toHaveCount(0);
   await expect(
     page.getByRole("dialog", { name: "Route exploration" }),
   ).toBeVisible();
   await expect(
-    explorer(page).getByText("Drag to select a section", { exact: true }),
+    explorer(page).getByText("Drag to select a segment", { exact: true }),
   ).toBeVisible();
   await dragProfile(page, false, false);
   await page.keyboard.press("Escape");
   await page.mouse.up();
-  await expect(section(page)).toHaveCount(0);
+  await expect(segment(page)).toHaveCount(0);
   await expect(profile(page)).toBeVisible();
   await dragProfile(page);
-  await explorer(page)
-    .getByRole("button", { name: "Clear", exact: true })
-    .click();
-  await expect(section(page)).toHaveCount(0);
+  await profile(page).focus();
+  await page.keyboard.press("Escape");
+  await expect(segment(page)).toHaveCount(0);
   await page.getByRole("button", { name: "Collapse map", exact: true }).click();
   await expect(profile(page)).toHaveCount(0);
   const streams = page
@@ -181,7 +410,7 @@ test("links a profile section, route picking and stream selection while preservi
       await chart.focus();
       await page.keyboard.press("Escape");
     }
-    await expect(section(page)).toHaveCount(0);
+    await expect(segment(page)).toHaveCount(0);
     await expect(
       streams.getByRole("button", { name: "Reset zoom" }),
     ).toHaveCount(0);
@@ -190,14 +419,14 @@ test("links a profile section, route picking and stream selection while preservi
   await streams.getByRole("button", { name: "Distance", exact: true }).click();
   await page.getByRole("button", { name: "Expand map", exact: true }).click();
   await expect(profile(page)).toBeVisible();
-  await expectSection(page);
+  await expectSegment(page);
   await expect(
     page.getByRole("dialog", { name: "Route exploration" }),
   ).toBeVisible();
-  await explorer(page).getByRole("button", { name: "Zoom to section" }).click();
+  await explorer(page).getByRole("button", { name: "Zoom to segment" }).click();
   await profile(page).focus();
   await page.keyboard.press("Escape");
-  await expect(section(page)).toHaveCount(0);
+  await expect(segment(page)).toHaveCount(0);
   await expect(profile(page)).toBeVisible();
   await expect(
     page.getByRole("dialog", { name: "Route exploration" }),
@@ -206,7 +435,7 @@ test("links a profile section, route picking and stream selection while preservi
   await expect(profile(page)).toBeVisible();
   await dragProfile(page);
   await expect(
-    explorer(page).getByRole("button", { name: "Zoom to section" }),
+    explorer(page).getByRole("button", { name: "Zoom to segment" }),
   ).toBeVisible();
   await profile(page).focus();
   await page.keyboard.press("Escape");
@@ -224,128 +453,227 @@ test("links a profile section, route picking and stream selection while preservi
   await expect(explorer(page)).toHaveCount(0);
 });
 
-test("supports mobile touch selection and keyboard range handles", async ({
-  page,
-  viewsFixture: f,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${origin}/activities/${f.ids.long}`);
-  await expect(
-    page.getByRole("button", { name: "Expand map", exact: true }),
-  ).toBeVisible();
-  await expect(profile(page)).toHaveCount(0);
-  await page.getByRole("button", { name: "Expand map", exact: true }).click();
-  await expect(profile(page)).toBeVisible();
-  await dragProfile(page, true);
-  await expectSection(page);
-  await page.screenshot({ path: test.info().outputPath("mobile.png") });
-  const start = explorer(page).getByRole("slider", { name: "Section start" });
-  await start.focus();
-  await page.keyboard.press("ArrowLeft");
-  await expect(metric(page, "Elapsed Time")).toHaveText("0:40");
-  await expect(metric(page, "Avg Power")).toHaveText("150 W");
-  await page.keyboard.press("ArrowRight");
-  await expectSection(page);
-  await expect
-    .poll(() =>
-      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-    )
-    .toBe(true);
-  await page.setViewportSize({ width: 390, height: 568 });
-  await profile(page).scrollIntoViewIfNeeded();
-  const scrollPosition = () =>
-    profile(page).evaluate((element) => {
-      for (
-        let parent = element.parentElement;
-        parent;
-        parent = parent.parentElement
-      )
-        if (
-          parent.scrollHeight > parent.clientHeight &&
-          getComputedStyle(parent).overflowY === "auto"
-        )
-          return parent.scrollTop;
-      return 0;
-    });
-  const beforeScroll = await scrollPosition();
-  const profileBox = await profile(page).boundingBox();
-  const cdp = await page.context().newCDPSession(page);
-  const touch = {
-    x: profileBox!.x + profileBox!.width / 2,
-    y: profileBox!.y + 90,
-  };
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [touch],
-  });
-  for (let i = 1; i <= 6; i++)
-    await cdp.send("Input.dispatchTouchEvent", {
-      type: "touchMove",
-      touchPoints: [{ ...touch, y: touch.y - i * 15 }],
-    });
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchEnd",
-    touchPoints: [],
-  });
-  await cdp.detach();
-  await expect.poll(scrollPosition).toBeGreaterThan(beforeScroll);
-  await expectSection(page);
-  const collapse = page.getByRole("button", {
-    name: "Collapse map",
-    exact: true,
-  });
-  await collapse.click();
-  await expect(profile(page)).toHaveCount(0);
-  await expectSection(page);
-  await page.getByRole("button", { name: "Expand map", exact: true }).click();
-  await expect(profile(page)).toBeVisible();
-  await expectSection(page);
-  await explorer(page).getByRole("slider", { name: "Section start" }).focus();
-  await page.keyboard.press("Escape");
-  await expect(section(page)).toHaveCount(0);
-  await expect(profile(page)).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(profile(page)).toBeVisible();
-});
+test.describe("mobile", () => {
+  test.use({ hasTouch: true });
 
-test("keeps a flat profile usable without GPS, distance or effort sensors", async ({
-  page,
-  viewsFixture: f,
-}) => {
-  const db = postgres(process.env.DATABASE_URL!);
-  try {
-    const [activity] = await db<
-      { id: number }[]
-    >`select id from activities where athlete=${f.athleteId} and strava_id=${f.ids.race}`;
-    for (const [type, data] of Object.entries({
-      time: [0, 10, 20, 30],
-      altitude: [100, 100, 100, 100],
-      latlng: [],
-    }))
-      await db`insert into activity_streams (activity_id,type,data,series_type,original_size,resolution) values (${activity.id},${type},${JSON.stringify(data)},'time',4,'high')`;
-  } finally {
-    await db.end();
-  }
-  await page.setViewportSize({ width: 320, height: 568 });
-  await page.goto(`${origin}/activities/${f.ids.race}`);
-  await page.getByRole("button", { name: "Expand map", exact: true }).click();
-  await expect(profile(page)).toBeVisible();
-  await explorer(page).getByRole("slider", { name: "Section start" }).focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(metric(page, "Elapsed Time")).toHaveText("0:20");
-  await expect(metric(page, "Distance")).toHaveText("—");
-  await expect(metric(page, "Ascent")).toHaveText("0 m");
-  await expect(metric(page, "Avg gradient")).toHaveText("—");
-  await expect(section(page).getByText("Avg HR", { exact: true })).toHaveCount(
-    0,
-  );
-  await expect(
-    section(page).getByText("Avg Power", { exact: true }),
-  ).toHaveCount(0);
-  await expect
-    .poll(() =>
-      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-    )
-    .toBe(true);
-  await page.screenshot({ path: test.info().outputPath("compact.png") });
+  test("mobile segment drawers reset selection on close, Escape and swipe without closing fullscreen", async ({
+    page,
+    viewsFixture: f,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${origin}/activities/${f.ids.long}`);
+    await page.getByRole("button", { name: "Expand map", exact: true }).click();
+    await expect(profile(page)).toBeVisible();
+    const before = await explorer(page)
+      .locator(".leaflet-container")
+      .boundingBox();
+    const drawer = page.getByRole("dialog", {
+      name: "Segment",
+      exact: true,
+    });
+    await dragProfile(page, true);
+    await expect(drawer).toBeVisible();
+    await expectSegment(page);
+    await expectDetails(page);
+    const after = await explorer(page)
+      .locator(".leaflet-container")
+      .boundingBox();
+    expect(after!.height).toBeCloseTo(before!.height, 0);
+    await page.screenshot({ path: test.info().outputPath("mobile.png") });
+    await drawer.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(drawer).toHaveCount(0);
+    await expect(segment(page)).toHaveCount(0);
+    await expect(explorer(page).locator('path[stroke-width="6"]')).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole("dialog", { name: "Route exploration", exact: true }),
+    ).toBeVisible();
+
+    const start = explorer(page).getByRole("slider", { name: "Segment start" });
+    const thumb = await start.evaluate((element) => {
+      const rect = element.parentElement!.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    });
+    const sliderWidth = (await profile(page).boundingBox())!.width - 60;
+    await touchDrag(
+      page,
+      thumb,
+      { x: thumb.x + sliderWidth / 6, y: thumb.y },
+      async () => {
+        await expect(start).toHaveAttribute("aria-valuenow", "100");
+        await expect(drawer).toHaveCount(0);
+      },
+    );
+    await expect(drawer).toBeVisible();
+    await expect(metric(page, "Elapsed Time")).toHaveText("0:50");
+    await waitForDrawer(page);
+    await page
+      .locator('[data-slot="drawer-overlay"]')
+      .tap({ position: { x: 100, y: 100 } });
+    await expect(drawer).toHaveCount(0);
+    await expect(segment(page)).toHaveCount(0);
+
+    // Keyboard adjustments remain editable until Enter opens the drawer.
+    await start.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(drawer).toHaveCount(0);
+    const end = explorer(page).getByRole("slider", { name: "Segment end" });
+    await end.focus();
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await expect(drawer).toHaveCount(0);
+    await page.keyboard.press("Enter");
+    await expect(drawer).toBeVisible();
+    await expectSegment(page);
+    await expectDetails(page);
+    await page.keyboard.press("Escape");
+    await expect(drawer).toHaveCount(0);
+    await expect(segment(page)).toHaveCount(0);
+    await expect(profile(page)).toBeVisible();
+    await profile(page).focus();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("dialog", { name: "Route exploration", exact: true }),
+    ).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 568 });
+    await dragProfile(page, true);
+    await expect(drawer).toBeVisible();
+    await waitForDrawer(page);
+    const box = await drawer.boundingBox();
+    const touch = { x: box!.x + box!.width / 2, y: box!.y + 18 };
+    await touchDrag(page, touch, { x: touch.x, y: 566 });
+    await expect(drawer).toHaveCount(0);
+    await expect(segment(page)).toHaveCount(0);
+    await expect(
+      page.getByRole("dialog", { name: "Route exploration", exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      )
+      .toBe(true);
+    await page
+      .getByRole("button", { name: "Collapse map", exact: true })
+      .click();
+    const streams = page
+      .getByRole("heading", { name: "Time Series", exact: true })
+      .locator("../..");
+    const chart = streams.locator("svg").last();
+    await chart.scrollIntoViewIfNeeded();
+    const chartBox = (await chart.boundingBox())!;
+    const plotWidth = chartBox.width - 100;
+    await touchDrag(
+      page,
+      { x: chartBox.x + 84 + plotWidth / 6, y: chartBox.y + 40 },
+      { x: chartBox.x + 84 + (plotWidth * 4) / 6, y: chartBox.y + 40 },
+    );
+    await expectDetails(page);
+    await expect(
+      page.getByRole("dialog", { name: "Route exploration", exact: true }),
+    ).toHaveCount(0);
+    await drawer.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(drawer).toHaveCount(0);
+    await expect(
+      streams.getByRole("button", { name: "Reset zoom", exact: true }),
+    ).toHaveCount(0);
+  });
+
+  test("keeps a flat profile usable without GPS, distance or effort sensors", async ({
+    page,
+    viewsFixture: f,
+  }) => {
+    const db = postgres(process.env.DATABASE_URL!);
+    try {
+      const [activity] = await db<
+        { id: number }[]
+      >`select id from activities where athlete=${f.athleteId} and strava_id=${f.ids.race}`;
+      for (const [type, data] of Object.entries({
+        time: [0, 10, 20, 30],
+        altitude: [100, 100, 100, 100],
+        latlng: [],
+      }))
+        await db`insert into activity_streams (activity_id,type,data,series_type,original_size,resolution) values (${activity.id},${type},${JSON.stringify(data)},'time',4,'high')`;
+    } finally {
+      await db.end();
+    }
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.goto(`${origin}/activities/${f.ids.race}`);
+    await page.getByRole("button", { name: "Expand map", exact: true }).click();
+    await expect(profile(page)).toBeVisible();
+    await explorer(page).getByRole("slider", { name: "Segment start" }).focus();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Enter");
+    await expect(metric(page, "Elapsed Time")).toHaveText("0:20");
+    await expect(metric(page, "Distance")).toHaveText("—");
+    await expect(metric(page, "Ascent")).toHaveText("0 m");
+    await expect(metric(page, "Avg gradient")).toHaveText("—");
+    await expect(
+      details(page).getByRole("img", {
+        name: "Segment elevation profile",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      details(page).getByText(
+        "Gradient unavailable without recorded distance.",
+        {
+          exact: true,
+        },
+      ),
+    ).toBeVisible();
+    await expect(
+      segment(page).getByText("Avg HR", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      segment(page).getByText("Avg Power", { exact: true }),
+    ).toHaveCount(0);
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      )
+      .toBe(true);
+    await page.screenshot({ path: test.info().outputPath("compact.png") });
+  });
+
+  test("touch resizing previews the segment on the map and opens its drawer only on release", async ({
+    page,
+    viewsFixture: f,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${origin}/activities/${f.ids.long}`);
+    await page.getByRole("button", { name: "Expand map", exact: true }).click();
+    const start = explorer(page).getByRole("slider", { name: "Segment start" });
+    const end = explorer(page).getByRole("slider", { name: "Segment end" });
+    await start.focus();
+    await page.keyboard.press("ArrowRight");
+    await end.focus();
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    const edge = (await explorer(page)
+      .getByRole("button", { name: "Segment end", exact: true })
+      .boundingBox())!;
+    const point = await routePoint(page, 5);
+    await touchDrag(
+      page,
+      { x: edge.x + 20, y: edge.y + 20 },
+      { x: point.x + 20, y: point.y + 20 },
+      async () => {
+        await expect(end).toHaveAttribute("aria-valuenow", "500");
+        await expect(details(page)).toHaveCount(0);
+      },
+    );
+    await expect(metric(page, "Elapsed Time")).toHaveText("0:40");
+    await expect(metric(page, "Distance")).toHaveText("0.40 km");
+    await details(page)
+      .getByRole("button", { name: "Close", exact: true })
+      .click();
+    await expect(segment(page)).toHaveCount(0);
+    await expect(
+      explorer(page).getByRole("button", { name: "Segment end", exact: true }),
+    ).toHaveCount(0);
+    await expect(profile(page)).toBeVisible();
+  });
 });

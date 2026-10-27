@@ -9,7 +9,7 @@ import {
   type NumericChannel,
   useActivityRecording,
 } from "~/lib/activityRecording";
-import type { RecordingRange } from "~/lib/activityRecording/selection";
+import type { RecordingSegment } from "~/lib/activityRecording/segment";
 import { useChartTokens } from "~/lib/chartTokens";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
@@ -85,10 +85,10 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
     stravaId,
     hiddenStreams,
     cursorTime,
-    selectedRange,
+    selectedSegment,
     onHoverTimeChange,
     onInspectTime,
-    onRangeChange,
+    onSegmentChange,
     onClear,
   } = props;
   const t = useT();
@@ -255,10 +255,10 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
         xAxisMode={xAxisMode}
         sportConfig={sportConfig}
         cursorIndex={cursorTime}
-        selectedRange={selectedRange}
+        selectedSegment={selectedSegment}
         onHoverIndexChange={onHoverTimeChange}
         onInspectTime={onInspectTime}
-        onRangeChange={onRangeChange}
+        onSegmentChange={onSegmentChange}
         onClear={onClear}
       />
     </ChartCard>
@@ -268,10 +268,10 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 interface ActivityStreamsProps {
   stravaId: number;
   cursorTime?: number | null;
-  selectedRange?: RecordingRange | null;
+  selectedSegment?: RecordingSegment | null;
   onHoverTimeChange?: (time: number | null) => void;
   onInspectTime?: (time: number) => void;
-  onRangeChange?: (range: RecordingRange) => void;
+  onSegmentChange?: (segment: RecordingSegment) => void;
   onClear?: () => void;
   hiddenStreams?: string[];
 }
