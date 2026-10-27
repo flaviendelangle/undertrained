@@ -123,18 +123,58 @@ describe("noteworthy climbs", () => {
     },
   );
 
-  it("keeps two ramps joined across a 1.5 km plateau when the overall climb still qualifies", () => {
-    const p = terrain([
-      [0, 100],
-      [4000, 340],
-      [5500, 340],
-      [9500, 580],
-    ]);
+  it.each([
+    {
+      name: "a long plateau",
+      knots: [
+        [0, 100],
+        [4000, 340],
+        [5500, 340],
+        [9500, 580],
+      ],
+      category: "2",
+    },
+    {
+      name: "a shallow saddle after a gradual approach",
+      knots: [
+        [0, 500],
+        [6000, 690],
+        [6500, 680],
+        [21_000, 1510],
+      ],
+      category: "HC",
+    },
+    {
+      name: "a flatter approach before the main ascent",
+      knots: [
+        [0, 820],
+        [7000, 1060],
+        [7750, 1050],
+        [24_500, 2200],
+      ],
+      category: "HC",
+    },
+    {
+      name: "several saddles that are small relative to the complete ascent",
+      knots: [
+        [0, 100],
+        [3000, 300],
+        [3500, 260],
+        [6500, 460],
+        [7000, 420],
+        [10_000, 620],
+      ],
+      category: "2",
+    },
+  ])("keeps one qualifying ascent across $name", ({ knots, category }) => {
+    const p = terrain(knots as [number, number][]);
     const climbs = detectClimbs(p.altitude, p.distance);
     expect(climbs).toHaveLength(1);
-    expect(climbs[0].category).toBe("2");
+    expect(climbs[0].category).toBe(category);
     expect(p.distance[climbs[0].startIndex]).toBeLessThan(100);
-    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(9400);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(
+      p.distance.at(-1)! - 100,
+    );
   });
 
   it("retains an earlier qualifying climb when a shallow uphill tail eventually dilutes its grade", () => {
@@ -213,4 +253,19 @@ describe("noteworthy climbs", () => {
     missingDistance[middle] = NaN;
     expect(detectClimbs(p.altitude, missingDistance)).toEqual([]);
   });
+
+  it.each(["altitude", "distance"] as const)(
+    "does not group qualifying climbs across missing %s",
+    (channel) => {
+      const p = terrain([
+        [0, 100],
+        [8000, 580],
+      ]);
+      p[channel][Math.floor(p[channel].length / 2)] = NaN;
+      const climbs = detectClimbs(p.altitude, p.distance);
+      expect(climbs).toHaveLength(2);
+      expect(climbs.map((climb) => climb.category)).toEqual(["3", "3"]);
+      expect(climbs[0].endIndex).toBeLessThan(climbs[1].startIndex);
+    },
+  );
 });

@@ -7,6 +7,11 @@ export interface DetectedClimb {
   category: "3" | "2" | "1" | "HC";
 }
 
+interface Candidate {
+  start: number;
+  end: number;
+}
+
 interface ProfilePoint {
   distance: number;
   altitude: number;
@@ -28,10 +33,12 @@ const DROP_FRACTION = 0.1;
  * Detect substantial valley-to-summit climbs, in recording order. Distance-based
  * median smoothing removes isolated altitude spikes. Hysteresis bridges small
  * dips. Flats stay inside a climb while the overall grade qualifies; a significant
- * descent or a flat/shallow tail that dilutes the grade ends it at its last
- * qualifying peak.
+ * descent or a flat/shallow tail that dilutes the grade ends a tentative section
+ * at its last qualifying peak.
  * These boundary heuristics are ours; Garmin publishes categories, not its full
- * extraction algorithm. Categorization uses smoothed net gain, never accumulated
+ * extraction algorithm. Tentative sections are grouped after the full ascent is
+ * known, so a shallow approach can rejoin the steeper mountain ahead.
+ * Categorization uses smoothed net gain, never accumulated
  * GPS noise. Returned indices still refer to the original, untouched recording.
  */
 export function detectClimbs(
@@ -45,42 +52,19 @@ export function detectClimbs(
   const finishRun = () => {
     if (run.length >= 3) {
       const profile = smoothProfile(run);
+      const candidates: Candidate[] = [];
       let valley = 0;
       let peak = 0;
       let nextValley = 0;
       let qualifyingPeak: number | null = null;
       const emit = (end = peak) => {
-        const a = profile[valley],
-          b = profile[end];
-        const length = distance[b.index] - distance[a.index];
-        const gain = b.altitude - a.altitude;
-        const grade = (100 * gain) / length;
-        // Algebraically length × grade, without rounding across category cutoffs.
-        const score = 100 * gain;
+        const climb = measureClimb(profile, distance, valley, end);
+        const previous = candidates.at(-1);
         if (
-          length < MIN_DISTANCE ||
-          grade < MIN_GRADE ||
-          score <= MIN_SCORE ||
-          !Number.isFinite(grade) ||
-          b.index <= a.index ||
-          a.index <= (climbs.at(-1)?.endIndex ?? -1)
+          climb &&
+          climb.startIndex > (previous ? profile[previous.end].index : -1)
         )
-          return;
-        climbs.push({
-          startIndex: a.index,
-          endIndex: b.index,
-          distance: length,
-          gain,
-          grade,
-          category:
-            score > 80_000
-              ? "HC"
-              : score > 64_000
-                ? "1"
-                : score > 32_000
-                  ? "2"
-                  : "3",
-        });
+          candidates.push({ start: valley, end });
       };
       for (let i = 1; i < profile.length; i++) {
         const point = profile[i];
@@ -122,6 +106,7 @@ export function detectClimbs(
         }
       }
       emit();
+      climbs.push(...groupClimbs(candidates, profile, distance));
     }
     run = [];
   };
@@ -142,6 +127,123 @@ export function detectClimbs(
   }
   finishRun();
   return climbs;
+}
+
+function measureClimb(
+  profile: ProfilePoint[],
+  distance: number[],
+  start: number,
+  end: number,
+): DetectedClimb | null {
+  const a = profile[start],
+    b = profile[end];
+  const length = distance[b.index] - distance[a.index];
+  const gain = b.altitude - a.altitude;
+  const grade = (100 * gain) / length;
+  // Algebraically length × grade, without rounding across category cutoffs.
+  const score = 100 * gain;
+  if (
+    length < MIN_DISTANCE ||
+    grade < MIN_GRADE ||
+    score <= MIN_SCORE ||
+    !Number.isFinite(grade) ||
+    b.index <= a.index
+  )
+    return null;
+  return {
+    startIndex: a.index,
+    endIndex: b.index,
+    distance: length,
+    gain,
+    grade,
+    category:
+      score > 80_000 ? "HC" : score > 64_000 ? "1" : score > 32_000 ? "2" : "3",
+  };
+}
+
+interface ElevationSummary {
+  min: number;
+  max: number;
+  drop: number;
+}
+
+function summarize(
+  profile: ProfilePoint[],
+  start: number,
+  end: number,
+): ElevationSummary {
+  let min = Infinity,
+    max = -Infinity,
+    drop = 0;
+  for (let i = start; i <= end; i++) {
+    const altitude = profile[i].altitude;
+    min = Math.min(min, altitude);
+    max = Math.max(max, altitude);
+    drop = Math.max(drop, max - altitude);
+  }
+  return { min, max, drop };
+}
+
+function combine(a: ElevationSummary, b: ElevationSummary): ElevationSummary {
+  return {
+    min: Math.min(a.min, b.min),
+    max: Math.max(a.max, b.max),
+    drop: Math.max(a.drop, b.drop, a.max - b.min),
+  };
+}
+
+/** Group the complete ascent first; partition at the strongest saddle only if it cannot qualify. */
+function groupClimbs(
+  candidates: Candidate[],
+  profile: ProfilePoint[],
+  distance: number[],
+): DetectedClimb[] {
+  if (candidates.length === 0) return [];
+  const bodies = candidates.map((c) => summarize(profile, c.start, c.end));
+  const gaps = candidates.slice(1).map((next, i) => {
+    const end = profile[candidates[i].end],
+      start = profile[next.start];
+    const summary = summarize(profile, candidates[i].end, next.start);
+    // Long flats and descents both separate efforts, measured in metres of
+    // elevation needed to maintain the minimum average gradient across the gap.
+    const deficit =
+      (MIN_GRADE * (distance[start.index] - distance[end.index])) / 100 -
+      (start.altitude - end.altitude);
+    return { summary, separation: Math.max(summary.drop, deficit) };
+  });
+  const result: DetectedClimb[] = [];
+  const pending: [number, number][] = [[0, candidates.length - 1]];
+  while (pending.length) {
+    const [first, last] = pending.pop()!;
+    const start = candidates[first].start,
+      end = candidates[last].end;
+    const climb = measureClimb(profile, distance, start, end);
+    let summary = bodies[first];
+    let split = first,
+      separation = -Infinity;
+    for (let i = first; i < last; i++) {
+      summary = combine(combine(summary, gaps[i].summary), bodies[i + 1]);
+      if (gaps[i].separation > separation) {
+        split = i;
+        separation = gaps[i].separation;
+      }
+    }
+    // The grouped interval must still run from its valley to its summit. Judge
+    // internal dips against the complete climb's gain, not the smaller approach.
+    if (
+      climb &&
+      (first === last ||
+        (summary.min >= profile[start].altitude &&
+          summary.max <= profile[end].altitude &&
+          summary.drop <= Math.max(MIN_DROP, climb.gain * DROP_FRACTION)))
+    ) {
+      result.push(climb);
+    } else if (first < last) {
+      // Left first, preserving chronological, disjoint output without recursion.
+      pending.push([split + 1, last], [first, split]);
+    }
+  }
+  return result;
 }
 
 function smoothProfile(raw: ProfilePoint[]): ProfilePoint[] {
