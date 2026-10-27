@@ -747,7 +747,10 @@ test("Fitness keeps full history and exposes a selected day's details", async ({
     page.getByRole("button", { name: "Planned: Tomorrow plan", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("All activities · full training history", { exact: true }),
+    page.getByText(
+      "Computed from all activities over your full training history.",
+      { exact: true },
+    ),
   ).toBeVisible();
 });
 
