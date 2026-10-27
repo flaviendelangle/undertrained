@@ -25,5 +25,40 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Activities",
+      "url": "/activities",
+      "icons": [
+        {
+          "src": "/icons/shortcut-activities.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Fitness",
+      "url": "/fitness",
+      "icons": [
+        {
+          "src": "/icons/shortcut-fitness.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Live Training",
+      "url": "/workouts/live",
+      "icons": [
+        {
+          "src": "/icons/shortcut-live-training.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }
