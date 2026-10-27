@@ -54,7 +54,7 @@ export function segmentProfile(
   const extent = points.at(-1)!.x;
   if (extent <= 0) return null;
   const segmentLength = distanceAxis
-    ? Math.max(50, tickStep(0, extent, 8))
+    ? Math.min(1000, Math.max(50, tickStep(0, extent, 8)))
     : null;
   const segments: SegmentProfileSegment[] = [];
   if (segmentLength) {
