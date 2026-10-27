@@ -63,15 +63,13 @@ const LoginPage: NextPageWithLayout = () => {
           </div>
 
           <button
-            className="group relative transition-transform hover:scale-105 active:scale-100"
+            className="transition-transform hover:scale-105 active:scale-100"
             onClick={() => signIn("strava", { callbackUrl })}
           >
-            <div className="absolute -inset-1 rounded-lg bg-[#FC4C02]/20 opacity-0 blur-md transition-opacity group-hover:opacity-100" />
             <Image
               priority
               src={stravaButton}
               alt={t("auth.loginWithStrava")}
-              className="relative"
             />
           </button>
 

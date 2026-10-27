@@ -93,11 +93,7 @@ export function SharedViewBar({ table = false }: { table?: boolean }) {
     </ToolbarPrimitive.Button>
   );
   const state = stateLabel && (
-    <span
-      role="status"
-      className="text-muted-foreground ml-auto flex items-center gap-1.5 text-xs"
-    >
-      <span className="size-1.5 rounded-full bg-amber-500" />
+    <span role="status" className="text-muted-foreground ml-auto text-xs">
       {stateLabel}
     </span>
   );

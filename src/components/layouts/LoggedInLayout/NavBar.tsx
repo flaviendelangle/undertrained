@@ -83,9 +83,6 @@ function NavBarLink({
       href={href}
       aria-current={isActive ? "page" : undefined}
     >
-      {isActive && (
-        <span className="bg-primary absolute top-1.5 bottom-1.5 left-0 w-0.75 rounded-r-full" />
-      )}
       <span className="relative">
         <Icon className="size-4.5 shrink-0" />
         {badge}

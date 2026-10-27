@@ -122,7 +122,8 @@ const fr: Messages = {
   fitnessPage: {
     chart: "Graphique de forme",
     title: "Forme",
-    source: "Toutes les activités · historique complet",
+    source:
+      "Calculé à partir de toutes les activités, sur tout l’historique d’entraînement.",
     selectedDay: "Jour sélectionné",
     today: "Aujourd’hui",
     load: "Charge du jour",
@@ -195,7 +196,7 @@ const fr: Messages = {
     empty: "Aucune activité pour le moment.",
     raceBadge: "Course",
     personalRecord: "Record personnel : {records}",
-    tierLoad: "Charge {tier} · {load}",
+    tierLoad: "Charge {tier} ({load})",
     moreActivities: { one: "+{count} autre", other: "+{count} autres" },
     load: "charge",
     deltaVsAverage:
@@ -1232,7 +1233,7 @@ const fr: Messages = {
         "Renseignez votre FTP actuelle dans les réglages pour adapter les intervalles de préparation.",
       ramp: {
         name: "Test FTP progressif",
-        duration: "Durée variable · 43 min maximum",
+        duration: "Durée variable, 43 min maximum",
         description:
           "5 min faciles, puis des paliers de 1 min à partir de 100 W, avec 20 W de plus par minute, jusqu’à 640 W. Arrêtez de pédaler lorsque vous ne pouvez plus tenir la cible. Après 10 s, la récupération de 10 min démarre. La FTP est estimée à 75 % de votre meilleure minute continue pendant les paliers.",
       },
