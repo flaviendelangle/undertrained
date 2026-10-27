@@ -41,7 +41,7 @@ const metric = (page: Page, label: string) =>
     .locator("dl > div")
     .filter({ has: page.locator("dt", { hasText: label }) })
     .locator("dd");
-async function dragProfile(page: Page, touch = false) {
+async function dragProfile(page: Page, touch = false, release = true) {
   const svg = profile(page);
   await svg.scrollIntoViewIfNeeded();
   const box = await svg.boundingBox();
@@ -68,7 +68,7 @@ async function dragProfile(page: Page, touch = false) {
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
     await page.mouse.move(end.x, end.y, { steps: 8 });
-    await page.mouse.up();
+    if (release) await page.mouse.up();
   }
 }
 async function expectSection(page: Page) {
@@ -132,6 +132,20 @@ test("links a profile section, route picking and stream selection while preservi
   await expect(
     explorer(page).getByText("0.40 km · 0:40 · 135 m", { exact: true }),
   ).toBeVisible();
+  await profile(page).dblclick({ position: { x: 100, y: 55 } });
+  await expect(section(page)).toHaveCount(0);
+  await expect(
+    page.getByRole("dialog", { name: "Route exploration" }),
+  ).toBeVisible();
+  await expect(
+    explorer(page).getByText("Drag to select a section", { exact: true }),
+  ).toBeVisible();
+  await dragProfile(page, false, false);
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(section(page)).toHaveCount(0);
+  await expect(profile(page)).toBeVisible();
+  await dragProfile(page);
   await explorer(page)
     .getByRole("button", { name: "Clear", exact: true })
     .click();
@@ -142,19 +156,37 @@ test("links a profile section, route picking and stream selection while preservi
     .getByRole("heading", { name: "Time Series", exact: true })
     .locator("..")
     .locator("..");
-  await streams.scrollIntoViewIfNeeded();
   const chart = streams.locator("svg").last();
-  const box = await chart.boundingBox();
-  if (!box) throw new Error("No stream bounds");
-  await page.mouse.move(box.x + 84 + (box.width - 156) / 6, box.y + 40);
-  await page.mouse.down();
-  await page.mouse.move(box.x + 84 + ((box.width - 156) * 4) / 6, box.y + 40, {
-    steps: 8,
-  });
-  await page.mouse.up();
-  await expect(
-    streams.getByRole("button", { name: "Reset zoom" }),
-  ).toBeVisible();
+  const selectStreamRange = async () => {
+    await chart.scrollIntoViewIfNeeded();
+    const box = await chart.boundingBox();
+    if (!box) throw new Error("No stream bounds");
+    await page.mouse.move(box.x + 84 + (box.width - 156) / 6, box.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(
+      box.x + 84 + ((box.width - 156) * 4) / 6,
+      box.y + 40,
+      { steps: 8 },
+    );
+    await page.mouse.up();
+    await expect(
+      streams.getByRole("button", { name: "Reset zoom" }),
+    ).toBeVisible();
+  };
+  for (const reset of ["double-click", "Escape"]) {
+    await selectStreamRange();
+    if (reset === "double-click")
+      await chart.dblclick({ position: { x: 120, y: 40 } });
+    else {
+      await chart.focus();
+      await page.keyboard.press("Escape");
+    }
+    await expect(section(page)).toHaveCount(0);
+    await expect(
+      streams.getByRole("button", { name: "Reset zoom" }),
+    ).toHaveCount(0);
+  }
+  await selectStreamRange();
   await streams.getByRole("button", { name: "Distance", exact: true }).click();
   await page.getByRole("button", { name: "Expand map", exact: true }).click();
   await expect(profile(page)).toBeVisible();
@@ -162,9 +194,26 @@ test("links a profile section, route picking and stream selection while preservi
   await expect(
     page.getByRole("dialog", { name: "Route exploration" }),
   ).toBeVisible();
+  await explorer(page).getByRole("button", { name: "Zoom to section" }).click();
+  await profile(page).focus();
+  await page.keyboard.press("Escape");
+  await expect(section(page)).toHaveCount(0);
+  await expect(profile(page)).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Route exploration" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(profile(page)).toBeVisible();
+  await dragProfile(page);
+  await expect(
+    explorer(page).getByRole("button", { name: "Zoom to section" }),
+  ).toBeVisible();
+  await profile(page).focus();
+  await page.keyboard.press("Escape");
+  // Only Escape outside the focused profile dismisses fullscreen.
+  await page.getByRole("button", { name: "Collapse map", exact: true }).focus();
   await page.keyboard.press("Escape");
   await expect(profile(page)).toHaveCount(0);
-  await expectSection(page);
   await expect(
     page.getByRole("button", { name: "Expand map", exact: true }),
   ).toBeFocused();
@@ -251,6 +300,12 @@ test("supports mobile touch selection and keyboard range handles", async ({
   await page.getByRole("button", { name: "Expand map", exact: true }).click();
   await expect(profile(page)).toBeVisible();
   await expectSection(page);
+  await explorer(page).getByRole("slider", { name: "Section start" }).focus();
+  await page.keyboard.press("Escape");
+  await expect(section(page)).toHaveCount(0);
+  await expect(profile(page)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(profile(page)).toBeVisible();
 });
 
 test("keeps a flat profile usable without GPS, distance or effort sensors", async ({

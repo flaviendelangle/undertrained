@@ -366,7 +366,7 @@ const fr: Messages = {
       elevation: "Profil d'altitude",
       drag: "Glissez pour sélectionner une section",
       keyboard:
-        "Utilisez les flèches pour examiner un point. Ajustez les poignées de début et de fin pour sélectionner une section.",
+        "Utilisez les flèches pour examiner un point. Ajustez les poignées de début et de fin pour sélectionner une section. Double-cliquez ou appuyez sur Échap pour effacer la sélection. Échap garde la carte en plein écran lorsque le profil a le focus.",
       start: "Début de la section",
       end: "Fin de la section",
       selected: "Section sélectionnée",
@@ -766,7 +766,7 @@ const fr: Messages = {
     },
     streams: {
       title: "Chronologie",
-      hint: "Fréquence cardiaque, puissance, cadence, vitesse, altitude et température tracées en fonction du temps ou de la distance. Survolez pour voir toutes les métriques à un point précis. Basculez l'axe X entre temps et distance.",
+      hint: "Fréquence cardiaque, puissance, cadence, vitesse, altitude et température tracées en fonction du temps ou de la distance. Survolez pour voir toutes les métriques à un point précis. Basculez l'axe X entre temps et distance. Double-cliquez ou appuyez sur Échap pour effacer la sélection et réinitialiser le zoom.",
       loading: "Chargement des données…",
       empty: "Aucune donnée disponible pour cette activité.",
       loadError: "Échec du chargement des données : {error}",

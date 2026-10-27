@@ -362,7 +362,7 @@ const en = {
       elevation: "Elevation profile",
       drag: "Drag to select a section",
       keyboard:
-        "Use arrow keys to inspect a point. Adjust the start and end handles to select a section.",
+        "Use arrow keys to inspect a point. Adjust the start and end handles to select a section. Double-click or press Escape to clear the selection. Escape keeps the fullscreen map open while the profile has focus.",
       start: "Section start",
       end: "Section end",
       selected: "Selected section",
@@ -749,7 +749,7 @@ const en = {
     },
     streams: {
       title: "Time Series",
-      hint: "Heart rate, power, cadence, speed, altitude, and temperature plotted over time or distance. Hover to see all metrics at a specific point. Toggle the X-axis between time and distance.",
+      hint: "Heart rate, power, cadence, speed, altitude, and temperature plotted over time or distance. Hover to see all metrics at a specific point. Toggle the X-axis between time and distance. Double-click or press Escape to clear the selection and reset zoom.",
       loading: "Loading stream data...",
       empty: "No stream data available for this activity.",
       loadError: "Failed to load streams: {error}",

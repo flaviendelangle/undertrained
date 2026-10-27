@@ -27,6 +27,7 @@ interface ElevationProfileProps {
   onCursorChange: (time: number | null) => void;
   onPinTime: (time: number) => void;
   onRangeChange: (range: RecordingRange) => void;
+  onClear: () => void;
 }
 
 export function ElevationProfile({
@@ -38,6 +39,7 @@ export function ElevationProfile({
   onCursorChange,
   onPinTime,
   onRangeChange,
+  onClear,
 }: ElevationProfileProps) {
   const t = useT();
   const ref = React.useRef<HTMLDivElement>(null);
@@ -134,6 +136,11 @@ export function ElevationProfile({
   const formatX = (value: number) =>
     distances ? formatKm(value, 2) : formatElapsed(value);
   const values = selection ? selection.map((i) => xData[i]) : [min, max];
+  const resetSelection = () => {
+    drag.current = null;
+    setPreviewRange(null);
+    onClear();
+  };
 
   if (n < 2 || max <= min) return <div ref={ref} />;
 
@@ -142,6 +149,14 @@ export function ElevationProfile({
       ref={ref}
       className="bg-card border-border shrink-0 border-t"
       aria-label={t("activities.inspection.elevation")}
+      onKeyDownCapture={(event) => {
+        if (event.key !== "Escape") return;
+        // The profile owns Escape, including when a range handle has focus.
+        // Keep it out of the surrounding fullscreen dialog's dismissal handler.
+        event.preventDefault();
+        event.stopPropagation();
+        resetSelection();
+      }}
     >
       <div
         className="text-muted-foreground grid min-h-10 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 pt-2 text-xs tabular-nums"
@@ -161,9 +176,11 @@ export function ElevationProfile({
         tabIndex={0}
         aria-label={t("activities.inspection.elevation")}
         aria-describedby={id + "-help"}
+        aria-keyshortcuts="Escape"
         className="focus-visible:ring-ring block touch-pan-y outline-none select-none focus-visible:ring-2 focus-visible:ring-inset"
         onPointerDown={(event) => {
           if (event.button !== 0 || !plotWidth) return;
+          event.currentTarget.focus({ preventScroll: true });
           const index = eventIndex(event);
           drag.current = { index, x: event.clientX, moved: false };
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -201,6 +218,7 @@ export function ElevationProfile({
         onPointerLeave={() => {
           if (!drag.current) onCursorChange(null);
         }}
+        onDoubleClick={resetSelection}
         onKeyDown={(event) => {
           if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
             return;

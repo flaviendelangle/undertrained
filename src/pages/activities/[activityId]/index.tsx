@@ -92,11 +92,11 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
     },
     [recording],
   );
-  const clearInspection = () => {
+  const clearInspection = React.useCallback(() => {
     setRange(null);
     setHoverTime(null);
     setPinnedTime(null);
-  };
+  }, []);
 
   const hiddenStreams = React.useMemo(() => {
     if (!activity) return [];
@@ -260,6 +260,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
               onHoverTimeChange={setHoverTime}
               onInspectTime={pinTime}
               onRangeChange={selectRange}
+              onClear={clearInspection}
               hiddenStreams={hiddenStreams}
             />
             <ActivityLaps

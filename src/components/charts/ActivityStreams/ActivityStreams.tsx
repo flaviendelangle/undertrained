@@ -89,6 +89,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
     onHoverTimeChange,
     onInspectTime,
     onRangeChange,
+    onClear,
   } = props;
   const t = useT();
   const streamDefs = React.useMemo(() => createStreamDefs(t), [t]);
@@ -258,6 +259,7 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
         onHoverIndexChange={onHoverTimeChange}
         onInspectTime={onInspectTime}
         onRangeChange={onRangeChange}
+        onClear={onClear}
       />
     </ChartCard>
   );
@@ -270,5 +272,6 @@ interface ActivityStreamsProps {
   onHoverTimeChange?: (time: number | null) => void;
   onInspectTime?: (time: number) => void;
   onRangeChange?: (range: RecordingRange) => void;
+  onClear?: () => void;
   hiddenStreams?: string[];
 }

@@ -47,4 +47,5 @@ export interface MultiPanelChartProps {
   selectedRange?: RecordingRange | null;
   onInspectTime?: (time: number) => void;
   onRangeChange?: (range: RecordingRange) => void;
+  onClear?: () => void;
 }

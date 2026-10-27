@@ -123,6 +123,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     selectedRange,
     onInspectTime,
     onRangeChange,
+    onClear,
   } = props;
   const t = useT();
   const tokens = useChartTokens();
@@ -312,6 +313,7 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
       const svgX = getSvgX(e);
       if (e.button !== 0 || svgX === null || svgX < 0 || svgX > drawingWidth)
         return;
+      e.currentTarget.focus({ preventScroll: true });
       e.currentTarget.setPointerCapture(e.pointerId);
       hoverFrame.cancel();
       const x = clamp(svgX, 0, drawingWidth);
@@ -425,9 +427,15 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
     onHoverIndexChange?.(null);
   }, [hoverFrame, onHoverIndexChange]);
 
-  const handleDoubleClick = React.useCallback(() => {
+  const resetSelection = React.useCallback(() => {
+    hoverFrame.cancel();
+    setDragStart(null);
+    setDragCurrent(null);
+    setHoverIndex(null);
     setZoomDomain(null);
-  }, []);
+    onHoverIndexChange?.(null);
+    onClear?.();
+  }, [hoverFrame, onHoverIndexChange, onClear]);
 
   // Format x-axis value
   const formatX = React.useCallback(
@@ -479,7 +487,16 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
       : null;
 
   return (
-    <div ref={containerRef} className="relative w-full">
+    <div
+      ref={containerRef}
+      className="relative w-full"
+      onKeyDownCapture={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        resetSelection();
+      }}
+    >
       {zoomDomain && (
         <Button
           variant="ghost"
@@ -509,7 +526,11 @@ export function MultiPanelChart(props: MultiPanelChartProps) {
         onPointerUp={handleMouseUp}
         onPointerLeave={handleMouseLeave}
         onPointerCancel={handleMouseLeave}
-        onDoubleClick={handleDoubleClick}
+        onDoubleClick={resetSelection}
+        tabIndex={0}
+        role="group"
+        aria-label={t("charts.streams.title")}
+        aria-keyshortcuts="Escape"
         className="relative touch-pan-y select-none"
         style={{ background: "transparent" }}
       >

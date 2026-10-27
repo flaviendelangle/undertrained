@@ -44,6 +44,12 @@ export function ActivityRouteExplorer({
   const t = useT();
   const [expanded, setExpanded] = React.useState(false);
   const [fitSelection, setFitSelection] = React.useState(false);
+  // A reset from the stream charts also leaves the section-fitting mode.
+  if (!range && fitSelection) setFitSelection(false);
+  const clearSelection = React.useCallback(() => {
+    setFitSelection(false);
+    onClear();
+  }, [onClear]);
   const expandButton = React.useRef<HTMLButtonElement>(null);
   const positions = React.useMemo(() => {
     const data = recording?.samples.latlng;
@@ -203,6 +209,7 @@ export function ActivityRouteExplorer({
             onCursorChange={onCursorChange}
             onPinTime={onPinTime}
             onRangeChange={onRangeChange}
+            onClear={clearSelection}
           />
         )}
         {range && (
@@ -219,14 +226,7 @@ export function ActivityRouteExplorer({
                   {`${formatElapsed(range[0])} – ${formatElapsed(range[1])}`}
                 </span>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setFitSelection(false);
-                  onClear();
-                }}
-              >
+              <Button variant="ghost" size="sm" onClick={clearSelection}>
                 <XIcon />
                 {t("activities.inspection.clear")}
               </Button>
