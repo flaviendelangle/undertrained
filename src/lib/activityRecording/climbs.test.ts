@@ -177,7 +177,82 @@ describe("noteworthy climbs", () => {
     );
   });
 
-  it("retains an earlier qualifying climb when a shallow uphill tail eventually dilutes its grade", () => {
+  it.each([10, 100])(
+    "trims shallow approaches and runouts before categorizing the climb at %i m sampling",
+    (step) => {
+      const p = terrain(
+        [
+          [0, 100],
+          [2000, 120],
+          [2250, 140],
+          [10_000, 200],
+          [20_000, 900],
+          [30_000, 1000],
+        ],
+        step,
+      );
+      const climbs = detectClimbs(p.altitude, p.distance);
+      expect(climbs).toHaveLength(1);
+      expect(p.distance[climbs[0].startIndex]).toBeCloseTo(10_000, -2);
+      expect(p.distance[climbs[0].endIndex]).toBeCloseTo(20_000, -2);
+      expect(climbs[0].category).toBe("1");
+      expect(climbs[0].gain).toBeCloseTo(700, 0);
+      expect(climbs[0].grade).toBeCloseTo(7, 1);
+    },
+  );
+
+  it("keeps a qualifying first ramp across an internal flat when trimming the outer edges", () => {
+    const p = terrain([
+      [0, 100],
+      [4000, 340],
+      [14_000, 340],
+      [30_000, 1300],
+    ]);
+    const climbs = detectClimbs(p.altitude, p.distance);
+    expect(climbs).toHaveLength(1);
+    expect(p.distance[climbs[0].startIndex]).toBeLessThan(100);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(29_900);
+  });
+
+  it("does not let a shallow approach hide a qualifying sustained climb", () => {
+    const p = terrain([
+      [0, 100],
+      [10_000, 200],
+      [14_000, 440],
+    ]);
+    const climbs = detectClimbs(p.altitude, p.distance);
+    expect(climbs).toHaveLength(1);
+    expect(p.distance[climbs[0].startIndex]).toBeCloseTo(10_000, -2);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(13_900);
+    expect(climbs[0].category).toBe("3");
+  });
+
+  it("keeps a ramp that falls below Cat 3 after trimming when it joins the main ascent", () => {
+    const p = terrain([
+      [0, 100],
+      [4000, 180],
+      [6000, 300],
+      [6500, 290],
+      [15_500, 830],
+    ]);
+    const climbs = detectClimbs(p.altitude, p.distance);
+    expect(climbs).toHaveLength(1);
+    expect(p.distance[climbs[0].startIndex]).toBeCloseTo(4000, -2);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(15_400);
+    expect(climbs[0].category).toBe("1");
+  });
+
+  it("excludes a climb whose sustained core falls below Cat 3 after trimming its shallow approach", () => {
+    const p = terrain([
+      [0, 100],
+      [2000, 130],
+      [4500, 280],
+      [5000, 280],
+    ]);
+    expect(detectClimbs(p.altitude, p.distance)).toEqual([]);
+  });
+
+  it("ends a sustained climb before a shallow uphill tail", () => {
     const p = terrain([
       [0, 100],
       [4000, 340],
@@ -187,8 +262,8 @@ describe("noteworthy climbs", () => {
     expect(climbs).toHaveLength(1);
     expect(climbs[0].category).toBe("3");
     expect(climbs[0].grade).toBeGreaterThanOrEqual(3);
-    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(9000);
-    expect(p.distance[climbs[0].endIndex]).toBeLessThan(11_000);
+    expect(p.distance[climbs[0].endIndex]).toBeGreaterThan(3900);
+    expect(p.distance[climbs[0].endIndex]).toBeLessThan(4100);
   });
 
   it("removes isolated altitude spikes, including at the end of a flat recording", () => {

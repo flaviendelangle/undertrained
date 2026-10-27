@@ -28,6 +28,7 @@ const SAMPLE_DISTANCE = 25;
 const MAX_RESAMPLED_POINTS = 20_000;
 const MIN_DROP = 20;
 const DROP_FRACTION = 0.1;
+const MIN_EDGE_DEFICIT = 20;
 
 /**
  * Detect substantial valley-to-summit climbs, in recording order. Distance-based
@@ -36,8 +37,9 @@ const DROP_FRACTION = 0.1;
  * descent or a flat/shallow tail that dilutes the grade ends a tentative section
  * at its last qualifying peak.
  * These boundary heuristics are ours; Garmin publishes categories, not its full
- * extraction algorithm. Tentative sections are grouped after the full ascent is
- * known, so a shallow approach can rejoin the steeper mountain ahead.
+ * extraction algorithm. Tentative sections qualify either as a whole or after
+ * edge trimming. Group them before final trimming and classification so an
+ * approach ramp can still rejoin the main ascent across a flat or saddle.
  * Categorization uses smoothed net gain, never accumulated
  * GPS noise. Returned indices still refer to the original, untouched recording.
  */
@@ -58,13 +60,21 @@ export function detectClimbs(
       let nextValley = 0;
       let qualifyingPeak: number | null = null;
       const emit = (end = peak) => {
-        const climb = measureClimb(profile, distance, valley, end);
+        const candidate = { start: valley, end };
+        let climb = measureClimb(profile, distance, valley, end);
+        if (!climb) {
+          // A long shallow approach must not hide a qualifying climb. Retain
+          // the original bounds until grouping so trimming cannot discard an
+          // approach ramp that only qualifies together with the main ascent.
+          const trimmed = trimEdges(profile, candidate, candidate);
+          climb = measureClimb(profile, distance, trimmed.start, trimmed.end);
+        }
         const previous = candidates.at(-1);
         if (
           climb &&
           climb.startIndex > (previous ? profile[previous.end].index : -1)
         )
-          candidates.push({ start: valley, end });
+          candidates.push(candidate);
       };
       for (let i = 1; i < profile.length; i++) {
         const point = profile[i];
@@ -192,6 +202,33 @@ function combine(a: ElevationSummary, b: ElevationSummary): ElevationSummary {
   };
 }
 
+/** Remove shallow outer edges, preserving the ramps and saddles inside a group. */
+function trimEdges(
+  profile: ProfilePoint[],
+  first: Candidate,
+  last: Candidate,
+): Candidate {
+  // Subtract a 3% baseline. A falling value means the interval averages below
+  // 3%; its minimum marks the foot of the sustained climb, its maximum the top.
+  // Require 20 m of deficit to avoid moving boundaries for small flattenings
+  // and altitude noise. This is our boundary policy, not a published GPS algorithm.
+  const excess = (i: number) =>
+    profile[i].altitude - (MIN_GRADE * profile[i].distance) / 100;
+  let start = first.start,
+    end = last.end,
+    foot = start,
+    summit = end;
+  // Search only the outer tentative sections. Searching the complete group
+  // could discard a real first ramp because of a long flat inside the climb.
+  for (let i = start + 1; i <= first.end; i++)
+    if (excess(i) < excess(foot)) foot = i;
+  if (excess(start) - excess(foot) >= MIN_EDGE_DEFICIT) start = foot;
+  for (let i = Math.max(start, last.start); i < end; i++)
+    if (excess(i) > excess(summit)) summit = i;
+  if (excess(summit) - excess(end) >= MIN_EDGE_DEFICIT) end = summit;
+  return { start, end };
+}
+
 /** Group the complete ascent first; partition at the strongest saddle only if it cannot qualify. */
 function groupClimbs(
   candidates: Candidate[],
@@ -217,7 +254,8 @@ function groupClimbs(
     const [first, last] = pending.pop()!;
     const start = candidates[first].start,
       end = candidates[last].end;
-    const climb = measureClimb(profile, distance, start, end);
+    const trimmed = trimEdges(profile, candidates[first], candidates[last]);
+    const climb = measureClimb(profile, distance, trimmed.start, trimmed.end);
     let summary = bodies[first];
     let split = first,
       separation = -Infinity;
