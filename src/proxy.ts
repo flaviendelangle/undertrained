@@ -32,7 +32,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
+  // The web app manifest and its icons stay public: browsers fetch the
+  // manifest without cookies, so the auth redirect would break installing.
   matcher: [
-    "/((?!login|privacy|toolbox|api|ingest|_next/static|_next/image|favicon.svg|sitemap.xml|robots.txt).*)",
+    "/((?!login|privacy|toolbox|api|ingest|_next/static|_next/image|favicon.svg|manifest.webmanifest|icons/|sitemap.xml|robots.txt).*)",
   ],
 };
