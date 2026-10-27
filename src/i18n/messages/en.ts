@@ -357,6 +357,22 @@ const en = {
     },
   },
   activities: {
+    inspection: {
+      title: "Route exploration",
+      elevation: "Elevation profile",
+      drag: "Drag to select a section",
+      keyboard:
+        "Use arrow keys to inspect a point. Adjust the start and end handles to select a section.",
+      start: "Section start",
+      end: "Section end",
+      selected: "Selected section",
+      clear: "Clear",
+      ascent: "Ascent",
+      grade: "Avg gradient",
+      focus: "Zoom to section",
+      wholeRoute: "Show whole route",
+      resetZoom: "Reset zoom",
+    },
     pageTitle: "Activities",
     name: "Name",
     notFound: "Activity not found",

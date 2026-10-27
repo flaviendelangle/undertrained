@@ -1,3 +1,4 @@
+import type { RecordingRange } from "~/lib/activityRecording/selection";
 import type { SportConfig } from "~/utils/sportConfig";
 
 export type XAxisMode = "time" | "distance";
@@ -42,4 +43,8 @@ export interface MultiPanelChartProps {
   xAxisMode: XAxisMode;
   sportConfig: SportConfig | null;
   onHoverIndexChange?: (index: number | null) => void;
+  cursorIndex?: number | null;
+  selectedRange?: RecordingRange | null;
+  onInspectTime?: (time: number) => void;
+  onRangeChange?: (range: RecordingRange) => void;
 }

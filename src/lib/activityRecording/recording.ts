@@ -29,6 +29,8 @@ const NUMERIC_CHANNELS: readonly NumericChannel[] = [
 ];
 
 export interface ActivityRecording {
+  /** Elapsed seconds of each recorded sample, before expansion to 1 Hz. */
+  sampleTimes: number[];
   /**
    * One entry per recorded sample, as Strava stores them. For views drawn
    * against distance or position: the map and the elevation profile.
@@ -69,7 +71,16 @@ export function decodeRecording(streams: EncodedStreams): ActivityRecording {
   samples.latlng = decodeChannel("latlng") as [number, number][] | undefined;
 
   if (!time) {
-    return { samples, perSecond: samples };
+    const length = Math.max(
+      0,
+      samples.latlng?.length ?? 0,
+      ...NUMERIC_CHANNELS.map((type) => samples[type]?.length ?? 0),
+    );
+    return {
+      sampleTimes: Array.from({ length }, (_, i) => i),
+      samples,
+      perSecond: samples,
+    };
   }
 
   const perSecond: RecordingChannels = {};
@@ -82,7 +93,7 @@ export function decodeRecording(streams: EncodedStreams): ActivityRecording {
     perSecond.latlng = perSecondSampleIndices(time).map((i) => latlng[i]);
   }
 
-  return { samples, perSecond };
+  return { sampleTimes: time, samples, perSecond };
 }
 
 /**

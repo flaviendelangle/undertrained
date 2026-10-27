@@ -19,6 +19,7 @@ import { useExplorerTilesToggle } from "~/hooks/useExplorerTilesToggle";
 import { TILE_PROVIDERS, useTileStyle } from "~/hooks/useTileStyle";
 import { useChartTokens } from "~/lib/chartTokens";
 import { type LatLngTuple, decode } from "~/utils/polyline";
+import { nearestRouteIndex, routeSegments } from "~/utils/routeGeometry";
 
 import { ExplorerTilesLayer } from "./ExplorerTilesLayer";
 import { ExplorerTilesStats } from "./ExplorerTilesStats";
@@ -84,6 +85,11 @@ export default function Map(props: MapProps) {
     interactive = true,
     onReady,
     routePositions,
+    selectedRoute,
+    onRouteHover,
+    onRouteSelect,
+    fitSelectedRoute = false,
+    scrollWheelZoom = true,
     zoomControl = true,
   } = props;
   const { showExplorerTiles } = useExplorerTilesToggle();
@@ -139,7 +145,10 @@ export default function Map(props: MapProps) {
 
   const polylines = React.useMemo(() => {
     if (routePositions) {
-      return [{ id: "latlng", polyline: routePositions }];
+      return routeSegments(routePositions).map((polyline, index) => ({
+        id: `latlng-${index}`,
+        polyline,
+      }));
     }
     return decodedActivityPolylines ?? [];
   }, [decodedActivityPolylines, routePositions]);
@@ -147,6 +156,11 @@ export default function Map(props: MapProps) {
   // Which polylines drive the initial zoom/position. "all" fits every route;
   // "last" fits only the most recent activity so it's fully visible.
   const fitPolylines = React.useMemo(() => {
+    if (fitSelectedRoute && selectedRoute?.length)
+      return selectedRoute.map((polyline, index) => ({
+        id: `selection-${index}`,
+        polyline,
+      }));
     if (fitMode !== "last") {
       return polylines;
     }
@@ -161,7 +175,13 @@ export default function Map(props: MapProps) {
       }
     }
     return latest ? [latest] : polylines;
-  }, [fitMode, polylines, decodedActivityPolylines]);
+  }, [
+    fitMode,
+    polylines,
+    decodedActivityPolylines,
+    fitSelectedRoute,
+    selectedRoute,
+  ]);
 
   // Clicking a route opens a tooltip identifying which activity it belongs to.
   // That's only meaningful when several routes are drawn together (e.g. the
@@ -199,7 +219,7 @@ export default function Map(props: MapProps) {
         attributionControl={false}
         dragging={interactive && dragging}
         zoomControl={interactive && zoomControl}
-        scrollWheelZoom={interactive}
+        scrollWheelZoom={interactive && scrollWheelZoom}
         doubleClickZoom={interactive}
         touchZoom={interactive}
         boxZoom={interactive}
@@ -240,32 +260,82 @@ export default function Map(props: MapProps) {
               pathOptions={{
                 color,
                 weight: heatmapStyle ? 2 : 4,
-                opacity: heatmapStyle ? 0.5 : 1,
-                className: enableActivityClick ? "cursor-pointer" : undefined,
+                opacity: selectedRoute ? 0.3 : heatmapStyle ? 0.5 : 1,
+                className:
+                  enableActivityClick || onRouteSelect
+                    ? "cursor-pointer"
+                    : undefined,
               }}
               eventHandlers={
-                enableActivityClick && "activity" in entry
+                routePositions && (onRouteHover || onRouteSelect)
                   ? {
+                      mousemove: (e) =>
+                        onRouteHover?.(
+                          nearestRouteIndex(
+                            routePositions,
+                            e.latlng.lat,
+                            e.latlng.lng,
+                          ),
+                        ),
+                      mouseout: () => onRouteHover?.(null),
                       click: (e) => {
-                        const { clientX, clientY } = e.originalEvent;
-                        setSelectedActivity({
-                          activity: (entry as { activity: MapActivity })
-                            .activity,
-                          position: { x: clientX, y: clientY },
-                        });
+                        const index = nearestRouteIndex(
+                          routePositions,
+                          e.latlng.lat,
+                          e.latlng.lng,
+                        );
+                        if (index != null) onRouteSelect?.(index);
                       },
                     }
-                  : undefined
+                  : enableActivityClick && "activity" in entry
+                    ? {
+                        click: (e) => {
+                          const { clientX, clientY } = e.originalEvent;
+                          setSelectedActivity({
+                            activity: (entry as { activity: MapActivity })
+                              .activity,
+                            position: { x: clientX, y: clientY },
+                          });
+                        },
+                      }
+                    : undefined
               }
             />
           );
         })}
+        {selectedRoute?.map((positions, index) => (
+          <Polyline
+            key={`selection-${index}`}
+            positions={positions}
+            interactive={false}
+            pathOptions={{ color: tokens.accent, weight: 6, opacity: 1 }}
+          />
+        ))}
+        {selectedRoute &&
+          [selectedRoute[0]?.[0], selectedRoute.at(-1)?.at(-1)].map(
+            (position, index) =>
+              position && (
+                <CircleMarker
+                  key={`boundary-${index}`}
+                  center={position}
+                  radius={5}
+                  interactive={false}
+                  pathOptions={{
+                    color: tokens.cardBg,
+                    fillColor: tokens.accent,
+                    fillOpacity: 1,
+                    weight: 2,
+                  }}
+                />
+              ),
+          )}
         {highlightPosition && (
           // "You are here" marker — brand teal fill with a card-colored ring,
           // the same treatment as the WebGL charts' crosshair dot.
           <CircleMarker
             center={highlightPosition}
             radius={6}
+            interactive={false}
             pathOptions={{
               color: tokens.cardBg,
               fillColor: tokens.accent,
@@ -322,6 +392,12 @@ interface MapProps {
   /** Called once the view is fitted and its tiles have finished loading. */
   onReady?: () => void;
   routePositions?: [number, number][] | null;
+  /** An inspected section, drawn above the full route. Gaps remain separate. */
+  selectedRoute?: [number, number][][] | null;
+  onRouteHover?: (index: number | null) => void;
+  onRouteSelect?: (index: number) => void;
+  fitSelectedRoute?: boolean;
+  scrollWheelZoom?: boolean;
   /** Whether to show Leaflet's zoom +/- buttons. Defaults to `true`. */
   zoomControl?: boolean;
 }

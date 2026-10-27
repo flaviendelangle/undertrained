@@ -9,6 +9,7 @@ import {
   type NumericChannel,
   useActivityRecording,
 } from "~/lib/activityRecording";
+import type { RecordingRange } from "~/lib/activityRecording/selection";
 import { useChartTokens } from "~/lib/chartTokens";
 import { getSportConfig } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
@@ -80,7 +81,15 @@ const createStreamDefs = (t: TFunction): StreamDef[] => [
 ];
 
 export default function ActivityStreams(props: ActivityStreamsProps) {
-  const { stravaId, onHoverPositionChange, hiddenStreams } = props;
+  const {
+    stravaId,
+    hiddenStreams,
+    cursorTime,
+    selectedRange,
+    onHoverTimeChange,
+    onInspectTime,
+    onRangeChange,
+  } = props;
   const t = useT();
   const streamDefs = React.useMemo(() => createStreamDefs(t), [t]);
   const tokens = useChartTokens();
@@ -88,21 +97,6 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
   const { data: activity } = trpc.activities.get.useQuery({ stravaId });
   const { recording, error: fetchError } = useActivityRecording(stravaId);
   const [xAxisMode, setXAxisMode] = React.useState<XAxisMode>("time");
-
-  // Every panel is drawn per second, so a hovered index is a second too.
-  const latlngData = recording?.perSecond.latlng ?? null;
-
-  const handleHoverIndexChange = React.useCallback(
-    (index: number | null) => {
-      if (!onHoverPositionChange) return;
-      if (index === null || !latlngData) {
-        onHoverPositionChange(null);
-      } else {
-        onHoverPositionChange(latlngData[index] ?? null);
-      }
-    },
-    [latlngData, onHoverPositionChange],
-  );
 
   // Per-panel stats — only re-run when the recording changes
   const parsedStreams = React.useMemo(() => {
@@ -259,7 +253,11 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
         distanceData={distanceData}
         xAxisMode={xAxisMode}
         sportConfig={sportConfig}
-        onHoverIndexChange={handleHoverIndexChange}
+        cursorIndex={cursorTime}
+        selectedRange={selectedRange}
+        onHoverIndexChange={onHoverTimeChange}
+        onInspectTime={onInspectTime}
+        onRangeChange={onRangeChange}
       />
     </ChartCard>
   );
@@ -267,6 +265,10 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
 
 interface ActivityStreamsProps {
   stravaId: number;
-  onHoverPositionChange?: (position: [number, number] | null) => void;
+  cursorTime?: number | null;
+  selectedRange?: RecordingRange | null;
+  onHoverTimeChange?: (time: number | null) => void;
+  onInspectTime?: (time: number) => void;
+  onRangeChange?: (range: RecordingRange) => void;
   hiddenStreams?: string[];
 }

@@ -17,7 +17,11 @@ export interface ActivityRecordingResult {
 }
 
 /** For an activity whose Strava fetch found nothing this page can chart. */
-const EMPTY_RECORDING: ActivityRecording = { samples: {}, perSecond: {} };
+const EMPTY_RECORDING: ActivityRecording = {
+  sampleTimes: [],
+  samples: {},
+  perSecond: {},
+};
 
 // Every card on the activity page reads the same query data: decode each
 // payload once, not once per card.

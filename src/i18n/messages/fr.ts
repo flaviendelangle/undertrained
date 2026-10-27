@@ -361,6 +361,22 @@ const fr: Messages = {
     },
   },
   activities: {
+    inspection: {
+      title: "Exploration du parcours",
+      elevation: "Profil d'altitude",
+      drag: "Glissez pour sélectionner une section",
+      keyboard:
+        "Utilisez les flèches pour examiner un point. Ajustez les poignées de début et de fin pour sélectionner une section.",
+      start: "Début de la section",
+      end: "Fin de la section",
+      selected: "Section sélectionnée",
+      clear: "Effacer",
+      ascent: "Dénivelé positif",
+      grade: "Pente moyenne",
+      focus: "Zoomer sur la section",
+      wholeRoute: "Afficher tout le parcours",
+      resetZoom: "Réinitialiser le zoom",
+    },
     pageTitle: "Activités",
     name: "Nom",
     notFound: "Activité introuvable",

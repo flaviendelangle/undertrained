@@ -1,20 +1,13 @@
 import * as React from "react";
 
-import {
-  ActivityIcon,
-  FlagIcon,
-  ListIcon,
-  Maximize2,
-  Minimize2,
-} from "lucide-react";
+import { ActivityIcon, FlagIcon, ListIcon } from "lucide-react";
 import { useRouter } from "next/router";
 
 import { ActivityActionsMenu } from "~/components/ActivityActionsMenu";
-import { ActivityMap } from "~/components/ActivityMap";
 import { ActivityStats } from "~/components/ActivityStats";
 import { EditActivityButton } from "~/components/EditActivityDialog";
-import { ElevationProfile } from "~/components/ElevationProfile";
 import { PageTitle } from "~/components/PageTitle";
+import { ActivityRouteExplorer } from "~/components/activity/ActivityRouteExplorer";
 import { ActivityLaps } from "~/components/charts/ActivityLaps";
 import { ActivityStreams } from "~/components/charts/ActivityStreams";
 import { PaceCard } from "~/components/charts/PaceCard";
@@ -29,8 +22,13 @@ import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { useActivityRecording } from "~/lib/activityRecording";
+import {
+  type RecordingRange,
+  recordingRange,
+} from "~/lib/activityRecording/selection";
 import { NextPageWithLayout } from "~/pages/_app";
 import { readReturnTo } from "~/utils/activityLinks";
+import { isRoutePosition } from "~/utils/routeGeometry";
 import {
   getSportConfig,
   supportsAnalysis,
@@ -50,7 +48,7 @@ const ActivityPage: NextPageWithLayout = () => {
 
   return (
     <React.Suspense fallback={<ActivityPageSkeleton />}>
-      <ActivityPageContent stravaId={stravaId} />
+      <ActivityPageContent key={stravaId} stravaId={stravaId} />
     </React.Suspense>
   );
 };
@@ -61,22 +59,24 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   const scope = useActivityView();
   const backHref = readReturnTo(router.query) ?? scope.href("/activities");
 
-  const [hoverPosition, setHoverPosition] = React.useState<
-    [number, number] | null
-  >(null);
-  const [mapExpanded, setMapExpanded] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!mapExpanded) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMapExpanded(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mapExpanded]);
-
+  const [hoverTime, setHoverTime] = React.useState<number | null>(null);
+  const [pinnedTime, setPinnedTime] = React.useState<number | null>(null);
+  const [range, setRange] = React.useState<RecordingRange | null>(null);
+  const cursorTime = hoverTime ?? pinnedTime;
+  const pinTime = React.useCallback((time: number) => {
+    setHoverTime(null);
+    setPinnedTime(time);
+  }, []);
   const [activity] = trpc.activities.get.useSuspenseQuery({ stravaId });
   const { recording } = useActivityRecording(stravaId);
+  const [inspectionRecording, setInspectionRecording] =
+    React.useState(recording);
+  if (inspectionRecording !== recording) {
+    setInspectionRecording(recording);
+    setRange(null);
+    setHoverTime(null);
+    setPinnedTime(null);
+  }
   useRememberRecentItem(
     activity && {
       kind: "activity",
@@ -86,12 +86,17 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
       startDateLocal: activity.startDateLocal,
     },
   );
-
-  // The map and the elevation profile are drawn against position and distance,
-  // so they take the samples as recorded rather than per second.
-  const latlngRoute = recording?.samples.latlng ?? null;
-  const altitudeData = recording?.samples.altitude ?? null;
-  const distanceData = recording?.samples.distance ?? null;
+  const selectRange = React.useCallback(
+    (value: RecordingRange) => {
+      if (recording) setRange(recordingRange(recording, ...value));
+    },
+    [recording],
+  );
+  const clearInspection = () => {
+    setRange(null);
+    setHoverTime(null);
+    setPinnedTime(null);
+  };
 
   const hiddenStreams = React.useMemo(() => {
     if (!activity) return [];
@@ -116,7 +121,9 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
     );
   }
 
-  const hasMap = !!activity.mapPolyline;
+  const hasMap =
+    !!activity.mapPolyline ||
+    !!recording?.samples.latlng?.some(isRoutePosition);
   const isRace = workoutKind(activity.workoutType) === "race";
   const hasNotes = !!activity.description || !!activity.privateNote;
   const hasPower =
@@ -205,49 +212,17 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {hasMap && mapExpanded && (
-          <div className="bg-background fixed inset-0 z-50 flex flex-col">
-            <div className="relative min-h-0 flex-1">
-              <ActivityMap
-                activity={activity}
-                highlightPosition={hoverPosition}
-                routePositions={latlngRoute}
-              />
-              <button
-                onClick={() => setMapExpanded(false)}
-                className="bg-background/80 hover:bg-background text-foreground absolute top-3 right-3 z-20 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
-                title={t("activities.collapseMap")}
-              >
-                <Minimize2 className="size-4" />
-              </button>
-            </div>
-            {altitudeData && (
-              <ElevationProfile
-                altitudeData={altitudeData}
-                distanceData={distanceData}
-                latlngData={latlngRoute}
-                onHoverPositionChange={setHoverPosition}
-              />
-            )}
-          </div>
-        )}
-        {hasMap && !mapExpanded && (
-          <div className="relative h-[50vh] max-h-[600px] min-h-80 w-full">
-            <ActivityMap
-              activity={activity}
-              highlightPosition={hoverPosition}
-              interactive={false}
-              routePositions={latlngRoute}
-            />
-            <div className="from-background pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t to-transparent" />
-            <button
-              onClick={() => setMapExpanded(true)}
-              className="bg-background/80 hover:bg-background text-foreground absolute top-3 right-3 flex size-8 items-center justify-center rounded-lg backdrop-blur-sm transition-colors"
-              title={t("activities.expandMap")}
-            >
-              <Maximize2 className="size-4" />
-            </button>
-          </div>
+        {hasMap && (
+          <ActivityRouteExplorer
+            activity={activity}
+            recording={recording}
+            cursorTime={cursorTime}
+            range={range}
+            onCursorChange={setHoverTime}
+            onPinTime={pinTime}
+            onRangeChange={selectRange}
+            onClear={clearInspection}
+          />
         )}
         {/* Below the map: full-bleed cards on mobile (hairline dividers), then
             boxed cards centered on desktop — matching the Statistics page. */}
@@ -280,7 +255,11 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             )}
             <ActivityStreams
               stravaId={activity.stravaId}
-              onHoverPositionChange={setHoverPosition}
+              cursorTime={cursorTime}
+              selectedRange={range}
+              onHoverTimeChange={setHoverTime}
+              onInspectTime={pinTime}
+              onRangeChange={selectRange}
               hiddenStreams={hiddenStreams}
             />
             <ActivityLaps
