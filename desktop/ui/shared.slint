@@ -63,14 +63,14 @@ export global Copy {
     }
     pure public function sensor-status(state: int) -> string {
         return state == 1 ? @tr("Connecting…")
-            : state == 2 ? @tr("Connected · waiting for data")
-            : state == 3 ? @tr("Connected · receiving data")
-            : state == 4 ? @tr("Connected · no recent data")
+            : state == 2 ? @tr("Connected, waiting for data")
+            : state == 3 ? @tr("Connected, receiving data")
+            : state == 4 ? @tr("Connected, no recent data")
             : @tr("Not connected");
     }
     pure public function resistance-words(code: int) -> string {
         return code == 1 ? @tr("ERG supported")
-            : code == 2 ? @tr("Read only · not confirmed")
+            : code == 2 ? @tr("Read only, not confirmed")
             : code == 3 ? @tr("Readings only over ANT+")
             : @tr("Not checked");
     }
@@ -79,13 +79,13 @@ export global Copy {
         return State.ride-erg-state == 1 ? @tr("Sending {} W to the trainer…", State.ride-erg-watts)
             : State.ride-erg-state == 4 ? @tr("Releasing the trainer…")
             : State.ride-erg-state == 2 ? @tr("Trainer holding {} W", State.ride-erg-watts)
-            : State.ride-erg-state == 3 ? (State.ride-workout-complete ? @tr("ERG on · workout complete, no target")
-                : State.ride-phase == 2 ? @tr("ERG on · paused, no target")
-                : @tr("ERG on · free step, no target"))
-            : State.ride-erg-available ? @tr("ERG off · target shown, resistance is yours")
-            : State.trainer-ant ? @tr("ANT+ trainer · readings only, follow the target yourself")
-            : State.trainer-connected ? @tr("This trainer takes no commands · follow the target yourself")
-            : @tr("No trainer connected · follow the target yourself");
+            : State.ride-erg-state == 3 ? (State.ride-workout-complete ? @tr("ERG on: workout complete, no target")
+                : State.ride-phase == 2 ? @tr("ERG on: paused, no target")
+                : @tr("ERG on: free step, no target"))
+            : State.ride-erg-available ? @tr("ERG off: target shown, resistance is yours")
+            : State.trainer-ant ? @tr("ANT+ trainer: readings only, follow the target yourself")
+            : State.trainer-connected ? @tr("This trainer takes no commands: follow the target yourself")
+            : @tr("No trainer connected: follow the target yourself");
     }
     // What the ready screen says about the ride to come.
     pure public function ready-notice() -> string {
@@ -103,10 +103,10 @@ export global Copy {
     }
     // What the ERG choice means for the ride to come, beside the switch on the ready screen.
     pure public function erg-choice() -> string {
-        return State.ride-erg-enabled ? @tr("ERG on · {} holds each target from the start", State.trainer-name)
-            : State.ride-erg-available ? @tr("ERG off · target shown, resistance is yours")
-            : State.trainer-ant ? @tr("ANT+ trainer · follow the targets yourself")
-            : State.trainer-connected ? @tr("No trainer control · follow the targets yourself")
+        return State.ride-erg-enabled ? @tr("ERG on: {} holds each target from the start", State.trainer-name)
+            : State.ride-erg-available ? @tr("ERG off: target shown, resistance is yours")
+            : State.trainer-ant ? @tr("ANT+ trainer: follow the targets yourself")
+            : State.trainer-connected ? @tr("No trainer control: follow the targets yourself")
             : @tr("No trainer connected");
     }
     // The header chip that leads back to a ride from any screen.
@@ -215,10 +215,9 @@ export component SensorTile inherits Rectangle {
                 font-size: 15px; font-weight: connected ? 600 : 400; overflow: elide;
                 horizontal-alignment: root.centered ? center : left;
             }
-            HorizontalLayout {
-                spacing: 6px; alignment: root.centered ? center : start;
-                Rectangle { y: (parent.height - self.height) / 2; width: 7px; height: 7px; border-radius: 4px; background: connected ? Theme.good : Theme.faint; }
-                Text { text: Copy.sensor-status(state); color: connected ? Theme.good : Theme.muted; font-size: 12px; overflow: elide; vertical-alignment: center; }
+            Text {
+                text: Copy.sensor-status(state); color: connected ? Theme.good : Theme.muted; font-size: 12px; overflow: elide;
+                horizontal-alignment: root.centered ? center : left;
             }
         }
         // A fixed-height slot keeps both cards the same shape whether or not a device is paired.
@@ -745,7 +744,7 @@ export component DevicePicker inherits Rectangle {
                                         }
                                     }
                                     Text {
-                                        text: (device.kind == 0 ? @tr("Smart trainer") : device.kind == 1 ? @tr("Heart-rate sensor") : @tr("Power meter · read only"))
+                                        text: (device.kind == 0 ? @tr("Smart trainer") : device.kind == 1 ? @tr("Heart-rate sensor") : @tr("Power meter (read only)"))
                                             + "  ·  " + (device.transport == 1 ? @tr("ANT+ {}", device.suffix)
                                                 : device.signal-level >= 3 ? @tr("Bluetooth · strong signal · {}", device.suffix)
                                                 : device.signal-level == 2 ? @tr("Bluetooth · fair signal · {}", device.suffix)

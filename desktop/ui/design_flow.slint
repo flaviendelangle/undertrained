@@ -89,9 +89,9 @@ component FlowLogin inherits Rectangle {
                 alignment: center;
                 VerticalLayout {
                     width: min(root.width - (root.narrow ? 40px : 80px), 520px); spacing: 18px;
-                    Text { text: @tr("Ride inside."); color: Theme.ink; font-size: root.narrow ? 40px : 56px; font-weight: 700; horizontal-alignment: center; wrap: word-wrap; }
+                    Text { text: @tr("Sign in to start riding"); color: Theme.ink; font-size: root.narrow ? 24px : 30px; font-weight: 700; horizontal-alignment: center; wrap: word-wrap; }
                     Text {
-                        text: @tr("Pair a smart trainer and a heart-rate strap over Bluetooth or ANT+, pick a workout from your Undertrained library, and ride it step by step.");
+                        text: @tr("Ride your Undertrained workouts on a smart trainer connected over Bluetooth or ANT+, with or without a heart-rate strap.");
                         color: Theme.muted; font-size: 15px; wrap: word-wrap; horizontal-alignment: center;
                     }
                     // The interval silhouette, drawn with native rectangles.
@@ -108,8 +108,6 @@ component FlowLogin inherits Rectangle {
                     Rectangle { height: 8px; }
                     AuthForm { centered: true; }
                     Text { text: @tr("Use your Undertrained account. Strava sign-in opens in your browser, and this window picks up the session when you return."); color: Theme.faint; font-size: 12px; wrap: word-wrap; horizontal-alignment: center; }
-                    Rectangle { height: 8px; }
-                    Caption { text: "FTMS  ·  CYCLING POWER  ·  HEART RATE  ·  ANT+"; horizontal-alignment: center; overflow: elide; }
                 }
             }
         }
@@ -210,13 +208,18 @@ component FilterChip inherits Rectangle {
     touch := TouchArea { mouse-cursor: pointer; clicked => { focus.focus(); root.activated(); } }
 }
 
-// A section's label: small caps with the count, a hairline, an optional note.
+// A section's label: small caps with the count fainter beside it, as the filter chips show
+// it, then a hairline and an optional note.
 component SectionLabel inherits HorizontalLayout {
     in property <string> text;
     in property <int> count;
     in property <string> note: "";
     spacing: 10px; padding-top: 6px;
-    Caption { text: root.text + " · " + root.count; vertical-alignment: center; }
+    HorizontalLayout {
+        spacing: 5px;
+        Caption { text: root.text; vertical-alignment: center; }
+        Caption { text: root.count; color: Theme.faint; vertical-alignment: center; }
+    }
     Rectangle { height: 1px; y: (parent.height - self.height) / 2; horizontal-stretch: 1; background: Theme.border; }
     if root.note != "": Text { text: root.note; color: Theme.faint; font-size: 12px; vertical-alignment: center; overflow: elide; max-width: 320px; }
 }
@@ -380,8 +383,7 @@ component NoSensorNotice inherits Rectangle {
     border-radius: 8px; background: Theme.warn.with-alpha(0.12); border-width: 1px; border-color: Theme.warn.with-alpha(0.45);
     height: layout.preferred-height;
     layout := HorizontalLayout {
-        padding: 12px; padding-left: 14px; spacing: 12px;
-        Rectangle { width: 3px; border-radius: 2px; background: Theme.warn; }
+        padding: 12px; padding-left: 14px; padding-right: 14px; spacing: 12px;
         VerticalLayout {
             spacing: 3px; horizontal-stretch: 1; min-width: 0px; alignment: center;
             Text { text: @tr("No trainer or heart-rate sensor is connected, so the ride cannot start."); color: Theme.warn; font-size: 14px; font-weight: 600; wrap: word-wrap; }
@@ -770,7 +772,7 @@ component FlowHud inherits Rectangle {
                     }
                     if root.auto-paused: GaugeCallout {
                         x: (parent.width - self.width) / 2; y: parent.height - self.height; width: min(parent.width + 2 * root.stage-pad, self.fitted-width); unit: root.unit;
-                        text: @tr("Auto-paused · pedal to resume"); tone: Theme.pause;
+                        text: @tr("Auto-paused: pedal to resume"); tone: Theme.pause;
                     }
                 }
                 Rectangle { vertical-stretch: 1; }
@@ -790,7 +792,7 @@ component FlowHud inherits Rectangle {
                 padding: 16px; spacing: 12px; alignment: start;
                 HorizontalLayout { alignment: center; PowerGauge { size: 200px; } }
                 if root.soon && !root.auto-paused: GaugeCallout { text: @tr("Next: {}", Copy.step-words(State.ride-next-duration, State.ride-next-target)); }
-                if root.auto-paused: GaugeCallout { text: @tr("Auto-paused · pedal to resume"); tone: Theme.pause; }
+                if root.auto-paused: GaugeCallout { text: @tr("Auto-paused: pedal to resume"); tone: Theme.pause; }
                 HorizontalLayout {
                     spacing: 12px;
                     MetricTile { label: @tr("HEART RATE"); value: State.ride-hr; unit: @tr("bpm"); live: State.ride-hr-live; tone: Theme.heart; size: 26px; }
@@ -834,16 +836,11 @@ component FlowSummary inherits Rectangle {
     in property <bool> narrow;
     Page { max: 960px; ScrollView { VerticalLayout {
         padding-top: 24px; padding-bottom: 24px; padding-right: 4px; spacing: 16px; alignment: start;
+        // The ride's name and its elapsed clock share one row; the save line under them
+        // says how the ride ended.
         HorizontalLayout {
             spacing: 12px;
-            VerticalLayout {
-                spacing: 4px; horizontal-stretch: 1; min-width: 0px;
-                Caption { text: @tr("RIDE COMPLETE"); color: Theme.primary; }
-                HorizontalLayout {
-                    spacing: 10px; alignment: start;
-                    Text { text: Copy.ride-title(); color: Theme.ink; font-size: root.narrow ? 24px : 30px; font-weight: 700; overflow: elide; min-width: 0px; }
-                }
-            }
+            Text { text: Copy.ride-title(); color: Theme.ink; font-size: root.narrow ? 24px : 30px; font-weight: 700; overflow: elide; horizontal-stretch: 1; min-width: 0px; vertical-alignment: center; }
             Text { text: State.ride-elapsed; color: Theme.ink; font-size: root.narrow ? 28px : 36px; font-weight: 700; vertical-alignment: center; font-family: "DejaVu Sans Mono"; }
         }
         SaveStatus { }

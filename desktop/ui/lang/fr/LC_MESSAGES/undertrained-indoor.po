@@ -73,14 +73,14 @@ msgstr "Connectez un home trainer pour terminer."
 msgid "Connect"
 msgstr "Connecter"
 
-msgid "Connected · no recent data"
-msgstr "Connecté · aucune donnée récente"
+msgid "Connected, no recent data"
+msgstr "Connecté, aucune donnée récente"
 
-msgid "Connected · receiving data"
-msgstr "Connecté · données reçues"
+msgid "Connected, receiving data"
+msgstr "Connecté, données reçues"
 
-msgid "Connected · waiting for data"
-msgstr "Connecté · en attente de données"
+msgid "Connected, waiting for data"
+msgstr "Connecté, en attente de données"
 
 msgid "Connecting…"
 msgstr "Connexion…"
@@ -199,14 +199,14 @@ msgstr "Donnez quelques coups de pédale pour réveiller le home trainer, puis t
 msgid "Plug the trainer in and pedal to wake it. Moisten the strap contacts and wear it. Turn Bluetooth on or plug in the ANT+ stick, close other training apps that may hold the connection, then search again. Devices that omit their service in advertisements are not listed."
 msgstr "Branchez le home trainer et pédalez pour le réveiller. Humidifiez les contacts de la ceinture et portez-la. Activez le Bluetooth ou branchez la clé ANT+, fermez les autres applications d'entraînement qui pourraient garder la connexion, puis relancez la recherche. Les appareils qui n'annoncent pas leur service ne sont pas listés."
 
-msgid "Power meter · read only"
-msgstr "Capteur de puissance · lecture seule"
+msgid "Power meter (read only)"
+msgstr "Capteur de puissance (lecture seule)"
 
 msgid "RESISTANCE CONTROL"
 msgstr "CONTRÔLE DE LA RÉSISTANCE"
 
-msgid "Read only · not confirmed"
-msgstr "Lecture seule · non confirmé"
+msgid "Read only, not confirmed"
+msgstr "Lecture seule, non confirmé"
 
 msgid "Read-only power meters are listed but cannot take resistance commands."
 msgstr "Les capteurs de puissance en lecture seule sont listés mais ne reçoivent pas de commandes de résistance."
@@ -223,8 +223,8 @@ msgstr "Actualisation…"
 msgid "Required"
 msgstr "Obligatoire"
 
-msgid "Ride inside."
-msgstr "Roulez à l'intérieur."
+msgid "Sign in to start riding"
+msgstr "Connectez-vous pour commencer à rouler"
 
 msgid "Saved"
 msgstr "Enregistré"
@@ -631,11 +631,11 @@ msgstr "{} tr/min"
 msgid "{} unavailable"
 msgstr "{} indisponible"
 
-msgid "ANT+ trainer · follow the targets yourself"
-msgstr "Home trainer ANT+ · suivez les cibles vous-même"
+msgid "ANT+ trainer: follow the targets yourself"
+msgstr "Home trainer ANT+ : suivez les cibles vous-même"
 
-msgid "ANT+ trainer · readings only, follow the target yourself"
-msgstr "Home trainer ANT+ · mesures uniquement, suivez la cible vous-même"
+msgid "ANT+ trainer: readings only, follow the target yourself"
+msgstr "Home trainer ANT+ : mesures uniquement, suivez la cible vous-même"
 
 msgid "Cadence cue {} rpm"
 msgstr "Consigne de cadence {} tr/min"
@@ -652,17 +652,17 @@ msgstr "Retour au calme"
 msgid "DONE"
 msgstr "TERMINÉE"
 
-msgid "ERG off · target shown, resistance is yours"
-msgstr "ERG désactivé · cible affichée, résistance libre"
+msgid "ERG off: target shown, resistance is yours"
+msgstr "ERG désactivé : cible affichée, résistance libre"
 
-msgid "ERG on · free step, no target"
-msgstr "ERG activé · étape libre, aucune cible"
+msgid "ERG on: free step, no target"
+msgstr "ERG activé : étape libre, aucune cible"
 
-msgid "ERG on · paused, no target"
-msgstr "ERG activé · en pause, aucune cible"
+msgid "ERG on: paused, no target"
+msgstr "ERG activé : en pause, aucune cible"
 
-msgid "ERG on · workout complete, no target"
-msgstr "ERG activé · séance terminée, aucune cible"
+msgid "ERG on: workout complete, no target"
+msgstr "ERG activé : séance terminée, aucune cible"
 
 msgid "FREE"
 msgstr "LIBRE"
@@ -688,11 +688,11 @@ msgstr "ENSUITE"
 msgid "No trainer connected"
 msgstr "Aucun home trainer connecté"
 
-msgid "No trainer connected · follow the target yourself"
-msgstr "Aucun home trainer connecté · suivez la cible vous-même"
+msgid "No trainer connected: follow the target yourself"
+msgstr "Aucun home trainer connecté : suivez la cible vous-même"
 
-msgid "No trainer control · follow the targets yourself"
-msgstr "Home trainer non pilotable · suivez les cibles vous-même"
+msgid "No trainer control: follow the targets yourself"
+msgstr "Home trainer non pilotable : suivez les cibles vous-même"
 
 msgid "PLAN"
 msgstr "PLAN"
@@ -739,8 +739,8 @@ msgstr "Aucune mesure de puissance du home trainer, l'ERG est donc désactivé. 
 msgid "The trainer disconnected, so ERG is off. The ride keeps recording; reconnect the trainer from the Devices screen, then enable ERG again."
 msgstr "Le home trainer s'est déconnecté, l'ERG est donc désactivé. L'enregistrement continue ; reconnectez le home trainer depuis l'écran Appareils, puis réactivez l'ERG."
 
-msgid "This trainer takes no commands · follow the target yourself"
-msgstr "Ce home trainer n'accepte pas de commandes · suivez la cible vous-même"
+msgid "This trainer takes no commands: follow the target yourself"
+msgstr "Ce home trainer n'accepte pas de commandes : suivez la cible vous-même"
 
 msgid "This workout came from a server without step data, so its profile is shown for reference only: steps are not timed and nothing is sent to the trainer. Update the Undertrained backend to ride it step by step."
 msgstr "Cette séance vient d'un serveur sans le détail des étapes : son profil est affiché à titre de repère uniquement, les étapes ne sont pas chronométrées et rien n'est envoyé au home trainer. Mettez à jour le serveur Undertrained pour la suivre étape par étape."
@@ -801,17 +801,14 @@ msgstr "Ensuite : {}"
 msgid "PERSONAL"
 msgstr "PERSONNELLES"
 
-msgid "Pair a smart trainer and a heart-rate strap over Bluetooth or ANT+, pick a workout from your Undertrained library, and ride it step by step."
-msgstr "Appairez un home trainer et une ceinture cardiaque en Bluetooth ou ANT+, choisissez une séance dans votre bibliothèque Undertrained et suivez-la étape par étape."
+msgid "Ride your Undertrained workouts on a smart trainer connected over Bluetooth or ANT+, with or without a heart-rate strap."
+msgstr "Suivez vos séances Undertrained sur un home trainer connecté en Bluetooth ou ANT+, avec ou sans ceinture cardiaque."
 
 msgid "Pair your devices"
 msgstr "Appairez vos appareils"
 
 msgid "Personal"
 msgstr "Personnelles"
-
-msgid "RIDE COMPLETE"
-msgstr "SORTIE TERMINÉE"
 
 msgid "Ride"
 msgstr "Sortie"
@@ -890,8 +887,8 @@ msgstr "ERG"
 msgid "Resistance control (ERG)"
 msgstr "Pilotage de la résistance (ERG)"
 
-msgid "ERG on · {} holds each target from the start"
-msgstr "ERG activé · {} maintient chaque cible dès le départ"
+msgid "ERG on: {} holds each target from the start"
+msgstr "ERG activé : {} maintient chaque cible dès le départ"
 
 msgid "{} paired. Recording starts at your first pedal stroke."
 msgstr "{} appairé. L'enregistrement démarre à votre premier coup de pédale."
@@ -920,8 +917,8 @@ msgstr "Annuler le départ"
 msgid "Auto-paused"
 msgstr "Pause automatique"
 
-msgid "Auto-paused · pedal to resume"
-msgstr "Pause automatique · pédalez pour reprendre"
+msgid "Auto-paused: pedal to resume"
+msgstr "Pause automatique : pédalez pour reprendre"
 
 msgid "Paused for {}. The ride paused itself after 5 seconds at zero watts, or 30 seconds without any reading from the trainer; the clock and the workout step are stopped. Pedal to resume, or press Resume."
 msgstr "En pause depuis {}. La sortie s'est mise en pause d'elle-même après 5 secondes à zéro watt, ou 30 secondes sans aucune mesure du home trainer ; le chrono et l'étape de la séance sont arrêtés. Pédalez pour reprendre, ou appuyez sur Reprendre."
