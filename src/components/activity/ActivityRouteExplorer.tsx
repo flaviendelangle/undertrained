@@ -42,7 +42,7 @@ export function ActivityRouteExplorer({
   activity,
   recording,
   cursorTime,
-  segment,
+  segment: selectedSegment,
   onCursorChange,
   onPinTime,
   onSegmentChange,
@@ -52,6 +52,7 @@ export function ActivityRouteExplorer({
   const t = useT();
   const isMobile = useIsMobile();
   const [expanded, setExpanded] = React.useState(false);
+  const segment = expanded ? selectedSegment : null;
   const [fitSegment, setFitSegment] = React.useState(false);
   // A reset from the stream charts also leaves the segment-fitting mode.
   if (!segment && fitSegment) setFitSegment(false);
@@ -59,6 +60,13 @@ export function ActivityRouteExplorer({
     setFitSegment(false);
     onClear();
   }, [onClear]);
+  const changeExpanded = React.useCallback(
+    (value: boolean) => {
+      setExpanded(value);
+      if (!value) clearSegment();
+    },
+    [clearSegment],
+  );
   const expandButton = React.useRef<HTMLButtonElement>(null);
   const positions = React.useMemo(() => {
     const data = recording?.samples.latlng;
@@ -241,7 +249,7 @@ export function ActivityRouteExplorer({
             variant="outline"
             size="icon"
             ref={expandButton}
-            onClick={() => setExpanded(!expanded)}
+            onClick={() => changeExpanded(!expanded)}
             title={t(
               expanded ? "activities.collapseMap" : "activities.expandMap",
             )}
@@ -272,7 +280,7 @@ export function ActivityRouteExplorer({
     </section>
   );
   return (
-    <Dialog.Root open={expanded} onOpenChange={setExpanded}>
+    <Dialog.Root open={expanded} onOpenChange={changeExpanded}>
       {!expanded && content}
       <Dialog.Portal>
         <Dialog.Popup

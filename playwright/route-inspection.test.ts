@@ -52,6 +52,24 @@ const metric = (page: Page, label: string) =>
     .locator("dl > div")
     .filter({ has: page.locator("dt", { hasText: label }) })
     .locator("dd");
+
+async function expectCompactMap(page: Page) {
+  await expect(
+    page.getByRole("button", { name: "Expand map", exact: true }),
+  ).toBeVisible();
+  await expect(profile(page)).toHaveCount(0);
+  await expect(segment(page)).toHaveCount(0);
+  await expect(explorer(page).locator('path[stroke-width="6"]')).toHaveCount(0);
+  await expect(
+    explorer(page).getByRole("button", { name: /^Segment (start|end)$/ }),
+  ).toHaveCount(0);
+  await expect(
+    explorer(page).getByRole("button", {
+      name: "Zoom to segment",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+}
 async function touchDrag(
   page: Page,
   start: { x: number; y: number },
@@ -357,7 +375,7 @@ test("resizes either map endpoint to the nearest route sample, including crossin
     .toBeGreaterThan(40);
 });
 
-test("links a profile segment, route picking and stream selection while preserving the selected segment", async ({
+test("links fullscreen segment inspection to stream selection and clears it on exit", async ({
   page,
   viewsFixture: f,
 }) => {
@@ -411,6 +429,13 @@ test("links a profile segment, route picking and stream selection while preservi
   await expect(
     card(page).getByRole("button", { name: "Details", exact: true }),
   ).toBeFocused();
+  await page.getByRole("button", { name: "Collapse map", exact: true }).click();
+  await expectCompactMap(page);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  await expect(profile(page)).toBeVisible();
+  await expect(segment(page)).toHaveCount(0);
+  await dragProfile(page);
+  await expectSegment(page);
   await page.mouse.move(2, 2);
   const selectedBeforeZoom = await explorer(page)
     .locator('path[stroke-width="6"]')
@@ -480,6 +505,7 @@ test("links a profile segment, route picking and stream selection while preservi
     await expect(
       streams.getByRole("button", { name: "Reset zoom" }),
     ).toBeVisible();
+    await expectCompactMap(page);
   };
   for (const reset of ["double-click", "Escape"]) {
     await selectStreamRange();
@@ -516,8 +542,6 @@ test("links a profile segment, route picking and stream selection while preservi
   await expect(
     explorer(page).getByRole("button", { name: "Zoom to segment" }),
   ).toBeVisible();
-  await profile(page).focus();
-  await page.keyboard.press("Escape");
   // Only Escape outside the focused profile dismisses fullscreen.
   await page.getByRole("button", { name: "Collapse map", exact: true }).focus();
   await page.keyboard.press("Escape");
@@ -525,6 +549,17 @@ test("links a profile segment, route picking and stream selection while preservi
   await expect(
     page.getByRole("button", { name: "Expand map", exact: true }),
   ).toBeFocused();
+  await expectCompactMap(page);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  await expect(profile(page)).toBeVisible();
+  await expect(segment(page)).toHaveCount(0);
+  await expect(
+    explorer(page).getByRole("slider", { name: "Segment start" }),
+  ).toHaveAttribute("aria-valuenow", "0");
+  await expect(
+    explorer(page).getByRole("slider", { name: "Segment end" }),
+  ).toHaveAttribute("aria-valuenow", "600");
+  await page.getByRole("button", { name: "Collapse map", exact: true }).click();
   await page.goto(`${origin}/activities/${f.ids.short}`);
   await expect(
     page.getByRole("heading", { name: "Time Series", exact: true }),
@@ -690,12 +725,17 @@ test.describe("mobile", () => {
       { x: chartBox.x + 84 + plotWidth / 6, y: chartBox.y + 40 },
       { x: chartBox.x + 84 + (plotWidth * 4) / 6, y: chartBox.y + 40 },
     );
-    await expectDetails(page);
+    await expectCompactMap(page);
     await expect(
-      page.getByRole("dialog", { name: "Route exploration", exact: true }),
-    ).toHaveCount(0);
+      streams.getByRole("button", { name: "Reset zoom", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Expand map", exact: true }).click();
+    await expectDetails(page);
     await drawer.getByRole("button", { name: "Close", exact: true }).click();
     await expect(drawer).toHaveCount(0);
+    await expect(
+      page.getByRole("dialog", { name: "Route exploration", exact: true }),
+    ).toBeVisible();
     await expect(
       streams.getByRole("button", { name: "Reset zoom", exact: true }),
     ).toHaveCount(0);
