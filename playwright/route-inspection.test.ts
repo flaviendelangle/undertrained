@@ -416,7 +416,7 @@ test("resizes either map endpoint to the nearest route sample, including crossin
     .toBeGreaterThan(40);
 });
 
-test("cancelling a map endpoint drag restores a stream selection between samples", async ({
+test("map endpoint drags keep the other boundary of a stream selection between samples", async ({
   page,
   viewsFixture: f,
 }) => {
@@ -458,6 +458,15 @@ test("cancelling a map endpoint drag restores a stream selection between samples
   await page.keyboard.press("Escape");
   await page.mouse.up();
   await expect(duration).toHaveText(selected!);
+  // Resizing the end keeps the start at 0:11 instead of snapping it to 0:10.
+  await page.mouse.move(
+    handleBox.x + handleBox.width / 2,
+    handleBox.y + handleBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await page.mouse.up();
+  await expect(duration).toHaveText("0:39");
 });
 
 test("End moves a map endpoint to the last recorded GPS point", async ({

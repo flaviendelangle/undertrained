@@ -92,16 +92,17 @@ export function ActivityRouteExplorer({
   );
   const changeMapSegment = React.useCallback(
     (indices: [number, number], phase: "preview" | "commit") => {
-      if (recording)
-        onSegmentChange(
-          [
-            recording.sampleTimes[indices[0]],
-            recording.sampleTimes[indices[1]],
-          ],
-          phase,
-        );
+      if (!recording) return;
+      // Keep a boundary's exact time while its handle stays on the same sample,
+      // so resizing one end of a chart selection leaves the other one untouched.
+      const time = (index: number) =>
+        selectedSegment?.find(
+          (boundary) =>
+            sampleIndexAtTime(recording.sampleTimes, boundary) === index,
+        ) ?? recording.sampleTimes[index];
+      onSegmentChange([time(indices[0]), time(indices[1])], phase);
     },
-    [recording, onSegmentChange],
+    [recording, selectedSegment, onSegmentChange],
   );
   // Sample indices cannot round-trip a chart selection. Restore the exact segment.
   const dragOrigin = React.useRef<{
