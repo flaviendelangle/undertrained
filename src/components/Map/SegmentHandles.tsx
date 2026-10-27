@@ -72,7 +72,8 @@ export function SegmentHandles({
     setMoving({ boundary: current.boundary, anchor: current.anchor, index });
     // A zero-length preview would remove the handles in the parent. Keep the
     // handle snapped to its partner; release there clears the empty segment.
-    if (index !== current.anchor) onChange([index, current.anchor], "preview");
+    if (index !== current.anchor)
+      onChange(ordered(current.boundary, index, current.anchor), "preview");
   };
   const finish = (cancel: boolean) => {
     const current = gesture.current;
@@ -84,7 +85,11 @@ export function SegmentHandles({
     setMoving(null);
     onDraggingChange(false);
     if (cancel) onCancel();
-    else onChange([current.index, current.anchor], "commit");
+    else
+      onChange(
+        ordered(current.boundary, current.index, current.anchor),
+        "commit",
+      );
   };
   React.useEffect(
     () => () => {
@@ -187,12 +192,24 @@ export function SegmentHandles({
               next < points.length &&
               next !== indices[1 - boundary]
             )
-              onChange([next, indices[1 - boundary]], "preview");
+              onChange(
+                ordered(boundary, next, indices[1 - boundary]),
+                "preview",
+              );
           }
         }}
       />
     );
   });
+}
+
+/** Report indices per handle, so the parent knows which boundary stayed put. */
+function ordered(
+  boundary: number,
+  index: number,
+  other: number,
+): SegmentIndices {
+  return boundary === 0 ? [index, other] : [other, index];
 }
 
 function SegmentHandle({

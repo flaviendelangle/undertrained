@@ -95,12 +95,20 @@ export function ActivityRouteExplorer({
       if (!recording) return;
       // Keep a boundary's exact time while its handle stays on the same sample,
       // so resizing one end of a chart selection leaves the other one untouched.
-      const time = (index: number) =>
-        selectedSegment?.find(
-          (boundary) =>
-            sampleIndexAtTime(recording.sampleTimes, boundary) === index,
-        ) ?? recording.sampleTimes[index];
-      onSegmentChange([time(indices[0]), time(indices[1])], phase);
+      // Match the same boundary first: both can share one sample. Then the other
+      // one, as a handle dragged past its partner swaps them in the selection.
+      const time = (boundary: number) => {
+        const index = indices[boundary];
+        const kept = [boundary, 1 - boundary]
+          .map((b) => selectedSegment?.[b])
+          .find(
+            (t) =>
+              t != null &&
+              sampleIndexAtTime(recording.sampleTimes, t) === index,
+          );
+        return kept ?? recording.sampleTimes[index];
+      };
+      onSegmentChange([time(0), time(1)], phase);
     },
     [recording, selectedSegment, onSegmentChange],
   );

@@ -469,6 +469,44 @@ test("map endpoint drags keep the other boundary of a stream selection between s
   await expect(duration).toHaveText("0:39");
 });
 
+test("map endpoints keep a stream selection inside one sample interval", async ({
+  page,
+  viewsFixture: f,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto(`${origin}/activities/${f.ids.long}`);
+  const streams = page
+    .getByRole("heading", { name: "Time Series", exact: true })
+    .locator("..")
+    .locator("..");
+  const chart = streams.locator("svg").last();
+  await chart.scrollIntoViewIfNeeded();
+  const box = (await chart.boundingBox())!;
+  // Samples are 10 s apart. Both 0:12 and 0:18 belong to the 0:10 sample.
+  const at = (time: number) => box.x + 84 + ((box.width - 156) * time) / 60;
+  await page.mouse.move(at(12), box.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(at(18), box.y + 40, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  const duration = card(page)
+    .locator("dl > div")
+    .filter({ has: page.locator("dt", { hasText: "Elapsed Time" }) })
+    .locator("dd");
+  const selected = await duration.textContent();
+  expect(selected).toMatch(/^0:0[1-9]$/);
+  const start = explorer(page).getByRole("button", {
+    name: "Segment start",
+    exact: true,
+  });
+  await start.focus();
+  await page.keyboard.press("Enter");
+  await expect(duration).toHaveText(selected!);
+  // Moving the start to 0:00 keeps the end inside the 0:10 sample.
+  await page.keyboard.press("Home");
+  await expect(duration).toHaveText(/^0:1[1-9]$/);
+});
+
 test("End moves a map endpoint to the last recorded GPS point", async ({
   page,
   viewsFixture: f,
