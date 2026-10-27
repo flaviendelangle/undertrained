@@ -23,22 +23,25 @@ export function ActivitySegmentDetails({
   recording,
   metrics,
   mobile,
+  inspectImmediately,
   onClear,
 }: {
   segment: RecordingSegment;
   recording: ActivityRecording;
   metrics: { label: string; value: string }[];
   mobile: boolean;
+  inspectImmediately: boolean;
   onClear: () => void;
 }) {
   const t = useT();
   const [open, setOpen] = React.useState(false);
+  const autoOpen = mobile || inspectImmediately;
   React.useEffect(() => {
-    if (!mobile) return;
+    if (!autoOpen) return;
     // Mount closed, then let Base UI animate the committed segment's drawer in.
     const frame = requestAnimationFrame(() => setOpen(true));
     return () => cancelAnimationFrame(frame);
-  }, [mobile]);
+  }, [autoOpen, segment]);
   const metricGrid = (rows: typeof metrics) =>
     rows.map((metric) => (
       <div key={metric.label}>
@@ -57,7 +60,7 @@ export function ActivitySegmentDetails({
         if (!value && mobile) onClear();
       }}
     >
-      {!mobile && (
+      {!mobile && !inspectImmediately && (
         <section
           aria-label={t("activities.inspection.selected")}
           className="bg-background/95 border-border absolute bottom-8 left-3 z-20 flex max-w-[calc(100%-1.5rem)] items-center gap-5 rounded-lg border p-3 shadow-lg backdrop-blur-sm"

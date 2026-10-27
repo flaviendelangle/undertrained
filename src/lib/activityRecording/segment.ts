@@ -5,6 +5,9 @@ import type { ActivityRecording } from "./recording";
 /** Elapsed-second boundaries. Metrics count [start, end), GPS includes both endpoints. */
 export type RecordingSegment = [start: number, end: number];
 
+/** Manual selections preview before commit; detected climbs open inspection directly. */
+export type SegmentSelectionPhase = "preview" | "commit" | "inspect";
+
 export function sampleIndexAtTime(times: number[], second: number): number {
   return Math.max(0, bisectRight(times, second) - 1);
 }

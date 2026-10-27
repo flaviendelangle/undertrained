@@ -12,6 +12,7 @@ import {
 } from "~/lib/activityRecording/climbs";
 import {
   type RecordingSegment,
+  type SegmentSelectionPhase,
   sampleIndexAtTime,
 } from "~/lib/activityRecording/segment";
 import {
@@ -43,7 +44,7 @@ interface ElevationProfileProps {
   onPinTime: (time: number) => void;
   onSegmentChange: (
     segment: RecordingSegment,
-    phase?: "preview" | "commit",
+    phase?: SegmentSelectionPhase,
   ) => void;
   onClear: () => void;
 }
@@ -147,7 +148,7 @@ export function ElevationProfile({
   const selectIndices = (
     a: number,
     b: number,
-    phase: "preview" | "commit" = "commit",
+    phase: SegmentSelectionPhase = "commit",
   ) => {
     const start = sampleTimes[Math.min(a, b)],
       end = sampleTimes[Math.max(a, b)];
@@ -176,7 +177,7 @@ export function ElevationProfile({
     drag.current = null;
     setPreviewSegment(null);
     onCursorChange(null);
-    selectIndices(climb.startIndex, climb.endIndex);
+    selectIndices(climb.startIndex, climb.endIndex, "inspect");
   };
   const climbLabels = React.useMemo(() => {
     const rowEnds: number[] = [];

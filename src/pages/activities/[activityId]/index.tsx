@@ -24,6 +24,7 @@ import { useT } from "~/i18n/useT";
 import { useActivityRecording } from "~/lib/activityRecording";
 import {
   type RecordingSegment,
+  type SegmentSelectionPhase,
   recordingSegment,
 } from "~/lib/activityRecording/segment";
 import { NextPageWithLayout } from "~/pages/_app";
@@ -62,7 +63,8 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   const [hoverTime, setHoverTime] = React.useState<number | null>(null);
   const [pinnedTime, setPinnedTime] = React.useState<number | null>(null);
   const [segment, setSegment] = React.useState<RecordingSegment | null>(null);
-  const [segmentCommitted, setSegmentCommitted] = React.useState(false);
+  const [segmentPhase, setSegmentPhase] =
+    React.useState<SegmentSelectionPhase>("preview");
   const cursorTime = hoverTime ?? pinnedTime;
   const pinTime = React.useCallback((time: number) => {
     setHoverTime(null);
@@ -75,7 +77,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
   if (inspectionRecording !== recording) {
     setInspectionRecording(recording);
     setSegment(null);
-    setSegmentCommitted(false);
+    setSegmentPhase("preview");
     setHoverTime(null);
     setPinnedTime(null);
   }
@@ -89,17 +91,17 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
     },
   );
   const selectSegment = React.useCallback(
-    (value: RecordingSegment, phase: "preview" | "commit" = "commit") => {
+    (value: RecordingSegment, phase: SegmentSelectionPhase = "commit") => {
       if (!recording) return;
       const next = recordingSegment(recording, ...value);
       setSegment(next);
-      setSegmentCommitted(next != null && phase === "commit");
+      setSegmentPhase(next ? phase : "preview");
     },
     [recording],
   );
   const clearInspection = React.useCallback(() => {
     setSegment(null);
-    setSegmentCommitted(false);
+    setSegmentPhase("preview");
     setHoverTime(null);
     setPinnedTime(null);
   }, []);
@@ -224,7 +226,7 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
             recording={recording}
             cursorTime={cursorTime}
             segment={segment}
-            showDetails={segmentCommitted}
+            segmentPhase={segmentPhase}
             onCursorChange={setHoverTime}
             onPinTime={pinTime}
             onSegmentChange={selectSegment}

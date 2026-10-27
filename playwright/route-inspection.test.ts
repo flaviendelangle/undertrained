@@ -230,24 +230,65 @@ test("selects detected climbs from the profile or keyboard without preventing ma
   await svg.click({
     position: { x: 42 + ((box.width - 60) * 3000) / 12000, y: 60 },
   });
+  await expect(details(page)).toBeVisible();
+  await waitForDrawer(page);
+  await expect(metric(page, "Distance")).toHaveText("4.00 km");
+  await expect(
+    explorer(page).getByRole("region", {
+      name: "Segment",
+      exact: true,
+      includeHidden: true,
+    }),
+  ).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath("climbs-desktop.png") });
+  await details(page)
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await expect(details(page)).toHaveCount(0);
+  await expect(card(page)).toHaveCount(0);
   const start = explorer(page).getByRole("slider", { name: "Segment start" });
   const end = explorer(page).getByRole("slider", { name: "Segment end" });
   await expect(start).toHaveAttribute("aria-valuenow", "1000");
   await expect(end).toHaveAttribute("aria-valuenow", "5000");
   await expect(climbs.first()).toHaveAttribute("aria-pressed", "true");
-  await expect(card(page)).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath("climbs-desktop.png") });
   // Enter on another climb must not recommit the existing segment in the profile's capture handler.
   await climbs.last().focus();
   await page.keyboard.press("Enter");
+  await expect(details(page)).toBeVisible();
+  await expect(
+    details(page).getByText("21:40 – 35:00", { exact: true }),
+  ).toBeVisible();
+  await expect(details(page)).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(details(page)).toHaveCount(0);
+  await expect(card(page)).toHaveCount(0);
   await expect(start).toHaveAttribute("aria-valuenow", "6500");
   await expect(end).toHaveAttribute("aria-valuenow", "10500");
   await expect(climbs.last()).toHaveAttribute("aria-pressed", "true");
+  // Selecting the same climb again must reopen its drawer.
+  await climbs.last().focus();
+  await page.keyboard.press("Space");
+  await expect(details(page)).toBeVisible();
+  await details(page)
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await expect(details(page)).toHaveCount(0);
   await dragProfile(page);
+  await expect(card(page)).toBeVisible();
+  await expect(details(page)).toHaveCount(0);
   await expect(start).toHaveAttribute("aria-valuenow", "2000");
   await expect(end).toHaveAttribute("aria-valuenow", "8000");
   await expect(climbs.first()).toHaveAttribute("aria-pressed", "false");
   await expect(climbs.last()).toHaveAttribute("aria-pressed", "false");
+  await card(page)
+    .getByRole("button", { name: "Details", exact: true })
+    .click();
+  await expect(metric(page, "Distance")).toHaveText("6.00 km");
+  await details(page)
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await expect(details(page)).toHaveCount(0);
+  await expect(card(page)).toBeVisible();
   await svg.focus();
   await page.keyboard.press("Escape");
   await expect(segment(page)).toHaveCount(0);

@@ -13,6 +13,7 @@ import { useT } from "~/i18n/useT";
 import type { ActivityRecording } from "~/lib/activityRecording";
 import {
   type RecordingSegment,
+  type SegmentSelectionPhase,
   sampleIndexAtTime,
   segmentStats,
 } from "~/lib/activityRecording/segment";
@@ -32,9 +33,9 @@ interface Props {
   onPinTime: (time: number) => void;
   onSegmentChange: (
     segment: RecordingSegment,
-    phase?: "preview" | "commit",
+    phase?: SegmentSelectionPhase,
   ) => void;
-  showDetails: boolean;
+  segmentPhase: SegmentSelectionPhase;
   onClear: () => void;
 }
 
@@ -46,13 +47,14 @@ export function ActivityRouteExplorer({
   onCursorChange,
   onPinTime,
   onSegmentChange,
-  showDetails,
+  segmentPhase,
   onClear,
 }: Props) {
   const t = useT();
   const isMobile = useIsMobile();
   const [expanded, setExpanded] = React.useState(false);
   const segment = expanded ? selectedSegment : null;
+  const showDetails = segmentPhase !== "preview";
   const [fitSegment, setFitSegment] = React.useState(false);
   // A reset from the stream charts also leaves the segment-fitting mode.
   if (!segment && fitSegment) setFitSegment(false);
@@ -208,6 +210,7 @@ export function ActivityRouteExplorer({
             recording={recording}
             metrics={metricRows}
             mobile={isMobile}
+            inspectImmediately={segmentPhase === "inspect"}
             onClear={clearSegment}
           />
         )}
