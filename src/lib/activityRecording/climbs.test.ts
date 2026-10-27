@@ -166,6 +166,16 @@ describe("noteworthy climbs", () => {
       ],
       category: "2",
     },
+    {
+      name: "a saddle between ramps that only qualify together",
+      knots: [
+        [0, 100],
+        [2000, 250],
+        [2500, 225],
+        [4500, 375],
+      ],
+      category: "3",
+    },
   ])("keeps one qualifying ascent across $name", ({ knots, category }) => {
     const p = terrain(knots as [number, number][]);
     const climbs = detectClimbs(p.altitude, p.distance);

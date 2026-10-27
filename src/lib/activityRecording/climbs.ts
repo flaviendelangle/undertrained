@@ -37,9 +37,10 @@ const MIN_EDGE_DEFICIT = 20;
  * descent or a flat/shallow tail that dilutes the grade ends a tentative section
  * at its last qualifying peak.
  * These boundary heuristics are ours; Garmin publishes categories, not its full
- * extraction algorithm. Tentative sections qualify either as a whole or after
- * edge trimming. Group them before final trimming and classification so an
- * approach ramp can still rejoin the main ascent across a flat or saddle.
+ * extraction algorithm. Tentative sections need Cat 3 length and grade, either
+ * as a whole or after edge trimming, but not its score. Group them before final
+ * trimming and classification so smaller ramps can still form one climb across
+ * a flat or saddle.
  * Categorization uses smoothed net gain, never accumulated
  * GPS noise. Returned indices still refer to the original, untouched recording.
  */
@@ -61,13 +62,21 @@ export function detectClimbs(
       let qualifyingPeak: number | null = null;
       const emit = (end = peak) => {
         const candidate = { start: valley, end };
-        let climb = measureClimb(profile, distance, valley, end);
+        // Ramps need Cat 3 length and grade but not its score: smaller ramps
+        // can still qualify together across a saddle once grouped.
+        let climb = measureClimb(profile, distance, valley, end, 0);
         if (!climb) {
-          // A long shallow approach must not hide a qualifying climb. Retain
+          // A long shallow approach must not hide a qualifying ramp. Retain
           // the original bounds until grouping so trimming cannot discard an
           // approach ramp that only qualifies together with the main ascent.
           const trimmed = trimEdges(profile, candidate, candidate);
-          climb = measureClimb(profile, distance, trimmed.start, trimmed.end);
+          climb = measureClimb(
+            profile,
+            distance,
+            trimmed.start,
+            trimmed.end,
+            0,
+          );
         }
         const previous = candidates.at(-1);
         if (
@@ -144,6 +153,7 @@ function measureClimb(
   distance: number[],
   start: number,
   end: number,
+  minScore = MIN_SCORE,
 ): DetectedClimb | null {
   const a = profile[start],
     b = profile[end];
@@ -155,7 +165,7 @@ function measureClimb(
   if (
     length < MIN_DISTANCE ||
     grade < MIN_GRADE ||
-    score <= MIN_SCORE ||
+    score <= minScore ||
     !Number.isFinite(grade) ||
     b.index <= a.index
   )
