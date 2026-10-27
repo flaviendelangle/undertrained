@@ -123,7 +123,7 @@ const en = {
   fitnessPage: {
     chart: "Fitness chart",
     title: "Fitness",
-    source: "All activities · full training history",
+    source: "Computed from all activities over your full training history.",
     selectedDay: "Selected day",
     today: "Today",
     load: "Daily training load",
@@ -195,7 +195,7 @@ const en = {
     empty: "No activities yet.",
     raceBadge: "Race",
     personalRecord: "Personal record: {records}",
-    tierLoad: "{tier} load · {load}",
+    tierLoad: "{tier} load ({load})",
     moreActivities: { one: "+{count} more", other: "+{count} more" },
     load: "load",
     deltaVsAverage: "{delta}% vs. trailing 4-week average",
@@ -1206,7 +1206,7 @@ const en = {
         "Set your current FTP in Settings to scale the preparation intervals.",
       ramp: {
         name: "Ramp test",
-        duration: "Variable · up to 43 min",
+        duration: "Variable, up to 43 min",
         description:
           "5 min easy, then 1-minute steps starting at 100 W and increasing by 20 W, up to 640 W. Stop pedaling when you cannot hold the target. After 10 seconds, a 10-minute cooldown starts. FTP is estimated from 75% of your best continuous minute during the ramp.",
       },

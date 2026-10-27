@@ -249,7 +249,7 @@ const ActivityLaps = React.memo(function ActivityLaps(
                 {structureSummary}
                 {structure != null &&
                   !structure.confident &&
-                  ` · ${t("charts.laps.structureUncertain")}`}
+                  ` (${t("charts.laps.structureUncertain")})`}
               </span>
             )}
           </>

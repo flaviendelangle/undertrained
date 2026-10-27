@@ -206,14 +206,10 @@ export component Notice inherits Rectangle {
     background: tone.with-alpha(0.12);
     border-width: 1px;
     border-color: tone.with-alpha(0.45);
-    HorizontalLayout {
-        padding: 12px; padding-left: 14px; spacing: 10px;
-        Rectangle { width: 3px; border-radius: 2px; background: tone; }
-        VerticalLayout {
-            spacing: 4px;
-            Text { text: root.text; color: root.info ? Theme.ink : tone; font-size: root.size; wrap: word-wrap; vertical-alignment: center; }
-            if root.detail != "": Text { text: root.detail; color: Theme.muted; font-size: root.size - 1px; wrap: word-wrap; }
-        }
+    VerticalLayout {
+        padding: 12px; padding-left: 14px; padding-right: 14px; spacing: 4px;
+        Text { text: root.text; color: root.info ? Theme.ink : tone; font-size: root.size; wrap: word-wrap; vertical-alignment: center; }
+        if root.detail != "": Text { text: root.detail; color: Theme.muted; font-size: root.size - 1px; wrap: word-wrap; }
     }
 }
 
@@ -450,21 +446,13 @@ export component SignalBars inherits Rectangle {
     }
 }
 
-// A radio's state: 0 not checked, 1 ready, 2 unavailable.
-export component RadioPill inherits HorizontalLayout {
+// A radio's state, as one colored line: 0 not checked, 1 ready, 2 unavailable.
+export component RadioPill inherits Text {
     in property <string> name;
     in property <int> state;
-    spacing: 6px; alignment: start;
-    Rectangle {
-        y: (parent.height - self.height) / 2;
-        width: 8px; height: 8px; border-radius: 4px;
-        background: root.state == 1 ? Theme.good : root.state == 2 ? Theme.warn : Theme.faint;
-    }
-    Text {
-        text: root.state == 1 ? @tr("{} ready", root.name) : root.state == 2 ? @tr("{} unavailable", root.name) : @tr("{} not checked", root.name);
-        color: root.state == 1 ? Theme.good : root.state == 2 ? Theme.warn : Theme.muted;
-        font-size: 12px; vertical-alignment: center;
-    }
+    text: root.state == 1 ? @tr("{} ready", root.name) : root.state == 2 ? @tr("{} unavailable", root.name) : @tr("{} not checked", root.name);
+    color: root.state == 1 ? Theme.good : root.state == 2 ? Theme.warn : Theme.muted;
+    font-size: 12px; vertical-alignment: center;
 }
 
 export component TextField inherits Rectangle {
