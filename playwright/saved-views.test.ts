@@ -236,7 +236,7 @@ for (const viewport of [
           .click();
     };
 
-    const folder = await f.client.views.createFolder.mutate({
+    await f.client.views.createFolder.mutate({
       athleteId: f.athleteId,
       name: "Training",
     });
@@ -344,7 +344,13 @@ for (const viewport of [
     await saveDialog
       .getByRole("textbox", { name: "Name", exact: true })
       .fill("Long activities");
-    await pick(saveDialog, "Folder", "Training");
+    await pick(saveDialog, "Folder", "New folder");
+    const newFolder = saveDialog.getByRole("textbox", {
+      name: "New folder name",
+      exact: true,
+    });
+    await expect(newFolder).toBeFocused();
+    await newFolder.fill("Bikepacking");
     if (viewport.width < 768)
       await page.screenshot({ path: "/tmp/undertrained-inline-save-390.png" });
     await saveDialog
@@ -357,11 +363,18 @@ for (const viewport of [
     ).toContainText("Long activities");
     await closeViewOptions();
     const [saved] = await f.client.views.list.query({ athleteId: f.athleteId });
+    const folders = await f.client.views.listFolders.query({
+      athleteId: f.athleteId,
+    });
+    expect(folders.map((folder) => folder.name)).toEqual([
+      "Bikepacking",
+      "Training",
+    ]);
     expect(saved.rules.children[0]).toMatchObject({
       kind: "group",
       join: "OR",
     });
-    expect(saved.folderId).toBe(folder.id);
+    expect(saved.folderId).toBe(folders[0].id);
     expect(saved.display).toMatchObject({
       groupBy: "month",
       sort: { id: "distance" },

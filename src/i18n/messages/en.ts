@@ -31,6 +31,7 @@ const en = {
     update: "Update saved view",
     newView: "New view",
     newFolder: "New folder",
+    newFolderName: "New folder name",
     folder: "Folder",
     ungrouped: "Ungrouped",
     name: "Name",

@@ -27,7 +27,7 @@ import {
   ActivityFilterBuilder,
   ActivitySelectionPreview,
 } from "./ActivityFilterEditor";
-import { ViewDetailsFields } from "./ViewDetailsDialog";
+import { ViewDetailsFields, useViewDetails } from "./ViewDetailsDialog";
 import { ViewPicker } from "./ViewPicker";
 import { useSaveActivityView } from "./useSaveActivityView";
 
@@ -46,12 +46,6 @@ export function MobileViewDrawer({
   const [rules, setRules] = React.useState(scope.rules);
   const [display, setDisplay] = React.useState(scope.display);
   const [saving, setSaving] = React.useState(false);
-  const [name, setName] = React.useState(scope.view?.name ?? "");
-  const [folderId, setFolderId] = React.useState(
-    scope.view?.folderId === null || !scope.view
-      ? ""
-      : String(scope.view.folderId),
-  );
   const valid =
     scope.ready &&
     activityRulesSchema.safeParse(rules).success &&
@@ -61,7 +55,12 @@ export function MobileViewDrawer({
     !sameFilter(rules, scope.rules) ||
     !sameDisplay(display, scope.display);
   const save = useSaveActivityView(onCommit);
-  const busy = save.busy;
+  const details = useViewDetails(
+    scope.view?.name ?? "",
+    scope.view?.folderId ?? null,
+    (name, folderId) => save.saveNew(name, folderId, rules, display),
+  );
+  const busy = save.busy || details.busy;
   return (
     <ResponsiveDialog
       open
@@ -128,12 +127,7 @@ export function MobileViewDrawer({
           )}
           {saving && (
             <div className="border-border flex flex-col gap-3 border-t py-3">
-              <ViewDetailsFields
-                name={name}
-                folder={folderId}
-                onNameChange={setName}
-                onFolderChange={setFolderId}
-              />
+              <ViewDetailsFields details={details} />
             </div>
           )}
         </div>
@@ -160,16 +154,10 @@ export function MobileViewDrawer({
             {t("views.apply")}
           </Button>
           <Button
-            disabled={!valid || busy || (saving && !name.trim())}
+            disabled={!valid || busy || (saving && !details.valid)}
             onClick={() => {
               if (!saving) setSaving(true);
-              else
-                save.saveNew(
-                  name.trim(),
-                  folderId ? Number(folderId) : null,
-                  rules,
-                  display,
-                );
+              else details.submit();
             }}
           >
             {t(scope.view && !saving ? "views.saveAs" : "views.save")}
