@@ -16,14 +16,17 @@ import { groupViewsByFolder } from "./groupViewsByFolder";
 export function ViewPicker({
   children,
   onSelect,
+  disabled,
 }: {
   children: React.ReactNode;
   onSelect?: () => void;
+  disabled?: boolean;
 }) {
   const t = useT();
   const scope = useActivityView();
   return (
     <Select
+      disabled={disabled}
       value={scope.view ? String(scope.view.id) : ""}
       onValueChange={(value) => {
         if (value !== null)

@@ -361,7 +361,28 @@ for (const viewport of [
       failedSave = true;
       await route.fulfill({ status: 500, body: "" });
     });
+    let releaseFolder = () => {};
+    const folderGate = new Promise<void>((resolve) => {
+      releaseFolder = resolve;
+    });
+    await page.route(/\/api\/trpc\/views\.createFolder\?/, async (route) => {
+      await folderGate;
+      await route.continue();
+    });
     await newFolder.press("Enter");
+    if (viewport.width < 768) {
+      // Leaving the drawer mid-folder-creation would drop the view save.
+      await expect(
+        saveDialog.getByRole("combobox", { name: "Saved views", exact: true }),
+      ).toBeDisabled();
+      await expect(
+        saveDialog.getByRole("link", {
+          name: "Manage saved views",
+          exact: true,
+        }),
+      ).toHaveAttribute("aria-disabled", "true");
+    }
+    releaseFolder();
     await expect.poll(() => failedSave).toBe(true);
     await expect(saveDialog).toBeVisible();
     await saveDialog

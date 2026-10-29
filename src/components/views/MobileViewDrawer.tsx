@@ -76,7 +76,8 @@ export function MobileViewDrawer({
           </ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         <div className="min-h-0 overflow-y-auto pb-1">
-          <ViewPicker onSelect={onCommit}>
+          {/* Leaving mid-save would drop the view save queued after a new folder. */}
+          <ViewPicker onSelect={onCommit} disabled={busy}>
             <SelectTrigger
               aria-label={t("views.title")}
               className="w-full font-medium"
@@ -91,8 +92,12 @@ export function MobileViewDrawer({
               {dirty ? t(scope.view ? "views.modified" : "views.unsaved") : ""}
             </span>
             <Link
-              className="text-muted-foreground text-xs underline"
+              className="text-muted-foreground text-xs underline aria-disabled:pointer-events-none aria-disabled:opacity-50"
               href="/views"
+              aria-disabled={busy || undefined}
+              onClick={(event) => {
+                if (busy) event.preventDefault();
+              }}
             >
               {t("views.manage")}
             </Link>
