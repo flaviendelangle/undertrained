@@ -166,8 +166,12 @@ export function MobileViewDrawer({
             type={saving ? "submit" : "button"}
             form={saving ? formId : undefined}
             disabled={!valid || busy || (saving && !details.valid)}
-            onClick={() => {
-              if (!saving) setSaving(true);
+            onClick={(event) => {
+              if (saving) return;
+              // React commits the `submit` type before the click's default
+              // action runs, which would submit the just-revealed form.
+              event.preventDefault();
+              setSaving(true);
             }}
           >
             {t(scope.view && !saving ? "views.saveAs" : "views.save")}

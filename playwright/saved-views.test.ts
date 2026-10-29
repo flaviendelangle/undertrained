@@ -403,6 +403,28 @@ for (const viewport of [
       ).toContainText(name);
       await closeViewOptions();
     }
+    if (viewport.width < 768) {
+      // The first "Save as new" click only reveals the fields, even though
+      // the existing view's name already makes them valid.
+      await openViewOptions();
+      const drawer = page.getByRole("dialog", {
+        name: "View options",
+        exact: true,
+      });
+      await drawer
+        .getByRole("button", { name: "Save as new", exact: true })
+        .click();
+      await expect(
+        drawer.getByRole("textbox", { name: "Name", exact: true }),
+      ).toHaveValue(saved.name);
+      await expect(
+        drawer.getByRole("button", { name: "Save view", exact: true }),
+      ).toBeEnabled();
+      expect(
+        await f.client.views.list.query({ athleteId: f.athleteId }),
+      ).toHaveLength(1);
+      await closeViewOptions();
+    }
     if (viewport.width >= 768) {
       const toolbar = page.getByRole("toolbar", {
         name: "View options",
