@@ -29,6 +29,7 @@ const fr: Messages = {
     update: "Mettre à jour la vue",
     newView: "Nouvelle vue",
     newFolder: "Nouveau dossier",
+    newFolderName: "Nom du nouveau dossier",
     folder: "Dossier",
     ungrouped: "Sans dossier",
     name: "Nom",

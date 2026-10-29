@@ -27,7 +27,7 @@ import {
   ActivityFilterBuilder,
   ActivitySelectionPreview,
 } from "./ActivityFilterEditor";
-import { ViewDetailsFields } from "./ViewDetailsDialog";
+import { ViewDetailsFields, useViewDetails } from "./ViewDetailsDialog";
 import { ViewPicker } from "./ViewPicker";
 import { useSaveActivityView } from "./useSaveActivityView";
 
@@ -46,12 +46,6 @@ export function MobileViewDrawer({
   const [rules, setRules] = React.useState(scope.rules);
   const [display, setDisplay] = React.useState(scope.display);
   const [saving, setSaving] = React.useState(false);
-  const [name, setName] = React.useState(scope.view?.name ?? "");
-  const [folderId, setFolderId] = React.useState(
-    scope.view?.folderId === null || !scope.view
-      ? ""
-      : String(scope.view.folderId),
-  );
   const valid =
     scope.ready &&
     activityRulesSchema.safeParse(rules).success &&
@@ -61,7 +55,13 @@ export function MobileViewDrawer({
     !sameFilter(rules, scope.rules) ||
     !sameDisplay(display, scope.display);
   const save = useSaveActivityView(onCommit);
-  const busy = save.busy;
+  const details = useViewDetails(
+    scope.view?.name ?? "",
+    scope.view?.folderId ?? null,
+    (name, folderId) => save.saveNew(name, folderId, rules, display),
+  );
+  const busy = save.busy || details.busy;
+  const formId = React.useId();
   return (
     <ResponsiveDialog
       open
@@ -76,7 +76,8 @@ export function MobileViewDrawer({
           </ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         <div className="min-h-0 overflow-y-auto pb-1">
-          <ViewPicker onSelect={onCommit}>
+          {/* Leaving mid-save would drop the view save queued after a new folder. */}
+          <ViewPicker onSelect={onCommit} disabled={busy}>
             <SelectTrigger
               aria-label={t("views.title")}
               className="w-full font-medium"
@@ -91,8 +92,12 @@ export function MobileViewDrawer({
               {dirty ? t(scope.view ? "views.modified" : "views.unsaved") : ""}
             </span>
             <Link
-              className="text-muted-foreground text-xs underline"
+              className="text-muted-foreground text-xs underline aria-disabled:pointer-events-none aria-disabled:opacity-50"
               href="/views"
+              aria-disabled={busy || undefined}
+              onClick={(event) => {
+                if (busy) event.preventDefault();
+              }}
             >
               {t("views.manage")}
             </Link>
@@ -127,14 +132,16 @@ export function MobileViewDrawer({
             </Button>
           )}
           {saving && (
-            <div className="border-border flex flex-col gap-3 border-t py-3">
-              <ViewDetailsFields
-                name={name}
-                folder={folderId}
-                onNameChange={setName}
-                onFolderChange={setFolderId}
-              />
-            </div>
+            <form
+              id={formId}
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (valid && !busy && details.valid) details.submit();
+              }}
+              className="border-border flex flex-col gap-3 border-t py-3"
+            >
+              <ViewDetailsFields details={details} />
+            </form>
           )}
         </div>
         <ResponsiveDialogFooter className="border-border grid shrink-0 grid-cols-2 gap-2 border-t pt-3">
@@ -160,16 +167,16 @@ export function MobileViewDrawer({
             {t("views.apply")}
           </Button>
           <Button
-            disabled={!valid || busy || (saving && !name.trim())}
-            onClick={() => {
-              if (!saving) setSaving(true);
-              else
-                save.saveNew(
-                  name.trim(),
-                  folderId ? Number(folderId) : null,
-                  rules,
-                  display,
-                );
+            // Outside the form, so Enter in its fields submits through `form`.
+            type={saving ? "submit" : "button"}
+            form={saving ? formId : undefined}
+            disabled={!valid || busy || (saving && !details.valid)}
+            onClick={(event) => {
+              if (saving) return;
+              // React commits the `submit` type before the click's default
+              // action runs, which would submit the just-revealed form.
+              event.preventDefault();
+              setSaving(true);
             }}
           >
             {t(scope.view && !saving ? "views.saveAs" : "views.save")}

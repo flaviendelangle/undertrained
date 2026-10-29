@@ -236,7 +236,7 @@ for (const viewport of [
           .click();
     };
 
-    const folder = await f.client.views.createFolder.mutate({
+    await f.client.views.createFolder.mutate({
       athleteId: f.athleteId,
       name: "Training",
     });
@@ -344,9 +344,47 @@ for (const viewport of [
     await saveDialog
       .getByRole("textbox", { name: "Name", exact: true })
       .fill("Long activities");
-    await pick(saveDialog, "Folder", "Training");
+    await pick(saveDialog, "Folder", "New folder");
+    const newFolder = saveDialog.getByRole("textbox", {
+      name: "New folder name",
+      exact: true,
+    });
+    await expect(newFolder).toBeFocused();
+    await newFolder.fill("Bikepacking");
     if (viewport.width < 768)
       await page.screenshot({ path: "/tmp/undertrained-inline-save-390.png" });
+    // The first view save fails after the folder is created; the retry must
+    // reuse that folder.
+    let failedSave = false;
+    await page.route(/\/api\/trpc\/views\.create\?/, async (route) => {
+      if (failedSave) return route.continue();
+      failedSave = true;
+      await route.fulfill({ status: 500, body: "" });
+    });
+    let releaseFolder = () => {};
+    const folderGate = new Promise<void>((resolve) => {
+      releaseFolder = resolve;
+    });
+    await page.route(/\/api\/trpc\/views\.createFolder\?/, async (route) => {
+      await folderGate;
+      await route.continue();
+    });
+    await newFolder.press("Enter");
+    if (viewport.width < 768) {
+      // Leaving the drawer mid-folder-creation would drop the view save.
+      await expect(
+        saveDialog.getByRole("combobox", { name: "Saved views", exact: true }),
+      ).toBeDisabled();
+      await expect(
+        saveDialog.getByRole("link", {
+          name: "Manage saved views",
+          exact: true,
+        }),
+      ).toHaveAttribute("aria-disabled", "true");
+    }
+    releaseFolder();
+    await expect.poll(() => failedSave).toBe(true);
+    await expect(saveDialog).toBeVisible();
     await saveDialog
       .getByRole("button", { name: "Save view", exact: true })
       .click();
@@ -357,11 +395,18 @@ for (const viewport of [
     ).toContainText("Long activities");
     await closeViewOptions();
     const [saved] = await f.client.views.list.query({ athleteId: f.athleteId });
+    const folders = await f.client.views.listFolders.query({
+      athleteId: f.athleteId,
+    });
+    expect(folders.map((folder) => folder.name)).toEqual([
+      "Bikepacking",
+      "Training",
+    ]);
     expect(saved.rules.children[0]).toMatchObject({
       kind: "group",
       join: "OR",
     });
-    expect(saved.folderId).toBe(folder.id);
+    expect(saved.folderId).toBe(folders[0].id);
     expect(saved.display).toMatchObject({
       groupBy: "month",
       sort: { id: "distance" },
@@ -377,6 +422,28 @@ for (const viewport of [
       await expect(
         page.getByRole("combobox", { name: "Saved views" }),
       ).toContainText(name);
+      await closeViewOptions();
+    }
+    if (viewport.width < 768) {
+      // The first "Save as new" click only reveals the fields, even though
+      // the existing view's name already makes them valid.
+      await openViewOptions();
+      const drawer = page.getByRole("dialog", {
+        name: "View options",
+        exact: true,
+      });
+      await drawer
+        .getByRole("button", { name: "Save as new", exact: true })
+        .click();
+      await expect(
+        drawer.getByRole("textbox", { name: "Name", exact: true }),
+      ).toHaveValue(saved.name);
+      await expect(
+        drawer.getByRole("button", { name: "Save view", exact: true }),
+      ).toBeEnabled();
+      expect(
+        await f.client.views.list.query({ athleteId: f.athleteId }),
+      ).toHaveLength(1);
       await closeViewOptions();
     }
     if (viewport.width >= 768) {
@@ -502,6 +569,27 @@ for (const viewport of [
       await expect(
         page.getByRole("button", { name: "Edit filters (1)", exact: true }),
       ).toBeVisible();
+    // A new folder name matching an existing folder reuses that folder.
+    await openViewOptions();
+    await page.getByRole("button", { name: "Save view", exact: true }).click();
+    await saveDialog
+      .getByRole("textbox", { name: "Name", exact: true })
+      .fill("Long activities in Training");
+    await pick(saveDialog, "Folder", "New folder");
+    await newFolder.fill(" Training ");
+    await newFolder.press("Enter");
+    await expect(saveDialog).not.toBeVisible();
+    await expect
+      .poll(
+        async () =>
+          (await f.client.views.list.query({ athleteId: f.athleteId })).find(
+            (view) => view.name === "Long activities in Training",
+          )?.folderId,
+      )
+      .toBe(folders[1].id);
+    expect(
+      await f.client.views.listFolders.query({ athleteId: f.athleteId }),
+    ).toEqual(folders);
   });
 }
 
