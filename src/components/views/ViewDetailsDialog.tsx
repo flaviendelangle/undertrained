@@ -52,7 +52,8 @@ export function ViewDetailsDialog({
     <ResponsiveDialog
       open
       onOpenChange={(open) => {
-        if (!open) onClose();
+        // Closing mid-creation would leave the new folder empty.
+        if (!open && !details.busy) onClose();
       }}
     >
       <ResponsiveDialogContent>
@@ -68,7 +69,7 @@ export function ViewDetailsDialog({
         >
           <ViewDetailsFields details={details} />
           <ResponsiveDialogFooter>
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" disabled={details.busy} onClick={onClose}>
               {t("common.cancel")}
             </Button>
             <Button

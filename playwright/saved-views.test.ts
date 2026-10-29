@@ -353,6 +353,17 @@ for (const viewport of [
     await newFolder.fill("Bikepacking");
     if (viewport.width < 768)
       await page.screenshot({ path: "/tmp/undertrained-inline-save-390.png" });
+    // The first view save fails after the folder is created; the retry must
+    // reuse that folder.
+    let failedSave = false;
+    await page.route(/\/api\/trpc\/views\.create\?/, async (route) => {
+      if (failedSave) return route.continue();
+      failedSave = true;
+      await route.fulfill({ status: 500, body: "" });
+    });
+    await newFolder.press("Enter");
+    await expect.poll(() => failedSave).toBe(true);
+    await expect(saveDialog).toBeVisible();
     await saveDialog
       .getByRole("button", { name: "Save view", exact: true })
       .click();

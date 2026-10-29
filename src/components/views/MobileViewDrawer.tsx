@@ -61,6 +61,7 @@ export function MobileViewDrawer({
     (name, folderId) => save.saveNew(name, folderId, rules, display),
   );
   const busy = save.busy || details.busy;
+  const formId = React.useId();
   return (
     <ResponsiveDialog
       open
@@ -126,9 +127,16 @@ export function MobileViewDrawer({
             </Button>
           )}
           {saving && (
-            <div className="border-border flex flex-col gap-3 border-t py-3">
+            <form
+              id={formId}
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (valid && !busy && details.valid) details.submit();
+              }}
+              className="border-border flex flex-col gap-3 border-t py-3"
+            >
               <ViewDetailsFields details={details} />
-            </div>
+            </form>
           )}
         </div>
         <ResponsiveDialogFooter className="border-border grid shrink-0 grid-cols-2 gap-2 border-t pt-3">
@@ -154,10 +162,12 @@ export function MobileViewDrawer({
             {t("views.apply")}
           </Button>
           <Button
+            // Outside the form, so Enter in its fields submits through `form`.
+            type={saving ? "submit" : "button"}
+            form={saving ? formId : undefined}
             disabled={!valid || busy || (saving && !details.valid)}
             onClick={() => {
               if (!saving) setSaving(true);
-              else details.submit();
             }}
           >
             {t(scope.view && !saving ? "views.saveAs" : "views.save")}
