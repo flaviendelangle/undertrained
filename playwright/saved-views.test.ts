@@ -548,6 +548,27 @@ for (const viewport of [
       await expect(
         page.getByRole("button", { name: "Edit filters (1)", exact: true }),
       ).toBeVisible();
+    // A new folder name matching an existing folder reuses that folder.
+    await openViewOptions();
+    await page.getByRole("button", { name: "Save view", exact: true }).click();
+    await saveDialog
+      .getByRole("textbox", { name: "Name", exact: true })
+      .fill("Long activities in Training");
+    await pick(saveDialog, "Folder", "New folder");
+    await newFolder.fill(" Training ");
+    await newFolder.press("Enter");
+    await expect(saveDialog).not.toBeVisible();
+    await expect
+      .poll(
+        async () =>
+          (await f.client.views.list.query({ athleteId: f.athleteId })).find(
+            (view) => view.name === "Long activities in Training",
+          )?.folderId,
+      )
+      .toBe(folders[1].id);
+    expect(
+      await f.client.views.listFolders.query({ athleteId: f.athleteId }),
+    ).toEqual(folders);
   });
 }
 
