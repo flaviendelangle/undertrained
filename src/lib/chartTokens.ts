@@ -303,15 +303,6 @@ export function formatCompact(value: number): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Axis sizes — override MUI defaults (45px width, 25px height).
- * These are additive with the margin, so keep margin small.
- */
-export const AXIS_SIZE = {
-  desktop: { width: 60, height: 25 },
-  mobile: { width: 32, height: 20 },
-} as const;
-
-/**
  * Font sizes for the custom SVG/WebGL charts (PowerCurve, ActivityStreams),
  * which render their own axes and labels. MUI x-charts get their tick/label
  * sizing from the global `.MuiChartsAxis-*` rules in globals.css — do not set

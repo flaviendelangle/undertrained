@@ -26,7 +26,7 @@ import type { TFunction } from "~/i18n/I18nProvider";
 import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { activitySettingsDay } from "~/lib/activityRecording";
-import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
+import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import type { RiderSettings } from "~/sensors/types";
 import { ZONE_MODELS } from "~/sensors/zoneModels";
 import { formatElapsed } from "~/utils/format";
@@ -113,8 +113,10 @@ const ActivityLaps = React.memo(function ActivityLaps(
   const usePower = sportConfig.zoneModel === "power";
   const usePace = sportConfig.zoneModel === "pace";
 
+  // A pace has no value at zero speed (it would read "Infinity:NaN /km"), so
+  // the speed axis leaves its zero tick blank.
   const formatValue = (v: number) =>
-    usePower ? `${Math.round(v)} W` : sportConfig.formatSpeed(v);
+    usePower ? `${Math.round(v)} W` : v > 0 ? sportConfig.formatSpeed(v) : "";
 
   // Lay laps out end-to-end on a cumulative-time axis so each bar's WIDTH is
   // proportional to its duration. Prefix sums avoid mutating render-scope state.
@@ -329,23 +331,23 @@ function LapsChart(props: {
         xAxis={[
           {
             id: X_AXIS_ID,
+            label: isMobile ? undefined : t("charts.laps.timeAxis"),
             scaleType: "linear",
             min: 0,
             max: totalDuration,
             valueFormatter: (v: number) => formatElapsed(v),
-            height: isMobile
-              ? AXIS_SIZE.mobile.height
-              : AXIS_SIZE.desktop.height,
+            height: "auto",
           },
         ]}
         yAxis={[
           {
             id: Y_AXIS_ID,
+            label: isMobile ? undefined : valueLabel,
             scaleType: "linear",
             min: 0,
             max: maxValue * headroom,
             valueFormatter: (v: number) => formatValue(v),
-            width: isMobile ? AXIS_SIZE.mobile.width : AXIS_SIZE.desktop.width,
+            width: "auto",
           },
         ]}
       >
@@ -360,14 +362,8 @@ function LapsChart(props: {
             gapPx={BAR_GAP_PX}
           />
         )}
-        <ChartsXAxis
-          axisId={X_AXIS_ID}
-          label={isMobile ? undefined : t("charts.laps.timeAxis")}
-        />
-        <ChartsYAxis
-          axisId={Y_AXIS_ID}
-          label={isMobile ? undefined : valueLabel}
-        />
+        <ChartsXAxis axisId={X_AXIS_ID} />
+        <ChartsYAxis axisId={Y_AXIS_ID} />
       </ChartsContainerPro>
       {hover && <LapTooltip hover={hover} />}
     </div>

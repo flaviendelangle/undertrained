@@ -3,7 +3,7 @@ import * as React from "react";
 import { LineChartPro } from "@mui/x-charts-pro";
 
 import { useT } from "~/i18n/useT";
-import { AXIS_SIZE, useChartTokens } from "~/lib/chartTokens";
+import { useChartTokens } from "~/lib/chartTokens";
 
 import { ChartThemeProvider } from "../charts/ChartThemeProvider";
 import { ChartTooltip } from "../charts/ChartTooltip";
@@ -93,13 +93,13 @@ export function WeeklyLoadChart({
             {
               scaleType: "point",
               data: dayLabels,
-              height: AXIS_SIZE.mobile.height,
+              height: "auto",
             },
           ]}
           yAxis={[
             {
               min: 0,
-              width: AXIS_SIZE.mobile.width,
+              width: "auto",
               valueFormatter: (v: number) => Math.round(v).toString(),
             },
           ]}

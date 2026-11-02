@@ -27,7 +27,6 @@ import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
 import {
-  AXIS_SIZE,
   CHART_MARGINS,
   formatCompact,
   useChartTokens,
@@ -225,9 +224,7 @@ export default function ActivitiesCumulativeTimeline() {
                 ctx?.location === "tick"
                   ? format(value, "MMMM", { locale: enGB })
                   : format(value, "d MMMM", { locale: enGB }),
-              height: isMobile
-                ? AXIS_SIZE.mobile.height
-                : AXIS_SIZE.desktop.height,
+              height: "auto",
             },
           ]}
           yAxis={[
@@ -239,9 +236,7 @@ export default function ActivitiesCumulativeTimeline() {
                   ? `${formatted} ${metricConfig.unit}`
                   : formatted;
               },
-              width: isMobile
-                ? AXIS_SIZE.mobile.width
-                : AXIS_SIZE.desktop.width,
+              width: "auto",
             },
           ]}
           series={series}
