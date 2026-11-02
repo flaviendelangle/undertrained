@@ -225,93 +225,103 @@ const ViewsPage: NextPageWithLayout = () => {
                   kind={savedViewKind}
                   payload={view}
                   disabled={busy}
-                  render={<li />}
-                  className="hover:bg-muted/30 flex items-center gap-2 p-3 data-dragging:opacity-40 md:p-4"
                 >
-                  <Draggable.Handle
-                    render={
-                      <Button variant="ghost" size="icon-sm" disabled={busy} />
-                    }
-                    aria-label={t("views.moveView", { name: view.name })}
-                    className="text-muted-foreground cursor-grab touch-none active:cursor-grabbing"
-                    onClick={() => setAction({ kind: "edit", view })}
+                  <Draggable.Trigger
+                    render={<li />}
+                    className="hover:bg-muted/30 flex items-center gap-2 p-3 data-dragging:opacity-40 md:p-4"
                   >
-                    <GripVerticalIcon />
-                  </Draggable.Handle>
-                  <Link
-                    className="min-w-0 flex-1"
-                    href={scope.viewHref(view.id)}
-                  >
-                    <span className="block truncate font-medium">
-                      {view.name}
-                    </span>
-                    <span className="text-muted-foreground text-xs">
-                      {view.folderId === null
-                        ? t("views.ungrouped")
-                        : scope.folders.find((f) => f.id === view.folderId)
-                            ?.name}
-                      {counts.data?.[view.id] !== undefined
-                        ? ` · ${t("views.activities", { count: counts.data[view.id] })}`
-                        : ""}
-                    </span>
-                  </Link>
-                  <div className="hidden gap-2 text-xs md:flex">
-                    <Link
-                      className="text-muted-foreground hover:text-foreground p-2"
-                      href={scope.viewHref(view.id, "/activities/charts")}
-                    >
-                      {t("nav.statistics")}
-                    </Link>
-                    <Link
-                      className="text-muted-foreground hover:text-foreground p-2"
-                      href={scope.viewHref(view.id, "/activities/map")}
-                    >
-                      {t("nav.map")}
-                    </Link>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
+                    <Draggable.Handle
                       render={
                         <Button
-                          size="icon"
                           variant="ghost"
-                          aria-label={`${t("views.manage")} ${view.name}`}
+                          size="icon-sm"
+                          disabled={busy}
                         />
                       }
+                      aria-label={t("views.moveView", { name: view.name })}
+                      className="text-muted-foreground cursor-grab touch-none active:cursor-grabbing"
+                      onClick={() => setAction({ kind: "edit", view })}
                     >
-                      <MoreHorizontalIcon />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-max min-w-44">
-                      <DropdownMenuItem
-                        className="whitespace-nowrap"
-                        onClick={() => setAction({ kind: "edit", view })}
+                      <GripVerticalIcon />
+                    </Draggable.Handle>
+                    <Link
+                      className="min-w-0 flex-1"
+                      href={scope.viewHref(view.id)}
+                    >
+                      <span className="block truncate font-medium">
+                        {view.name}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {view.folderId === null
+                          ? t("views.ungrouped")
+                          : scope.folders.find((f) => f.id === view.folderId)
+                              ?.name}
+                        {counts.data?.[view.id] !== undefined
+                          ? ` · ${t("views.activities", { count: counts.data[view.id] })}`
+                          : ""}
+                      </span>
+                    </Link>
+                    <div className="hidden gap-2 text-xs md:flex">
+                      <Link
+                        className="text-muted-foreground hover:text-foreground p-2"
+                        href={scope.viewHref(view.id, "/activities/charts")}
                       >
-                        {t("views.rename")} / {t("views.move")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setAction({ kind: "duplicate", view })}
+                        {t("nav.statistics")}
+                      </Link>
+                      <Link
+                        className="text-muted-foreground hover:text-foreground p-2"
+                        href={scope.viewHref(view.id, "/activities/map")}
                       >
-                        {t("views.duplicate")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={() => setAction({ kind: "delete", view })}
+                        {t("nav.map")}
+                      </Link>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`${t("views.manage")} ${view.name}`}
+                          />
+                        }
                       >
-                        {t("common.delete")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  {/* Outside the list: a <ul> only accepts <li> children. */}
-                  <Draggable.Preview
-                    container={mainRef}
-                    offset={({ container }) => ({
-                      x: container.getBoundingClientRect().width / 2,
-                      y: -8,
-                    })}
-                    className="bg-popover text-popover-foreground border-border pointer-events-none w-max max-w-64 truncate rounded-md border px-2.5 py-1.5 text-sm font-medium shadow-md"
-                  >
-                    {view.name}
-                  </Draggable.Preview>
+                        <MoreHorizontalIcon />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-max min-w-44"
+                      >
+                        <DropdownMenuItem
+                          className="whitespace-nowrap"
+                          onClick={() => setAction({ kind: "edit", view })}
+                        >
+                          {t("views.rename")} / {t("views.move")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setAction({ kind: "duplicate", view })}
+                        >
+                          {t("views.duplicate")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => setAction({ kind: "delete", view })}
+                        >
+                          {t("common.delete")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {/* Outside the list: a <ul> only accepts <li> children. */}
+                    <Draggable.Preview
+                      container={mainRef}
+                      offset={({ container }) => ({
+                        x: container.getBoundingClientRect().width / 2,
+                        y: -8,
+                      })}
+                      className="bg-popover text-popover-foreground border-border pointer-events-none w-max max-w-64 truncate rounded-md border px-2.5 py-1.5 text-sm font-medium shadow-md"
+                    >
+                      {view.name}
+                    </Draggable.Preview>
+                  </Draggable.Trigger>
                 </Draggable.Root>
               ))}
             </ul>

@@ -149,13 +149,13 @@ export function StepDraggable({
   className?: string;
 }) {
   return (
-    <Draggable.Root
-      kind={STEP_DRAG_KIND}
-      payload={{ id }}
-      aria-label={label}
-      className={cn("data-dragging:opacity-40", className)}
-    >
-      {children}
+    <Draggable.Root kind={STEP_DRAG_KIND} payload={{ id }}>
+      <Draggable.Trigger
+        aria-label={label}
+        className={cn("data-dragging:opacity-40", className)}
+      >
+        {children}
+      </Draggable.Trigger>
     </Draggable.Root>
   );
 }

@@ -522,31 +522,27 @@ export function RescheduleSource({
   const dimmed = useStore(drag, selectDimmed, training.id);
 
   return (
-    <Draggable.Root
-      kind={trainingKind}
-      payload={training}
-      disabled={disabled}
-      data-dimmed={dimmed ? "" : undefined}
-      {...props}
-    >
-      {children}
-      <Draggable.Preview
-        kind={trainingKind}
-        {...previewSettings}
-        className="pointer-events-none"
-      >
-        {({ source }) => {
-          const rect = source.element.getBoundingClientRect();
-          return (
-            <RescheduleSourcePreview
-              drag={drag}
-              renderPreview={renderPreview}
-              width={rect.width}
-              height={rect.height}
-            />
-          );
-        }}
-      </Draggable.Preview>
+    <Draggable.Root kind={trainingKind} payload={training} disabled={disabled}>
+      <Draggable.Trigger data-dimmed={dimmed ? "" : undefined} {...props}>
+        {children}
+        <Draggable.Preview
+          kind={trainingKind}
+          {...previewSettings}
+          className="pointer-events-none"
+        >
+          {({ source }) => {
+            const rect = source.element.getBoundingClientRect();
+            return (
+              <RescheduleSourcePreview
+                drag={drag}
+                renderPreview={renderPreview}
+                width={rect.width}
+                height={rect.height}
+              />
+            );
+          }}
+        </Draggable.Preview>
+      </Draggable.Trigger>
     </Draggable.Root>
   );
 }
