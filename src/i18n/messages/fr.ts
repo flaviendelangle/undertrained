@@ -200,9 +200,8 @@ const fr: Messages = {
     tierLoad: "Charge {tier} ({load})",
     moreActivities: { one: "+{count} autre", other: "+{count} autres" },
     load: "charge",
-    deltaVsAverage:
-      "{delta}% par rapport à la moyenne des 4 dernières semaines",
-    stillPlanned: "+{duration} encore prévues cette semaine",
+    deltaVsAverage: "{delta}% vs moy. 4 sem.",
+    cumulativeLoad: "Charge cumulée",
     thisWeek: "Cette semaine",
     previousWeek: "Semaine précédente",
     planned: "prévu",
@@ -230,6 +229,7 @@ const fr: Messages = {
     stat: {
       distance: "Distance",
       duration: "Durée",
+      load: "Charge",
       elevation: "Dénivelé",
       power: "Puissance",
       avgHr: "FC moy.",

@@ -199,8 +199,8 @@ const en = {
     tierLoad: "{tier} load ({load})",
     moreActivities: { one: "+{count} more", other: "+{count} more" },
     load: "load",
-    deltaVsAverage: "{delta}% vs. trailing 4-week average",
-    stillPlanned: "+{duration} still planned this week",
+    deltaVsAverage: "{delta}% vs. 4-week avg.",
+    cumulativeLoad: "Cumulative load",
     thisWeek: "This week",
     previousWeek: "Previous week",
     planned: "planned",
@@ -228,6 +228,7 @@ const en = {
     stat: {
       distance: "Distance",
       duration: "Duration",
+      load: "Load",
       elevation: "Elevation",
       power: "Power",
       avgHr: "Avg HR",

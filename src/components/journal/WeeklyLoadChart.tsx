@@ -1,12 +1,15 @@
 import * as React from "react";
 
-import { LineChartPro } from "@mui/x-charts-pro";
+import { LineChartPro, lineClasses } from "@mui/x-charts-pro";
 
 import { useT } from "~/i18n/useT";
 import { AXIS_SIZE, useChartTokens } from "~/lib/chartTokens";
 
 import { ChartThemeProvider } from "../charts/ChartThemeProvider";
 import { ChartTooltip } from "../charts/ChartTooltip";
+
+/** Dash pattern of the previous-week line, shared by the line and its key. */
+const LAST_WEEK_DASH = "4 3";
 
 /**
  * Running total of a 7-day load array, so the line rises across the week.
@@ -24,11 +27,30 @@ function cumulative(daily: (number | null)[]): (number | null)[] {
   });
 }
 
+/** Short line swatch for the chart key, solid or dashed like its series. */
+function LineKey({ color, dashed }: { color: string; dashed?: boolean }) {
+  return (
+    <svg aria-hidden width="12" height="2" className="shrink-0">
+      <line
+        x1="0"
+        x2="12"
+        y1="1"
+        y2="1"
+        stroke={color}
+        strokeWidth="2"
+        strokeDasharray={dashed ? LAST_WEEK_DASH : undefined}
+      />
+    </svg>
+  );
+}
+
 /**
  * Compact cumulative training-load line for one week: this week's load builds up
- * Monday → Sunday in the primary colour, with the previous week drawn in grey for
- * comparison (Strava-style, no suggested range). Meant to live inside the Journal
- * week summary card, so it only mounts once that card is opened.
+ * Monday → Sunday in the primary colour, with the previous week drawn as a dashed
+ * grey line for comparison (Strava-style, no suggested range). Only this week's
+ * latest day carries a dot; the tooltip gives every other value. Meant to live
+ * inside the Journal week summary card, so it only mounts once that card is
+ * opened.
  */
 export function WeeklyLoadChart({
   thisWeek,
@@ -68,7 +90,7 @@ export function WeeklyLoadChart({
         label: t("journal.previousWeek"),
         data: cumulative(lastWeek),
         color: lastWeekColor,
-        showMark: true,
+        showMark: false,
         curve: "monotoneX" as const,
         valueFormatter: (v: number | null) => (v == null ? "" : v.toFixed(0)),
       });
@@ -78,7 +100,8 @@ export function WeeklyLoadChart({
       label: t("journal.thisWeek"),
       data: cumulative(thisWeek),
       color: thisWeekColor,
-      showMark: true,
+      shape: "circle" as const,
+      showMark: "end" as const,
       curve: "monotoneX" as const,
       valueFormatter: (v: number | null) => (v == null ? "" : v.toFixed(0)),
     });
@@ -86,30 +109,59 @@ export function WeeklyLoadChart({
   }, [thisWeek, lastWeek, thisWeekColor, lastWeekColor, t]);
 
   return (
-    <ChartThemeProvider>
-      <div className="h-36 w-full">
-        <LineChartPro
-          xAxis={[
-            {
-              scaleType: "point",
-              data: dayLabels,
-              height: AXIS_SIZE.mobile.height,
-            },
-          ]}
-          yAxis={[
-            {
-              min: 0,
-              width: AXIS_SIZE.mobile.width,
-              valueFormatter: (v: number) => Math.round(v).toString(),
-            },
-          ]}
-          series={series}
-          margin={{ left: 4, right: 8, top: 8, bottom: 4 }}
-          grid={{ horizontal: true }}
-          hideLegend
-          slots={{ tooltip: ChartTooltip }}
-        />
+    <div className="flex flex-col gap-2">
+      {/* The key doubles as the chart title: the solid line is this week's
+          cumulative load, the dashed one the week before. */}
+      <div className="text-muted-foreground flex items-center justify-between gap-3 text-[11px]">
+        <span className="flex items-center gap-1.5">
+          <LineKey color={thisWeekColor} />
+          {t("journal.cumulativeLoad")}
+        </span>
+        {lastWeek != null && (
+          <span className="flex items-center gap-1.5">
+            <LineKey color={lastWeekColor} dashed />
+            {t("journal.previousWeek")}
+          </span>
+        )}
       </div>
-    </ChartThemeProvider>
+      <ChartThemeProvider>
+        <div className="h-36 w-full">
+          <LineChartPro
+            xAxis={[
+              {
+                scaleType: "point",
+                data: dayLabels,
+                // MUI blanks any tick label taller than the axis height minus
+                // the tick and gap (4 + 3px even with ticks disabled), so the
+                // shared 20px mobile height leaves no room for the day names.
+                height: 24,
+                disableTicks: true,
+                disableLine: true,
+              },
+            ]}
+            yAxis={[
+              {
+                min: 0,
+                width: AXIS_SIZE.mobile.width,
+                disableTicks: true,
+                disableLine: true,
+                valueFormatter: (v: number) => Math.round(v).toString(),
+              },
+            ]}
+            series={series}
+            // Room on the right for half of the last day name and the end dot.
+            margin={{ left: 0, right: 12, top: 8, bottom: 0 }}
+            grid={{ horizontal: true }}
+            hideLegend
+            slots={{ tooltip: ChartTooltip }}
+            sx={{
+              [`& .${lineClasses.line}[data-series="last"]`]: {
+                strokeDasharray: LAST_WEEK_DASH,
+              },
+            }}
+          />
+        </div>
+      </ChartThemeProvider>
+    </div>
   );
 }
