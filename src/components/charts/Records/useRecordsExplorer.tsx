@@ -150,7 +150,7 @@ export interface RecordControl<T extends string | number> {
 }
 
 export interface RecordsExplorer {
-  /** Sport switch — only sports with data are listed; labels are sport icons. */
+  /** Sport switch — only sports with data are listed; labels are sport icons named for screen readers. */
   sportControl: RecordControl<Sport>;
   /** Metric switch for the active sport (power/speed/… or pace/heart rate). */
   metricControl: RecordControl<string>;
@@ -191,11 +191,27 @@ export function useRecordsExplorer(): RecordsExplorer {
   const sportItems = React.useMemo(() => {
     const opts: { key: Sport; label: React.ReactNode }[] = [];
     if (options?.hasCycling)
-      opts.push({ key: "cycling", label: <RideIcon className="size-3.5" /> });
+      opts.push({
+        key: "cycling",
+        label: (
+          <>
+            <RideIcon aria-hidden className="size-4" />
+            <span className="sr-only">{t("sport.cycling.label")}</span>
+          </>
+        ),
+      });
     if (options && options.runDistances.length > 0)
-      opts.push({ key: "running", label: <RunIcon className="size-3.5" /> });
+      opts.push({
+        key: "running",
+        label: (
+          <>
+            <RunIcon aria-hidden className="size-4" />
+            <span className="sr-only">{t("sport.running.label")}</span>
+          </>
+        ),
+      });
     return opts;
-  }, [options]);
+  }, [options, t]);
 
   const [urlSelection] = React.useState(readUrlSelection);
   const [sport, setSport] = React.useState<Sport>(

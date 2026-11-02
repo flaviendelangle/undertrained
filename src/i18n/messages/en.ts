@@ -693,6 +693,7 @@ const en = {
       loading: "Loading pace data…",
     },
     records: {
+      options: "Leaderboard options",
       sport: "Sport",
       metric: "Metric",
       result: "Result",
