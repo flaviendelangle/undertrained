@@ -15,7 +15,7 @@ import {
 
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useT } from "~/i18n/useT";
-import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
+import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { formatElapsed } from "~/utils/format";
 
 import { ChartMessage } from "../ChartMessage";
@@ -122,13 +122,12 @@ export function MetricOverTime({
           xAxis={[
             {
               id: TIME_AXIS_ID,
+              label: isMobile ? undefined : t(metric.messages.timeAxis),
               scaleType: "linear",
               min: 0,
               max: smoothed.length - 1,
               valueFormatter: (v: number) => formatElapsed(v),
-              height: isMobile
-                ? AXIS_SIZE.mobile.height
-                : AXIS_SIZE.desktop.height,
+              height: "auto",
               zoom: metric.zoomable
                 ? {
                     filterMode: "keep",
@@ -141,14 +140,13 @@ export function MetricOverTime({
           yAxis={[
             {
               id: VALUE_AXIS_ID,
+              label: isMobile ? undefined : t(metric.messages.valueAxis),
               scaleType: "linear",
               min: yMin,
               max: yMax,
               valueFormatter: (v: number) =>
                 metric.formatTick(metric.toDisplay(v)),
-              width: isMobile
-                ? AXIS_SIZE.mobile.width
-                : AXIS_SIZE.desktop.width,
+              width: "auto",
             },
           ]}
         >
@@ -161,14 +159,8 @@ export function MetricOverTime({
             threshold={threshold}
             onHover={setHover}
           />
-          <ChartsXAxis
-            axisId={TIME_AXIS_ID}
-            label={isMobile ? undefined : t(metric.messages.timeAxis)}
-          />
-          <ChartsYAxis
-            axisId={VALUE_AXIS_ID}
-            label={isMobile ? undefined : t(metric.messages.valueAxis)}
-          />
+          <ChartsXAxis axisId={TIME_AXIS_ID} />
+          <ChartsYAxis axisId={VALUE_AXIS_ID} />
           {metric.zoomable && <ChartsZoomSlider />}
         </ChartsContainerPro>
         {hover && (

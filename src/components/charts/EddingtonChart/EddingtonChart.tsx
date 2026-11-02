@@ -10,7 +10,6 @@ import { useIsMobile } from "~/hooks/useIsMobile";
 import { sportCategoryLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import {
-  AXIS_SIZE,
   CHART_MARGINS,
   formatCompact,
   useChartTokens,
@@ -151,9 +150,7 @@ export default function EddingtonChart({ sports }: EddingtonChartProps) {
               scaleType: "band",
               data: xAxisData,
               label: isMobile ? undefined : t("charts.eddington.distanceAxis"),
-              height: isMobile
-                ? AXIS_SIZE.mobile.height
-                : AXIS_SIZE.desktop.height,
+              height: "auto",
               valueFormatter: (value: number) => `${value}`,
               zoom: { filterMode: "discard" },
               colorMap: {
@@ -170,9 +167,7 @@ export default function EddingtonChart({ sports }: EddingtonChartProps) {
                 isMobile
                   ? formatCompact(value)
                   : Math.round(value).toLocaleString(),
-              width: isMobile
-                ? AXIS_SIZE.mobile.width
-                : AXIS_SIZE.desktop.width,
+              width: "auto",
             },
           ]}
           series={[

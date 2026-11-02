@@ -20,7 +20,7 @@ import { StructureBrackets } from "~/components/charts/shared/StructureBrackets"
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
-import { AXIS_SIZE, CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
+import { CHART_MARGINS, useChartTokens } from "~/lib/chartTokens";
 import { formatElapsed } from "~/utils/format";
 import type { RepeatSpan, ResolvedSegment } from "~/utils/structuredWorkout";
 import { formatStepDuration } from "~/utils/structuredWorkout";
@@ -45,11 +45,6 @@ const Y_AXIS_ID = "workout-power";
 const BAR_GAP_PX = 1;
 /** Ceiling floor, so an easy ride isn't drawn as if it were all-out. */
 const MIN_PEAK_PCT = 1.2;
-/**
- * Wider than the shared `AXIS_SIZE.mobile.width`: these ticks read "100%", and
- * 32 px ellipsises that to "1...".
- */
-const Y_AXIS_WIDTH_MOBILE = 42;
 
 interface HoverState {
   segment: ResolvedSegment;
@@ -132,24 +127,24 @@ export function WorkoutPreviewChart({
             xAxis={[
               {
                 id: X_AXIS_ID,
+                label: isMobile ? undefined : t("workouts.chart.time"),
                 scaleType: "linear",
                 min: 0,
                 max: totalSeconds,
                 valueFormatter: (value: number) => formatElapsed(value),
-                height: isMobile
-                  ? AXIS_SIZE.mobile.height
-                  : AXIS_SIZE.desktop.height,
+                height: "auto",
               },
             ]}
             yAxis={[
               {
                 id: Y_AXIS_ID,
+                label: isMobile ? undefined : t("workouts.chart.power"),
                 scaleType: "linear",
                 min: 0,
                 max: maxPct,
                 valueFormatter: (value: number) =>
                   `${Math.round(value * 100)}%`,
-                width: isMobile ? Y_AXIS_WIDTH_MOBILE : AXIS_SIZE.desktop.width,
+                width: "auto",
               },
             ]}
           >
@@ -168,14 +163,8 @@ export function WorkoutPreviewChart({
                 gapPx={BAR_GAP_PX}
               />
             )}
-            <ChartsXAxis
-              axisId={X_AXIS_ID}
-              label={isMobile ? undefined : t("workouts.chart.time")}
-            />
-            <ChartsYAxis
-              axisId={Y_AXIS_ID}
-              label={isMobile ? undefined : t("workouts.chart.power")}
-            />
+            <ChartsXAxis axisId={X_AXIS_ID} />
+            <ChartsYAxis axisId={Y_AXIS_ID} />
           </ChartsContainerPro>
 
           {hover && <SegmentTooltip hover={hover} ftp={ftp} />}
