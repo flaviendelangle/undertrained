@@ -12,7 +12,6 @@ import {
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useT } from "~/i18n/useT";
 import {
-  AXIS_SIZE,
   CHART_FONT,
   CHART_MARGINS,
   REFERENCE_LINE,
@@ -120,25 +119,23 @@ export function MetricSliceDistribution<TFrequency = never>({
           xAxis={[
             {
               id: VALUE_AXIS_ID,
+              label: isMobile ? undefined : t(metric.messages.valueAxis),
               scaleType: "linear",
               min,
               max,
               valueFormatter: (v: number) => metric.formatTick(v),
-              height: isMobile
-                ? AXIS_SIZE.mobile.height
-                : AXIS_SIZE.desktop.height,
+              height: "auto",
             },
           ]}
           yAxis={[
             {
               id: TIME_AXIS_ID,
+              label: isMobile ? undefined : t(metric.messages.timeAxis),
               scaleType: "linear",
               min: 0,
               max: yMax,
               valueFormatter: (v: number) => formatElapsed(v),
-              width: isMobile
-                ? AXIS_SIZE.mobile.width
-                : AXIS_SIZE.desktop.width,
+              width: "auto",
             },
           ]}
         >
@@ -158,14 +155,8 @@ export function MetricSliceDistribution<TFrequency = never>({
                 }
               />
             )}
-          <ChartsXAxis
-            axisId={VALUE_AXIS_ID}
-            label={isMobile ? undefined : t(metric.messages.valueAxis)}
-          />
-          <ChartsYAxis
-            axisId={TIME_AXIS_ID}
-            label={isMobile ? undefined : t(metric.messages.timeAxis)}
-          />
+          <ChartsXAxis axisId={VALUE_AXIS_ID} />
+          <ChartsYAxis axisId={TIME_AXIS_ID} />
         </ChartsContainerPro>
         {hover && <SliceTooltip metric={metric} hover={hover} />}
       </div>

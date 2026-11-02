@@ -26,7 +26,6 @@ import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import {
-  AXIS_SIZE,
   CHART_MARGINS,
   formatCompact,
   sportColor,
@@ -411,9 +410,7 @@ export default function ActivitiesTimeline() {
                       minSpan: minZoomSpan,
                       slider: { enabled: true },
                     },
-                    height: isMobile
-                      ? AXIS_SIZE.mobile.height
-                      : AXIS_SIZE.desktop.height,
+                    height: "auto",
                   },
                 ]}
                 yAxis={[
@@ -425,9 +422,7 @@ export default function ActivitiesTimeline() {
                         ? `${formatted} ${metricConfig.unit}`
                         : formatted;
                     },
-                    width: isMobile
-                      ? AXIS_SIZE.mobile.width
-                      : AXIS_SIZE.desktop.width,
+                    width: "auto",
                   },
                 ]}
                 series={series}

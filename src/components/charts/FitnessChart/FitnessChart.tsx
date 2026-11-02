@@ -9,11 +9,9 @@ import {
 } from "@mui/x-charts-pro";
 
 import { ChartCard } from "~/components/ui/chart-card";
-import { useIsMobile } from "~/hooks/useIsMobile";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { useT } from "~/i18n/useT";
 import {
-  AXIS_SIZE,
   CHART_MARGINS,
   REFERENCE_LINE,
   useChartTokens,
@@ -44,7 +42,6 @@ export default function FitnessChart({
 }) {
   const t = useT();
   const tokens = useChartTokens();
-  const isMobile = useIsMobile();
 
   const fitnessColor = tokens.palette[5]; // orange
   const fatigueColor = tokens.axisLabel; // gray
@@ -137,12 +134,6 @@ export default function FitnessChart({
   // Track Form (TSB) visibility so its zero baseline hides alongside the series.
   const [formHidden, setFormHidden] = React.useState(false);
 
-  const yAxisWidth = isMobile
-    ? AXIS_SIZE.mobile.width
-    : AXIS_SIZE.desktop.width;
-  const xAxisHeight = isMobile
-    ? AXIS_SIZE.mobile.height
-    : AXIS_SIZE.desktop.height;
   const todayDate = series.length > 0 ? series[series.length - 1].date : null;
 
   return (
@@ -183,7 +174,7 @@ export default function FitnessChart({
                   minSpan: minZoomSpan,
                   slider: { enabled: true },
                 },
-                height: xAxisHeight,
+                height: "auto",
               },
             ]}
             yAxis={[
@@ -191,13 +182,13 @@ export default function FitnessChart({
                 id: LOAD_AXIS_ID,
                 position: "left",
                 min: 0,
-                width: yAxisWidth,
+                width: "auto",
                 valueFormatter: (v: number) => Math.round(v).toString(),
               },
               {
                 id: FORM_AXIS_ID,
                 position: "right",
-                width: yAxisWidth,
+                width: "auto",
                 valueFormatter: (v: number) =>
                   `${v > 0 ? "+" : ""}${Math.round(v)}`,
               },
