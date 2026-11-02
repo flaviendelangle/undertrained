@@ -109,9 +109,13 @@ function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
   const t = useT();
   const todayStart = startOfDay(new Date()).getTime();
   // Signed % the week's load sits above/below its trailing 4-week average — the
-  // quantitative backing for the verdict, shown under the load figure.
+  // quantitative backing for the verdict, shown under the load figure. Gated on
+  // the verdict, which needs the full 4-week window: `loadTrend` is computed
+  // from fewer weeks early on, which the "4-week avg." label would misstate.
   const deltaPct =
-    week.loadTrend != null ? Math.round((week.loadTrend - 1) * 100) : null;
+    week.verdict != null && week.loadTrend != null
+      ? Math.round((week.loadTrend - 1) * 100)
+      : null;
   return (
     // The mobile drawer already pads its content; the top padding keeps the
     // header clear of its close button.

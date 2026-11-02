@@ -51,3 +51,26 @@ it("opens the week summary from the keyboard on desktop", async () => {
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(document.activeElement).toBe(trigger);
 });
+
+async function openSummary(w: JournalWeek) {
+  render(
+    <JournalWeekRow week={w} dayLoadScale={0} start={0} size={ROW_HEIGHT} />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "journal.moreInfo" }));
+  return screen.findByRole("dialog", { name: "journal.weekSummaryTitle" });
+}
+
+it("hides the 4-week comparison until the week has a full history window", async () => {
+  // `loadTrend` is set but `verdict` isn't: the baseline covers < 4 weeks.
+  const summary = await openSummary({ ...week, loadTrend: 1.2 });
+  expect(summary.textContent).not.toContain("journal.deltaVsAverage");
+});
+
+it("shows the 4-week comparison once the week is judged", async () => {
+  const summary = await openSummary({
+    ...week,
+    loadTrend: 1.2,
+    verdict: { key: "productive", label: "Productive", color: "#000" },
+  });
+  expect(summary.textContent).toContain("journal.deltaVsAverage");
+});
