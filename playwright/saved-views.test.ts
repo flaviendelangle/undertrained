@@ -5,6 +5,7 @@ import {
   type ActivityFilterGroup,
   DEFAULT_ACTIVITY_DISPLAY,
 } from "../src/utils/activityFilters";
+import { activityViewHref } from "../src/utils/activityViewState";
 import { expect, origin, test } from "./helpers/activityViews";
 
 const condition = (
@@ -129,6 +130,37 @@ test("nested selection agrees across list, routes, counts and power analytics", 
       })
     ).count,
   ).toBe(4);
+});
+
+test("the command palette carries a modified saved view to scoped pages", async ({
+  page,
+  viewsFixture: f,
+}) => {
+  const view = await f.client.views.create.mutate({
+    athleteId: f.athleteId,
+    name: "Long rides",
+    folderId: null,
+    rules: selection,
+    display: DEFAULT_ACTIVITY_DISPLAY,
+  });
+  // Unsaved changes on top of the saved view live only in the URL.
+  const state = {
+    viewId: view.id,
+    rules: {
+      ...selection,
+      children: [condition("sport", "sport", "in", "", ["Ride"])],
+    },
+  };
+  await page.goto(`${origin}${activityViewHref("/activities", state)}`);
+  await expect(page.getByRole("table")).toBeVisible();
+  await page.keyboard.press("Control+k");
+  await page
+    .getByRole("combobox", { name: "Search", exact: true })
+    .fill("Activity map");
+  await page.getByRole("option", { name: "Activity map", exact: true }).click();
+  await expect(page).toHaveURL(
+    `${origin}${activityViewHref("/activities/map", state)}`,
+  );
 });
 
 test("views persist rules and display, stay private, and survive folder deletion", async ({
