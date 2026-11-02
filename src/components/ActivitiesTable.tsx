@@ -44,6 +44,7 @@ import { type TFunction } from "~/i18n/I18nProvider";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
+import { cn } from "~/lib/utils";
 import {
   ACTIVITY_COLUMNS,
   type ActivityDisplay,
@@ -76,30 +77,58 @@ const features = tableFeatures({
     basic: sortFn_basic,
     text: sortFn_text,
   },
-  columnMeta: metaHelper<{ minWidth?: number }>(),
+  // `numeric` right-aligns the column with tabular figures so values line up.
+  columnMeta: metaHelper<{ minWidth?: number; numeric?: boolean }>(),
 });
+
+/**
+ * The sport's icon in its color on a faint tile of that color. It is the only
+ * colored mark on an activity row: the list reads by sport at a glance while
+ * the rows themselves stay neutral.
+ */
+function SportIconTile(props: {
+  type: string;
+  className?: string;
+  iconClassName?: string;
+}) {
+  const sport = getSportConfig(props.type);
+  const Icon = sport.icon;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center",
+        props.className,
+      )}
+      style={{
+        color: sport.color,
+        backgroundColor: `color-mix(in oklab, ${sport.color} 14%, transparent)`,
+      }}
+    >
+      <Icon className={props.iconClassName} />
+    </span>
+  );
+}
 
 function ActivityRow(props: {
   row: Row<typeof features, ActivityWithoutMap>;
-  index: number;
   style?: React.CSSProperties;
   getActivityHref: (id: number) => string;
 }) {
-  const { row, index, style } = props;
+  const { row, style } = props;
   const activityHref = props.getActivityHref(row.original.stravaId);
 
   return (
-    <TableRow
-      className="data-[odd=true]:bg-secondary data-[odd=true]:hover:bg-accent relative flex w-full border-0"
-      data-odd={index % 2 === 1}
-      style={style}
-    >
+    <TableRow className="border-border/60 relative flex w-full" style={style}>
       {row.getVisibleCells().map((cell, cellIndex) => {
-        const minWidth = cell.column.columnDef.meta?.minWidth;
+        const meta = cell.column.columnDef.meta;
         return (
           <TableCell
-            className="flex min-w-0 items-center px-3 md:px-6"
-            style={{ flex: cell.column.getSize(), minWidth }}
+            className={cn(
+              "flex min-w-0 items-center px-3 md:px-6",
+              meta?.numeric && "justify-end tabular-nums",
+            )}
+            style={{ flex: cell.column.getSize(), minWidth: meta?.minWidth }}
             key={cell.id}
           >
             {cellIndex === 0 ? (
@@ -126,26 +155,35 @@ const createColumns = (t: TFunction) =>
     columnHelper.accessor("type", {
       cell: (info) => {
         const type = info.getValue();
-        const Icon = getSportConfig(type).icon;
         return (
-          <span className="inline-flex items-center gap-2">
-            <Icon className="size-4 shrink-0" />
+          <span className="inline-flex items-center gap-2.5">
+            <SportIconTile
+              type={type}
+              className="size-7 rounded-md"
+              iconClassName="size-4"
+            />
             <span className="truncate">{sportTypeLabel(type, t)}</span>
           </span>
         );
       },
       header: () => <span>{t("activities.columns.sport")}</span>,
-      size: 2,
-      meta: { minWidth: 155 },
+      // Sizes are flex weights, not pixels. They must stay above TanStack's
+      // default `minSize` (20), which would otherwise clamp them all to equal.
+      size: 170,
+      meta: { minWidth: 185 },
       filterFn: (row, _columnId, filterValue: string[]) => {
         if (filterValue.length === 0) return true;
         return filterValue.includes(row.getValue("type"));
       },
     }),
     columnHelper.accessor("name", {
-      cell: (info) => <span className="truncate">{info.getValue()}</span>,
+      cell: (info) => (
+        <span className="text-foreground truncate font-medium">
+          {info.getValue()}
+        </span>
+      ),
       header: () => <span>{t("activities.columns.title")}</span>,
-      size: 3,
+      size: 320,
       meta: { minWidth: 140 },
     }),
     columnHelper.accessor("startDateLocal", {
@@ -157,7 +195,7 @@ const createColumns = (t: TFunction) =>
         </span>
       ),
       header: () => <span>{t("activities.columns.date")}</span>,
-      size: 2,
+      size: 150,
       meta: { minWidth: 140 },
     }),
     columnHelper.accessor("distance", {
@@ -169,7 +207,8 @@ const createColumns = (t: TFunction) =>
       },
       header: () => <span>{t("activities.columns.distance")}</span>,
       sortFn: "basic",
-      size: 1,
+      size: 100,
+      meta: { numeric: true },
     }),
     columnHelper.accessor("totalElevationGain", {
       cell: (info) => {
@@ -178,13 +217,15 @@ const createColumns = (t: TFunction) =>
       },
       header: () => <span>{t("activities.columns.elevation")}</span>,
       sortFn: "basic",
-      size: 1,
+      size: 90,
+      meta: { numeric: true },
     }),
     columnHelper.accessor("movingTime", {
       cell: (info) => formatDuration(info.getValue()),
       header: () => <span>{t("activities.columns.movingTime")}</span>,
       sortFn: "basic",
-      size: 1,
+      size: 100,
+      meta: { numeric: true },
     }),
     columnHelper.accessor("averageSpeed", {
       cell: (info) => {
@@ -195,7 +236,8 @@ const createColumns = (t: TFunction) =>
       },
       header: () => <span>{t("activities.columns.pace")}</span>,
       sortFn: "basic",
-      size: 1,
+      size: 100,
+      meta: { numeric: true },
     }),
     columnHelper.accessor("load", {
       cell: (info) => {
@@ -204,11 +246,13 @@ const createColumns = (t: TFunction) =>
       },
       header: () => <span>{t("activities.columns.load")}</span>,
       sortFn: "basic",
-      size: 1,
+      size: 70,
+      meta: { numeric: true },
     }),
   ]);
 
 const ROW_HEIGHT = 48;
+const MOBILE_ROW_HEIGHT = 80;
 const VIRTUALIZER_OVERSCAN = 20;
 const SKELETON_ROW_COUNT = 25;
 
@@ -311,7 +355,11 @@ export function ActivitiesTable() {
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     estimateSize: (index) =>
-      rows[index]?.kind === "group" ? 40 : isMobile ? 112 : ROW_HEIGHT,
+      rows[index]?.kind === "group"
+        ? 40
+        : isMobile
+          ? MOBILE_ROW_HEIGHT
+          : ROW_HEIGHT,
     getScrollElement: () => tableContainerRef.current,
     overscan: VIRTUALIZER_OVERSCAN,
     getItemKey: (index) =>
@@ -368,22 +416,58 @@ export function ActivitiesTable() {
                   return (
                     <div
                       key={entry.key}
-                      className="bg-muted absolute left-0 w-full px-4 py-2 text-sm font-medium"
+                      className="bg-muted absolute left-0 flex w-full items-center gap-2 px-4 text-sm font-medium"
                       style={{
                         height: item.size,
                         transform: `translateY(${item.start}px)`,
                       }}
                     >
-                      {entry.label}{" "}
-                      <span className="text-muted-foreground">
-                        ({entry.count})
+                      {scope.display.groupBy === "sport" && (
+                        <SportIconTile
+                          type={entry.key}
+                          className="size-6 rounded-md"
+                          iconClassName="size-3.5"
+                        />
+                      )}
+                      <span>
+                        {entry.label}{" "}
+                        <span className="text-muted-foreground">
+                          ({entry.count})
+                        </span>
                       </span>
                     </div>
                   );
                 const activity = entry.row.original;
                 const sport = getSportConfig(activity.type);
-                const Icon = sport.icon;
                 const href = getActivityHref(activity.stravaId);
+                const shown = scope.display.columns;
+                // Zero values are dropped, as in the desktop cells: a strength
+                // session has no distance, elevation, or speed worth showing.
+                const details = [
+                  shown.includes("type") && sportTypeLabel(activity.type, t),
+                  shown.includes("startDateLocal") &&
+                    format(
+                      new Date(activity.startDateLocal.slice(0, 19)),
+                      "P p",
+                      { locale: getActiveDateLocale() },
+                    ),
+                ].filter((part) => typeof part === "string");
+                const stats = [
+                  shown.includes("distance") &&
+                    activity.distance > 0 &&
+                    sport.formatDistance(activity.distance),
+                  shown.includes("movingTime") &&
+                    formatDuration(activity.movingTime),
+                  shown.includes("totalElevationGain") &&
+                    activity.totalElevationGain > 0 &&
+                    formatMeters(activity.totalElevationGain),
+                  shown.includes("averageSpeed") &&
+                    activity.averageSpeed > 0 &&
+                    sport.formatSpeed(activity.averageSpeed),
+                  shown.includes("load") &&
+                    activity.load != null &&
+                    `${t("activities.columns.load")}: ${Math.round(activity.load)}`,
+                ].filter((part) => typeof part === "string");
                 return (
                   <div
                     role="listitem"
@@ -396,56 +480,29 @@ export function ActivitiesTable() {
                   >
                     <Link
                       href={href}
-                      className="border-border hover:bg-accent focus-visible:bg-accent flex h-full min-w-0 flex-col justify-center gap-1 border-b px-4"
+                      className="border-border/60 hover:bg-accent focus-visible:bg-accent flex h-full min-w-0 items-center gap-3 border-b px-4"
                     >
-                      <span className="truncate text-sm font-medium">
-                        {activity.name}
-                      </span>
-                      <span className="text-muted-foreground flex items-center gap-2 text-xs">
-                        {scope.display.columns.includes("type") && (
-                          <>
-                            <Icon className="size-4 shrink-0" />
-                            <span>{sportTypeLabel(activity.type, t)}</span>
-                          </>
-                        )}
-                        {scope.display.columns.includes("startDateLocal") && (
-                          <span>
-                            {format(
-                              new Date(activity.startDateLocal.slice(0, 19)),
-                              "P p",
-                              {
-                                locale: getActiveDateLocale(),
-                              },
-                            )}
+                      {shown.includes("type") && (
+                        <SportIconTile
+                          type={activity.type}
+                          className="size-10 rounded-xl"
+                          iconClassName="size-5"
+                        />
+                      )}
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate text-sm font-medium">
+                          {activity.name}
+                        </span>
+                        {details.length > 0 && (
+                          <span className="text-muted-foreground truncate text-xs">
+                            {details.join(" · ")}
                           </span>
                         )}
-                      </span>
-                      <span className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
-                        {scope.display.columns.includes("distance") && (
-                          <span>{sport.formatDistance(activity.distance)}</span>
-                        )}
-                        {scope.display.columns.includes("movingTime") && (
-                          <span>{formatDuration(activity.movingTime)}</span>
-                        )}
-                        {scope.display.columns.includes(
-                          "totalElevationGain",
-                        ) && (
-                          <span>
-                            {formatMeters(activity.totalElevationGain)}
+                        {stats.length > 0 && (
+                          <span className="text-foreground/80 truncate text-xs tabular-nums">
+                            {stats.join(" · ")}
                           </span>
                         )}
-                        {scope.display.columns.includes("averageSpeed") && (
-                          <span>
-                            {sport.formatSpeed(activity.averageSpeed)}
-                          </span>
-                        )}
-                        {scope.display.columns.includes("load") &&
-                          activity.load != null && (
-                            <span>
-                              {t("activities.columns.load")}:{" "}
-                              {Math.round(activity.load)}
-                            </span>
-                          )}
                       </span>
                     </Link>
                   </div>
@@ -486,7 +543,10 @@ export function ActivitiesTable() {
                           : t("activities.clearSort")
                       : undefined
                   }
-                  className="flex min-w-0 items-center px-3 py-3 md:px-6"
+                  className={cn(
+                    "flex min-w-0 items-center px-3 py-3 md:px-6",
+                    header.column.columnDef.meta?.numeric && "justify-end",
+                  )}
                   style={{
                     flex: header.column.getSize(),
                     minWidth: header.column.columnDef.meta?.minWidth,
@@ -520,17 +580,25 @@ export function ActivitiesTable() {
         >
           {activitiesQuery.isLoading
             ? Array.from({ length: SKELETON_ROW_COUNT }).map((_, index) => (
-                <TableRow key={index} className="odd:bg-secondary flex h-12">
+                <TableRow key={index} className="border-border/60 flex h-12">
                   {table.getVisibleFlatColumns().map((col) => (
                     <TableCell
                       key={col.id}
-                      className="flex min-w-0 items-center px-3 md:px-6"
+                      className={cn(
+                        "flex min-w-0 items-center px-3 md:px-6",
+                        col.columnDef.meta?.numeric && "justify-end",
+                      )}
                       style={{
                         flex: col.getSize(),
                         minWidth: col.columnDef.meta?.minWidth,
                       }}
                     >
-                      <div className="bg-border h-4 w-32 animate-pulse" />
+                      <div
+                        className={cn(
+                          "bg-border h-4 animate-pulse rounded",
+                          col.columnDef.meta?.numeric ? "w-12" : "w-32",
+                        )}
+                      />
                     </TableCell>
                   ))}
                 </TableRow>
@@ -541,14 +609,26 @@ export function ActivitiesTable() {
                   return (
                     <TableRow
                       key={entry.key}
-                      className="bg-muted absolute left-0 flex w-full px-4 py-2 text-sm font-medium"
+                      className="bg-muted text-foreground absolute left-0 flex w-full items-center px-4 text-sm font-medium"
                       style={{
                         height: virtualRow.size,
                         transform: `translateY(${virtualRow.start}px)`,
                       }}
                     >
-                      <TableCell>
-                        {entry.label} ({entry.count})
+                      <TableCell className="flex items-center gap-2 py-0">
+                        {scope.display.groupBy === "sport" && (
+                          <SportIconTile
+                            type={entry.key}
+                            className="size-6 rounded-md"
+                            iconClassName="size-3.5"
+                          />
+                        )}
+                        <span>
+                          {entry.label}{" "}
+                          <span className="text-muted-foreground">
+                            ({entry.count})
+                          </span>
+                        </span>
                       </TableCell>
                     </TableRow>
                   );
@@ -558,7 +638,6 @@ export function ActivitiesTable() {
                     key={row.id}
                     row={row}
                     getActivityHref={getActivityHref}
-                    index={virtualRow.index}
                     style={{
                       position: "absolute",
                       top: 0,
