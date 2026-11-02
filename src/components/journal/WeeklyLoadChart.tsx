@@ -3,7 +3,7 @@ import * as React from "react";
 import { LineChartPro, lineClasses } from "@mui/x-charts-pro";
 
 import { useT } from "~/i18n/useT";
-import { AXIS_SIZE, useChartTokens } from "~/lib/chartTokens";
+import { useChartTokens } from "~/lib/chartTokens";
 
 import { ChartThemeProvider } from "../charts/ChartThemeProvider";
 import { ChartTooltip } from "../charts/ChartTooltip";
@@ -131,10 +131,8 @@ export function WeeklyLoadChart({
               {
                 scaleType: "point",
                 data: dayLabels,
-                // MUI blanks any tick label taller than the axis height minus
-                // the tick and gap (4 + 3px even with ticks disabled), so the
-                // shared 20px mobile height leaves no room for the day names.
-                height: 24,
+                // Sized to the labels: MUI blanks tick labels that don't fit.
+                height: "auto",
                 disableTicks: true,
                 disableLine: true,
               },
@@ -142,7 +140,7 @@ export function WeeklyLoadChart({
             yAxis={[
               {
                 min: 0,
-                width: AXIS_SIZE.mobile.width,
+                width: "auto",
                 disableTicks: true,
                 disableLine: true,
                 valueFormatter: (v: number) => Math.round(v).toString(),
