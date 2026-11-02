@@ -709,6 +709,7 @@ const fr: Messages = {
       loading: "Chargement des données d'allure…",
     },
     records: {
+      options: "Options du classement",
       sport: "Sport",
       metric: "Métrique",
       result: "Résultat",

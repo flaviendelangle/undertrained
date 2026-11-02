@@ -36,12 +36,9 @@ const RecordsPage: NextPageWithLayout = () => {
     <>
       <PageToolbar title={t("nav.personalBests")} icon={TrophyIcon} />
 
-      <div className="relative flex flex-1 flex-col overflow-hidden">
-        <div className="flex flex-1 flex-col overflow-y-auto p-3 max-sm:px-0 sm:p-6">
-          <div className="mx-auto w-full max-w-6xl">
-            <Records />
-          </div>
-        </div>
+      {/* Records renders its own toolbar above the scrolling leaderboard. */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Records />
         <LoadingOverlay hidden={ready} />
       </div>
     </>
