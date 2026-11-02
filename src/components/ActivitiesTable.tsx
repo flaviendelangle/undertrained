@@ -405,17 +405,20 @@ export function ActivitiesTable() {
                         {scope.display.columns.includes("type") && (
                           <>
                             <Icon className="size-4 shrink-0" />
-                            {sportTypeLabel(activity.type, t)}
+                            <span>{sportTypeLabel(activity.type, t)}</span>
                           </>
                         )}
-                        {scope.display.columns.includes("startDateLocal") &&
-                          format(
-                            new Date(activity.startDateLocal.slice(0, 19)),
-                            "P p",
-                            {
-                              locale: getActiveDateLocale(),
-                            },
-                          )}
+                        {scope.display.columns.includes("startDateLocal") && (
+                          <span>
+                            {format(
+                              new Date(activity.startDateLocal.slice(0, 19)),
+                              "P p",
+                              {
+                                locale: getActiveDateLocale(),
+                              },
+                            )}
+                          </span>
+                        )}
                       </span>
                       <span className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
                         {scope.display.columns.includes("distance") && (
