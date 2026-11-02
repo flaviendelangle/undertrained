@@ -76,50 +76,84 @@ function VerdictChip({ week }: { week: JournalWeek }) {
   );
 }
 
+/**
+ * One headline figure of the week summary card: a small label over the value,
+ * with an optional muted line of context underneath.
+ */
+function WeekStat({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: React.ReactNode;
+  detail?: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-muted-foreground text-[11px]">{label}</dt>
+      <dd className="text-foreground text-lg leading-tight font-semibold">
+        {value}
+      </dd>
+      {detail != null && (
+        <dd className="text-muted-foreground flex items-center gap-1 text-[11px] tabular-nums">
+          {detail}
+        </dd>
+      )}
+    </div>
+  );
+}
+
 /** Detail card for a week's summary. Only mounts while the card is open. */
 function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
   const t = useT();
   const todayStart = startOfDay(new Date()).getTime();
   // Signed % the week's load sits above/below its trailing 4-week average — the
-  // quantitative backing for the verdict, shown here rather than as a tooltip.
+  // quantitative backing for the verdict, shown under the load figure. Gated on
+  // the verdict, which needs the full 4-week window: `loadTrend` is computed
+  // from fewer weeks early on, which the "4-week avg." label would misstate.
   const deltaPct =
-    week.loadTrend != null ? Math.round((week.loadTrend - 1) * 100) : null;
+    week.verdict != null && week.loadTrend != null
+      ? Math.round((week.loadTrend - 1) * 100)
+      : null;
   return (
-    <div className="flex flex-col gap-3 p-3">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-foreground text-sm font-medium">
-            {formatWeekRange(week.weekStart, week.weekEnd)}
-          </span>
-          <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
-            {formatCompactDuration(week.totalSeconds)} ·{" "}
-            <span className="text-foreground font-medium">
-              {Math.round(week.totalLoad)}
-            </span>{" "}
-            {t("journal.load")}
-          </span>
-        </div>
-        {week.verdict != null && (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <VerdictChip week={week} />
-            {deltaPct != null && (
-              <span className="text-muted-foreground text-[11px] leading-none tabular-nums">
-                {t("journal.deltaVsAverage", {
-                  delta: `${deltaPct > 0 ? "+" : ""}${deltaPct}`,
-                })}
-              </span>
-            )}
-          </div>
-        )}
-        {week.plannedSeconds > 0 && (
-          <div className="text-muted-foreground flex items-center gap-1 text-[11px] tabular-nums">
-            <CalendarClockIcon className="size-3 shrink-0" aria-hidden />
-            {t("journal.stillPlanned", {
-              duration: formatCompactDuration(week.plannedSeconds),
-            })}
-          </div>
-        )}
+    // The mobile drawer already pads its content; the top padding keeps the
+    // header clear of its close button.
+    <div className="flex flex-col gap-4 pt-3 md:p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-foreground text-sm font-semibold">
+          {formatWeekRange(week.weekStart, week.weekEnd)}
+        </span>
+        <VerdictChip week={week} />
       </div>
+
+      <dl className="grid grid-cols-2 gap-3">
+        <WeekStat
+          label={t("journal.stat.duration")}
+          value={formatCompactDuration(week.totalSeconds)}
+          detail={
+            week.plannedSeconds > 0 ? (
+              <>
+                <CalendarClockIcon className="size-3 shrink-0" aria-hidden />
+                {t("journal.plannedDuration", {
+                  duration: formatCompactDuration(week.plannedSeconds),
+                })}
+              </>
+            ) : null
+          }
+        />
+        <WeekStat
+          label={t("journal.stat.load")}
+          value={Math.round(week.totalLoad)}
+          detail={
+            deltaPct != null
+              ? t("journal.deltaVsAverage", {
+                  delta: `${deltaPct > 0 ? "+" : ""}${deltaPct}`,
+                })
+              : null
+          }
+        />
+      </dl>
 
       {week.sportBreakdown.length > 0 && (
         <div className="flex flex-col gap-1.5">
@@ -151,31 +185,14 @@ function WeekSummaryCardBody({ week }: { week: JournalWeek }) {
         </div>
       )}
 
-      <div className="flex flex-col gap-1">
-        <WeeklyLoadChart
-          thisWeek={week.days.map((day) =>
-            // Don't plot days that haven't happened yet (current/partial week),
-            // otherwise the cumulative line runs flat to Sunday.
-            day.date.getTime() > todayStart ? null : day.totalLoad,
-          )}
-          lastWeek={week.previousWeekDailyLoad}
-        />
-        <div className="text-muted-foreground flex items-center justify-center gap-3 text-[10px]">
-          <span className="flex items-center gap-1">
-            <span
-              className="size-1.5 rounded-full"
-              style={{ backgroundColor: "var(--primary)" }}
-            />
-            {t("journal.thisWeek")}
-          </span>
-          {week.previousWeekDailyLoad != null && (
-            <span className="flex items-center gap-1">
-              <span className="bg-muted-foreground size-1.5 rounded-full" />
-              {t("journal.previousWeek")}
-            </span>
-          )}
-        </div>
-      </div>
+      <WeeklyLoadChart
+        thisWeek={week.days.map((day) =>
+          // Don't plot days that haven't happened yet (current/partial week),
+          // otherwise the cumulative line runs flat to Sunday.
+          day.date.getTime() > todayStart ? null : day.totalLoad,
+        )}
+        lastWeek={week.previousWeekDailyLoad}
+      />
     </div>
   );
 }
