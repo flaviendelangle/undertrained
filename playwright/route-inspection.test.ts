@@ -530,6 +530,45 @@ test("End moves a map endpoint to the last recorded GPS point", async ({
   await expect(end).toHaveAttribute("aria-valuenow", "500");
 });
 
+test("clicking a map endpoint keeps its boundary, and Escape on it leaves fullscreen", async ({
+  page,
+  viewsFixture: f,
+}) => {
+  const db = postgres(process.env.DATABASE_URL!);
+  try {
+    await db`update activity_streams set data=jsonb_set(data::jsonb,'{5}','null')::text where type='latlng' and activity_id=(select id from activities where athlete=${f.athleteId} and strava_id=${f.ids.long})`;
+  } finally {
+    await db.end();
+  }
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto(`${origin}/activities/${f.ids.long}`);
+  await page.getByRole("button", { name: "Expand map", exact: true }).click();
+  const box = (await profile(page).boundingBox())!;
+  const at = (sample: number) => box.x + 42 + ((box.width - 60) * sample) / 6;
+  await page.mouse.move(at(1), box.y + 55);
+  await page.mouse.down();
+  await page.mouse.move(at(5), box.y + 55, { steps: 8 });
+  await page.mouse.up();
+  const end = explorer(page).getByRole("slider", { name: "Segment end" });
+  await expect(end).toHaveAttribute("aria-valuenow", "500");
+  // The end has no GPS point, so its handle sits on the previous sample.
+  const handle = explorer(page).getByRole("button", {
+    name: "Segment end",
+    exact: true,
+  });
+  const handleBox = (await handle.boundingBox())!;
+  await page.mouse.move(
+    handleBox.x + handleBox.width / 2,
+    handleBox.y + handleBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(end).toHaveAttribute("aria-valuenow", "500");
+  await expect(handle).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expectCompactMap(page);
+});
+
 test("detects climbs around a missing distance sample", async ({
   page,
   viewsFixture: f,

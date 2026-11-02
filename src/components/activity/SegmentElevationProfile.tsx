@@ -110,6 +110,8 @@ export function SegmentElevationProfile({
                   <clipPath id={id + "-area"}>
                     <path d={geometry.area} />
                   </clipPath>
+                  {/* Defined once: every coloured split reuses it through its own clip. */}
+                  <path id={id + "-line"} d={geometry.line} fill="none" />
                   {model.segments.map((segment, i) => (
                     <clipPath key={i} id={id + "-segment-" + i}>
                       <rect
@@ -147,9 +149,8 @@ export function SegmentElevationProfile({
                     </g>
                   ))}
                 <path d={geometry.area} className="fill-muted" />
-                <path
-                  d={geometry.line}
-                  fill="none"
+                <use
+                  href={`#${id}-line`}
                   className="stroke-muted-foreground"
                   strokeWidth={2}
                 />
@@ -181,9 +182,8 @@ export function SegmentElevationProfile({
                         </title>
                       </rect>
                       {color && (
-                        <path
-                          d={geometry.line}
-                          fill="none"
+                        <use
+                          href={`#${id}-line`}
                           stroke={color}
                           strokeWidth={2.5}
                           clipPath={`url(#${id}-segment-${i})`}

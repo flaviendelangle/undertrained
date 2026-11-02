@@ -10,6 +10,9 @@ import { type RoutePosition, isRoutePosition } from "~/utils/routeGeometry";
 export type SegmentIndices = [start: number, end: number];
 export type SegmentChangePhase = "preview" | "commit";
 
+/** Pixels the pointer must travel before a press on a handle becomes a drag. */
+const DRAG_THRESHOLD = 3;
+
 interface Props {
   positions: RoutePosition[];
   indices: SegmentIndices;
@@ -41,6 +44,10 @@ export function SegmentHandles({
     target: HTMLButtonElement;
     pointerId: number;
     restorePanning: boolean;
+    /** Where the press started, so a click without a drag keeps the boundary. */
+    x: number;
+    y: number;
+    moved: boolean;
   } | null>(null);
   // Project once in world pixels. Uniform zoom/pan transforms preserve nearest
   // distances, so every move can search the full recording without reprojecting it.
@@ -66,6 +73,16 @@ export function SegmentHandles({
   const update = (event: React.PointerEvent<HTMLButtonElement>) => {
     const current = gesture.current;
     if (event.pointerId !== current?.pointerId) return;
+    // The nearest sample can differ from the boundary under a still pointer: the
+    // handle sits beside a boundary inside a GPS gap, or on a repeated position.
+    if (!current.moved) {
+      if (
+        Math.hypot(event.clientX - current.x, event.clientY - current.y) <
+        DRAG_THRESHOLD
+      )
+        return;
+      current.moved = true;
+    }
     const index = nearest(event);
     if (index == null || index === current.index) return;
     current.index = index;
@@ -144,6 +161,9 @@ export function SegmentHandles({
             target: event.currentTarget,
             pointerId: event.pointerId,
             restorePanning: map.dragging.enabled(),
+            x: event.clientX,
+            y: event.clientY,
+            moved: false,
           };
           map.stop();
           map.dragging.disable();
@@ -163,7 +183,8 @@ export function SegmentHandles({
           if (event.pointerId === gesture.current?.pointerId) finish(true);
         }}
         onKeyDown={(event) => {
-          if (event.key === "Escape") {
+          // Escape only cancels a drag. Otherwise it dismisses the fullscreen dialog.
+          if (event.key === "Escape" && gesture.current) {
             event.preventDefault();
             event.stopPropagation();
             finish(true);

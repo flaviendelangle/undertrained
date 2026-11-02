@@ -1,4 +1,4 @@
-import { bisectRight, tickStep } from "d3-array";
+import { bisectLeft, bisectRight, tickStep } from "d3-array";
 
 import type { ActivityRecording } from "./recording";
 import { type RecordingSegment, sampleIndexAtTime } from "./segment";
@@ -59,6 +59,13 @@ export function segmentProfile(
   const segments: SegmentProfileSegment[] = [];
   if (segmentLength) {
     const xs = points.map((point) => point.x);
+    // missingBefore[i]: points before index i without altitude, so each split
+    // checks for gaps with two bisections instead of a scan of every point.
+    const missingBefore = [0];
+    for (const point of points)
+      missingBefore.push(
+        missingBefore.at(-1)! + (point.altitude == null ? 1 : 0),
+      );
     const altitudeAt = (x: number): number | null => {
       if (x === 0) return points[0].altitude;
       const i = Math.max(0, bisectRight(xs, x) - 1),
@@ -73,9 +80,8 @@ export function segmentProfile(
       const b = Math.min(extent, a + segmentLength),
         low = altitudeAt(a),
         high = altitudeAt(b);
-      const complete = points.every(
-        (point) => point.x < a || point.x > b || point.altitude != null,
-      );
+      const complete =
+        missingBefore[bisectRight(xs, b)] === missingBefore[bisectLeft(xs, a)];
       segments.push({
         start: a,
         end: b,
