@@ -93,7 +93,7 @@ export function PageToolbar({
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <TabIcon className="size-4 shrink-0" />
+              <TabIcon className="size-4 shrink-0 max-md:hidden" />
               {label}
             </Toolbar.Link>
           ))}
