@@ -340,6 +340,13 @@ const en = {
     avgCadence: "Avg Cadence",
     intensityFactor: "Intensity Factor",
     restingHr: "Resting HR",
+    average: "Average",
+    maximum: "Max",
+    normalized: "Normalized",
+    timeInZones: "Time in zones",
+    avgInZone: "Avg in {zone}",
+    paused: "Paused",
+    noPause: "No pauses",
     settingsForDate: "Settings for {date}",
     normalizedPowerTooltip:
       "An estimate of the power you could have sustained for the same physiological cost if your effort had been perfectly steady. It weights hard surges more heavily than steady riding, making it a better measure of true intensity than average power.",
@@ -349,12 +356,13 @@ const en = {
       "Configure your rider settings (Resting HR, Max HR, LTHR) to enable this metric.",
     section: {
       activityDetails: "Activity Details",
+      time: "Time",
       timeAndSpeed: "Time & {label}",
       heartRate: "Heart Rate",
       power: "Power",
       energyAndCadence: "Energy & Cadence",
       perceivedExertion: "Perceived Exertion",
-      trainingLoadDetails: "Training Load Details",
+      effort: "Effort",
     },
   },
   activities: {

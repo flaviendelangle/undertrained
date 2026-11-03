@@ -14,6 +14,7 @@ import { PaceCard } from "~/components/charts/PaceCard";
 import { ActivityPersonalRecords } from "~/components/charts/PersonalRecords/ActivityPersonalRecords";
 import { PowerCurve } from "~/components/charts/PowerCurve";
 import { PageToolbar } from "~/components/layouts/PageToolbar";
+import { SportIconTile } from "~/components/primitives/SportIconTile";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
 import { useActivityView } from "~/hooks/useActivityView";
 import { useRememberRecentItem } from "~/hooks/useRememberRecentItem";
@@ -30,11 +31,7 @@ import {
 import { NextPageWithLayout } from "~/pages/_app";
 import { readReturnTo } from "~/utils/activityLinks";
 import { isRoutePosition } from "~/utils/routeGeometry";
-import {
-  getSportConfig,
-  supportsAnalysis,
-  workoutKind,
-} from "~/utils/sportConfig";
+import { supportsAnalysis, workoutKind } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 const routerSchema = { activityId: "string" as const };
@@ -149,7 +146,14 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
       <PageTitle title={activity.name} />
       <PageToolbar
         title={activity.name}
-        icon={getSportConfig(activity.type).icon}
+        icon={
+          <SportIconTile
+            type={activity.type}
+            label={sportTypeLabel(activity.type, t)}
+            className="size-7 rounded-md"
+            iconClassName="size-4"
+          />
+        }
         backHref={backHref}
         actions={
           <>
@@ -158,12 +162,6 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
           </>
         }
       >
-        <span className="bg-accent text-accent-foreground hidden shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium uppercase sm:inline-flex">
-          {React.createElement(getSportConfig(activity.type).icon, {
-            className: "size-3.5",
-          })}
-          {sportTypeLabel(activity.type, t)}
-        </span>
         {isRace && (
           <span className="hidden shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-amber-500 uppercase ring-1 ring-amber-400/80 ring-inset sm:inline-flex">
             <FlagIcon className="size-3" />
@@ -189,12 +187,6 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
       </PageToolbar>
 
       <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-4 py-2 sm:hidden">
-        <span className="bg-accent text-accent-foreground inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium uppercase">
-          {React.createElement(getSportConfig(activity.type).icon, {
-            className: "size-3.5",
-          })}
-          {sportTypeLabel(activity.type, t)}
-        </span>
         {isRace && (
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-amber-500 uppercase ring-1 ring-amber-400/80 ring-inset">
             <FlagIcon className="size-3" />

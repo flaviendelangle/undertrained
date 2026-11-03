@@ -345,6 +345,13 @@ const fr: Messages = {
     avgCadence: "Cadence moy.",
     intensityFactor: "Facteur d'intensité",
     restingHr: "FC au repos",
+    average: "Moyenne",
+    maximum: "Max",
+    normalized: "Normalisée",
+    timeInZones: "Temps par zone",
+    avgInZone: "Moy. en {zone}",
+    paused: "Pauses",
+    noPause: "Sans pause",
     settingsForDate: "Réglages pour le {date}",
     normalizedPowerTooltip:
       "Estimation de la puissance que vous auriez pu maintenir au même coût physiologique si votre effort avait été parfaitement constant. Elle pondère davantage les accélérations intenses que l'effort régulier, ce qui en fait une meilleure mesure de l'intensité réelle que la puissance moyenne.",
@@ -354,12 +361,13 @@ const fr: Messages = {
       "Configurez vos réglages athlète (FC au repos, FC max, LTHR) pour activer cette métrique.",
     section: {
       activityDetails: "Détails de l'activité",
+      time: "Temps",
       timeAndSpeed: "Temps et {label}",
       heartRate: "Fréquence cardiaque",
       power: "Puissance",
       energyAndCadence: "Énergie et cadence",
       perceivedExertion: "Effort perçu",
-      trainingLoadDetails: "Charge d'entraînement",
+      effort: "Effort",
     },
   },
   activities: {
