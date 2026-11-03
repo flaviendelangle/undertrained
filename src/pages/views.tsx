@@ -310,18 +310,20 @@ const ViewsPage: NextPageWithLayout = () => {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    {/* Outside the list: a <ul> only accepts <li> children. */}
-                    <Draggable.Preview
-                      container={mainRef}
-                      offset={({ container }) => ({
-                        x: container.getBoundingClientRect().width / 2,
+                  </Draggable.Trigger>
+                  {/* Outside the list: a <ul> only accepts <li> children. */}
+                  <Draggable.Portal container={mainRef}>
+                    <Draggable.Positioner
+                      offset={({ element }) => ({
+                        x: element.getBoundingClientRect().width / 2,
                         y: -8,
                       })}
-                      className="bg-popover text-popover-foreground border-border pointer-events-none w-max max-w-64 truncate rounded-md border px-2.5 py-1.5 text-sm font-medium shadow-md"
                     >
-                      {view.name}
-                    </Draggable.Preview>
-                  </Draggable.Trigger>
+                      <Draggable.Preview className="bg-popover text-popover-foreground border-border w-max max-w-64 truncate rounded-md border px-2.5 py-1.5 text-sm font-medium shadow-md">
+                        {view.name}
+                      </Draggable.Preview>
+                    </Draggable.Positioner>
+                  </Draggable.Portal>
                 </Draggable.Root>
               ))}
             </ul>

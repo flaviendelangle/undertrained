@@ -23,9 +23,9 @@
     "webhook:delete": "tsx scripts/manage-webhook.ts delete"
   },
   "dependencies": {
-    "@base-ui/plus": "https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@052f5f5",
-    "@base-ui/react": "https://pkg.pr.new/mui/base-ui/@base-ui/react@096cbba9c",
-    "@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@096cbba9c",
+    "@base-ui/plus": "https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1aaf180",
+    "@base-ui/react": "https://pkg.pr.new/mui/base-ui/@base-ui/react@5e87aeb95",
+    "@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@markw65/fit-file-writer": "^0.2.0",
@@ -105,9 +105,9 @@
   },
   "pnpm": {
     "overrides": {
-      "@base-ui/react>@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@096cbba9c",
-      "@base-ui/plus>@base-ui/react": "https://pkg.pr.new/mui/base-ui/@base-ui/react@096cbba9c",
-      "@base-ui/plus>@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@096cbba9c"
+      "@base-ui/react>@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95",
+      "@base-ui/plus>@base-ui/react": "https://pkg.pr.new/mui/base-ui/@base-ui/react@5e87aeb95",
+      "@base-ui/plus>@base-ui/utils": "https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95"
     }
   }
 }

@@ -156,6 +156,11 @@ export function StepDraggable({
       >
         {children}
       </Draggable.Trigger>
+      <Draggable.Portal>
+        <Draggable.Positioner>
+          <Draggable.Preview />
+        </Draggable.Positioner>
+      </Draggable.Portal>
     </Draggable.Root>
   );
 }
