@@ -4,6 +4,7 @@ import { ActivityIcon, FlagIcon, ListIcon } from "lucide-react";
 import { useRouter } from "next/router";
 
 import { ActivityActionsMenu } from "~/components/ActivityActionsMenu";
+import { ActivityNotes } from "~/components/ActivityNotes";
 import { ActivityStats } from "~/components/ActivityStats";
 import { EditActivityButton } from "~/components/EditActivityDialog";
 import { PageTitle } from "~/components/PageTitle";
@@ -14,6 +15,7 @@ import { PaceCard } from "~/components/charts/PaceCard";
 import { ActivityPersonalRecords } from "~/components/charts/PersonalRecords/ActivityPersonalRecords";
 import { PowerCurve } from "~/components/charts/PowerCurve";
 import { PageToolbar } from "~/components/layouts/PageToolbar";
+import { SportIconTile } from "~/components/primitives/SportIconTile";
 import { ChartCardSurfaceProvider } from "~/components/ui/chart-card";
 import { useActivityView } from "~/hooks/useActivityView";
 import { useRememberRecentItem } from "~/hooks/useRememberRecentItem";
@@ -30,11 +32,7 @@ import {
 import { NextPageWithLayout } from "~/pages/_app";
 import { readReturnTo } from "~/utils/activityLinks";
 import { isRoutePosition } from "~/utils/routeGeometry";
-import {
-  getSportConfig,
-  supportsAnalysis,
-  workoutKind,
-} from "~/utils/sportConfig";
+import { supportsAnalysis, workoutKind } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
 const routerSchema = { activityId: "string" as const };
@@ -133,7 +131,6 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
     !!activity.mapPolyline ||
     !!recording?.samples.latlng?.some(isRoutePosition);
   const isRace = workoutKind(activity.workoutType) === "race";
-  const hasNotes = !!activity.description || !!activity.privateNote;
   const hasPower =
     activity.powerBests != null &&
     Object.keys(activity.powerBests).length > 0 &&
@@ -149,7 +146,14 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
       <PageTitle title={activity.name} />
       <PageToolbar
         title={activity.name}
-        icon={getSportConfig(activity.type).icon}
+        icon={
+          <SportIconTile
+            type={activity.type}
+            label={sportTypeLabel(activity.type, t)}
+            className="size-7 rounded-md"
+            iconClassName="size-4"
+          />
+        }
         backHref={backHref}
         actions={
           <>
@@ -158,12 +162,6 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
           </>
         }
       >
-        <span className="bg-accent text-accent-foreground hidden shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium uppercase sm:inline-flex">
-          {React.createElement(getSportConfig(activity.type).icon, {
-            className: "size-3.5",
-          })}
-          {sportTypeLabel(activity.type, t)}
-        </span>
         {isRace && (
           <span className="hidden shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-amber-500 uppercase ring-1 ring-amber-400/80 ring-inset sm:inline-flex">
             <FlagIcon className="size-3" />
@@ -189,12 +187,6 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
       </PageToolbar>
 
       <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-4 py-2 sm:hidden">
-        <span className="bg-accent text-accent-foreground inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium uppercase">
-          {React.createElement(getSportConfig(activity.type).icon, {
-            className: "size-3.5",
-          })}
-          {sportTypeLabel(activity.type, t)}
-        </span>
         {isRace && (
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium text-amber-500 uppercase ring-1 ring-amber-400/80 ring-inset">
             <FlagIcon className="size-3" />
@@ -238,30 +230,10 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
         <ChartCardSurfaceProvider surface="responsive">
           <div className="divide-border border-border flex w-full flex-col divide-y border-b md:mx-auto md:max-w-7xl md:gap-6 md:divide-y-0 md:border-0 md:p-6">
             <ActivityStats activity={activity} />
-            {hasNotes && (
-              <div className="md:border-border md:bg-card flex flex-col gap-4 p-5 md:rounded-sm md:border">
-                {activity.description && (
-                  <div>
-                    <div className="text-muted-foreground mb-1 text-xs font-medium">
-                      {t("activities.description")}
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap">
-                      {activity.description}
-                    </p>
-                  </div>
-                )}
-                {activity.privateNote && (
-                  <div>
-                    <div className="text-muted-foreground mb-1 text-xs font-medium">
-                      {t("activities.privateNote")}
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap">
-                      {activity.privateNote}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+            <ActivityNotes
+              description={activity.description}
+              privateNote={activity.privateNote}
+            />
             <ActivityStreams
               stravaId={activity.stravaId}
               cursorTime={cursorTime}

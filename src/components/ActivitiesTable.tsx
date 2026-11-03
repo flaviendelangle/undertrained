@@ -26,6 +26,7 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { QueryState } from "~/components/primitives/QueryState";
+import { SportIconTile } from "~/components/primitives/SportIconTile";
 import { Button } from "~/components/ui/button";
 import {
   Table,
@@ -80,35 +81,6 @@ const features = tableFeatures({
   // `numeric` right-aligns the column with tabular figures so values line up.
   columnMeta: metaHelper<{ minWidth?: number; numeric?: boolean }>(),
 });
-
-/**
- * The sport's icon in its color on a faint tile of that color. It is the only
- * colored mark on an activity row: the list reads by sport at a glance while
- * the rows themselves stay neutral.
- */
-function SportIconTile(props: {
-  type: string;
-  className?: string;
-  iconClassName?: string;
-}) {
-  const sport = getSportConfig(props.type);
-  const Icon = sport.icon;
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center",
-        props.className,
-      )}
-      style={{
-        color: sport.color,
-        backgroundColor: `color-mix(in oklab, ${sport.color} 14%, transparent)`,
-      }}
-    >
-      <Icon className={props.iconClassName} />
-    </span>
-  );
-}
 
 function ActivityRow(props: {
   row: Row<typeof features, ActivityWithoutMap>;

@@ -1,4 +1,11 @@
-import { type ElementType, type ReactNode, useEffect, useRef } from "react";
+import {
+  type ElementType,
+  type ReactElement,
+  type ReactNode,
+  isValidElement,
+  useEffect,
+  useRef,
+} from "react";
 
 import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
@@ -25,7 +32,8 @@ export function PageToolbar({
   tabs,
 }: {
   title: string;
-  icon: ElementType;
+  /** An icon component, or a ready-made element such as a tinted tile. */
+  icon: ElementType | ReactElement;
   backHref?: string;
   actions?: ReactNode;
   children?: ReactNode;
@@ -69,7 +77,7 @@ export function PageToolbar({
             <ArrowLeftIcon className="size-4" />
           </Toolbar.Link>
         )}
-        <Icon className="size-4 shrink-0" />
+        {isValidElement(Icon) ? Icon : <Icon className="size-4 shrink-0" />}
         <h1 className="min-w-0 truncate text-base font-semibold" title={title}>
           {title}
         </h1>
