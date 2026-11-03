@@ -4,6 +4,7 @@ import { ActivityIcon, FlagIcon, ListIcon } from "lucide-react";
 import { useRouter } from "next/router";
 
 import { ActivityActionsMenu } from "~/components/ActivityActionsMenu";
+import { ActivityNotes } from "~/components/ActivityNotes";
 import { ActivityStats } from "~/components/ActivityStats";
 import { EditActivityButton } from "~/components/EditActivityDialog";
 import { PageTitle } from "~/components/PageTitle";
@@ -130,7 +131,6 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
     !!activity.mapPolyline ||
     !!recording?.samples.latlng?.some(isRoutePosition);
   const isRace = workoutKind(activity.workoutType) === "race";
-  const hasNotes = !!activity.description || !!activity.privateNote;
   const hasPower =
     activity.powerBests != null &&
     Object.keys(activity.powerBests).length > 0 &&
@@ -230,30 +230,10 @@ function ActivityPageContent({ stravaId }: { stravaId: number }) {
         <ChartCardSurfaceProvider surface="responsive">
           <div className="divide-border border-border flex w-full flex-col divide-y border-b md:mx-auto md:max-w-7xl md:gap-6 md:divide-y-0 md:border-0 md:p-6">
             <ActivityStats activity={activity} />
-            {hasNotes && (
-              <div className="md:border-border md:bg-card flex flex-col gap-4 p-5 md:rounded-sm md:border">
-                {activity.description && (
-                  <div>
-                    <div className="text-muted-foreground mb-1 text-xs font-medium">
-                      {t("activities.description")}
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap">
-                      {activity.description}
-                    </p>
-                  </div>
-                )}
-                {activity.privateNote && (
-                  <div>
-                    <div className="text-muted-foreground mb-1 text-xs font-medium">
-                      {t("activities.privateNote")}
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap">
-                      {activity.privateNote}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+            <ActivityNotes
+              description={activity.description}
+              privateNote={activity.privateNote}
+            />
             <ActivityStreams
               stravaId={activity.stravaId}
               cursorTime={cursorTime}
