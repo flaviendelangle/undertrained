@@ -17,6 +17,7 @@ import Link from "next/link";
 
 import type { Activity } from "@server/db/types";
 
+import { placeTrackLabels } from "~/components/powerTrackLabels";
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { SettingsCallout } from "~/components/primitives/SettingsCallout";
 import {
@@ -726,7 +727,7 @@ interface TrackMark {
  * average power next to it when the effort was variable (or alone without
  * NP). Labels sit above the track and FTP's below, so they never collide: with
  * two marks, average (always the lower one) is labelled on its left and NP on
- * its right.
+ * its right, or the two share one caption near either end of the track.
  */
 function PowerTrack({
   average,
@@ -771,40 +772,39 @@ function PowerTrack({
     });
   }
 
-  // Each label hugs its mark on its side, but flips inward near either end
-  // of the track so it stays inside the panel.
-  const labelAnchor = ({ side, watts }: TrackMark) => {
-    const at = ratio(watts);
-    if (side === "before")
-      return at < 0.15 ? "pl-1.5" : "-translate-x-full pr-1.5";
-    if (side === "after")
-      return at > 0.85 ? "-translate-x-full pr-1.5" : "pl-1.5";
-    if (at < 0.1) return "";
-    return at > 0.9 ? "-translate-x-full" : "-translate-x-1/2";
-  };
+  const labelGroups = placeTrackLabels(
+    marks.map((mark) => ({ ...mark, at: ratio(mark.watts) })),
+  );
 
   return (
     // Label row, track and caption mirror HeartRateZoneBar's geometry, so the
     // two bars line up when the panels sit side by side.
     <div className="mt-4">
       <div className="relative h-4 text-xs">
-        {marks.map((mark) => (
+        {labelGroups.map((group) => (
           <span
-            key={mark.label}
-            className={cn("absolute whitespace-nowrap", labelAnchor(mark))}
-            style={{ left: position(mark.watts) }}
+            key={group.labels[0].label}
+            className={cn(
+              "absolute flex gap-3 whitespace-nowrap",
+              group.anchor,
+            )}
+            style={{ left: `${group.at * 100}%` }}
           >
-            <span className="text-muted-foreground tracking-wider uppercase">
-              {mark.label}
-            </span>{" "}
-            <span
-              className={cn(
-                "font-mono font-semibold",
-                mark.muted && "text-muted-foreground",
-              )}
-            >
-              {Math.round(mark.watts)} W
-            </span>
+            {group.labels.map((mark) => (
+              <span key={mark.label}>
+                <span className="text-muted-foreground tracking-wider uppercase">
+                  {mark.label}
+                </span>{" "}
+                <span
+                  className={cn(
+                    "font-mono font-semibold",
+                    mark.muted && "text-muted-foreground",
+                  )}
+                >
+                  {Math.round(mark.watts)} W
+                </span>
+              </span>
+            ))}
           </span>
         ))}
       </div>
