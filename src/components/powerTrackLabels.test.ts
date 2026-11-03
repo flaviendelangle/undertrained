@@ -2,33 +2,32 @@ import { expect, it } from "vitest";
 
 import { placeTrackLabels } from "./powerTrackLabels";
 
-const pair = (average: number, normalized: number) => [
-  { side: "before" as const, at: average },
-  { side: "after" as const, at: normalized },
-];
+const average = (at: number) => ({ label: "average", at });
+const normalized = (at: number) => ({ label: "NP", at });
 
 it("labels average and NP on either side of their marks", () => {
-  expect(placeTrackLabels(pair(0.4, 0.6))).toEqual([
-    {
-      labels: [pair(0.4, 0.6)[0]],
-      at: 0.4,
-      anchor: "-translate-x-full pr-1.5",
-    },
-    { labels: [pair(0.4, 0.6)[1]], at: 0.6, anchor: "pl-1.5" },
+  const marks = [average(0.4), normalized(0.6)];
+  expect(placeTrackLabels(marks)).toEqual([
+    { marks: [marks[0]], at: 0.4, align: "end" },
+    { marks: [marks[1]], at: 0.6, align: "start" },
   ]);
 });
 
 it("shares one caption pinned to NP when both labels would end at the track's end", () => {
   // Average and NP both past 150% of FTP clamp to the same point.
-  const labels = pair(1, 1);
-  expect(placeTrackLabels(labels)).toEqual([
-    { labels, at: 1, anchor: "-translate-x-full pr-1.5" },
-  ]);
+  const marks = [average(1), normalized(1)];
+  expect(placeTrackLabels(marks)).toEqual([{ marks, at: 1, align: "end" }]);
 });
 
 it("shares one caption pinned to average near the track's start", () => {
-  const labels = pair(0.05, 0.1);
-  expect(placeTrackLabels(labels)).toEqual([
-    { labels, at: 0.05, anchor: "pl-1.5" },
+  const marks = [average(0.05), normalized(0.1)];
+  expect(placeTrackLabels(marks)).toEqual([
+    { marks, at: 0.05, align: "start" },
   ]);
+});
+
+it("centers a lone label, shifted inward near the ends", () => {
+  expect(placeTrackLabels([normalized(0.5)])[0].align).toBe("center");
+  expect(placeTrackLabels([normalized(0.05)])[0].align).toBe("start");
+  expect(placeTrackLabels([normalized(0.95)])[0].align).toBe("end");
 });
