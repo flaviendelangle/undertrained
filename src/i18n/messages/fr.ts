@@ -349,7 +349,6 @@ const fr: Messages = {
     maximum: "Max",
     normalized: "Normalisée",
     timeInZones: "Temps par zone",
-    avgInZone: "Moy. en {zone}",
     paused: "Pauses",
     noPause: "Sans pause",
     settingsForDate: "Réglages pour le {date}",

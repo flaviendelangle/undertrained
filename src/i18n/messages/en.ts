@@ -344,7 +344,6 @@ const en = {
     maximum: "Max",
     normalized: "Normalized",
     timeInZones: "Time in zones",
-    avgInZone: "Avg in {zone}",
     paused: "Paused",
     noPause: "No pauses",
     settingsForDate: "Settings for {date}",
