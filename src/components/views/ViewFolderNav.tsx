@@ -22,8 +22,8 @@ import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
 export type ViewFolder = { id: number; name: string };
-/** The views the page lists: every view, the ones without a folder, or a folder's. */
-export type ViewScope = number | null | "all";
+/** The views the page lists: every view, grouped by folder, or one folder's. */
+export type ViewScope = number | "all";
 
 export const savedViewKind = Draggable.createKind<SavedActivityView>(
   "saved-activity-view",
@@ -37,7 +37,10 @@ export interface ScopeEntry {
   folder?: ViewFolder;
 }
 
-/** "All views", "Ungrouped", then one entry per folder, each with its view count. */
+/**
+ * "All views", then one entry per folder, each with its view count. Views
+ * without a folder have no entry: "All views" lists them in their own group.
+ */
 export function useScopeEntries(
   views: SavedActivityView[],
   folders: ViewFolder[],
@@ -45,11 +48,6 @@ export function useScopeEntries(
   const t = useT();
   return [
     { scope: "all", label: t("views.allViews"), count: views.length },
-    {
-      scope: null,
-      label: t("views.ungrouped"),
-      count: views.filter((view) => view.folderId === null).length,
-    },
     ...folders.map((folder) => ({
       scope: folder.id,
       label: folder.name,
@@ -95,8 +93,8 @@ export function FolderMenu({
 }
 
 /**
- * The desktop folder column. Every entry but "All views" is a drop target:
- * dropping a view row on it moves the view there.
+ * The desktop folder column. Dropping a view row on a folder moves the view
+ * there; dropping it on "All views" takes it out of its folder.
  */
 export function ViewFolderSidebar({
   entries,
@@ -123,13 +121,15 @@ export function ViewFolderSidebar({
     const active = selected === scope;
     return (
       <Draggable.Target
-        key={scope ?? "ungrouped"}
+        key={scope}
         accept={savedViewKind}
-        disabled={busy || scope === "all"}
-        canDrop={({ source }) => source.payload.folderId !== scope}
-        onDraggableDrop={({ source }) => {
-          if (scope !== "all") onMove(source.payload, scope);
-        }}
+        disabled={busy}
+        canDrop={({ source }) =>
+          source.payload.folderId !== (scope === "all" ? null : scope)
+        }
+        onDraggableDrop={({ source }) =>
+          onMove(source.payload, scope === "all" ? null : scope)
+        }
         className="group/entry data-drag-over:bg-primary/10 data-drag-over:ring-primary relative flex h-9 shrink-0 items-center rounded-md data-drag-over:ring-2 data-drag-over:ring-inset"
       >
         <button
@@ -181,7 +181,7 @@ export function ViewFolderSidebar({
       className="border-border flex w-56 shrink-0 flex-col overflow-y-auto border-r px-2 py-3"
     >
       <nav aria-label={t("views.folders")} className="flex flex-col gap-0.5">
-        {entries.slice(0, 2).map(renderEntry)}
+        {renderEntry(entries[0])}
         <div className="mt-3 mb-1 flex h-6 items-center justify-between pl-2">
           <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
             {t("views.folders")}
@@ -197,7 +197,7 @@ export function ViewFolderSidebar({
             <PlusIcon className="size-3.5" />
           </Button>
         </div>
-        {entries.slice(2).map(renderEntry)}
+        {entries.slice(1).map(renderEntry)}
       </nav>
     </Draggable.Viewport>
   );
@@ -218,7 +218,7 @@ export function ViewFolderDrawer({
   const t = useT();
   const item = (entry: ScopeEntry) => (
     <button
-      key={entry.scope ?? "ungrouped"}
+      key={entry.scope}
       type="button"
       aria-current={selected === entry.scope ? "page" : undefined}
       onClick={() => {
@@ -254,11 +254,11 @@ export function ViewFolderDrawer({
           aria-label={t("views.folders")}
           className="flex min-h-0 flex-col overflow-y-auto pb-2"
         >
-          {entries.slice(0, 2).map(item)}
+          {item(entries[0])}
           <span className="text-muted-foreground mt-3 mb-1 px-2 text-[10px] font-medium tracking-wide uppercase">
             {t("views.folders")}
           </span>
-          {entries.slice(2).map(item)}
+          {entries.slice(1).map(item)}
         </nav>
       </ResponsiveDialogContent>
     </ResponsiveDialog>

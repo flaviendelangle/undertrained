@@ -272,13 +272,7 @@ const ViewsPage: NextPageWithLayout = () => {
             ) : !views.length ? (
               <QueryState>
                 <p>
-                  {t(
-                    !scope.views.length
-                      ? "views.empty"
-                      : current.scope === null
-                        ? "views.emptyUngrouped"
-                        : "views.emptyFolder",
-                  )}
+                  {t(scope.views.length ? "views.emptyFolder" : "views.empty")}
                 </p>
               </QueryState>
             ) : isMobile ? (

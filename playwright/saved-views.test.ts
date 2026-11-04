@@ -723,8 +723,9 @@ test("move a view between folders by dragging its row", async ({
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await target.click();
   await expect(link).toBeVisible();
+  // Dropping on "All views" takes the view out of its folder.
   await link.dragTo(
-    folders.getByRole("button", { name: "Sans dossier", exact: true }),
+    folders.getByRole("button", { name: "Toutes les vues", exact: true }),
   );
   await expect.poll(folderOf).toBeNull();
   await expect(link).toHaveCount(0);
@@ -782,23 +783,24 @@ test("move a view and switch folders on mobile", async ({
           .folderId,
     )
     .toBe(folder.id);
+  const link = page.getByRole("link", { name: view.name, exact: true });
   await page.getByRole("button", { name: /^Toutes les vues/ }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /^Sans dossier/ })
-    .click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(
-    page.getByRole("link", { name: view.name, exact: true }),
-  ).toHaveCount(0);
-  await page.getByRole("button", { name: /^Sans dossier/ }).click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: /^Voyages/ })
     .click();
-  await expect(
-    page.getByRole("link", { name: view.name, exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(link).toBeVisible();
+  await page
+    .getByRole("button", { name: `Gérer ${view.name}`, exact: true })
+    .click();
+  await page
+    .getByRole("menuitem", { name: "Déplacer vers", exact: true })
+    .click();
+  await page
+    .getByRole("menuitemradio", { name: "Sans dossier", exact: true })
+    .click();
+  await expect(link).toHaveCount(0);
 });
 
 test("Journal tabs preserve the selected week and ignore retired filters", async ({

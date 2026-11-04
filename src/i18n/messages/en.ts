@@ -63,7 +63,6 @@ const en = {
     emptyFolder:
       "No views in this folder. In All views, use a view’s Move to menu.",
     statsError: "Could not load the activities of your views.",
-    emptyUngrouped: "Every view is in a folder.",
     listColumns: {
       sport: "Sport",
       view: "View",

@@ -61,7 +61,6 @@ const fr: Messages = {
     emptyFolder:
       "Aucune vue dans ce dossier. Depuis Toutes les vues, utilisez Déplacer vers dans le menu d’une vue.",
     statsError: "Impossible de charger les activités de vos vues.",
-    emptyUngrouped: "Toutes les vues sont rangées dans un dossier.",
     listColumns: {
       sport: "Sport",
       view: "Vue",
