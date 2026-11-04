@@ -481,6 +481,9 @@ export function useRecordsExplorer() {
   if (fresh && active.data !== shown.data)
     setShown({ data: active.data, entries: freshEntries });
   const entries = fresh ? freshEntries : shown.entries;
+  // Without a link, a failed overview leaves no leaderboard to load: its error
+  // is the page's, and retrying it settles the default.
+  const overviewFailed = !settled && overviewQuery.isError;
 
   return {
     sports,
@@ -516,8 +519,8 @@ export function useRecordsExplorer() {
     /** Newer rows load while the previous ones stay on screen. */
     isRefreshing: active.isFetching && entries.length > 0,
     // An error shows even over the previous rows: they belong to another category.
-    isError: active.isError,
-    retry: () => void active.refetch(),
+    isError: overviewFailed || active.isError,
+    retry: () => void (overviewFailed ? overviewQuery : active).refetch(),
     emptyMessage,
   };
 }
