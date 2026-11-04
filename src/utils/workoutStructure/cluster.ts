@@ -231,7 +231,13 @@ function cycleWithPeriod(
   metric: StructureMetric,
 ): RawBlock | null {
   if (start + 2 * period > units.length) return null;
-  const steps = units.slice(start, start + period).map((unit) => [unit]);
+  const first = units.slice(start, start + period);
+  // A cycle's first repetition already shows distinct steps. Checking this
+  // up front keeps plain runs from being scanned to their end at every start.
+  if (first.every((unit) => workMatches(unit.work, first[0].work, metric))) {
+    return null;
+  }
+  const steps = first.map((unit) => [unit]);
   let end = start + period;
   while (
     end + period <= units.length &&
