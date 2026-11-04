@@ -820,6 +820,7 @@ const fr: Messages = {
       title: "Préférences",
       description:
         "Gérez les préférences de l'application et les conseils d'accueil.",
+      hints: "Conseils d'accueil",
       resetHints: "Réinitialiser tous les conseils",
       hintsRestored: "Conseils restaurés",
     },
@@ -857,10 +858,25 @@ const fr: Messages = {
         weightTraining: "Musculation",
       },
     },
+    profile: {
+      title: "Profil sportif",
+      description:
+        "Chaque activité est évaluée avec les valeurs en vigueur à sa date.",
+    },
     metric: {
       add: "Ajouter",
-      start: "Départ",
-      logValue: "Enregistrer une nouvelle valeur",
+      replace: "Remplacer",
+      start: "Valeur de départ",
+      default: "Par défaut",
+      logValue: "Ajouter une valeur",
+      effectiveDate: "En vigueur à partir du",
+      deleteValue: "Supprimer la valeur du {date}",
+      column: {
+        metric: "Mesure",
+        value: "Valeur",
+        since: "Depuis",
+        change: "Évolution",
+      },
     },
     field: {
       ftp: {

@@ -1,9 +1,10 @@
 import * as React from "react";
+import type { ReactNode } from "react";
 
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
-import { Label } from "~/components/ui/label";
+import { Field, FieldLabel } from "~/components/ui/field";
 import { NumberField } from "~/components/ui/number-field";
 import {
   Select,
@@ -14,8 +15,69 @@ import {
 } from "~/components/ui/select";
 import type { AppMessageKey, TFunction } from "~/i18n/I18nProvider";
 import { useT } from "~/i18n/useT";
+import { cn } from "~/lib/utils";
 import type { RiderSettingsTimeline } from "~/sensors/types";
 import { getLoadAlgorithmConfigs } from "~/utils/sportConfig";
+
+/**
+ * One setting: its label on the left, its control on the right, ruled off from
+ * the row above like the rows of the profile table.
+ */
+export function SettingRow({
+  label,
+  children,
+  className,
+}: {
+  label: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Field
+      className={cn(
+        "border-border/60 min-h-12 flex-row items-center justify-between gap-4 border-t py-2",
+        className,
+      )}
+    >
+      <FieldLabel className="min-w-0">{label}</FieldLabel>
+      {children}
+    </Field>
+  );
+}
+
+/**
+ * A titled group of setting rows. Side by side panels share their parent's row
+ * tracks (`subgrid`), so their rows line up even when one description wraps
+ * onto more lines than the other.
+ */
+export function SettingsPanel({
+  title,
+  tooltip,
+  description,
+  rows,
+  children,
+  className,
+}: {
+  title: string;
+  tooltip?: string;
+  description?: string;
+  /** How many rows the panel spans in its parent grid, its title included. */
+  rows: number;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      style={{ gridRow: `span ${rows}` }}
+      className={cn("flex flex-col md:grid md:grid-rows-subgrid", className)}
+    >
+      <CardTitle tooltip={tooltip} description={description}>
+        {title}
+      </CardTitle>
+      {children}
+    </section>
+  );
+}
 
 const EQUIPMENT_FIELDS = [
   {
@@ -43,40 +105,41 @@ const EQUIPMENT_FIELDS = [
   smallStep: number;
 }[];
 
+/** Rows the equipment and load algorithm panels span: title + 3 settings. */
+export const EQUIPMENT_PANEL_ROWS = EQUIPMENT_FIELDS.length + 1;
+
 export function EquipmentFields({
   timeline,
   setTimeline,
+  className,
 }: {
   timeline: RiderSettingsTimeline;
   setTimeline: (t: RiderSettingsTimeline) => void;
+  className?: string;
 }) {
   const t = useT();
 
   return (
-    <div className="flex flex-col gap-5">
-      <CardTitle
-        tooltip={t("settings.equipment.tooltip")}
-        description={t("settings.equipment.description")}
-      >
-        {t("settings.equipment.title")}
-      </CardTitle>
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-        {EQUIPMENT_FIELDS.map(({ field, labelKey, step, smallStep }) => (
-          <div key={field} className="flex flex-col gap-2">
-            <Label>{t(labelKey)}</Label>
-            <NumberField
-              value={timeline[field]}
-              onValueChange={(v) =>
-                setTimeline({ ...timeline, [field]: v ?? 0 })
-              }
-              min={0}
-              step={step}
-              smallStep={smallStep}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
+    <SettingsPanel
+      title={t("settings.equipment.title")}
+      tooltip={t("settings.equipment.tooltip")}
+      description={t("settings.equipment.description")}
+      rows={EQUIPMENT_PANEL_ROWS}
+      className={className}
+    >
+      {EQUIPMENT_FIELDS.map(({ field, labelKey, step, smallStep }) => (
+        <SettingRow key={field} label={t(labelKey)}>
+          <NumberField
+            value={timeline[field]}
+            onValueChange={(v) => setTimeline({ ...timeline, [field]: v ?? 0 })}
+            min={0}
+            step={step}
+            smallStep={smallStep}
+            className="w-32 shrink-0"
+          />
+        </SettingRow>
+      ))}
+    </SettingsPanel>
   );
 }
 
@@ -95,41 +158,41 @@ function renderLabel(
 export function LoadAlgorithmFields({
   timeline,
   setTimeline,
+  className,
 }: {
   timeline: RiderSettingsTimeline;
   setTimeline: (t: RiderSettingsTimeline) => void;
+  className?: string;
 }) {
   const t = useT();
   return (
-    <div
-      className={`grid grid-cols-1 gap-5 sm:grid-cols-${LOAD_ALGORITHM_CONFIGS.length}`}
+    <SettingsPanel
+      title={t("settings.loadAlgorithm.title")}
+      tooltip={t("settings.loadAlgorithm.tooltip")}
+      description={t("settings.loadAlgorithm.description")}
+      rows={LOAD_ALGORITHM_CONFIGS.length + 1}
+      className={className}
     >
-      {LOAD_ALGORITHM_CONFIGS.map((config) => {
-        const currentValue = timeline[config.key];
-        return (
-          <div key={config.key} className="flex flex-col gap-2">
-            <Label>{t(config.labelKey)}</Label>
-            <Select
-              value={currentValue}
-              onValueChange={(v) =>
-                setTimeline({ ...timeline, [config.key]: v })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue>{renderLabel(config.options, t)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {config.options.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {t(o.labelKey)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        );
-      })}
-    </div>
+      {LOAD_ALGORITHM_CONFIGS.map((config) => (
+        <SettingRow key={config.key} label={t(config.labelKey)}>
+          <Select
+            value={timeline[config.key]}
+            onValueChange={(v) => setTimeline({ ...timeline, [config.key]: v })}
+          >
+            <SelectTrigger size="sm" className="w-60 shrink-0">
+              <SelectValue>{renderLabel(config.options, t)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {config.options.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {t(o.labelKey)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingRow>
+      ))}
+    </SettingsPanel>
   );
 }
 
@@ -146,18 +209,24 @@ export function DangerZone({
 }) {
   const t = useT();
   return (
-    <section className="md:border-destructive/30 md:bg-card p-5 md:rounded-sm md:border">
-      <h2 className="text-destructive mb-2 text-lg font-semibold">
-        {t("settings.dangerZone.title")}
-      </h2>
-      <p className="text-muted-foreground mb-4 text-sm">
-        {t("settings.dangerZone.description")}
-      </p>
+    <section className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:py-0">
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold">
+          {t("settings.dangerZone.title")}
+        </h2>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {t("settings.dangerZone.description")}
+        </p>
+      </div>
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         trigger={
-          <Button variant="destructive" disabled={deleting}>
+          <Button
+            variant="destructive"
+            disabled={deleting}
+            className="shrink-0 self-start md:self-auto"
+          >
             {t("settings.dangerZone.deleteAll")}
           </Button>
         }

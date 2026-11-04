@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { PencilIcon } from "lucide-react";
 
+import { Quantity } from "~/components/primitives/Quantity";
 import { NumberField } from "~/components/ui/number-field";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
@@ -73,19 +74,25 @@ export function EditableValue({
         onClick={startEditing}
         aria-label={t("common.editValue", { name: t(config.labelKey) })}
         className={cn(
-          "hover:bg-muted/60 focus-visible:ring-ring/50 inline-flex items-center gap-1.5 rounded px-1 text-left focus-visible:ring-2 focus-visible:outline-none",
+          "group/edit hover:bg-muted/60 focus-visible:ring-ring/50 inline-flex items-center gap-1.5 rounded px-1 text-left focus-visible:ring-2 focus-visible:outline-none",
           isEmpty && "text-muted-foreground",
           displayClassName,
         )}
       >
-        {isEmpty
-          ? placeholderValue != null
-            ? formatFieldValue(config, placeholderValue)
-            : emptyLabel
-          : formatFieldValue(config, value)}
+        <span>
+          {isEmpty ? (
+            placeholderValue != null ? (
+              <Quantity text={formatFieldValue(config, placeholderValue)} />
+            ) : (
+              emptyLabel
+            )
+          ) : (
+            <Quantity text={formatFieldValue(config, value)} />
+          )}
+        </span>
         <PencilIcon
           aria-hidden="true"
-          className="text-muted-foreground size-3 shrink-0"
+          className="text-muted-foreground size-3 shrink-0 transition-opacity group-focus-visible/edit:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover/edit:opacity-100"
         />
       </button>
     );

@@ -12,7 +12,7 @@ import {
   EquipmentFields,
   LoadAlgorithmFields,
 } from "~/components/settings/layouts/shared";
-import { RiderMetricCards } from "~/components/settings/rider/RiderMetricCards";
+import { RiderProfile } from "~/components/settings/rider/RiderProfile";
 import { Button } from "~/components/ui/button";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
@@ -69,42 +69,36 @@ const SettingsPage: NextPageWithLayout = () => {
 
       {/* Mobile (< md): full-bleed sections separated by hairline dividers,
           flush under the toolbar — matches the Statistics page. Desktop (md+):
-          the centered column of boxed cards. */}
+          a centered column of cards. */}
       <div className="flex flex-1 flex-col overflow-y-auto pb-4 md:items-center md:p-6">
-        <div className="divide-border border-border flex w-full flex-col divide-y border-b md:max-w-5xl md:gap-6 md:divide-y-0 md:border-0">
-          <RiderMetricCards
+        <div className="divide-border border-border flex w-full flex-col divide-y border-b md:max-w-4xl md:gap-6 md:divide-y-0 md:border-0">
+          <RiderProfile
             timeline={timeline}
             onTimelineChange={setTimeline}
             hasSettings={hasSettings}
           />
 
-          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
-            <EquipmentFields timeline={timeline} setTimeline={setTimeline} />
-          </section>
-
-          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
-            <CardTitle
-              tooltip={t("settings.loadAlgorithm.tooltip")}
-              description={t("settings.loadAlgorithm.description")}
-              className="mb-5"
-            >
-              {t("settings.loadAlgorithm.title")}
-            </CardTitle>
+          <div className="md:border-border md:bg-card flex flex-col gap-5 p-5 md:grid md:grid-cols-2 md:gap-0 md:rounded-sm md:border">
+            <EquipmentFields
+              timeline={timeline}
+              setTimeline={setTimeline}
+              className="md:border-border md:border-r md:pr-6"
+            />
             <LoadAlgorithmFields
               timeline={timeline}
               setTimeline={setTimeline}
+              className="border-border -mx-5 border-t px-5 pt-5 md:mx-0 md:border-t-0 md:pt-0 md:pr-0 md:pl-6"
             />
-          </section>
-
-          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
-            <CardTitle description={t("settings.preferences.description")}>
-              {t("settings.preferences.title")}
-            </CardTitle>
-            <div className="flex flex-col gap-5">
-              <LanguageSelect />
-              <ResetHintsButton />
-            </div>
-          </section>
+            <section className="border-border -mx-5 border-t px-5 pt-5 md:col-span-2 md:mx-0 md:mt-6 md:px-0">
+              <CardTitle description={t("settings.preferences.description")}>
+                {t("settings.preferences.title")}
+              </CardTitle>
+              <div className="md:grid md:grid-cols-2 md:gap-x-12">
+                <LanguageSelect />
+                <ResetHintsButton />
+              </div>
+            </section>
+          </div>
 
           <DangerZone
             onDeleteAllData={handleDeleteAllData}

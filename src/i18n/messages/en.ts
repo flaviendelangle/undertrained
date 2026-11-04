@@ -802,6 +802,7 @@ const en = {
     preferences: {
       title: "Preferences",
       description: "Manage app preferences and onboarding hints.",
+      hints: "Onboarding hints",
       resetHints: "Reset all hints",
       hintsRestored: "Hints restored",
     },
@@ -839,10 +840,25 @@ const en = {
         weightTraining: "Weight Training",
       },
     },
+    profile: {
+      title: "Athlete profile",
+      description:
+        "Each activity is scored with the values in force on its date.",
+    },
     metric: {
       add: "Add",
-      start: "Start",
-      logValue: "Log a new value",
+      replace: "Replace",
+      start: "Start value",
+      default: "Default",
+      logValue: "Add a value",
+      effectiveDate: "Effective from",
+      deleteValue: "Delete the {date} value",
+      column: {
+        metric: "Metric",
+        value: "Value",
+        since: "Since",
+        change: "Change",
+      },
     },
     field: {
       ftp: {

@@ -52,8 +52,8 @@ export function MetricSparkline({
         <SparkLineChart
           data={data}
           curve="stepAfter"
-          color={tokens.palette[0]}
-          height={36}
+          color={tokens.axisLabel}
+          height={28}
           showTooltip={false}
           showHighlight={false}
           margin={{ top: 4, bottom: 4, left: 0, right: 0 }}
