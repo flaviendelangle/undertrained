@@ -70,7 +70,7 @@ export function detectWorkoutStructure(
 
   const confidence = scoreConfidence({
     metric,
-    blocks: finalized.map((f) => f.stats),
+    blocks: finalized.flatMap((f) => f.stats),
     separationRatio: split.separationRatio,
     ...computeCoverage(points, finalized),
   });
@@ -86,7 +86,15 @@ export function detectWorkoutStructure(
 
 interface FinalizedBlock {
   block: IntervalBlock;
-  stats: BlockStats;
+  /** One entry per step: each step is scored as its own run of reps. */
+  stats: BlockStats[];
+}
+
+/** The laps and raw measurements gathered for one step of a block. */
+interface StepSamples extends BlockStats {
+  recoveryValues: number[];
+  workLapIndices: number[];
+  recoveryLapIndices: number[];
 }
 
 function finalizeBlock(
@@ -95,9 +103,7 @@ function finalizeBlock(
   thresholds: Thresholds,
 ): FinalizedBlock {
   const { members, groupSizes } = raw;
-  const matched = members.filter((m) => !m.bridged);
-  const workDurations = matched.map((m) => m.unit.work.duration);
-  const workValues = matched.map((m) => m.unit.work.value);
+  const period = raw.period ?? 1;
 
   // Set breaks sit at the group boundaries; exclude them from recovery stats
   // so a long between-set break does not distort the within-set recovery.
@@ -110,52 +116,68 @@ function finalizeBlock(
     }
   }
 
-  const recoveryDurations: number[] = [];
-  const recoveryValues: number[] = [];
+  const samples = Array.from({ length: period }, (): StepSamples => ({
+    workDurations: [],
+    workValues: [],
+    recoveryDurations: [],
+    recoveryValues: [],
+    workLapIndices: [],
+    recoveryLapIndices: [],
+    repCount: 0,
+    bridgedCount: 0,
+  }));
   const lapIndices: number[] = [];
-  const workLapIndices: number[] = [];
-  const recoveryLapIndices: number[] = [];
   members.forEach((member, i) => {
-    lapIndices.push(member.unit.work.lapIndex);
-    workLapIndices.push(member.unit.work.lapIndex);
+    const step = samples[i % period];
+    const { work, recovery } = member.unit;
+    lapIndices.push(work.lapIndex);
+    step.workLapIndices.push(work.lapIndex);
+    step.repCount++;
+    if (member.bridged) {
+      step.bridgedCount++;
+    } else {
+      step.workDurations.push(work.duration);
+      step.workValues.push(work.value);
+    }
     const isLast = i === members.length - 1;
-    const recovery = member.unit.recovery;
     if (isLast || recovery == null) return;
     lapIndices.push(...recovery.lapIndices);
     if (!breakPositions.has(i)) {
-      recoveryLapIndices.push(...recovery.lapIndices);
-      recoveryDurations.push(recovery.duration);
-      recoveryValues.push(recovery.value);
+      step.recoveryLapIndices.push(...recovery.lapIndices);
+      step.recoveryDurations.push(recovery.duration);
+      step.recoveryValues.push(recovery.value);
     }
   });
 
   const block: IntervalBlock = {
-    reps: groupSizes != null ? groupSizes[0] : members.length,
+    reps: groupSizes != null ? groupSizes[0] : members.length / period,
     ...(groupSizes != null ? { sets: groupSizes.length } : {}),
-    workDuration: roundToFiveSeconds(median(workDurations)),
-    work: toIntensity(median(workValues), metric, thresholds),
-    recoveryDuration:
-      recoveryDurations.length > 0
-        ? roundToFiveSeconds(median(recoveryDurations))
-        : null,
-    recovery:
-      recoveryValues.length > 0
-        ? toIntensity(median(recoveryValues), metric, thresholds)
-        : null,
+    steps: samples.map((step) => ({
+      workDuration: roundToFiveSeconds(median(step.workDurations)),
+      work: toIntensity(median(step.workValues), metric, thresholds),
+      recoveryDuration:
+        step.recoveryDurations.length > 0
+          ? roundToFiveSeconds(median(step.recoveryDurations))
+          : null,
+      recovery:
+        step.recoveryValues.length > 0
+          ? toIntensity(median(step.recoveryValues), metric, thresholds)
+          : null,
+      workLapIndices: step.workLapIndices,
+      recoveryLapIndices: step.recoveryLapIndices,
+    })),
     lapIndices,
-    workLapIndices,
-    recoveryLapIndices,
   };
 
   return {
     block,
-    stats: {
-      workDurations,
-      workValues,
-      recoveryDurations,
-      repCount: members.length,
-      bridgedCount: members.length - matched.length,
-    },
+    stats: samples.map((step) => ({
+      workDurations: step.workDurations,
+      workValues: step.workValues,
+      recoveryDurations: step.recoveryDurations,
+      repCount: step.repCount,
+      bridgedCount: step.bridgedCount,
+    })),
   };
 }
 

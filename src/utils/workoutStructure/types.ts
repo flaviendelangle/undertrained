@@ -38,26 +38,39 @@ export interface StructureIntensity {
   zoneIndex: number | null;
 }
 
-export interface IntervalBlock {
-  /** Work reps (per set when `sets` is present). */
-  reps: number;
-  /** Number of repeated sets when a nested "2×(5×…)" structure was detected (≥2). */
-  sets?: number;
+/**
+ * One step of a block's repeating pattern: a work interval and the recovery
+ * that follows it.
+ */
+export interface IntervalStep {
   /** Seconds, rounded to a multiple of 5. */
   workDuration: number;
   work: StructureIntensity;
   /** null when work laps are back-to-back (no recovery laps recorded). */
   recoveryDuration: number | null;
   recovery: StructureIntensity | null;
-  /** StoredLap.index values consumed by this block (work + recovery laps). */
-  lapIndices: number[];
-  /** The work laps among `lapIndices`. */
+  /** The work laps of this step, across every repetition. */
   workLapIndices: number[];
-  /**
-   * The within-set recovery laps among `lapIndices`. Laps in neither list are
-   * set breaks — consumed by the block but not part of the rep pattern.
-   */
+  /** The within-set recovery laps after this step, across every repetition. */
   recoveryLapIndices: number[];
+}
+
+export interface IntervalBlock {
+  /** Repetitions of the step pattern (per set when `sets` is present). */
+  reps: number;
+  /** Number of repeated sets when a nested "2×(5×…)" structure was detected (≥2). */
+  sets?: number;
+  /**
+   * The pattern repeated `reps` times, in order. One step for "10 × 1' @ 280W";
+   * several for a cycle like "4 × (1' @ 4:00/km + 1' @ 4:20/km)".
+   */
+  steps: IntervalStep[];
+  /**
+   * StoredLap.index values consumed by this block. Laps in no step's
+   * `workLapIndices`/`recoveryLapIndices` are set breaks: consumed by the
+   * block but not part of the rep pattern.
+   */
+  lapIndices: number[];
 }
 
 export interface WorkoutStructure {
@@ -115,8 +128,17 @@ export interface BlockMember {
 
 /** A contiguous run of similar rep units, before rounding/zone labelling. */
 export interface RawBlock {
-  /** In workout order. */
+  /**
+   * In workout order. With `period` > 1, member `i` is step `i % period` of
+   * the repeating cycle.
+   */
   members: BlockMember[];
+  /**
+   * Steps per repetition when the block is a cycle of distinct rep units
+   * (e.g. 1' fast + 1' medium, repeated). Absent for a plain run of similar
+   * reps. Cycles never carry `groupSizes` or bridged members.
+   */
+  period?: number;
   /**
    * Present when a nested set structure was detected: the members are split
    * into `groupSizes.length` equal sets of `groupSizes[0]` reps each.

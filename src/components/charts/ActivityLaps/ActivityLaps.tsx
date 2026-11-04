@@ -141,21 +141,29 @@ const ActivityLaps = React.memo(function ActivityLaps(
       ? `${intensity.value} W`
       : sportConfig.formatSpeed(1000 / intensity.value);
 
+  // "4 × 1:00 @ 280 W", or "4 × (1:00 @ 4:00 /km + 1:00 @ 4:20 /km)" for a
+  // cycle; the short form drops the intensities.
   const blockLabel = (block: IntervalBlock, short: boolean) => {
     const reps =
       block.sets != null ? `${block.sets} × ${block.reps}` : `${block.reps}`;
-    const work = `${reps} × ${formatElapsed(block.workDuration)}`;
-    return short ? work : `${work} @ ${formatTargetIntensity(block.work)}`;
+    const steps = block.steps.map((step) =>
+      short
+        ? formatElapsed(step.workDuration)
+        : `${formatElapsed(step.workDuration)} @ ${formatTargetIntensity(step.work)}`,
+    );
+    return steps.length === 1
+      ? `${reps} × ${steps[0]}`
+      : `${reps} × (${steps.join(" + ")})`;
   };
 
   const targetByLap = new Map<number, string>();
-  for (const block of structure?.blocks ?? []) {
-    const workTarget = `${formatElapsed(block.workDuration)} @ ${formatTargetIntensity(block.work)}`;
-    for (const lapIndex of block.workLapIndices)
+  for (const step of structure?.blocks.flatMap((block) => block.steps) ?? []) {
+    const workTarget = `${formatElapsed(step.workDuration)} @ ${formatTargetIntensity(step.work)}`;
+    for (const lapIndex of step.workLapIndices)
       targetByLap.set(lapIndex, workTarget);
-    if (block.recoveryDuration != null && block.recovery != null) {
-      const recoveryTarget = `${formatElapsed(block.recoveryDuration)} @ ${formatTargetIntensity(block.recovery)}`;
-      for (const lapIndex of block.recoveryLapIndices)
+    if (step.recoveryDuration != null && step.recovery != null) {
+      const recoveryTarget = `${formatElapsed(step.recoveryDuration)} @ ${formatTargetIntensity(step.recovery)}`;
+      for (const lapIndex of step.recoveryLapIndices)
         targetByLap.set(lapIndex, recoveryTarget);
     }
   }
