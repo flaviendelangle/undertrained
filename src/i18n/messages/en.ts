@@ -522,7 +522,6 @@ const en = {
     toolbox: "Toolbox",
     noLoginRequired: "No login required",
     privacyPolicy: "Privacy Policy",
-    gotIt: "Got it",
     learnAbout: "Learn about {title}",
     tool: {
       paceCalculator: "Pace Calculator",
@@ -660,10 +659,8 @@ const en = {
       daysAxis: "Days",
     },
     powerCurve: {
-      title: "Power Curve",
       cardTitle: "Cycling Power Curve",
       activityCardTitle: "Power",
-      hint: "Your best sustained power efforts at each duration. Add date ranges to compare this activity against your historical bests and spot improvements.",
       thisActivity: "This Activity",
       dateRanges: "Date ranges",
       addRange: "Add range…",
@@ -704,7 +701,6 @@ const en = {
     },
     pace: {
       activityCardTitle: "Pace",
-      hint: "Your running pace through this activity — a 30-second rolling pace over time, the time spent in each pace zone, and how that time spreads across paces. Pace zones come from your run threshold pace.",
       tab30sPace: "30-second pace",
       tabZones: "Time in zones",
       tabDistribution: "Pace distribution",
@@ -790,7 +786,6 @@ const en = {
     },
     streams: {
       title: "Time Series",
-      hint: "Heart rate, power, cadence, speed, altitude, and temperature plotted over time or distance. Hover to see all metrics at a specific point. Toggle the X-axis between time and distance. Double-click or press Escape to clear the selection and reset zoom.",
       loading: "Loading stream data...",
       empty: "No stream data available for this activity.",
       loadError: "Failed to load streams: {error}",
@@ -1129,8 +1124,6 @@ const en = {
     reconnect: "Reconnect",
     reconnecting: "Connecting…",
 
-    equipmentCallout:
-      "Set your weight, bike weight, and aerodynamics (CdA, Crr) in Settings for accurate watts/kg and virtual speed.",
     compat: {
       noBleNoUsb:
         "Web Bluetooth and WebUSB are not available. BLE and ANT+ sensors will not work. Please use Chrome, Edge, or Brave on desktop.",

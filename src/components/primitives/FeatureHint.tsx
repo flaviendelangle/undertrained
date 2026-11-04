@@ -10,33 +10,30 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import { useDismissedHints } from "~/hooks/useDismissedHints";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
 interface FeatureHintProps {
-  hintId: string;
   title: string;
   children: React.ReactNode;
   side?: "top" | "right" | "bottom" | "left";
   className?: string;
 }
 
+/**
+ * An info icon that opens an explanation of what a chart shows, for what
+ * the chart can't say on its own (what its colours mean, say). Always shown.
+ */
 export function FeatureHint({
-  hintId,
   title,
   children,
   side = "bottom",
   className,
 }: FeatureHintProps) {
   const t = useT();
-  const { isDismissed, dismiss } = useDismissedHints();
-  const [open, setOpen] = React.useState(false);
-
-  if (isDismissed(hintId)) return null;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover>
       <PopoverTrigger
         render={
           <button
@@ -55,15 +52,6 @@ export function FeatureHint({
           <PopoverTitle>{title}</PopoverTitle>
           <PopoverDescription>{children}</PopoverDescription>
         </PopoverHeader>
-        <button
-          onClick={() => {
-            dismiss(hintId);
-            setOpen(false);
-          }}
-          className="text-primary hover:text-primary/80 self-end text-xs font-medium"
-        >
-          {t("auth.gotIt")}
-        </button>
       </PopoverContent>
     </Popover>
   );

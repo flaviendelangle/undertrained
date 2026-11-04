@@ -2,7 +2,6 @@ import * as React from "react";
 
 import { ActivityIcon, BarChart3Icon, LayersIcon } from "lucide-react";
 
-import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { ChartCard } from "~/components/ui/chart-card";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
@@ -66,16 +65,6 @@ const PaceCard = React.memo(function PaceCard({ stravaId }: PaceCardProps) {
     : 0;
   const averageSpeed = activity?.averageSpeed ?? null;
 
-  const hint = (
-    <FeatureHint
-      hintId="hint-activity-pace"
-      title={t("charts.pace.activityCardTitle")}
-      side="right"
-    >
-      {t("charts.pace.hint")}
-    </FeatureHint>
-  );
-
   const tabOptions = [
     iconTabOption<PaceTab>(
       "timeline",
@@ -92,7 +81,6 @@ const PaceCard = React.memo(function PaceCard({ stravaId }: PaceCardProps) {
 
   const actions = (
     <>
-      {hint}
       <div className="flex-1" />
       {/* Only the Distribution tab exposes a parameter (the slice width). */}
       {tab === "distribution" && (

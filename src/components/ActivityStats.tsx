@@ -324,10 +324,7 @@ export const ActivityStats = React.memo(function ActivityStats({
         </MetricRow>
         {rpe != null && <RpeMeter rpe={rpe} />}
         {!hasSettings && showLoadStats && (
-          <SettingsCallout
-            hintId="callout-activity-load"
-            message={sportConfig.settingsCalloutMessage}
-          />
+          <SettingsCallout message={sportConfig.settingsCalloutMessage} />
         )}
       </StatPanel>,
     );

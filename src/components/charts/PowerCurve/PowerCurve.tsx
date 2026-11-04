@@ -8,7 +8,6 @@ import {
   X,
 } from "lucide-react";
 
-import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { Button } from "~/components/ui/button";
 import { ChartCard } from "~/components/ui/chart-card";
 import { Label } from "~/components/ui/label";
@@ -269,16 +268,6 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
     };
   }, [activity, queryResults, ranges, tokens.palette, resolveForDate]);
 
-  const hint = (
-    <FeatureHint
-      hintId="hint-activity-power-curve"
-      title={t("charts.powerCurve.title")}
-      side="right"
-    >
-      {t("charts.powerCurve.hint")}
-    </FeatureHint>
-  );
-
   const tabOptions = [
     iconTabOption<PowerTab>(
       "curve",
@@ -316,7 +305,6 @@ function SingleActivityPowerCurve({ stravaId }: { stravaId: number }) {
 
   const actions = (
     <>
-      {hint}
       <div className="flex-1" />
       {settings && (
         <ChartSettingsPopover label={t("charts.power.settings")}>

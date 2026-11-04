@@ -231,10 +231,7 @@ const ActivityLaps = React.memo(function ActivityLaps(
         title={t("charts.laps.title")}
         headerSlot={
           <>
-            <FeatureHint
-              hintId="hint-activity-laps"
-              title={t("charts.laps.title")}
-            >
+            <FeatureHint title={t("charts.laps.title")}>
               {t("charts.laps.hintIntro", {
                 metric: usePower
                   ? t("charts.laps.power").toLowerCase()

@@ -1,6 +1,5 @@
 import * as React from "react";
 
-import { FeatureHint } from "~/components/primitives/FeatureHint";
 import { ChartCard } from "~/components/ui/chart-card";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
 import { type TFunction } from "~/i18n/I18nProvider";
@@ -227,14 +226,6 @@ export default function ActivityStreams(props: ActivityStreamsProps) {
   return (
     <ChartCard
       title={t("charts.streams.title")}
-      headerSlot={
-        <FeatureHint
-          hintId="hint-activity-streams"
-          title={t("charts.streams.title")}
-        >
-          {t("charts.streams.hint")}
-        </FeatureHint>
-      }
       actions={
         xAxisOptions.length > 1 ? (
           <div className="ml-auto">

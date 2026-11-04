@@ -20,7 +20,7 @@ export interface SliceWidthStore {
  * The width of each bar in a Distribution histogram, persisted to localStorage
  * so the preferred granularity sticks across activities and sessions. Backed by
  * an external store read through `useSyncExternalStore` (SSR-safe, and kept in
- * sync across every instance) — the same pattern as `useDismissedHints`.
+ * sync across every instance).
  */
 export function createSliceWidthStore({
   storageKey,
