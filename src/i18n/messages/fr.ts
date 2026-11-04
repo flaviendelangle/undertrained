@@ -36,7 +36,6 @@ const fr: Messages = {
     namePlaceholder: "Par exemple, Alpes 2026",
     rename: "Renommer",
     move: "Déplacer",
-    moveView: "Déplacer {name}",
     duplicate: "Dupliquer",
     deleteViewHelp:
       "Seule la définition de la vue sera supprimée. Vos activités sont conservées.",
@@ -46,6 +45,33 @@ const fr: Messages = {
     empty:
       "Aucune vue enregistrée. Filtrez les activités puis enregistrez la sélection à retrouver plus tard.",
     manage: "Gérer les vues",
+    manageItem: "Gérer {name}",
+    folders: "Dossiers",
+    viewCount: {
+      one: "{count} vue",
+      other: "{count} vues",
+    },
+    activityCount: {
+      one: "{n} activité",
+      other: "{n} activités",
+    },
+    moveTo: "Déplacer vers",
+    openAs: "{presentation} : {name}",
+    since: "Depuis {date}",
+    noActivities: "Aucune activité",
+    emptyFolder:
+      "Aucune vue dans ce dossier. Depuis Toutes les vues, utilisez Déplacer vers dans le menu d’une vue.",
+    statsError: "Impossible de charger les activités de vos vues.",
+    emptyUngrouped: "Toutes les vues sont rangées dans un dossier.",
+    listColumns: {
+      sport: "Sport",
+      view: "Vue",
+      period: "Période",
+      activities: "Activités",
+      distance: "Distance",
+      elevation: "Dénivelé",
+      time: "Temps actif",
+    },
     activities: {
       one: "{count} activité",
       other: "{count} activités",

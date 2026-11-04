@@ -38,7 +38,6 @@ const en = {
     namePlaceholder: "For example, Alps 2026",
     rename: "Rename",
     move: "Move",
-    moveView: "Move {name}",
     duplicate: "Duplicate",
     deleteViewHelp:
       "Only the saved definition is deleted. Your activities are kept.",
@@ -48,6 +47,33 @@ const en = {
     empty:
       "No saved views yet. Filter Activities, then save the selection you want to revisit.",
     manage: "Manage saved views",
+    manageItem: "Manage {name}",
+    folders: "Folders",
+    viewCount: {
+      one: "{count} view",
+      other: "{count} views",
+    },
+    activityCount: {
+      one: "{n} activity",
+      other: "{n} activities",
+    },
+    moveTo: "Move to",
+    openAs: "{presentation}: {name}",
+    since: "Since {date}",
+    noActivities: "No activities",
+    emptyFolder:
+      "No views in this folder. In All views, use a view’s Move to menu.",
+    statsError: "Could not load the activities of your views.",
+    emptyUngrouped: "Every view is in a folder.",
+    listColumns: {
+      sport: "Sport",
+      view: "View",
+      period: "Period",
+      activities: "Activities",
+      distance: "Distance",
+      elevation: "Elevation",
+      time: "Moving time",
+    },
     activities: {
       one: "{count} activity",
       other: "{count} activities",

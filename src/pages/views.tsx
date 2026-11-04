@@ -1,12 +1,6 @@
 import * as React from "react";
 
-import {
-  FolderIcon,
-  FolderOpenIcon,
-  GripVerticalIcon,
-  MoreHorizontalIcon,
-  PlusIcon,
-} from "lucide-react";
+import { ChevronDownIcon, FolderOpenIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 
 import { Draggable } from "@base-ui/react/draggable";
@@ -15,12 +9,6 @@ import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { QueryState } from "~/components/primitives/QueryState";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -31,44 +19,59 @@ import {
 } from "~/components/ui/responsive-dialog";
 import { showErrorToast } from "~/components/ui/toast";
 import { viewInputClass } from "~/components/views/ActivityFilterEditor";
+import {
+  type SavedViewActions,
+  SavedViewCards,
+  SavedViewTable,
+} from "~/components/views/SavedViewList";
 import { ViewDetailsDialog } from "~/components/views/ViewDetailsDialog";
+import {
+  FolderMenu,
+  type ViewFolder,
+  ViewFolderDrawer,
+  ViewFolderSidebar,
+  type ViewScope,
+  useScopeEntries,
+} from "~/components/views/ViewFolderNav";
+import { groupViewsByFolder } from "~/components/views/groupViewsByFolder";
 import {
   type SavedActivityView,
   useActivityView,
 } from "~/hooks/useActivityView";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useIsMobile } from "~/hooks/useIsMobile";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
 import { trpc } from "~/utils/trpc";
 
-type Folder = { id: number; name: string };
-const savedViewKind = Draggable.createKind<SavedActivityView>(
-  "saved-activity-view",
-);
+const NEW_VIEW_HREF = "/activities?edit=filters";
+
 type Action =
   | {
-      [K in "edit" | "duplicate" | "delete"]: {
+      [K in "rename" | "duplicate" | "delete"]: {
         kind: K;
         view: SavedActivityView;
       };
-    }["edit" | "duplicate" | "delete"]
-  | { kind: "folder"; folder?: Folder }
-  | { kind: "deleteFolder"; folder: Folder };
+    }["rename" | "duplicate" | "delete"]
+  | { kind: "folder"; folder?: ViewFolder }
+  | { kind: "deleteFolder"; folder: ViewFolder };
 
 const ViewsPage: NextPageWithLayout = () => {
   const t = useT();
   const scope = useActivityView();
   const athleteId = useAthleteId();
+  const isMobile = useIsMobile();
   const utils = trpc.useUtils();
-  const [folderId, setFolderId] = React.useState<number | null | "all">("all");
+  const [selected, setSelected] = React.useState<ViewScope>("all");
   const [action, setAction] = React.useState<Action | null>(null);
+  const [folderDrawer, setFolderDrawer] = React.useState(false);
   const mainRef = React.useRef<HTMLElement>(null);
-  const counts = trpc.views.counts.useQuery({ athleteId, today: scope.today });
+  const stats = trpc.views.stats.useQuery({ athleteId, today: scope.today });
   const onSuccess = async () => {
     await Promise.all([
       utils.views.list.invalidate(),
       utils.views.listFolders.invalidate(),
-      utils.views.counts.invalidate(),
+      utils.views.stats.invalidate(),
     ]);
     setAction(null);
   };
@@ -84,7 +87,7 @@ const ViewsPage: NextPageWithLayout = () => {
   const deleteFolder = trpc.views.deleteFolder.useMutation({
     ...options,
     onSuccess: async () => {
-      setFolderId("all");
+      setSelected("all");
       await onSuccess();
     },
   });
@@ -95,255 +98,217 @@ const ViewsPage: NextPageWithLayout = () => {
     createFolder.isPending ||
     renameFolder.isPending ||
     deleteFolder.isPending;
-  const folders = [
-    { id: "all" as const, name: t("views.allViews") },
-    { id: null, name: t("views.ungrouped") },
-    ...scope.folders,
-  ];
-  const currentFolder = scope.folders.find((f) => f.id === folderId);
-  const filteredViews = scope.views.filter(
-    (view) => folderId === "all" || view.folderId === folderId,
+  const entries = useScopeEntries(scope.views, scope.folders);
+  // A folder deleted elsewhere falls back to every view.
+  const current =
+    entries.find((entry) => entry.scope === selected) ?? entries[0];
+  const views = scope.views.filter(
+    (view) => current.scope === "all" || view.folderId === current.scope,
   );
+  const groups =
+    current.scope === "all"
+      ? groupViewsByFolder(views, scope.folders, t("views.ungrouped"))
+      : [{ key: "scope", label: null, views }];
+  const save = (
+    view: SavedActivityView,
+    changes: { name?: string; folderId?: number | null },
+  ) =>
+    update.mutate({
+      athleteId,
+      id: view.id,
+      name: view.name,
+      folderId: view.folderId,
+      rules: view.rules,
+      display: view.display,
+      ...changes,
+    });
+  const actions: SavedViewActions = {
+    href: (view, path) => scope.viewHref(view.id, path),
+    onRename: (view) => setAction({ kind: "rename", view }),
+    onDuplicate: (view) => setAction({ kind: "duplicate", view }),
+    onDelete: (view) => setAction({ kind: "delete", view }),
+    onMove: (view, folderId) => save(view, { folderId }),
+  };
+  const folderActions = {
+    onRename: (folder: ViewFolder) => setAction({ kind: "folder", folder }),
+    onDelete: (folder: ViewFolder) =>
+      setAction({ kind: "deleteFolder", folder }),
+  };
+  const listProps = {
+    groups,
+    stats: stats.data,
+    folders: scope.folders,
+    today: scope.today,
+    busy,
+    actions,
+  };
+  const count = (
+    <>
+      <span aria-hidden className="text-muted-foreground">
+        ·
+      </span>
+      <span className="text-muted-foreground shrink-0 text-sm font-normal">
+        {t("views.viewCount", { count: current.count })}
+      </span>
+    </>
+  );
+  const folderMenu = current.folder && (
+    <FolderMenu
+      folder={current.folder}
+      {...folderActions}
+      trigger={
+        <Button
+          variant="ghost"
+          size={isMobile ? "icon" : "icon-sm"}
+          className="text-muted-foreground"
+        />
+      }
+    />
+  );
+
   return (
     <Draggable.Provider>
       <PageToolbar title={t("views.title")} icon={FolderOpenIcon} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row">
-        <aside className="border-border flex shrink-0 flex-col gap-1 border-b p-3 md:w-56 md:border-r md:border-b-0">
-          <Draggable.Viewport
-            accept={savedViewKind}
-            render={<nav aria-label={t("views.folder")} />}
-            className="flex gap-1 overflow-x-auto p-1 md:flex-col"
-          >
-            {folders.map((folder) => (
-              <Draggable.Target
-                key={folder.id ?? "ungrouped"}
-                accept={savedViewKind}
-                disabled={busy || folder.id === "all"}
-                canDrop={({ source }) => source.payload.folderId !== folder.id}
-                onDraggableDrop={({ source }) => {
-                  if (folder.id === "all") return;
-                  const view = source.payload;
-                  update.mutate({
-                    athleteId,
-                    id: view.id,
-                    name: view.name,
-                    folderId: folder.id,
-                    rules: view.rules,
-                    display: view.display,
-                  });
-                }}
-                render={
-                  <Button
-                    variant={folderId === folder.id ? "secondary" : "ghost"}
-                  />
-                }
-                aria-current={folderId === folder.id ? "page" : undefined}
-                className="data-drag-over:bg-primary/10 data-drag-over:ring-primary justify-start data-drag-over:ring-2 data-drag-over:ring-inset"
-                onClick={() => setFolderId(folder.id)}
+      <div className="flex min-h-0 flex-1">
+        {!isMobile && (
+          <ViewFolderSidebar
+            entries={entries}
+            selected={current.scope}
+            busy={busy}
+            onSelect={setSelected}
+            onMove={actions.onMove}
+            onNewFolder={() => setAction({ kind: "folder" })}
+            onRenameFolder={folderActions.onRename}
+            onDeleteFolder={folderActions.onDelete}
+          />
+        )}
+        <main ref={mainRef} className="@container flex min-w-0 flex-1 flex-col">
+          {isMobile ? (
+            <div className="border-border flex shrink-0 items-center gap-1 border-b px-3 py-2">
+              <Button
+                variant="ghost"
+                aria-haspopup="dialog"
+                className="h-10 min-w-0 flex-1 justify-start gap-1.5 px-1 text-left"
+                onClick={() => setFolderDrawer(true)}
               >
-                <FolderIcon />
-                <span className="truncate">{folder.name}</span>
-              </Draggable.Target>
-            ))}
-          </Draggable.Viewport>
-          <Button
-            variant="ghost"
-            className="justify-start"
-            onClick={() => setAction({ kind: "folder" })}
-          >
-            <PlusIcon />
-            {t("views.newFolder")}
-          </Button>
-          <p className="text-muted-foreground hidden pt-3 text-xs md:block">
-            {t("views.folderHelp")}
-          </p>
-        </aside>
-        <main ref={mainRef} className="min-w-0 flex-1 p-4 md:p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <h2 className="min-w-0 flex-1 truncate text-xl font-semibold">
-              {folders.find((f) => f.id === folderId)?.name ?? t("views.title")}
-            </h2>
-            {currentFolder && (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("views.folder")}
-                    />
-                  }
-                >
-                  <MoreHorizontalIcon />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem
-                    onClick={() =>
-                      setAction({ kind: "folder", folder: currentFolder })
-                    }
-                  >
-                    {t("views.rename")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() =>
-                      setAction({ kind: "deleteFolder", folder: currentFolder })
-                    }
-                  >
-                    {t("common.delete")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            <Button
-              nativeButton={false}
-              render={<Link href="/activities?edit=filters" />}
-            >
-              <PlusIcon />
-              {t("views.newView")}
-            </Button>
-          </div>
-          {scope.viewsQuery.isError || scope.foldersQuery.isError ? (
-            <QueryState
-              error
-              onRetry={() => {
-                void scope.viewsQuery.refetch();
-                void scope.foldersQuery.refetch();
-              }}
-            />
-          ) : scope.viewsQuery.isLoading || scope.foldersQuery.isLoading ? (
-            <QueryState loading />
-          ) : !filteredViews.length ? (
-            <QueryState>
-              <p>{t("views.empty")}</p>
-            </QueryState>
+                <span className="truncate">{current.label}</span>
+                {count}
+                <ChevronDownIcon className="text-muted-foreground ml-auto" />
+              </Button>
+              {folderMenu}
+              <Button
+                size="icon"
+                nativeButton={false}
+                render={<Link href={NEW_VIEW_HREF} />}
+                aria-label={t("views.newView")}
+                title={t("views.newView")}
+              >
+                <PlusIcon />
+              </Button>
+            </div>
           ) : (
-            <ul className="divide-border border-border divide-y rounded-lg border">
-              {filteredViews.map((view) => (
-                <Draggable.Root
-                  key={view.id}
-                  kind={savedViewKind}
-                  payload={view}
-                  disabled={busy}
-                  render={<li />}
-                  className="hover:bg-muted/30 flex items-center gap-2 p-3 data-dragging:opacity-40 md:p-4"
-                >
-                  <Draggable.Handle
-                    render={
-                      <Button variant="ghost" size="icon-sm" disabled={busy} />
-                    }
-                    aria-label={t("views.moveView", { name: view.name })}
-                    className="text-muted-foreground cursor-grab touch-none active:cursor-grabbing"
-                    onClick={() => setAction({ kind: "edit", view })}
-                  >
-                    <GripVerticalIcon />
-                  </Draggable.Handle>
-                  <Link
-                    className="min-w-0 flex-1"
-                    href={scope.viewHref(view.id)}
-                  >
-                    <span className="block truncate font-medium">
-                      {view.name}
-                    </span>
-                    <span className="text-muted-foreground text-xs">
-                      {view.folderId === null
-                        ? t("views.ungrouped")
-                        : scope.folders.find((f) => f.id === view.folderId)
-                            ?.name}
-                      {counts.data?.[view.id] !== undefined
-                        ? ` · ${t("views.activities", { count: counts.data[view.id] })}`
-                        : ""}
-                    </span>
-                  </Link>
-                  <div className="hidden gap-2 text-xs md:flex">
-                    <Link
-                      className="text-muted-foreground hover:text-foreground p-2"
-                      href={scope.viewHref(view.id, "/activities/charts")}
-                    >
-                      {t("nav.statistics")}
-                    </Link>
-                    <Link
-                      className="text-muted-foreground hover:text-foreground p-2"
-                      href={scope.viewHref(view.id, "/activities/map")}
-                    >
-                      {t("nav.map")}
-                    </Link>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`${t("views.manage")} ${view.name}`}
-                        />
-                      }
-                    >
-                      <MoreHorizontalIcon />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-max min-w-44">
-                      <DropdownMenuItem
-                        className="whitespace-nowrap"
-                        onClick={() => setAction({ kind: "edit", view })}
-                      >
-                        {t("views.rename")} / {t("views.move")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setAction({ kind: "duplicate", view })}
-                      >
-                        {t("views.duplicate")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={() => setAction({ kind: "delete", view })}
-                      >
-                        {t("common.delete")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  {/* Outside the list: a <ul> only accepts <li> children. */}
-                  <Draggable.Preview
-                    container={mainRef}
-                    offset={({ container }) => ({
-                      x: container.getBoundingClientRect().width / 2,
-                      y: -8,
-                    })}
-                    className="bg-popover text-popover-foreground border-border pointer-events-none w-max max-w-64 truncate rounded-md border px-2.5 py-1.5 text-sm font-medium shadow-md"
-                  >
-                    {view.name}
-                  </Draggable.Preview>
-                </Draggable.Root>
-              ))}
-            </ul>
+            <div className="border-border flex shrink-0 items-center gap-2 border-b px-4 py-3">
+              <h2 className="min-w-0 truncate text-sm font-medium">
+                {current.label}
+              </h2>
+              {count}
+              {folderMenu}
+              <Button
+                className="ml-auto"
+                nativeButton={false}
+                render={<Link href={NEW_VIEW_HREF} />}
+              >
+                <PlusIcon />
+                {t("views.newView")}
+              </Button>
+            </div>
           )}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {stats.isError && !stats.data && views.length > 0 && (
+              <div
+                role="alert"
+                className="text-muted-foreground border-border flex items-center gap-2 border-b px-4 py-2 text-sm"
+              >
+                {t("views.statsError")}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void stats.refetch()}
+                >
+                  {t("common.retry")}
+                </Button>
+              </div>
+            )}
+            {scope.viewsQuery.isError || scope.foldersQuery.isError ? (
+              <QueryState
+                error
+                onRetry={() => {
+                  void scope.viewsQuery.refetch();
+                  void scope.foldersQuery.refetch();
+                }}
+              />
+            ) : scope.viewsQuery.isLoading || scope.foldersQuery.isLoading ? (
+              <QueryState loading />
+            ) : !views.length ? (
+              <QueryState>
+                <p>
+                  {t(
+                    !scope.views.length
+                      ? "views.empty"
+                      : current.scope === null
+                        ? "views.emptyUngrouped"
+                        : "views.emptyFolder",
+                  )}
+                </p>
+              </QueryState>
+            ) : isMobile ? (
+              <SavedViewCards {...listProps} />
+            ) : (
+              <SavedViewTable {...listProps} previewContainer={mainRef} />
+            )}
+          </div>
         </main>
       </div>
-      {action && (action.kind === "edit" || action.kind === "duplicate") && (
+      {folderDrawer && (
+        <ViewFolderDrawer
+          entries={entries}
+          selected={current.scope}
+          onSelect={setSelected}
+          onNewFolder={() => setAction({ kind: "folder" })}
+          onClose={() => setFolderDrawer(false)}
+        />
+      )}
+      {action?.kind === "rename" && (
+        <NameDialog
+          title={t("views.rename")}
+          initial={action.view.name}
+          busy={busy}
+          onClose={() => setAction(null)}
+          onSave={(name) => save(action.view, { name })}
+        />
+      )}
+      {action?.kind === "duplicate" && (
         <ViewDetailsDialog
-          title={t(action.kind === "edit" ? "views.rename" : "views.duplicate")}
-          initialName={
-            action.view.name +
-            (action.kind === "duplicate" ? ` (${t("views.copy")})` : "")
-          }
+          title={t("views.duplicate")}
+          initialName={`${action.view.name} (${t("views.copy")})`}
           initialFolder={action.view.folderId}
           busy={busy}
           onClose={() => setAction(null)}
-          onSave={(name, folderId) => {
-            const fields = {
+          onSave={(name, folderId) =>
+            create.mutate({
               athleteId,
               name,
               folderId,
               rules: action.view.rules,
               display: action.view.display,
-            };
-            if (action.kind === "edit")
-              update.mutate({ ...fields, id: action.view.id });
-            else create.mutate(fields);
-          }}
+            })
+          }
         />
       )}
       {action?.kind === "folder" && (
-        <FolderDialog
+        <NameDialog
+          title={t(action.folder ? "views.rename" : "views.newFolder")}
+          description={t("views.folderHelp")}
           initial={action.folder?.name ?? ""}
           busy={busy}
           onClose={() => setAction(null)}
@@ -385,12 +350,17 @@ const ViewsPage: NextPageWithLayout = () => {
   );
 };
 
-function FolderDialog({
+/** Names a folder, or renames a folder or a view. */
+function NameDialog({
+  title,
+  description,
   initial,
   busy,
   onClose,
   onSave,
 }: {
+  title: string;
+  description?: string;
   initial: string;
   busy: boolean;
   onClose: () => void;
@@ -407,12 +377,12 @@ function FolderDialog({
     >
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>
-            {t(initial ? "views.rename" : "views.newFolder")}
-          </ResponsiveDialogTitle>
-          <ResponsiveDialogDescription>
-            {t("views.folderHelp")}
-          </ResponsiveDialogDescription>
+          <ResponsiveDialogTitle>{title}</ResponsiveDialogTitle>
+          {description && (
+            <ResponsiveDialogDescription>
+              {description}
+            </ResponsiveDialogDescription>
+          )}
         </ResponsiveDialogHeader>
         <form
           className="flex flex-col gap-4"
