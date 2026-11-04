@@ -95,18 +95,37 @@ function intensitiesMatch(
   return Math.abs(a - b) <= INTENSITY_TOLERANCE[metric] * Math.max(a, b);
 }
 
+interface WorkTarget {
+  duration: number;
+  value: number;
+}
+
+/** The median work duration/intensity of `units`. */
+function workCentroid(units: readonly RepUnit[]): WorkTarget {
+  return {
+    duration: median(units.map((u) => u.work.duration)),
+    value: median(units.map((u) => u.work.value)),
+  };
+}
+
+function workMatches(
+  a: WorkTarget,
+  b: WorkTarget,
+  metric: StructureMetric,
+): boolean {
+  return (
+    durationsMatch(a.duration, b.duration) &&
+    intensitiesMatch(a.value, b.value, metric)
+  );
+}
+
 /** Whether a unit matches the median work duration/intensity of `others`. */
 function matchesCentroid(
   unit: RepUnit,
   others: readonly RepUnit[],
   metric: StructureMetric,
 ): boolean {
-  const centroidDuration = median(others.map((u) => u.work.duration));
-  const centroidValue = median(others.map((u) => u.work.value));
-  return (
-    durationsMatch(unit.work.duration, centroidDuration) &&
-    intensitiesMatch(unit.work.value, centroidValue, metric)
-  );
+  return workMatches(unit.work, workCentroid(others), metric);
 }
 
 function matchesBlock(
@@ -203,7 +222,7 @@ export function findCycle(
  * centroid of its step's earlier repetitions. Only full repetitions count and
  * nothing is bridged. Needs `MIN_BLOCK_REPS` repetitions, or 2 when one
  * repetition holds `TWO_REP_MIN_DURATION_S` of work, like a plain block.
- * Steps that all match each other make a plain block, not a cycle.
+ * Steps whose centroids all match each other make a plain block, not a cycle.
  */
 function cycleWithPeriod(
   units: RepUnit[],
@@ -213,10 +232,6 @@ function cycleWithPeriod(
 ): RawBlock | null {
   if (start + 2 * period > units.length) return null;
   const steps = units.slice(start, start + period).map((unit) => [unit]);
-  if (steps.every(([unit]) => matchesCentroid(unit, steps[0], metric))) {
-    return null;
-  }
-
   let end = start + period;
   while (
     end + period <= units.length &&
@@ -235,6 +250,13 @@ function cycleWithPeriod(
     repetitions >= MIN_BLOCK_REPS ||
     (repetitions === 2 && workPerRepetition >= TWO_REP_MIN_DURATION_S);
   if (!accepted) return null;
+  // Judged on the step centroids, not the first repetition: lap jitter
+  // (56s, 64s, 60s…) can make one repetition look distinct when every step
+  // converges on the same target.
+  const centroids = steps.map(workCentroid);
+  if (centroids.every((c) => workMatches(c, centroids[0], metric))) {
+    return null;
+  }
 
   return {
     members: units.slice(start, end).map((unit) => ({ unit, bridged: false })),

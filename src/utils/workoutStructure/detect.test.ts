@@ -94,6 +94,23 @@ describe("detectWorkoutStructure — cycling", () => {
     expect(result?.confident).toBe(true);
   });
 
+  it("does not read lap jitter as a cycle", () => {
+    const durations = [60, 56, 64, 60, 60, 60, 60, 60, 60, 60];
+    const specs: LapSpec[] = [WARMUP_RIDE];
+    durations.forEach((duration, i) => {
+      specs.push({ duration, watts: 280 });
+      if (i < durations.length - 1) specs.push({ duration: 30, watts: 100 });
+    });
+    specs.push(COOLDOWN_RIDE);
+
+    const result = detectRide(specs);
+    expect(result?.blocks).toHaveLength(1);
+    const block = result!.blocks[0];
+    expect(block.reps).toBe(10);
+    expect(block.steps).toHaveLength(1);
+    expect(block.steps[0].workDuration).toBe(60);
+  });
+
   it("keeps genuinely different blocks apart (5×30\"@330W then 4×4'@250W)", () => {
     const specs = [
       { duration: 600, watts: 140 },
