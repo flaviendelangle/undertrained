@@ -28,7 +28,7 @@ const SEPARATION_FULL_SCORE_RATIO: Record<StructureMetric, number> = {
   pace: 1.35,
 };
 
-/** The raw consistency numbers of one accepted block. */
+/** The raw consistency numbers of one accepted block, or of one step of a cycle. */
 export interface BlockStats {
   /** Work durations of the matched (non-bridged) members, seconds. */
   workDurations: number[];

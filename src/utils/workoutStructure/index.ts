@@ -13,6 +13,7 @@ export { CONFIDENT_THRESHOLD, CONFIDENCE_NULL_FLOOR } from "./confidence";
 export type {
   DetectableLap,
   IntervalBlock,
+  IntervalStep,
   StructureIntensity,
   StructureMetric,
   WorkoutStructure,
