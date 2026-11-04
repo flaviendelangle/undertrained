@@ -8,21 +8,20 @@ import {
 import { LOCALES, LOCALE_LABEL, type Locale } from "~/i18n/locales";
 import { useLocale, useT } from "~/i18n/useT";
 
+import { SettingRow } from "./layouts/shared";
+
 /** Account language picker. Persists to the DB + a cookie via `setLocale`. */
 export function LanguageSelect() {
   const t = useT();
   const { locale, setLocale } = useLocale();
 
   return (
-    <div>
-      <div className="text-muted-foreground mb-2 text-xs font-medium">
-        {t("settings.language.label")}
-      </div>
+    <SettingRow label={t("settings.language.label")}>
       <Select
         value={locale}
         onValueChange={(value) => setLocale(value as Locale)}
       >
-        <SelectTrigger size="sm" className="w-full md:w-64">
+        <SelectTrigger size="sm" className="w-full shrink-0 sm:w-60">
           <SelectValue>{LOCALE_LABEL[locale]}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -33,6 +32,6 @@ export function LanguageSelect() {
           ))}
         </SelectContent>
       </Select>
-    </div>
+    </SettingRow>
   );
 }

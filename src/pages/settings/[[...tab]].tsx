@@ -6,13 +6,12 @@ import { signOut } from "next-auth/react";
 import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { LanguageSelect } from "~/components/settings/LanguageSelect";
-import { ResetHintsButton } from "~/components/settings/ResetHintsButton";
 import {
   DangerZone,
   EquipmentFields,
   LoadAlgorithmFields,
 } from "~/components/settings/layouts/shared";
-import { RiderMetricCards } from "~/components/settings/rider/RiderMetricCards";
+import { RiderProfile } from "~/components/settings/rider/RiderProfile";
 import { Button } from "~/components/ui/button";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
@@ -69,42 +68,38 @@ const SettingsPage: NextPageWithLayout = () => {
 
       {/* Mobile (< md): full-bleed sections separated by hairline dividers,
           flush under the toolbar — matches the Statistics page. Desktop (md+):
-          the centered column of boxed cards. */}
+          a centered column of cards. */}
       <div className="flex flex-1 flex-col overflow-y-auto pb-4 md:items-center md:p-6">
-        <div className="divide-border border-border flex w-full flex-col divide-y border-b md:max-w-5xl md:gap-6 md:divide-y-0 md:border-0">
-          <RiderMetricCards
+        <div className="divide-border border-border flex w-full flex-col divide-y border-b md:max-w-4xl md:gap-6 md:divide-y-0 md:border-0">
+          <RiderProfile
             timeline={timeline}
             onTimelineChange={setTimeline}
             hasSettings={hasSettings}
           />
 
-          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
-            <EquipmentFields timeline={timeline} setTimeline={setTimeline} />
-          </section>
-
-          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
-            <CardTitle
-              tooltip={t("settings.loadAlgorithm.tooltip")}
-              description={t("settings.loadAlgorithm.description")}
-              className="mb-5"
-            >
-              {t("settings.loadAlgorithm.title")}
-            </CardTitle>
+          {/* Equipment | load algorithm side by side on lg+, their rows on
+              shared tracks, the vertical rule meeting the preferences' top
+              rule; stacked panels below lg, each ruled off from the last. */}
+          <div className="md:border-border md:bg-card flex flex-col gap-5 p-5 md:rounded-sm md:border lg:grid lg:grid-cols-2 lg:gap-0">
+            <EquipmentFields
+              timeline={timeline}
+              setTimeline={setTimeline}
+              className="lg:border-border lg:border-r lg:pr-6 lg:pb-6"
+            />
             <LoadAlgorithmFields
               timeline={timeline}
               setTimeline={setTimeline}
+              className="border-border -mx-5 border-t px-5 pt-5 lg:mx-0 lg:border-t-0 lg:pt-0 lg:pr-0 lg:pb-6 lg:pl-6"
             />
-          </section>
-
-          <section className="md:border-border md:bg-card p-5 md:rounded-sm md:border">
-            <CardTitle description={t("settings.preferences.description")}>
-              {t("settings.preferences.title")}
-            </CardTitle>
-            <div className="flex flex-col gap-5">
-              <LanguageSelect />
-              <ResetHintsButton />
-            </div>
-          </section>
+            <section className="border-border -mx-5 border-t px-5 pt-5 lg:col-span-2 lg:mx-0 lg:px-0">
+              <CardTitle description={t("settings.preferences.description")}>
+                {t("settings.preferences.title")}
+              </CardTitle>
+              <div className="lg:grid lg:grid-cols-2 lg:gap-x-12">
+                <LanguageSelect />
+              </div>
+            </section>
+          </div>
 
           <DangerZone
             onDeleteAllData={handleDeleteAllData}

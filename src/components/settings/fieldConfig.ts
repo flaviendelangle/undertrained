@@ -1,5 +1,6 @@
 import type { AppMessageKey } from "~/i18n/I18nProvider";
 import type { TimeVaryingField } from "~/sensors/types";
+import { formatNumber } from "~/utils/format";
 
 export interface RiderFieldConfig {
   field: TimeVaryingField;
@@ -118,6 +119,35 @@ export function formatPace(speed: number, paceUnit: "/km" | "/100m"): string {
 }
 
 /**
+ * Format how far a field moved from `from` to `to`, signed, in the field's own
+ * terms: "+10 W", "−1.5 kg", or for paces the seconds gained or lost on the
+ * pace ("−5 s", "+1:05"). Returns null when the value didn't move.
+ */
+export function formatFieldDelta(
+  config: RiderFieldConfig,
+  from: number,
+  to: number,
+): string | null {
+  if (config.inputType === "pace" && config.paceUnit) {
+    const seconds = (speed: number) => {
+      const { minutes, seconds } = speedToPace(speed, config.paceUnit!);
+      return minutes * 60 + seconds;
+    };
+    const delta = seconds(to) - seconds(from);
+    if (delta === 0) return null;
+    const abs = Math.abs(delta);
+    const text =
+      abs < 60
+        ? `${abs} s`
+        : `${Math.floor(abs / 60)}:${String(abs % 60).padStart(2, "0")}`;
+    return `${delta > 0 ? "+" : "−"}${text}`;
+  }
+  const delta = Math.round((to - from) * 10) / 10;
+  if (delta === 0) return null;
+  return `${delta > 0 ? "+" : "−"}${formatNumber(Math.abs(delta), 1, 0)} ${config.unit}`;
+}
+
+/**
  * Format a field value for display, handling pace fields (min:sec) and
  * appending the unit for plain numbers. Returns "—" for null.
  */
@@ -129,5 +159,5 @@ export function formatFieldValue(
   if (config.inputType === "pace" && config.paceUnit) {
     return formatPace(value, config.paceUnit);
   }
-  return `${value}${config.unit}`;
+  return `${formatNumber(value, 2, 0)} ${config.unit}`;
 }

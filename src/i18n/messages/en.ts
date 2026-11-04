@@ -825,9 +825,7 @@ const en = {
     },
     preferences: {
       title: "Preferences",
-      description: "Manage app preferences and onboarding hints.",
-      resetHints: "Reset all hints",
-      hintsRestored: "Hints restored",
+      description: "Manage app preferences.",
     },
     language: {
       label: "Language",
@@ -863,10 +861,33 @@ const en = {
         weightTraining: "Weight Training",
       },
     },
+    profile: {
+      title: "Athlete profile",
+      description:
+        "Each activity is scored with the values in force on its date.",
+    },
     metric: {
       add: "Add",
-      start: "Start",
-      logValue: "Log a new value",
+      replace: "Replace",
+      start: "Start value",
+      startDefault: "Start value · default",
+      historyHint:
+        "Each value applies from its date; the start value applies before the first one.",
+      default: "Default",
+      sinceDate: "Since {date}",
+      changeSinceStart: "since the start value:",
+      changeFromPrevious: "from the previous value:",
+      paceMinutes: "{name}, minutes",
+      paceSeconds: "{name}, seconds",
+      logValue: "Add a value",
+      effectiveDate: "Effective from",
+      deleteValue: "Delete the {date} value",
+      column: {
+        metric: "Metric",
+        value: "Value",
+        since: "Since",
+        change: "Change",
+      },
     },
     field: {
       ftp: {

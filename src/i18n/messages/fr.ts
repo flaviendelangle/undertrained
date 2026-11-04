@@ -842,10 +842,7 @@ const fr: Messages = {
     },
     preferences: {
       title: "Préférences",
-      description:
-        "Gérez les préférences de l'application et les conseils d'accueil.",
-      resetHints: "Réinitialiser tous les conseils",
-      hintsRestored: "Conseils restaurés",
+      description: "Gérez les préférences de l'application.",
     },
     language: {
       label: "Langue",
@@ -881,10 +878,33 @@ const fr: Messages = {
         weightTraining: "Musculation",
       },
     },
+    profile: {
+      title: "Profil sportif",
+      description:
+        "Chaque activité est évaluée avec les valeurs en vigueur à sa date.",
+    },
     metric: {
       add: "Ajouter",
-      start: "Départ",
-      logValue: "Enregistrer une nouvelle valeur",
+      replace: "Remplacer",
+      start: "Valeur de départ",
+      startDefault: "Valeur de départ · par défaut",
+      historyHint:
+        "Chaque valeur s'applique à partir de sa date ; la valeur de départ, avant la première.",
+      default: "Par défaut",
+      sinceDate: "Depuis le {date}",
+      changeSinceStart: "depuis la valeur de départ :",
+      changeFromPrevious: "par rapport à la valeur précédente :",
+      paceMinutes: "{name}, minutes",
+      paceSeconds: "{name}, secondes",
+      logValue: "Ajouter une valeur",
+      effectiveDate: "En vigueur à partir du",
+      deleteValue: "Supprimer la valeur du {date}",
+      column: {
+        metric: "Mesure",
+        value: "Valeur",
+        since: "Depuis",
+        change: "Évolution",
+      },
     },
     field: {
       ftp: {
