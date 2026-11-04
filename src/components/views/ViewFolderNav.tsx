@@ -208,13 +208,11 @@ export function ViewFolderDrawer({
   entries,
   selected,
   onSelect,
-  onNewFolder,
   onClose,
 }: {
   entries: ScopeEntry[];
   selected: ViewScope;
   onSelect: (scope: ViewScope) => void;
-  onNewFolder: () => void;
   onClose: () => void;
 }) {
   const t = useT();
@@ -261,17 +259,6 @@ export function ViewFolderDrawer({
             {t("views.folders")}
           </span>
           {entries.slice(2).map(item)}
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onNewFolder();
-            }}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground flex h-11 items-center gap-2 rounded-md px-2 text-left text-sm"
-          >
-            <PlusIcon className="size-4" />
-            {t("views.newFolder")}
-          </button>
         </nav>
       </ResponsiveDialogContent>
     </ResponsiveDialog>

@@ -47,10 +47,9 @@ const fr: Messages = {
     manage: "Gérer les vues",
     manageItem: "Gérer {name}",
     folders: "Dossiers",
-    viewCount: {
-      one: "{count} vue",
-      other: "{count} vues",
-    },
+    actions: "Actions",
+    renameFolder: "Renommer le dossier",
+    deleteFolder: "Supprimer le dossier",
     activityCount: {
       one: "{n} activité",
       other: "{n} activités",

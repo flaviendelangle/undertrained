@@ -1,6 +1,10 @@
 import * as React from "react";
 
-import { ChevronDownIcon, FolderOpenIcon, PlusIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  FolderOpenIcon,
+  MoreHorizontalIcon,
+} from "lucide-react";
 import Link from "next/link";
 
 import { Draggable } from "@base-ui/react/draggable";
@@ -9,6 +13,14 @@ import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { QueryState } from "~/components/primitives/QueryState";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLinkItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -26,7 +38,6 @@ import {
 } from "~/components/views/SavedViewList";
 import { ViewDetailsDialog } from "~/components/views/ViewDetailsDialog";
 import {
-  FolderMenu,
   type ViewFolder,
   ViewFolderDrawer,
   ViewFolderSidebar,
@@ -142,28 +153,56 @@ const ViewsPage: NextPageWithLayout = () => {
     busy,
     actions,
   };
-  const count = (
-    <>
-      <span aria-hidden className="text-muted-foreground">
-        ·
-      </span>
-      <span className="text-muted-foreground shrink-0 text-sm font-normal">
-        {t("views.viewCount", { count: current.count })}
-      </span>
-    </>
-  );
-  const folderMenu = current.folder && (
-    <FolderMenu
-      folder={current.folder}
-      {...folderActions}
-      trigger={
-        <Button
-          variant="ghost"
-          size={isMobile ? "icon" : "icon-sm"}
-          className="text-muted-foreground"
-        />
-      }
-    />
+  // One menu for the page: the scope bar stays a title and a single trigger.
+  const folder = current.folder;
+  const pageActions = (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          isMobile ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("views.actions")}
+              className="text-muted-foreground"
+            />
+          ) : (
+            <Button variant="outline" className="ml-auto" />
+          )
+        }
+      >
+        {isMobile ? (
+          <MoreHorizontalIcon />
+        ) : (
+          <>
+            {t("views.actions")}
+            <ChevronDownIcon />
+          </>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-max min-w-48">
+        <DropdownMenuLinkItem render={<Link href={NEW_VIEW_HREF} />}>
+          {t("views.newView")}
+        </DropdownMenuLinkItem>
+        <DropdownMenuItem onClick={() => setAction({ kind: "folder" })}>
+          {t("views.newFolder")}
+        </DropdownMenuItem>
+        {folder && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => folderActions.onRename(folder)}>
+              {t("views.renameFolder")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => folderActions.onDelete(folder)}
+            >
+              {t("views.deleteFolder")}
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 
   return (
@@ -192,35 +231,16 @@ const ViewsPage: NextPageWithLayout = () => {
                 onClick={() => setFolderDrawer(true)}
               >
                 <span className="truncate">{current.label}</span>
-                {count}
                 <ChevronDownIcon className="text-muted-foreground ml-auto" />
               </Button>
-              {folderMenu}
-              <Button
-                size="icon"
-                nativeButton={false}
-                render={<Link href={NEW_VIEW_HREF} />}
-                aria-label={t("views.newView")}
-                title={t("views.newView")}
-              >
-                <PlusIcon />
-              </Button>
+              {pageActions}
             </div>
           ) : (
             <div className="border-border flex shrink-0 items-center gap-2 border-b px-4 py-3">
               <h2 className="min-w-0 truncate text-sm font-medium">
                 {current.label}
               </h2>
-              {count}
-              {folderMenu}
-              <Button
-                className="ml-auto"
-                nativeButton={false}
-                render={<Link href={NEW_VIEW_HREF} />}
-              >
-                <PlusIcon />
-                {t("views.newView")}
-              </Button>
+              {pageActions}
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -274,7 +294,6 @@ const ViewsPage: NextPageWithLayout = () => {
           entries={entries}
           selected={current.scope}
           onSelect={setSelected}
-          onNewFolder={() => setAction({ kind: "folder" })}
           onClose={() => setFolderDrawer(false)}
         />
       )}

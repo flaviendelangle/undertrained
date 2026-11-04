@@ -49,10 +49,9 @@ const en = {
     manage: "Manage saved views",
     manageItem: "Manage {name}",
     folders: "Folders",
-    viewCount: {
-      one: "{count} view",
-      other: "{count} views",
-    },
+    actions: "Actions",
+    renameFolder: "Rename folder",
+    deleteFolder: "Delete folder",
     activityCount: {
       one: "{n} activity",
       other: "{n} activities",
