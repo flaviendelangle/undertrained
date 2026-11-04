@@ -80,6 +80,9 @@ interface LeaderboardRow {
   activityStravaId: number;
   activityName: string;
   activityStartDate: string;
+  /** The activity's floating-local start, for showing its calendar day. */
+  activityStartDateLocal: string;
+  activityType: string;
   value: number;
 }
 
@@ -103,9 +106,12 @@ async function topActivities(
     strava_id: string;
     name: string;
     start_date: string;
+    start_date_local: string;
+    type: string;
     value: string;
   }>(sql`
-    SELECT a.strava_id, a.name, a.start_date, ${opts.valueExpr} AS value
+    SELECT a.strava_id, a.name, a.start_date, a.start_date_local, a.type,
+      ${opts.valueExpr} AS value
     FROM activities a
     WHERE a.athlete = ${opts.athleteId}
       AND ${opts.valueExpr} IS NOT NULL
@@ -117,6 +123,8 @@ async function topActivities(
     activityStravaId: Number(r.strava_id),
     activityName: String(r.name),
     activityStartDate: String(r.start_date),
+    activityStartDateLocal: String(r.start_date_local),
+    activityType: String(r.type),
     value: Number(r.value),
   }));
 }
@@ -350,12 +358,21 @@ export const recordsRouter = router({
   getOptions: athleteProcedure.query(async ({ ctx, input }) => {
     const cyclingTypes = sqlList(CYCLING_TYPES);
     const [cyclingRows, runRows] = await Promise.all([
-      ctx.db.execute<{ has_cycling: boolean; has_power: boolean }>(sql`
+      ctx.db.execute<{
+        has_cycling: boolean;
+        has_power: boolean;
+        has_running: boolean;
+      }>(sql`
           SELECT
             EXISTS (
               SELECT 1 FROM activities
               WHERE athlete = ${input.athleteId} AND type IN (${cyclingTypes})
             ) AS has_cycling,
+            EXISTS (
+              SELECT 1 FROM activities
+              WHERE athlete = ${input.athleteId}
+                AND type IN (${sqlList(RUNNING_TYPES)})
+            ) AS has_running,
             EXISTS (
               SELECT 1 FROM activities
               WHERE athlete = ${input.athleteId}
@@ -376,6 +393,7 @@ export const recordsRouter = router({
     return {
       hasCycling: Boolean(cyclingRows[0]?.has_cycling),
       hasCyclingPower: Boolean(cyclingRows[0]?.has_power),
+      hasRunning: Boolean(cyclingRows[0]?.has_running),
       runDistances: runRows.map((r) => ({
         name: String(r.name),
         distance: Number(r.distance),
@@ -479,6 +497,95 @@ export const recordsRouter = router({
       runEfforts,
     };
   }),
+
+  /**
+   * The all-time best of every category the explorer offers for `sport`, for
+   * its category list: each power and heart-rate duration, speed distance and
+   * run effort, plus the climbing and volume records. Each value follows the
+   * rules of the matching leaderboard, whose first row it is.
+   */
+  getBestsOverview: athleteProcedure
+    .input(z.object({ sport: z.enum(["cycling", "running"]) }))
+    .query(async ({ ctx, input }) => {
+      const { athleteId, sport } = input;
+      const cycling = sport === "cycling";
+      const sportTypes = sqlList(cycling ? CYCLING_TYPES : RUNNING_TYPES);
+      const best = async (valueExpr: SQL, extra: SQL) => {
+        const [row] = await topActivities(ctx.db, {
+          athleteId,
+          valueExpr,
+          order: sql`DESC`,
+          extra: sql`${extra} AND ${valueExpr} > 0`,
+          limit: 1,
+        });
+        return row?.value ?? null;
+      };
+      const longest = (valueExpr: SQL) =>
+        best(valueExpr, sql`AND a.type IN (${sportTypes})`);
+      const climb = (valueExpr: SQL) =>
+        cycling
+          ? best(
+              valueExpr,
+              sql`AND a.type IN (${sqlList(NON_VIRTUAL_CYCLING_TYPES)})`,
+            )
+          : null;
+      const settings = await findLoadSettings(ctx.db, athleteId);
+      const [
+        power,
+        speed,
+        heartrate,
+        runEfforts,
+        distance,
+        duration,
+        load,
+        biggestClimb,
+        totalElevation,
+      ] = await Promise.all([
+        cycling ? bestCyclingPower(ctx.db, athleteId) : [],
+        cycling
+          ? bestPerKey(ctx.db, {
+              athleteId,
+              column: sql`a.speed_efforts`,
+              keys: CYCLING_SPEED_DISTANCE_METERS,
+              order: sql`ASC`,
+            })
+          : [],
+        bestPerKey(ctx.db, {
+          athleteId,
+          column: sql`a.heartrate_bests`,
+          keys: CYCLING_POWER_DURATION_SECONDS,
+          order: sql`DESC`,
+          typeFilter: sql`AND a.type IN (${sportTypes})`,
+        }),
+        cycling ? [] : fastestRunEfforts(ctx.db, athleteId),
+        longest(sql`a.distance`),
+        longest(sql`a.moving_time`),
+        longest(loadSql(loadAlgorithmFor(settings, sport))),
+        climb(sql`a.biggest_climb`),
+        climb(sql`a.total_elevation_gain`),
+      ]);
+      const byKey = (bests: { key: number; value: number }[]) =>
+        bests.map(({ key, value }) => ({ key, value }));
+      return {
+        /** Watts held for `key` seconds. */
+        power: byKey(power),
+        /** Seconds taken to ride `key` meters. */
+        speed: byKey(speed),
+        /** Beats per minute held for `key` seconds. */
+        heartrate: byKey(heartrate),
+        /** Seconds taken to run each Strava best-effort distance. */
+        runEfforts: runEfforts.map(({ effort, meters, value }) => ({
+          name: effort,
+          meters,
+          value,
+        })),
+        distance,
+        duration,
+        load,
+        biggestClimb,
+        totalElevation,
+      };
+    }),
 
   /**
    * Every leaderboard on which a single activity places in the all-time top
@@ -797,6 +904,8 @@ export const recordsRouter = router({
         strava_id: string;
         activity_name: string;
         start_date: string;
+        start_date_local: string;
+        type: string;
         elapsed_time: string;
         distance: string;
       }>(sql`
@@ -804,6 +913,8 @@ export const recordsRouter = router({
           a.strava_id,
           a.name AS activity_name,
           be.start_date,
+          a.start_date_local,
+          a.type,
           be.elapsed_time,
           be.distance
         FROM best_efforts be
@@ -818,6 +929,8 @@ export const recordsRouter = router({
         activityStravaId: Number(r.strava_id),
         activityName: String(r.activity_name),
         activityStartDate: String(r.start_date),
+        activityStartDateLocal: String(r.start_date_local),
+        activityType: String(r.type),
         elapsedTime: Number(r.elapsed_time),
         distance: Number(r.distance),
       }));

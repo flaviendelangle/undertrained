@@ -1,484 +1,528 @@
 import * as React from "react";
 
+import { format } from "date-fns";
+import { useRouter } from "next/router";
+
+import type { AppRouter } from "@server/trpc/root";
 import { keepPreviousData } from "@tanstack/react-query";
+import type { inferRouterOutputs } from "@trpc/server";
 
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { type TFunction } from "~/i18n/I18nProvider";
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { useT } from "~/i18n/useT";
 import { CYCLING_POWER_DURATIONS as DURATIONS } from "~/utils/cyclingPowerDurations";
 import { CYCLING_SPEED_DISTANCES } from "~/utils/cyclingRecordDistances";
-import { formatElapsed, formatMeters } from "~/utils/format";
-import { getSportConfig } from "~/utils/sportConfig";
+import { formatElapsed, formatNumber } from "~/utils/format";
 import { trpc } from "~/utils/trpc";
 
 import { formatCyclingSpeed, formatPace } from "./format";
 
 export type Sport = "cycling" | "running";
 
-const RideIcon = getSportConfig("Ride").icon;
-const RunIcon = getSportConfig("Run").icon;
-
-// Metric options are a flat list (rendered as a dropdown). The two elevation
-// kinds and the three "longest activity" measures are top-level entries here
-// rather than sub-pickers; only Power/Speed/Heart rate (and running Pace) keep
-// a secondary duration/distance selector. Object key order = display order.
-type CyclingMetric =
+/** The leaderboards, named as in the URL's `metric` parameter. */
+type Metric =
   | "power"
   | "speed"
-  | "elevation_total"
-  | "biggest_climb"
   | "heartrate"
+  | "biggest_climb"
+  | "elevation_total"
   | "distance"
   | "duration"
-  | "load";
-const createCyclingMetricLabels = (
-  t: TFunction,
-): Record<CyclingMetric, string> => ({
-  power: t("charts.records.metricLabel.power"),
-  speed: t("charts.records.metricLabel.speed"),
-  elevation_total: t("charts.records.metricLabel.totalElevation"),
-  biggest_climb: t("charts.records.metricLabel.biggestClimb"),
-  heartrate: t("charts.records.metricLabel.heartRate"),
-  distance: t("charts.records.metricLabel.distance"),
-  duration: t("charts.records.metricLabel.duration"),
-  load: t("charts.records.metricLabel.load"),
-});
-
-type RunningMetric = "pace" | "heartrate" | "distance" | "duration" | "load";
-const createRunningMetricLabels = (
-  t: TFunction,
-): Record<RunningMetric, string> => ({
-  pace: t("charts.records.metricLabel.pace"),
-  heartrate: t("charts.records.metricLabel.heartRate"),
-  distance: t("charts.records.metricLabel.distance"),
-  duration: t("charts.records.metricLabel.duration"),
-  load: t("charts.records.metricLabel.load"),
-});
-
-// The three metrics backed by the "longest activity" leaderboard, which differ
-// only in how the ranked value is computed and formatted.
-const LONGEST_MEASURES = ["distance", "duration", "load"] as const;
-type LongestMeasure = (typeof LONGEST_MEASURES)[number];
-
-const CYCLING_METRICS: readonly CyclingMetric[] = [
-  "power",
-  "speed",
-  "elevation_total",
-  "biggest_climb",
-  "heartrate",
-  "distance",
-  "duration",
-  "load",
-];
-const RUNNING_METRICS: readonly RunningMetric[] = [
-  "pace",
-  "heartrate",
-  "distance",
-  "duration",
-  "load",
-];
+  | "load"
+  | "pace";
 
 /**
- * Initial selection deep-linked via query params (e.g. from the activity-detail
- * "Personal records" card): `?sport=cycling&metric=power&duration=1200`. Read
- * once from the URL — the explorer page is client-only, so `window` is present.
+ * One leaderboard: a metric and its parameter, the duration in seconds (power,
+ * heart rate), the distance in meters (speed) or the effort name (pace).
  */
-function readUrlSelection(): {
-  sport?: Sport;
-  metric?: string;
-  duration?: number;
-  distance?: number;
-  name?: string;
-} {
-  if (typeof window === "undefined") {
-    return {};
-  }
-  const p = new URLSearchParams(window.location.search);
-  const sportParam = p.get("sport");
-  // Treat malformed numerics as absent (fall back to the default) rather than
-  // seeding NaN into state — `NaN ?? default` is NaN, which the server rejects.
-  const positiveInt = (raw: string | null): number | undefined => {
-    if (!raw) return undefined;
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : undefined;
-  };
-  return {
-    sport:
-      sportParam === "cycling" || sportParam === "running"
-        ? sportParam
-        : undefined,
-    metric: p.get("metric") ?? undefined,
-    duration: positiveInt(p.get("duration")),
-    distance: positiveInt(p.get("distance")),
-    name: p.get("name") ?? undefined,
-  };
+export interface Selection {
+  metric: Metric;
+  param: number | string | null;
 }
 
-/** One normalised leaderboard row, ready to render regardless of metric. */
+/** A formatted result: its unit renders apart, smaller and muted. */
+export interface Result {
+  value: string;
+  unit?: string;
+}
+
+export interface Category extends Selection {
+  id: string;
+  label: string;
+  /** The all-time best, or `null` without one. */
+  best: Result | null;
+}
+
+export interface CategoryGroup {
+  key: string;
+  label: string;
+  categories: Category[];
+  /** The category picking the group opens. */
+  fallback: Selection;
+}
+
+/** One ranked activity, ready to render whatever the metric. */
 export interface Entry {
   stravaId: number;
   name: string;
+  type: string;
+  /** The activity's local day, in the app's locale. */
   date: string;
-  value: string;
+  /** Ties share a rank. */
+  rank: number;
+  result: Result;
+  /** The average behind a timed distance: pace for runs, speed for rides. */
   sub?: string;
 }
 
-/** Builds an {@link Entry} from a leaderboard row's common fields plus a formatted value. */
-function toEntry(
-  row: {
-    activityStravaId: number;
-    activityName: string;
-    activityStartDate: string;
-  },
-  value: string,
-  sub?: string,
-): Entry {
-  return {
-    stravaId: row.activityStravaId,
-    name: row.activityName,
-    date: row.activityStartDate,
-    value,
-    sub,
+const categoryId = ({ metric, param }: Selection) => `${metric}:${param ?? ""}`;
+
+/** The category a deep link names, e.g. `?sport=cycling&metric=power&duration=1200`. */
+function readUrlSelection(
+  query: Record<string, string | string[] | undefined>,
+): { sport: Sport; selection: Selection | null } | null {
+  const one = (key: string) => {
+    const value = query[key];
+    return typeof value === "string" ? value : undefined;
   };
+  const sport = one("sport");
+  if (sport !== "cycling" && sport !== "running") return null;
+  const positive = (raw: string | undefined) => {
+    const n = Number(raw);
+    return raw && Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const metric = one("metric") as Metric | undefined;
+  switch (metric) {
+    case "power":
+    case "heartrate": {
+      const duration = positive(one("duration"));
+      return {
+        sport,
+        selection: { metric, param: duration ?? 1200 },
+      };
+    }
+    case "speed":
+      return {
+        sport,
+        selection: { metric, param: positive(one("distance")) ?? 40000 },
+      };
+    case "pace": {
+      const name = one("name");
+      return { sport, selection: name ? { metric, param: name } : null };
+    }
+    case "biggest_climb":
+    case "elevation_total":
+    case "distance":
+    case "duration":
+    case "load":
+      return { sport, selection: { metric, param: null } };
+    default:
+      return { sport, selection: null };
+  }
 }
 
-/** A presentation-agnostic single-choice control: items, current value, setter. */
-export interface RecordControl<T extends string | number> {
-  items: { key: T; label: React.ReactNode }[];
-  selected: T | null;
-  onSelect: (key: T) => void;
+/** The URL query naming `selection`, the inverse of {@link readUrlSelection}. */
+function selectionQuery(sport: Sport, { metric, param }: Selection) {
+  const query: Record<string, string> = { sport, metric };
+  if (metric === "power" || metric === "heartrate")
+    query.duration = String(param);
+  else if (metric === "speed") query.distance = String(param);
+  else if (metric === "pace") query.name = String(param);
+  return query;
 }
 
-export interface RecordsExplorer {
-  /** Sport switch — only sports with data are listed; labels are sport icons named for screen readers. */
-  sportControl: RecordControl<Sport>;
-  /** Metric switch for the active sport (power/speed/… or pace/heart rate). */
-  metricControl: RecordControl<string>;
-  /** Duration / distance / elevation-kind picker — null when the metric has none. */
-  paramControl: RecordControl<string | number> | null;
-  /** Heading for the third control, e.g. "Duration", "Distance", "Measure". */
-  paramLabel: string;
-  /** Display name of the active metric, e.g. "Power". */
-  metricLabel: string;
-  /** Normalised, already-formatted leaderboard rows. */
-  entries: Entry[];
-  /** True only on first load, when there are no rows to show yet (render a skeleton). */
-  isLoading: boolean;
-  /** True while newer data loads with previous rows still on screen (dim them). */
-  isRefreshing: boolean;
-  emptyMessage: string;
+/** A metric's value with its unit. Timed distances read as their time. */
+function formatResult(metric: Metric, value: number, sport: Sport): Result {
+  switch (metric) {
+    case "power":
+      return { value: String(value), unit: "W" };
+    case "heartrate":
+      return { value: String(value), unit: "bpm" };
+    case "biggest_climb":
+    case "elevation_total":
+      return { value: formatNumber(value, 0), unit: "m" };
+    case "distance":
+      return {
+        value: formatNumber(value / 1000, sport === "cycling" ? 1 : 2),
+        unit: "km",
+      };
+    case "load":
+      return { value: formatNumber(value, 0) };
+    case "speed":
+    case "pace":
+    case "duration":
+      return { value: formatElapsed(value) };
+  }
+}
+
+/** The local calendar day of a floating-local start, e.g. "10 juin 2025". */
+function formatDay(startDateLocal: string): string {
+  return format(new Date(startDateLocal.slice(0, 19)), "PP", {
+    locale: getActiveDateLocale(),
+  });
+}
+
+function categoryGroups(
+  t: TFunction,
+  sport: Sport,
+  overview: BestsOverview | undefined,
+  runDistances: { name: string; distance: number }[],
+): CategoryGroup[] {
+  const result = (metric: Metric, value: number | null | undefined) =>
+    value == null ? null : formatResult(metric, value, sport);
+  const keyed = (
+    metric: Metric,
+    params: { key: number; label: string }[],
+    bests: { key: number; value: number }[] | undefined,
+  ): Category[] =>
+    params.map(({ key, label }) => ({
+      id: categoryId({ metric, param: key }),
+      metric,
+      param: key,
+      label,
+      best: result(metric, bests?.find((b) => b.key === key)?.value),
+    }));
+  const scalar = (
+    metric: Metric,
+    label: string,
+    value?: number | null,
+  ): Category => ({
+    id: categoryId({ metric, param: null }),
+    metric,
+    param: null,
+    label,
+    best: result(metric, value),
+  });
+  const durations = DURATIONS.map((d) => ({ key: d.seconds, label: d.label }));
+  const heartRate: CategoryGroup = {
+    key: "heartRate",
+    label: t("charts.personalRecords.group.heartRate"),
+    categories: keyed("heartrate", durations, overview?.heartrate),
+    fallback: { metric: "heartrate", param: 1200 },
+  };
+  const overall: CategoryGroup = {
+    key: "overall",
+    label: t("charts.personalRecords.group.overall"),
+    fallback: { metric: "distance", param: null },
+    categories: [
+      scalar(
+        "distance",
+        t("charts.records.metricLabel.distance"),
+        overview?.distance,
+      ),
+      scalar(
+        "duration",
+        t("charts.records.metricLabel.duration"),
+        overview?.duration,
+      ),
+      scalar("load", t("charts.records.metricLabel.load"), overview?.load),
+    ],
+  };
+  if (sport === "running") {
+    const groups = [heartRate, overall];
+    // Only runs with Strava best efforts have this group.
+    if (runDistances.length)
+      groups.unshift({
+        key: "bestEfforts",
+        label: t("charts.personalRecords.group.bestEfforts"),
+        categories: runDistances.map(({ name }) => ({
+          id: categoryId({ metric: "pace", param: name }),
+          metric: "pace",
+          param: name,
+          label: name,
+          best: result(
+            "pace",
+            overview?.runEfforts.find((e) => e.name === name)?.value,
+          ),
+        })),
+        fallback: {
+          metric: "pace",
+          param: runDistances.some((d) => d.name === "10K")
+            ? "10K"
+            : runDistances[0].name,
+        },
+      });
+    return groups;
+  }
+  return [
+    {
+      key: "power",
+      label: t("charts.personalRecords.group.power"),
+      categories: keyed("power", durations, overview?.power),
+      fallback: { metric: "power", param: 1200 },
+    },
+    {
+      key: "speed",
+      label: t("charts.personalRecords.group.speed"),
+      categories: keyed(
+        "speed",
+        CYCLING_SPEED_DISTANCES.map((d) => ({ key: d.meters, label: d.label })),
+        overview?.speed,
+      ),
+      fallback: { metric: "speed", param: 40000 },
+    },
+    heartRate,
+    {
+      key: "climbing",
+      label: t("charts.personalRecords.group.climbing"),
+      fallback: { metric: "biggest_climb", param: null },
+      categories: [
+        scalar(
+          "biggest_climb",
+          t("charts.records.metricLabel.biggestClimb"),
+          overview?.biggestClimb,
+        ),
+        scalar(
+          "elevation_total",
+          t("charts.records.metricLabel.totalElevation"),
+          overview?.totalElevation,
+        ),
+      ],
+    },
+    overall,
+  ];
+}
+
+type BestsOverview =
+  inferRouterOutputs<AppRouter>["records"]["getBestsOverview"];
+
+/** Ranks rows already sorted best first: equal values share a rank. */
+function withRanks<T extends { raw: number }>(rows: T[]) {
+  return rows.map((row, i) => {
+    let first = i;
+    while (first > 0 && rows[first - 1].raw === row.raw) first--;
+    return { ...row, rank: first + 1 };
+  });
 }
 
 /**
- * Drives the "Personal bests" explorer: owns the Sport → Metric → (duration/distance/
- * measure) selection state, runs the matching tRPC leaderboard query, and normalises the
- * result into a single {@link Entry} list. Returns presentation-agnostic controls so each
- * page variant can render them however it likes.
+ * Drives the "Personal bests" page: the sport, the category list with every
+ * all-time best, and the leaderboard of the selected category. The selection
+ * lives in the URL, so the activity page and the command palette can link to a
+ * leaderboard and an activity opened from a row links back to it.
  */
-export function useRecordsExplorer(): RecordsExplorer {
+export function useRecordsExplorer() {
   const t = useT();
-  const cyclingMetricLabels = React.useMemo(
-    () => createCyclingMetricLabels(t),
-    [t],
-  );
-  const runningMetricLabels = React.useMemo(
-    () => createRunningMetricLabels(t),
-    [t],
-  );
+  const router = useRouter();
   const athleteId = useAthleteId();
   const { data: options } = trpc.records.getOptions.useQuery({ athleteId });
 
-  const sportItems = React.useMemo(() => {
-    const opts: { key: Sport; label: React.ReactNode }[] = [];
-    if (options?.hasCycling)
-      opts.push({
-        key: "cycling",
-        label: (
-          <>
-            <RideIcon aria-hidden className="size-4" />
-            <span className="sr-only">{t("sport.cycling.label")}</span>
-          </>
-        ),
-      });
-    if (options && options.runDistances.length > 0)
-      opts.push({
-        key: "running",
-        label: (
-          <>
-            <RunIcon aria-hidden className="size-4" />
-            <span className="sr-only">{t("sport.running.label")}</span>
-          </>
-        ),
-      });
-    return opts;
-  }, [options, t]);
+  const sports: Sport[] = [];
+  if (options?.hasCycling) sports.push("cycling");
+  if (options?.hasRunning) sports.push("running");
 
-  const [urlSelection] = React.useState(readUrlSelection);
-  const [sport, setSport] = React.useState<Sport>(
-    urlSelection.sport ?? "cycling",
+  // The URL is the selection, so a link opened while on the page applies too.
+  const linked = readUrlSelection(
+    router.isReady
+      ? router.query
+      : Object.fromEntries(new URLSearchParams(window.location.search)),
   );
-  const [cyclingMetric, setCyclingMetric] = React.useState<CyclingMetric>(() =>
-    urlSelection.sport === "cycling" &&
-    (CYCLING_METRICS as readonly string[]).includes(urlSelection.metric ?? "")
-      ? (urlSelection.metric as CyclingMetric)
-      : "power",
-  );
-  const [runningMetric, setRunningMetric] = React.useState<RunningMetric>(() =>
-    urlSelection.sport === "running" &&
-    (RUNNING_METRICS as readonly string[]).includes(urlSelection.metric ?? "")
-      ? (urlSelection.metric as RunningMetric)
-      : "pace",
-  );
-  const [duration, setDuration] = React.useState(
-    urlSelection.duration ?? 1200, // power/HR: 20 min
-  );
-  const [speedDistance, setSpeedDistance] = React.useState(
-    urlSelection.distance ?? 40000, // speed: 40 km
-  );
-  const [distanceName, setDistanceName] = React.useState<string | null>(
-    urlSelection.name ?? null,
-  );
+  const sport: Sport =
+    linked && (!options || sports.includes(linked.sport))
+      ? linked.sport
+      : (sports[0] ?? "cycling");
+  const runDistances = options?.runDistances ?? [];
 
-  // Adjust dependent state when `options` load (during render rather than in an
-  // effect, to avoid an extra render pass).
-  const [prevOptions, setPrevOptions] = React.useState(options);
-  if (options !== prevOptions) {
-    setPrevOptions(options);
-    // Keep the selected sport valid once options load.
-    if (sportItems.length > 0 && !sportItems.some((o) => o.key === sport)) {
-      setSport(sportItems[0].key);
-    }
-    // Default the running distance to 10 km (or the first available) once options load.
-    if (distanceName == null && options && options.runDistances.length > 0) {
-      const has10k = options.runDistances.some((d) => d.name === "10K");
-      setDistanceName(has10k ? "10K" : options.runDistances[0].name);
-    }
-  }
+  const overviewQuery = trpc.records.getBestsOverview.useQuery(
+    { athleteId, sport },
+    { placeholderData: keepPreviousData },
+  );
+  const overview = overviewQuery.isPlaceholderData
+    ? undefined
+    : overviewQuery.data;
+  const groups = categoryGroups(t, sport, overview, runDistances);
+  const groupOf = (target: Selection, among: CategoryGroup[]) =>
+    among.find((g) => g.categories.some((c) => c.id === categoryId(target)));
+  const bestsKnown = overview !== undefined;
+  const hasBests = (g: CategoryGroup) => g.categories.some((c) => c.best);
+  // Without a link, open the first metric with records: a rider without a
+  // power meter lands on speed or volume, not on an empty power table.
+  const firstWithBests = (): Selection => {
+    const populated = groups.find(hasBests);
+    if (!populated) return groups[0].fallback;
+    const fallback = populated.categories.find(
+      (c) => c.id === categoryId(populated.fallback),
+    );
+    return fallback?.best
+      ? populated.fallback
+      : populated.categories.find((c) => c.best)!;
+  };
+  const linkedSelection = linked?.sport === sport ? linked.selection : null;
+  const linkTarget =
+    linkedSelection && groupOf(linkedSelection, groups)
+      ? linkedSelection
+      : null;
+  const selection =
+    linkTarget ?? (bestsKnown ? firstWithBests() : groups[0].fallback);
+  // Until the default is known, no leaderboard query runs for nothing.
+  const settled = linkTarget != null || bestsKnown;
+  const group = groupOf(selection, groups) ?? groups[0];
+  const category = group.categories.find((c) => c.id === categoryId(selection));
 
-  const isCycling = sport === "cycling";
-  const metric: string = isCycling ? cyclingMetric : runningMetric;
+  const go = (nextSport: Sport, next: Selection) => {
+    void router.replace(
+      { pathname: router.pathname, query: selectionQuery(nextSport, next) },
+      undefined,
+      { shallow: true, scroll: false },
+    );
+  };
 
-  // Map the flat metric to a leaderboard. Elevation splits into two metrics
-  // (total vs biggest climb); distance/duration/load all map to the "longest
-  // activity" leaderboard, differing only in the `measure`.
-  const elevationActive =
-    isCycling && (metric === "elevation_total" || metric === "biggest_climb");
-  const elevationKind = metric === "biggest_climb" ? "biggest_climb" : "total";
-  const heartrateActive = metric === "heartrate";
-  const paceActive = !isCycling && metric === "pace";
-  const longestMeasure = (LONGEST_MEASURES as readonly string[]).includes(
-    metric,
-  )
-    ? (metric as LongestMeasure)
-    : null;
-  const longestActive = longestMeasure != null;
-
-  // `placeholderData: keepPreviousData` keeps the previous result on screen while a
-  // new key (e.g. another duration) loads, so switching a param within one metric
-  // never blanks the table. Switching metric/sport activates a *different* query
-  // hook, which keepPreviousData can't bridge — the display guard below handles that.
+  const { metric, param } = selection;
+  const cycling = sport === "cycling";
+  const longest =
+    metric === "distance" || metric === "duration" || metric === "load"
+      ? metric
+      : null;
+  const elevation =
+    cycling && (metric === "biggest_climb" || metric === "elevation_total");
+  const keep = { placeholderData: keepPreviousData };
+  // Each leaderboard has its own query: only the selected one runs.
   const powerQuery = trpc.records.getCyclingPowerLeaderboard.useQuery(
-    { athleteId, duration },
-    {
-      enabled: isCycling && metric === "power",
-      placeholderData: keepPreviousData,
-    },
+    { athleteId, duration: Number(param) },
+    { ...keep, enabled: settled && cycling && metric === "power" },
   );
   const speedQuery = trpc.records.getCyclingSpeedLeaderboard.useQuery(
-    { athleteId, distance: speedDistance },
-    {
-      enabled: isCycling && metric === "speed",
-      placeholderData: keepPreviousData,
-    },
-  );
-  const elevationQuery = trpc.records.getCyclingElevationLeaderboard.useQuery(
-    { athleteId, kind: elevationKind },
-    {
-      enabled: elevationActive,
-      placeholderData: keepPreviousData,
-    },
-  );
-  const runningQuery = trpc.records.getRunEffortLeaderboard.useQuery(
-    { athleteId, name: distanceName! },
-    {
-      enabled: paceActive && distanceName != null,
-      placeholderData: keepPreviousData,
-    },
+    { athleteId, distance: Number(param) },
+    { ...keep, enabled: settled && cycling && metric === "speed" },
   );
   const heartrateQuery = trpc.records.getHeartrateLeaderboard.useQuery(
-    { athleteId, sport, duration },
+    { athleteId, sport, duration: Number(param) },
+    { ...keep, enabled: settled && metric === "heartrate" },
+  );
+  const elevationQuery = trpc.records.getCyclingElevationLeaderboard.useQuery(
     {
-      enabled: heartrateActive,
-      placeholderData: keepPreviousData,
+      athleteId,
+      kind: metric === "biggest_climb" ? "biggest_climb" : "total",
     },
+    { ...keep, enabled: settled && elevation },
   );
   const longestQuery = trpc.records.getLongestActivityLeaderboard.useQuery(
-    { athleteId, sport, measure: longestMeasure ?? "distance" },
+    { athleteId, sport, measure: longest ?? "distance" },
+    { ...keep, enabled: settled && longest != null },
+  );
+  const runQuery = trpc.records.getRunEffortLeaderboard.useQuery(
+    { athleteId, name: String(param) },
     {
-      enabled: longestActive,
-      placeholderData: keepPreviousData,
+      ...keep,
+      enabled: settled && !cycling && metric === "pace" && param != null,
     },
   );
 
-  // Normalise whichever query is active into a single list to render. `active` is the
-  // query backing the current selection; `freshEntries` are its rows mapped to {@link Entry}.
+  type Row = {
+    activityStravaId: number;
+    activityName: string;
+    activityStartDateLocal: string;
+    activityType: string;
+  };
+  const entry = (row: Row, raw: number, sub?: string) => ({
+    stravaId: row.activityStravaId,
+    name: row.activityName,
+    type: row.activityType,
+    date: formatDay(row.activityStartDateLocal),
+    result: formatResult(metric, raw, sport),
+    sub,
+    raw,
+  });
   let active: {
     data: unknown;
     isFetching: boolean;
     isPlaceholderData: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   } = powerQuery;
-  let freshEntries: Entry[] = [];
+  let rows: ReturnType<typeof entry>[] = [];
   let emptyMessage = t("charts.records.empty.default");
-
-  if (heartrateActive) {
+  if (metric === "heartrate") {
     active = heartrateQuery;
     emptyMessage = t("charts.records.empty.heartRate");
-    freshEntries = (heartrateQuery.data ?? []).map((r) =>
-      toEntry(r, `${r.value} bpm`),
-    );
-  } else if (longestActive) {
+    rows = (heartrateQuery.data ?? []).map((r) => entry(r, r.value));
+  } else if (longest) {
     active = longestQuery;
     emptyMessage = t("charts.records.empty.activities");
-    const config = getSportConfig(isCycling ? "Ride" : "Run");
-    freshEntries = (longestQuery.data ?? []).map((r) =>
-      toEntry(
-        r,
-        longestMeasure === "distance"
-          ? config.formatPreciseDistance(r.value)
-          : longestMeasure === "duration"
-            ? formatElapsed(r.value)
-            : Math.round(r.value).toString(),
-      ),
-    );
-  } else if (paceActive) {
-    active = runningQuery;
+    rows = (longestQuery.data ?? []).map((r) => entry(r, r.value));
+  } else if (metric === "pace") {
+    active = runQuery;
     emptyMessage = t("charts.records.empty.bestEfforts");
-    freshEntries = (runningQuery.data ?? []).map((r) =>
-      toEntry(
+    rows = (runQuery.data ?? []).map((r) =>
+      entry(
         r,
-        formatElapsed(r.elapsedTime),
+        r.elapsedTime,
         formatPace(r.elapsedTime > 0 ? r.distance / r.elapsedTime : 0),
       ),
     );
   } else if (metric === "speed") {
     active = speedQuery;
-    freshEntries = (speedQuery.data ?? []).map((r) =>
-      toEntry(
+    rows = (speedQuery.data ?? []).map((r) =>
+      entry(
         r,
-        formatElapsed(r.value),
-        formatCyclingSpeed(r.value > 0 ? speedDistance / r.value : 0),
+        r.value,
+        formatCyclingSpeed(r.value > 0 ? Number(param) / r.value : 0),
       ),
     );
-  } else if (elevationActive) {
+  } else if (elevation) {
     active = elevationQuery;
-    freshEntries = (elevationQuery.data ?? []).map((r) =>
-      toEntry(r, formatMeters(r.value)),
-    );
+    rows = (elevationQuery.data ?? []).map((r) => entry(r, r.value));
   } else {
-    // Power (the default cycling metric).
-    active = powerQuery;
-    emptyMessage =
-      options && !options.hasCyclingPower
-        ? t("charts.records.empty.notComputed")
-        : t("charts.records.empty.default");
-    freshEntries = (powerQuery.data ?? []).map((r) =>
-      toEntry(r, `${r.value} W`),
-    );
+    if (options && !options.hasCyclingPower)
+      emptyMessage = t("charts.records.empty.notComputed");
+    rows = (powerQuery.data ?? []).map((r) => entry(r, r.value));
   }
 
-  // Keep the last settled rows on screen so metric/sport switches (which swap to a
-  // different query hook, defeating keepPreviousData) don't flash an empty table.
-  // `isPlaceholderData` means we're showing the *previous* key's rows, which for
-  // speed/running would be mis-formatted against the new param — treat those as stale
-  // too and fall back to the remembered list instead.
-  const hasFreshData = active.data !== undefined && !active.isPlaceholderData;
-  // Remember the last settled rows (keyed on the query's stable `data` reference) so a
-  // metric/sport switch keeps showing them instead of flashing an empty table. Updated
-  // during render via the same prev-state pattern as the options sync above; it
-  // converges because once stored, `active.data === shown.data`.
-  const [shown, setShown] = React.useState<{ data: unknown; entries: Entry[] }>(
-    {
-      data: undefined,
-      entries: [],
-    },
-  );
-  if (hasFreshData && active.data !== shown.data) {
+  // Switching category runs another query, which keepPreviousData can't bridge:
+  // keep the last settled rows on screen, dimmed, instead of flashing empty.
+  // Placeholder rows belong to the previous parameter, so they count as stale.
+  const fresh = active.data !== undefined && !active.isPlaceholderData;
+  const [shown, setShown] = React.useState<{
+    data: unknown;
+    entries: Entry[];
+  }>({ data: undefined, entries: [] });
+  const freshEntries = fresh ? withRanks(rows) : [];
+  if (fresh && active.data !== shown.data)
     setShown({ data: active.data, entries: freshEntries });
-  }
-  const entries = hasFreshData ? freshEntries : shown.entries;
-  // Skeleton only on the very first load, when there's genuinely nothing to show yet.
-  const isLoading = !hasFreshData && entries.length === 0 && active.isFetching;
-  // Old rows still on screen while newer data loads — used to dim the table.
-  const isRefreshing = active.isFetching && entries.length > 0;
-
-  const sportControl: RecordControl<Sport> = {
-    items: sportItems,
-    selected: sport,
-    onSelect: setSport,
-  };
-
-  const metricControl: RecordControl<string> = isCycling
-    ? {
-        items: (Object.keys(cyclingMetricLabels) as CyclingMetric[])
-          .map((m) => ({ key: m, label: cyclingMetricLabels[m] }))
-          .sort((a, b) => a.label.localeCompare(b.label)),
-        selected: cyclingMetric,
-        onSelect: (m) => setCyclingMetric(m as CyclingMetric),
-      }
-    : {
-        items: (Object.keys(runningMetricLabels) as RunningMetric[])
-          .map((m) => ({ key: m, label: runningMetricLabels[m] }))
-          .sort((a, b) => a.label.localeCompare(b.label)),
-        selected: runningMetric,
-        onSelect: (m) => setRunningMetric(m as RunningMetric),
-      };
-
-  const metricLabel = isCycling
-    ? cyclingMetricLabels[cyclingMetric]
-    : runningMetricLabels[runningMetric];
-
-  // Only Power/Heart rate (a duration) and Speed/Pace (a distance) take a
-  // secondary parameter; every other metric ranks on a fixed value.
-  let paramControl: RecordControl<string | number> | null = null;
-  let paramLabel = "";
-  if (metric === "power" || heartrateActive) {
-    paramLabel = t("charts.records.forDuration");
-    paramControl = {
-      items: DURATIONS.map((d) => ({ key: d.seconds, label: d.label })),
-      selected: duration,
-      onSelect: (v) => setDuration(Number(v)),
-    };
-  } else if (metric === "speed") {
-    paramLabel = t("charts.records.forDistance");
-    paramControl = {
-      items: CYCLING_SPEED_DISTANCES.map((d) => ({
-        key: d.meters,
-        label: d.label,
-      })),
-      selected: speedDistance,
-      onSelect: (v) => setSpeedDistance(Number(v)),
-    };
-  } else if (paceActive) {
-    paramLabel = t("charts.records.forDistance");
-    paramControl = {
-      items: (options?.runDistances ?? []).map((d) => ({
-        key: d.name,
-        label: d.name,
-      })),
-      selected: distanceName,
-      onSelect: (v) => setDistanceName(String(v)),
-    };
-  }
+  const entries = fresh ? freshEntries : shown.entries;
+  // Without a link, a failed overview leaves no leaderboard to load: its error
+  // is the page's, and retrying it settles the default.
+  const overviewFailed = !settled && overviewQuery.isError;
 
   return {
-    sportControl,
-    metricControl,
-    paramControl,
-    paramLabel,
-    metricLabel,
+    sports,
+    sport,
+    // The same category in the other sport (heart rate, volume) when it has
+    // it, else the other sport's first metric with records.
+    selectSport: (next: Sport) => {
+      const nextGroups = categoryGroups(t, next, undefined, runDistances);
+      if (groupOf(selection, nextGroups)) go(next, selection);
+      else
+        void router.replace(
+          { pathname: router.pathname, query: { sport: next } },
+          undefined,
+          { shallow: true, scroll: false },
+        );
+    },
+    /** The metrics to offer: those with records, and the selected one. */
+    groups: bestsKnown
+      ? groups.filter((g) => hasBests(g) || g.key === group.key)
+      : groups,
+    group,
+    /** Whether `best` values are loaded: `null` then means no record. */
+    bestsKnown,
+    selectGroup: (target: CategoryGroup) => go(sport, target.fallback),
+    selectedId: categoryId(selection),
+    /** The selected category, e.g. "Puissance · 20 min". */
+    title: category ? `${group.label} · ${category.label}` : group.label,
+    select: (next: Selection) => go(sport, next),
     entries,
-    isLoading,
-    isRefreshing,
+    /** Only the first load, with nothing to show yet. */
+    isLoading:
+      !settled || (!fresh && entries.length === 0 && active.isFetching),
+    /** Newer rows load while the previous ones stay on screen. */
+    isRefreshing: active.isFetching && entries.length > 0,
+    // An error shows even over the previous rows: they belong to another category.
+    isError: overviewFailed || active.isError,
+    retry: () => void (overviewFailed ? overviewQuery : active).refetch(),
     emptyMessage,
   };
 }
+
+export type RecordsExplorer = ReturnType<typeof useRecordsExplorer>;

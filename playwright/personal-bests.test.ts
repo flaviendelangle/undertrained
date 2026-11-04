@@ -1,6 +1,6 @@
 import postgres from "postgres";
 
-import { expect, test } from "./helpers/activityViews";
+import { expect, origin, test } from "./helpers/activityViews";
 
 // Runs the command palette's personal bests against Postgres: the unit tests
 // start from already-picked winners, not the SQL that ranks them.
@@ -66,3 +66,66 @@ test("personal bests keep each key's best activity for the athlete", async ({
     { key: "5k", stravaId: f.ids.easy, value: 1250 },
   ]);
 });
+
+for (const viewport of [
+  { width: 1440, height: 1000 },
+  { width: 390, height: 844 },
+]) {
+  test(`the explorer opens a deep link and picks a leaderboard at ${viewport.width}px`, async ({
+    page,
+    viewsFixture: f,
+  }) => {
+    const db = postgres(process.env.DATABASE_URL!);
+    try {
+      const set = (key: string, bests: Record<number, number>) =>
+        db`update activities set power_bests = ${db.json(bests)} where strava_id = ${f.ids[key]}`;
+      await set("short", { 60: 900, 300: 150 });
+      await set("commute", { 60: 800, 300: 250 });
+      await set("long", { 60: 200, 300: 180 });
+    } finally {
+      await db.end();
+    }
+    await page.setViewportSize(viewport);
+    // Without a link, it opens the first category with records, not the
+    // 20 min power that no ride here has.
+    await page.goto(`${origin}/personal-bests`);
+    await expect(
+      viewport.width < 768
+        ? page.getByRole("button", { name: /Power · 1 min/ })
+        : page.getByRole("combobox", { name: "Record", exact: true }),
+    ).toContainText("1 min");
+    await page.goto(
+      `${origin}/personal-bests?sport=cycling&metric=power&duration=60`,
+    );
+    const first = page.getByRole("link", { name: "short", exact: true });
+    await expect(first).toBeVisible();
+    // The activity's local day: it started at 07:30 UTC on 11 Jan.
+    await expect(page.getByText("10 Jan 2026").first()).toBeVisible();
+    if (viewport.width < 768) {
+      await page.getByRole("button", { name: /Power · 1 min/ }).click();
+      const drawer = page.getByRole("dialog");
+      // Every duration lists its all-time best.
+      await expect(
+        drawer.getByRole("button", { name: /^5 min/ }),
+      ).toContainText("250");
+      await drawer.getByRole("button", { name: /^5 min/ }).click();
+      await expect(drawer).toHaveCount(0);
+    } else {
+      await page.getByRole("combobox", { name: "Record", exact: true }).click();
+      const option = page.getByRole("option", { name: /^5 min/ });
+      await expect(option).toContainText("250");
+      await option.click();
+    }
+    await expect(page).toHaveURL(/duration=300/);
+    await expect(
+      page.getByRole("link", { name: "commute", exact: true }),
+    ).toBeVisible();
+    await expect(first).toBeVisible();
+    // An activity opened from a row links back to this leaderboard.
+    await page.getByRole("link", { name: "commute", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/activities/${f.ids.commute}`));
+    expect(decodeURIComponent(page.url())).toContain(
+      "/personal-bests?sport=cycling&metric=power&duration=300",
+    );
+  });
+}
