@@ -505,7 +505,6 @@ const fr: Messages = {
     toolbox: "Boîte à outils",
     noLoginRequired: "Aucune connexion requise",
     privacyPolicy: "Politique de confidentialité",
-    gotIt: "Compris",
     learnAbout: "En savoir plus sur {title}",
     tool: {
       paceCalculator: "Calculateur d'allure",
@@ -648,10 +647,8 @@ const fr: Messages = {
       daysAxis: "Jours",
     },
     powerCurve: {
-      title: "Courbe de puissance",
       cardTitle: "Puissance en cyclisme",
       activityCardTitle: "Puissance",
-      hint: "Vos meilleurs efforts de puissance soutenue pour chaque durée. Ajoutez des plages de dates pour comparer cette activité à vos records historiques et repérer vos progrès.",
       thisActivity: "Cette activité",
       dateRanges: "Plages de dates",
       addRange: "Ajouter une plage…",
@@ -693,7 +690,6 @@ const fr: Messages = {
     },
     pace: {
       activityCardTitle: "Allure",
-      hint: "Votre allure de course sur cette activité — une allure lissée sur 30 secondes dans le temps, le temps passé dans chaque zone d'allure, et la répartition de ce temps selon l'allure. Les zones d'allure proviennent de votre allure seuil en course.",
       tab30sPace: "Allure 30 s",
       tabZones: "Temps par zone",
       tabDistribution: "Distribution de l'allure",
@@ -783,7 +779,6 @@ const fr: Messages = {
     },
     streams: {
       title: "Chronologie",
-      hint: "Fréquence cardiaque, puissance, cadence, vitesse, altitude et température tracées en fonction du temps ou de la distance. Survolez pour voir toutes les métriques à un point précis. Basculez l'axe X entre temps et distance. Double-cliquez ou appuyez sur Échap pour effacer la sélection et réinitialiser le zoom.",
       loading: "Chargement des données…",
       empty: "Aucune donnée disponible pour cette activité.",
       loadError: "Échec du chargement des données : {error}",
@@ -1127,8 +1122,6 @@ const fr: Messages = {
     reconnect: "Reconnecter",
     reconnecting: "Connexion…",
 
-    equipmentCallout:
-      "Renseignez votre poids, le poids du vélo et l'aérodynamique (CdA, Crr) dans les Réglages pour des watts/kg et une vitesse virtuelle précis.",
     compat: {
       noBleNoUsb:
         "Web Bluetooth et WebUSB ne sont pas disponibles. Les capteurs BLE et ANT+ ne fonctionneront pas. Veuillez utiliser Chrome, Edge ou Brave sur ordinateur.",

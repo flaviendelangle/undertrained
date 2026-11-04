@@ -14,7 +14,6 @@ import { HudPauseOverlay } from "~/components/liveTraining/hud/HudPauseOverlay";
 import { HudPostTraining } from "~/components/liveTraining/hud/HudPostTraining";
 import { HudWaitingScreen } from "~/components/liveTraining/hud/HudWaitingScreen";
 import { QueryState } from "~/components/primitives/QueryState";
-import { SettingsCallout } from "~/components/primitives/SettingsCallout";
 import { Button } from "~/components/ui/button";
 import { useStructuredWorkout } from "~/hooks/structuredWorkouts";
 import { useRideEngine } from "~/hooks/useRideEngine";
@@ -157,12 +156,6 @@ function LiveWorkout({ workout }: { workout: RideWorkout }) {
           <p className="bg-card rounded p-3 text-sm">
             {t("workouts.ftpRequired")}
           </p>
-        )}
-        {(phase === "connection" || phase === "waiting") && (
-          <SettingsCallout
-            hintId="callout-training-equipment"
-            message={t("liveTraining.equipmentCallout")}
-          />
         )}
       </div>
 

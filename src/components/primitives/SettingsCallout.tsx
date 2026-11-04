@@ -1,27 +1,26 @@
-import { SettingsIcon, XIcon } from "lucide-react";
+import { SettingsIcon } from "lucide-react";
 import Link from "next/link";
 
-import { useDismissedHints } from "~/hooks/useDismissedHints";
 import { useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
 interface SettingsCalloutProps {
-  hintId: string;
   message: string;
   settingsPath?: string;
   className?: string;
 }
 
+/**
+ * Points to the settings a value depends on. Callers show it only while those
+ * settings are missing, so it goes away once they're set; it can't be
+ * dismissed.
+ */
 export function SettingsCallout({
-  hintId,
   message,
   settingsPath = "/settings/rider",
   className,
 }: SettingsCalloutProps) {
   const t = useT();
-  const { isDismissed, dismiss } = useDismissedHints();
-
-  if (isDismissed(hintId)) return null;
 
   return (
     <div
@@ -40,13 +39,6 @@ export function SettingsCallout({
           {t("common.openSettings")}
         </Link>
       </div>
-      <button
-        onClick={() => dismiss(hintId)}
-        className="text-muted-foreground hover:text-foreground -mt-0.5 -mr-1 shrink-0 p-1"
-        aria-label={t("common.dismiss")}
-      >
-        <XIcon className="size-3" />
-      </button>
     </div>
   );
 }
