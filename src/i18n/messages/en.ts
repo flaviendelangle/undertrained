@@ -801,10 +801,7 @@ const en = {
     },
     preferences: {
       title: "Preferences",
-      description: "Manage app preferences and onboarding hints.",
-      hints: "Onboarding hints",
-      resetHints: "Reset all hints",
-      hintsRestored: "Hints restored",
+      description: "Manage app preferences.",
     },
     language: {
       label: "Language",
@@ -850,6 +847,8 @@ const en = {
       replace: "Replace",
       start: "Start value",
       startDefault: "Start value · default",
+      historyHint:
+        "Each value applies from its date; the start value applies before the first one.",
       default: "Default",
       sinceDate: "Since {date}",
       changeSinceStart: "since the start value:",

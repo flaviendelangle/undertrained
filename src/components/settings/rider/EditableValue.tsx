@@ -4,7 +4,7 @@ import { PencilIcon } from "lucide-react";
 
 import { Quantity } from "~/components/primitives/Quantity";
 import { NumberField } from "~/components/ui/number-field";
-import { useT } from "~/i18n/useT";
+import { useLocale, useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 
 import { PaceInput } from "../PaceInput";
@@ -46,6 +46,7 @@ export function EditableValue({
   inputClassName = "w-24",
 }: EditableValueProps) {
   const t = useT();
+  const { locale } = useLocale();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<number | null>(value);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -151,6 +152,7 @@ export function EditableValue({
           min={config.min}
           step={config.step}
           smallStep={config.smallStep}
+          locale={locale}
           className={inputClassName}
           aria-label={label}
         />

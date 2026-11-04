@@ -10,7 +10,7 @@ import { Quantity } from "~/components/primitives/Quantity";
 import { Button } from "~/components/ui/button";
 import { NumberField } from "~/components/ui/number-field";
 import { getActiveDateLocale } from "~/i18n/activeDateLocale";
-import { useT } from "~/i18n/useT";
+import { useLocale, useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import {
   DEFAULT_RIDER_SETTINGS_TIMELINE,
@@ -46,7 +46,7 @@ const MetricSparkline = dynamic(
  * `lg` only the name, the value and the last column remain.
  */
 export const METRIC_ROW_GRID =
-  "grid grid-cols-[minmax(0,1fr)_auto_1.5rem] items-center gap-x-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1.5rem]";
+  "grid grid-cols-[minmax(0,1fr)_auto_1.5rem] items-center gap-x-4 max-lg:pointer-coarse:grid-cols-[minmax(0,1fr)_auto_2.5rem] lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1.5rem]";
 
 function formatDay(date: string): string {
   return format(parseISO(date), "d MMM yyyy", {
@@ -138,7 +138,11 @@ export function MetricRow({
             latest ? "text-foreground/80" : "text-muted-foreground",
           )}
         >
-          <span className="sr-only">{t("settings.metric.column.since")} </span>
+          {latest && (
+            <span className="sr-only">
+              {t("settings.metric.column.since")}{" "}
+            </span>
+          )}
           {since}
         </div>
         <div
@@ -146,7 +150,7 @@ export function MetricRow({
           className="text-muted-foreground flex items-center gap-3 text-sm tabular-nums max-lg:hidden"
         >
           {/* The history's rows compare with the previous value: the total
-                since the start steps aside while they show. */}
+              since the start steps aside while they show. */}
           {change && (
             <span className="w-14 shrink-0 group-data-open/metric:invisible">
               <span className="sr-only">
@@ -185,7 +189,7 @@ export function MetricRow({
  * the date leads and the value follows.
  */
 const HISTORY_ROW =
-  "grid min-h-9 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 py-0.5 pointer-coarse:min-h-11 lg:col-span-4 lg:grid-cols-subgrid";
+  "grid min-h-9 grid-cols-[minmax(0,1fr)_auto_1.5rem] items-center gap-x-4 py-0.5 pointer-coarse:min-h-11 max-lg:pointer-coarse:grid-cols-[minmax(0,1fr)_auto_2.5rem] lg:col-span-4 lg:grid-cols-subgrid";
 
 /**
  * The dated values of one metric, newest first, above its start value, with
@@ -242,11 +246,10 @@ function MetricHistory({
 
   return (
     <div className={cn(METRIC_ROW_GRID, "items-start pb-3")}>
-      {config.tooltipKey && (
-        <p className="text-muted-foreground col-span-3 pb-2 text-xs leading-relaxed lg:col-span-1 lg:row-span-2 lg:pt-2.5 lg:pb-0">
-          {t(config.tooltipKey)}
-        </p>
-      )}
+      <p className="text-muted-foreground col-span-3 pb-2 text-xs leading-relaxed lg:col-span-1 lg:row-span-2 lg:pt-2.5 lg:pb-0">
+        {config.tooltipKey && <>{t(config.tooltipKey)} </>}
+        {t("settings.metric.historyHint")}
+      </p>
 
       <ul
         ref={listRef}
@@ -260,11 +263,16 @@ function MetricHistory({
                 config={config}
                 value={entry.value}
                 name={`${label}, ${day}`}
-                onCommit={(value) =>
+                onCommit={(value) => {
+                  // Clearing a dated value removes its row, like delete.
+                  if (value == null) {
+                    focusAfterDelete.current =
+                      rows[index + 1]?.entry.id ?? "start";
+                  }
                   onTimelineChange(
                     setField(timeline, field, entry.date!, value),
-                  )
-                }
+                  );
+                }}
                 displayClassName="font-medium tabular-nums max-lg:justify-self-end lg:-ml-1"
               />
               <span className="text-muted-foreground truncate max-lg:order-first">
@@ -364,6 +372,7 @@ function AddValueRow({
   onCancel: () => void;
 }) {
   const t = useT();
+  const { locale } = useLocale();
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [value, setValue] = useState<number | null>(null);
   const replaces = existingDates.includes(date);
@@ -407,6 +416,7 @@ function AddValueRow({
           min={config.min}
           step={config.step}
           smallStep={config.smallStep}
+          locale={locale}
           className="w-28"
           aria-label={label}
         />

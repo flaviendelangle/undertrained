@@ -6,7 +6,6 @@ import { signOut } from "next-auth/react";
 import { PageToolbar } from "~/components/layouts/PageToolbar";
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { LanguageSelect } from "~/components/settings/LanguageSelect";
-import { ResetHintsButton } from "~/components/settings/ResetHintsButton";
 import {
   DangerZone,
   EquipmentFields,
@@ -98,7 +97,6 @@ const SettingsPage: NextPageWithLayout = () => {
               </CardTitle>
               <div className="lg:grid lg:grid-cols-2 lg:gap-x-12">
                 <LanguageSelect />
-                <ResetHintsButton />
               </div>
             </section>
           </div>

@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import type { AppMessageKey, TFunction } from "~/i18n/I18nProvider";
-import { useT } from "~/i18n/useT";
+import { useLocale, useT } from "~/i18n/useT";
 import { cn } from "~/lib/utils";
 import type { RiderSettingsTimeline } from "~/sensors/types";
 import { getLoadAlgorithmConfigs } from "~/utils/sportConfig";
@@ -119,6 +119,7 @@ export function EquipmentFields({
   className?: string;
 }) {
   const t = useT();
+  const { locale } = useLocale();
 
   return (
     <SettingsPanel
@@ -136,6 +137,7 @@ export function EquipmentFields({
             min={0}
             step={step}
             smallStep={smallStep}
+            locale={locale}
             className="w-full shrink-0 sm:w-32"
           />
         </SettingRow>

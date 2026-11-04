@@ -818,11 +818,7 @@ const fr: Messages = {
     },
     preferences: {
       title: "Préférences",
-      description:
-        "Gérez les préférences de l'application et les conseils d'accueil.",
-      hints: "Conseils d'accueil",
-      resetHints: "Réinitialiser tous les conseils",
-      hintsRestored: "Conseils restaurés",
+      description: "Gérez les préférences de l'application.",
     },
     language: {
       label: "Langue",
@@ -868,6 +864,8 @@ const fr: Messages = {
       replace: "Remplacer",
       start: "Valeur de départ",
       startDefault: "Valeur de départ · par défaut",
+      historyHint:
+        "Chaque valeur s'applique à partir de sa date ; la valeur de départ, avant la première.",
       default: "Par défaut",
       sinceDate: "Depuis le {date}",
       changeSinceStart: "depuis la valeur de départ :",
