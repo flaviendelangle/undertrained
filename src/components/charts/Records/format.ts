@@ -18,17 +18,6 @@ export function formatCyclingSpeed(metersPerSecond: number): string {
   return rideConfig.formatSpeed(metersPerSecond);
 }
 
-/** ISO date → short locale date, e.g. "May 12, 2025". */
-export function formatShortDate(isoDate: string): string {
-  const d = new Date(isoDate);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 /** A record duration as its chip reads, e.g. "20 min". */
 export const durationLabel = (seconds: number) =>
   CYCLING_POWER_DURATIONS.find((d) => d.seconds === seconds)?.label ??

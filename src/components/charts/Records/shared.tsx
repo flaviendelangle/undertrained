@@ -1,6 +1,6 @@
 /**
- * Presentation helpers shared by the "Personal bests" page variants:
- * medal colouring for the top three ranks and the empty/loading placeholder.
+ * Medal colouring for the top three ranks, on the activity page's
+ * "Personal records" card.
  */
 
 /** Tailwind classes for a rank badge — gold / silver / bronze for the podium. */
@@ -15,13 +15,4 @@ export function getMedalClasses(rank: number): string {
     default:
       return "text-muted-foreground";
   }
-}
-
-/** Centered placeholder used for empty/loading states inside a Records view. */
-export function RecordsEmptyState({ message }: { message: string }) {
-  return (
-    <div className="text-muted-foreground flex h-full min-h-48 items-center justify-center text-sm">
-      {message}
-    </div>
-  );
 }

@@ -24,6 +24,7 @@ const RecordsPage: NextPageWithLayout = () => {
 
   const ready = useInitialLoadComplete(moduleReady, 10000, [
     "records.getOptions",
+    "records.getBestsOverview",
     "records.getCyclingPowerLeaderboard",
     "records.getCyclingSpeedLeaderboard",
     "records.getCyclingElevationLeaderboard",
