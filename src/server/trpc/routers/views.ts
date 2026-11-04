@@ -19,6 +19,21 @@ import {
 import { athleteProcedure, router } from "../index";
 
 const name = z.string().trim().min(1).max(100);
+
+export interface SavedViewStats {
+  count: number;
+  /** Metres. */
+  distance: number;
+  /** Seconds. */
+  movingTime: number;
+  /** Metres climbed. */
+  elevation: number;
+  /** Local calendar days ("yyyy-MM-dd") of the first and last activity. */
+  firstDay: string | null;
+  lastDay: string | null;
+  /** Activity types it selects, the most frequent first. */
+  sports: string[];
+}
 const viewFields = z.object({
   name,
   folderId: z.number().int().positive().nullable(),
@@ -170,21 +185,72 @@ export const viewsRouter = router({
         .where(selected);
       return row;
     }),
-  counts: athleteProcedure
+  /** What each saved view selects today, keyed by view id. */
+  stats: athleteProcedure
     .input(z.object({ today: calendarDate }))
     .query(async ({ ctx, input }) => {
       const views = await ctx.db
-        .select()
+        .select({ id: activityViews.id, rules: activityViews.rules })
         .from(activityViews)
         .where(eq(activityViews.athlete, input.athleteId));
-      if (!views.length) return {};
-      const expressions = views.map(
-        (view) =>
-          sql`count(*) filter (where ${activityRuleCondition(view.rules, activities, input.today)})::int as ${sql.identifier(String(view.id))}`,
+      const stats: Record<number, SavedViewStats> = {};
+      if (!views.length) return stats;
+      // One row per view and sport, so a single round trip also yields the
+      // sport mix. Sums are float8 so they reach JS as numbers, not strings.
+      const parts = views.map(
+        (
+          view,
+        ) => sql`(select ${view.id}::int as view, ${activities.type} as sport,
+          count(*)::int as count,
+          sum(${activities.distance})::float8 as distance,
+          sum(${activities.movingTime})::float8 as moving_time,
+          sum(${activities.totalElevationGain})::float8 as elevation,
+          min(${activities.startDateLocal}) as first,
+          max(${activities.startDateLocal}) as last
+        from ${activities}
+        where ${activities.athlete} = ${input.athleteId}
+          and ${activityRuleCondition(view.rules, activities, input.today)}
+        group by ${activities.type})`,
       );
-      const rows = await ctx.db.execute<Record<string, number>>(
-        sql`select ${sql.join(expressions, sql`, `)} from ${activities} where ${activities.athlete} = ${input.athleteId}`,
-      );
-      return rows[0] ?? {};
+      const rows = await ctx.db.execute<{
+        view: number;
+        sport: string;
+        count: number;
+        distance: number;
+        moving_time: number;
+        elevation: number;
+        first: string;
+        last: string;
+      }>(sql.join(parts, sql` union all `));
+      for (const view of views)
+        stats[view.id] = {
+          count: 0,
+          distance: 0,
+          movingTime: 0,
+          elevation: 0,
+          firstDay: null,
+          lastDay: null,
+          sports: [],
+        };
+      const sportCounts = new Map<number, Map<string, number>>();
+      for (const row of rows) {
+        const view = stats[row.view];
+        view.count += row.count;
+        view.distance += row.distance;
+        view.movingTime += row.moving_time;
+        view.elevation += row.elevation;
+        const first = row.first.slice(0, 10);
+        const last = row.last.slice(0, 10);
+        if (!view.firstDay || first < view.firstDay) view.firstDay = first;
+        if (!view.lastDay || last > view.lastDay) view.lastDay = last;
+        const counts = sportCounts.get(row.view) ?? new Map<string, number>();
+        counts.set(row.sport, row.count);
+        sportCounts.set(row.view, counts);
+      }
+      for (const [id, counts] of sportCounts)
+        stats[id].sports = [...counts]
+          .sort(([a, x], [b, y]) => y - x || a.localeCompare(b))
+          .map(([sport]) => sport);
+      return stats;
     }),
 });

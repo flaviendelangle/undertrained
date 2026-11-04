@@ -25,7 +25,7 @@ export function useSaveActivityView(onSaved: () => void) {
           (a, b) => a.name.localeCompare(b.name),
         ),
       );
-      await utils.views.counts.invalidate();
+      await utils.views.stats.invalidate();
       onSaved();
       await scope.acceptSaved(saved);
     },

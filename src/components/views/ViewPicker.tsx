@@ -36,7 +36,7 @@ export function ViewPicker({
       }}
     >
       {children}
-      <SelectContent align="start" alignItemWithTrigger={false} className="p-1">
+      <SelectContent align="start" alignItemWithTrigger={false}>
         <SelectItem value="">{t("views.allActivities")}</SelectItem>
         {groupViewsByFolder(
           scope.views,
