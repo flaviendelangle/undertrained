@@ -267,11 +267,14 @@ function RecordsDrawer({
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useT();
-  const selectedRef = React.useRef<HTMLButtonElement>(null);
-  // Long lists (16 durations) can hide the selected one below the fold.
-  React.useEffect(() => {
-    if (open) selectedRef.current?.scrollIntoView({ block: "nearest" });
-  }, [open]);
+  // Long lists (16 durations) can hide the selected one below the fold. A
+  // callback ref, as the drawer's portal mounts the list after it opens.
+  const scrollIntoView = React.useCallback(
+    (button: HTMLButtonElement | null) => {
+      button?.scrollIntoView({ block: "nearest" });
+    },
+    [],
+  );
   return (
     // Kept mounted so that closing returns focus to the toolbar button.
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
@@ -296,7 +299,7 @@ function RecordsDrawer({
             return (
               <button
                 key={category.id}
-                ref={active ? selectedRef : undefined}
+                ref={active ? scrollIntoView : undefined}
                 type="button"
                 aria-current={active ? "page" : undefined}
                 onClick={() => {
