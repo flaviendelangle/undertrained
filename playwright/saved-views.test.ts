@@ -194,14 +194,41 @@ test("views persist rules and display, stay private, and survive folder deletion
       display: fields.display,
     }),
   ]);
+  const empty = await f.client.views.create.mutate({
+    ...fields,
+    name: "Swims",
+    rules: {
+      ...selection,
+      children: [condition("sport", "sport", "in", "", ["Swim"])],
+    },
+  });
+  // Activities start at 07:30Z on the 11th but 22:30 local on the 10th.
   expect(
-    (
-      await f.client.views.counts.query({
-        athleteId: f.athleteId,
-        today: "2026-01-10",
-      })
-    )[view.id],
-  ).toBe(2);
+    await f.client.views.stats.query({
+      athleteId: f.athleteId,
+      today: "2026-01-10",
+    }),
+  ).toEqual({
+    [view.id]: {
+      count: 2,
+      distance: 62000,
+      movingTime: 7200,
+      elevation: 1000,
+      firstDay: "2026-01-10",
+      lastDay: "2026-01-10",
+      sports: ["Ride", "Run"],
+    },
+    [empty.id]: {
+      count: 0,
+      distance: 0,
+      movingTime: 0,
+      elevation: 0,
+      firstDay: null,
+      lastDay: null,
+      sports: [],
+    },
+  });
+  await f.client.views.delete.mutate({ athleteId: f.athleteId, id: empty.id });
   await expect(
     f.client.views.update.mutate({
       ...fields,
@@ -235,14 +262,23 @@ test("views persist rules and display, stay private, and survive folder deletion
     folderId: null,
     rules: { ...selection, children: [] },
   });
+  // Three rides and two runs: the most frequent sport comes first.
   expect(
     (
-      await f.client.views.counts.query({
+      await f.client.views.stats.query({
         athleteId: f.athleteId,
         today: "2026-01-10",
       })
     )[view.id],
-  ).toBe(5);
+  ).toEqual({
+    count: 5,
+    distance: 147000,
+    movingTime: 18000,
+    elevation: 2500,
+    firstDay: "2026-01-10",
+    lastDay: "2026-01-10",
+    sports: ["Ride", "Run"],
+  });
 });
 
 for (const viewport of [
@@ -625,119 +661,209 @@ for (const viewport of [
   });
 }
 
-for (const viewport of [
-  { width: 1440, height: 1000 },
-  { width: 390, height: 844 },
-]) {
-  test(`move a view between folders by dragging at ${viewport.width}px`, async ({
-    page,
-    context,
-    viewsFixture: f,
-  }) => {
-    const folder = await f.client.views.createFolder.mutate({
-      athleteId: f.athleteId,
-      name: "Voyages",
-    });
-    const view = await f.client.views.create.mutate({
-      athleteId: f.athleteId,
-      name: "Alpes 2026",
-      folderId: null,
-      rules: selection,
-      display: DEFAULT_ACTIVITY_DISPLAY,
-    });
-    await context.addCookies([{ name: "locale", value: "fr-FR", url: origin }]);
-    await page.setViewportSize(viewport);
-    await page.goto(`${origin}/views`);
-    const folders = page.getByRole("navigation", {
-      name: "Dossier",
-      exact: true,
-    });
-    await expect(
-      folders.getByRole("button", { name: "Toutes les vues", exact: true }),
-    ).toBeVisible();
-    const row = page.getByRole("listitem").filter({
-      has: page.getByRole("link", { name: view.name }),
-    });
-    const move = row.getByRole("button", {
-      name: `Déplacer ${view.name}`,
-      exact: true,
-    });
-    const start = await move.boundingBox();
-    expect(start).not.toBeNull();
-    await page.mouse.move(
-      start!.x + start!.width / 2,
-      start!.y + start!.height / 2,
-    );
-    await page.mouse.down();
-    await page.mouse.move(start!.x + 35, start!.y + 10, { steps: 6 });
-    const preview = page.locator("[data-drag-preview]:visible");
-    await expect(preview).toHaveText(view.name);
-    const previewBox = await preview.boundingBox();
-    expect(previewBox?.width).toBeLessThan(260);
-    expect(previewBox?.height).toBeLessThan(50);
-    expect(
-      Math.abs(previewBox!.x + previewBox!.width / 2 - (start!.x + 35)),
-    ).toBeLessThan(2);
-    expect(previewBox!.y - (start!.y + 10)).toBeCloseTo(8, 0);
-    expect(previewBox!.width).toBeLessThan((await row.boundingBox())!.width);
-    const target = folders.getByRole("button", {
-      name: folder.name,
-      exact: true,
-    });
-    const targetBox = await target.boundingBox();
-    await page.mouse.move(
-      targetBox!.x + targetBox!.width / 2,
-      targetBox!.y + targetBox!.height / 2,
-      { steps: 10 },
-    );
-    await expect(target).toHaveAttribute("data-drag-over");
-    await page.mouse.up();
-    await expect
-      .poll(
-        async () =>
-          (await f.client.views.list.query({ athleteId: f.athleteId }))[0]
-            .folderId,
-      )
-      .toBe(folder.id);
-    await expect(row).toContainText(folder.name);
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await page.reload();
-    await expect(row).toContainText(folder.name);
-    await move.dragTo(
-      folders.getByRole("button", { name: "Sans dossier", exact: true }),
-    );
-    await expect
-      .poll(
-        async () =>
-          (await f.client.views.list.query({ athleteId: f.athleteId }))[0]
-            .folderId,
-      )
-      .toBeNull();
-    await expect(row).toContainText("Sans dossier");
-    await row
-      .getByRole("button", { name: `Gérer les vues ${view.name}`, exact: true })
-      .click();
-    const rename = page.getByRole("menuitem", {
-      name: "Renommer / Déplacer",
-      exact: true,
-    });
-    await expect(rename).toBeVisible();
-    const lineCount = await rename.evaluate((element) => {
-      const range = document.createRange();
-      range.selectNodeContents(element);
-      return new Set(
-        [...range.getClientRects()].map((rect) => Math.round(rect.top)),
-      ).size;
-    });
-    expect(lineCount).toBe(1);
-    await page.keyboard.press("Escape");
-    await move.focus();
-    await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("dialog", { name: "Renommer", exact: true }),
-    ).toBeVisible();
+test("move a view between folders by dragging its row", async ({
+  page,
+  context,
+  viewsFixture: f,
+}) => {
+  const folder = await f.client.views.createFolder.mutate({
+    athleteId: f.athleteId,
+    name: "Voyages",
   });
-}
+  const view = await f.client.views.create.mutate({
+    athleteId: f.athleteId,
+    name: "Alpes 2026",
+    folderId: null,
+    rules: selection,
+    display: DEFAULT_ACTIVITY_DISPLAY,
+  });
+  const folderOf = async () =>
+    (await f.client.views.list.query({ athleteId: f.athleteId }))[0].folderId;
+  await context.addCookies([{ name: "locale", value: "fr-FR", url: origin }]);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${origin}/views`);
+  const folders = page.getByRole("navigation", {
+    name: "Dossiers",
+    exact: true,
+  });
+  await expect(
+    folders.getByRole("button", { name: "Toutes les vues", exact: true }),
+  ).toBeVisible();
+  // The row's stretched link is its drag handle.
+  const link = page.getByRole("link", { name: view.name, exact: true });
+  const start = await link.boundingBox();
+  expect(start).not.toBeNull();
+  await page.mouse.move(start!.x + 10, start!.y + start!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(start!.x + 45, start!.y + 10, { steps: 6 });
+  const preview = page.locator("[data-drag-preview]:visible");
+  await expect(preview).toHaveText(view.name);
+  const previewBox = await preview.boundingBox();
+  expect(previewBox?.width).toBeLessThan(260);
+  expect(previewBox?.height).toBeLessThan(50);
+  expect(
+    Math.abs(previewBox!.x + previewBox!.width / 2 - (start!.x + 45)),
+  ).toBeLessThan(2);
+  expect(previewBox!.y - (start!.y + 10)).toBeCloseTo(8, 0);
+  const target = folders.getByRole("button", {
+    name: folder.name,
+    exact: true,
+  });
+  const targetBox = await target.boundingBox();
+  await page.mouse.move(
+    targetBox!.x + targetBox!.width / 2,
+    targetBox!.y + targetBox!.height / 2,
+    { steps: 10 },
+  );
+  // The whole sidebar entry, its menu included, is the drop target.
+  await expect(target.locator("xpath=..")).toHaveAttribute("data-drag-over");
+  await page.mouse.up();
+  await expect.poll(folderOf).toBe(folder.id);
+  await expect(page).toHaveURL(`${origin}/views`);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await target.click();
+  await expect(link).toBeVisible();
+  // Dropping on "All views" takes the view out of its folder.
+  await link.dragTo(
+    folders.getByRole("button", { name: "Toutes les vues", exact: true }),
+  );
+  await expect.poll(folderOf).toBeNull();
+  await expect(link).toHaveCount(0);
+  // Without a pointer, the row menu moves the view.
+  await folders
+    .getByRole("button", { name: "Toutes les vues", exact: true })
+    .click();
+  const menu = page.getByRole("button", {
+    name: `Gérer ${view.name}`,
+    exact: true,
+  });
+  await menu.focus();
+  await page.keyboard.press("Enter");
+  await page
+    .getByRole("menuitem", { name: "Déplacer vers", exact: true })
+    .press("ArrowRight");
+  await page
+    .getByRole("menuitemradio", { name: folder.name, exact: true })
+    .press("Enter");
+  await expect.poll(folderOf).toBe(folder.id);
+});
+
+test("create a view from the views page without leaving it", async ({
+  page,
+  viewsFixture: f,
+}) => {
+  const folder = await f.client.views.createFolder.mutate({
+    athleteId: f.athleteId,
+    name: "Training",
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${origin}/views`);
+  await page
+    .getByRole("navigation", { name: "Folders", exact: true })
+    .getByRole("button", { name: folder.name, exact: true })
+    .click();
+  await page.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New view", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New view", exact: true });
+  await dialog
+    .getByRole("textbox", { name: "Name", exact: true })
+    .fill("Long activities");
+  // It defaults to the folder on screen.
+  await expect(
+    dialog.getByRole("combobox", { name: "Folder", exact: true }),
+  ).toContainText(folder.name);
+  await dialog
+    .getByRole("button", { name: "Add condition", exact: true })
+    .click();
+  await dialog
+    .getByRole("combobox", { name: "Activity property", exact: true })
+    .click();
+  await page.getByRole("option", { name: "Distance, km", exact: true }).click();
+  await dialog
+    .getByRole("combobox", { name: "Comparison", exact: true })
+    .click();
+  await page.getByRole("option", { name: "is at least", exact: true }).click();
+  await dialog
+    .getByRole("spinbutton", { name: "Value", exact: true })
+    .fill("40");
+  await expect(dialog.getByText("2 activities", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Save view", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page).toHaveURL(`${origin}/views`);
+  await expect(
+    page.getByRole("link", { name: "Long activities", exact: true }),
+  ).toBeVisible();
+  expect(await f.client.views.list.query({ athleteId: f.athleteId })).toEqual([
+    expect.objectContaining({
+      name: "Long activities",
+      folderId: folder.id,
+      rules: expect.objectContaining({
+        children: [
+          expect.objectContaining({
+            field: "distance",
+            operator: "ge",
+            value: "40",
+          }),
+        ],
+      }),
+    }),
+  ]);
+});
+
+test("move a view and switch folders on mobile", async ({
+  page,
+  context,
+  viewsFixture: f,
+}) => {
+  const folder = await f.client.views.createFolder.mutate({
+    athleteId: f.athleteId,
+    name: "Voyages",
+  });
+  const view = await f.client.views.create.mutate({
+    athleteId: f.athleteId,
+    name: "Alpes 2026",
+    folderId: null,
+    rules: selection,
+    display: DEFAULT_ACTIVITY_DISPLAY,
+  });
+  await context.addCookies([{ name: "locale", value: "fr-FR", url: origin }]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${origin}/views`);
+  await page
+    .getByRole("button", { name: `Gérer ${view.name}`, exact: true })
+    .click();
+  await page
+    .getByRole("menuitem", { name: "Déplacer vers", exact: true })
+    .click();
+  await page
+    .getByRole("menuitemradio", { name: folder.name, exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await f.client.views.list.query({ athleteId: f.athleteId }))[0]
+          .folderId,
+    )
+    .toBe(folder.id);
+  const link = page.getByRole("link", { name: view.name, exact: true });
+  await page.getByRole("button", { name: /^Toutes les vues/ }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /^Voyages/ })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(link).toBeVisible();
+  await page
+    .getByRole("button", { name: `Gérer ${view.name}`, exact: true })
+    .click();
+  await page
+    .getByRole("menuitem", { name: "Déplacer vers", exact: true })
+    .click();
+  await page
+    .getByRole("menuitemradio", { name: "Sans dossier", exact: true })
+    .click();
+  await expect(link).toHaveCount(0);
+});
 
 test("Journal tabs preserve the selected week and ignore retired filters", async ({
   page,

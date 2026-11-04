@@ -43,7 +43,8 @@ export function findSetBreaks(block: RawBlock): number[] {
  * Unequal groups leave the block flat.
  */
 export function detectSetsWithinBlock(block: RawBlock): RawBlock {
-  if (block.groupSizes != null) return block;
+  // A cycle's recoveries differ by step on purpose; none of them is a break.
+  if (block.groupSizes != null || block.period != null) return block;
   const breaks = findSetBreaks(block);
   if (breaks.length === 0) return block;
 
@@ -99,8 +100,8 @@ export function mergeAdjacentIdenticalBlocks(
     if (run.length > 0) {
       const previous = run[run.length - 1];
       const continuesRun =
-        previous.groupSizes == null &&
-        block.groupSizes == null &&
+        isFlat(previous) &&
+        isFlat(block) &&
         roundedSignature(previous, metric) ===
           roundedSignature(block, metric) &&
         isLongRecoveryBetween(previous);
@@ -110,6 +111,11 @@ export function mergeAdjacentIdenticalBlocks(
   }
   flushRun();
   return merged;
+}
+
+/** A plain run of similar reps: neither already split into sets nor a cycle. */
+function isFlat(block: RawBlock): boolean {
+  return block.groupSizes == null && block.period == null;
 }
 
 /** The recovery after a block's last rep, long enough to be a set break. */

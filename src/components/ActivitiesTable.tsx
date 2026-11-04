@@ -26,6 +26,7 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { QueryState } from "~/components/primitives/QueryState";
+import { SportIconTile } from "~/components/primitives/SportIconTile";
 import { Button } from "~/components/ui/button";
 import {
   Table,
@@ -48,6 +49,7 @@ import { cn } from "~/lib/utils";
 import {
   ACTIVITY_COLUMNS,
   type ActivityDisplay,
+  DEFAULT_ACTIVITY_DISPLAY,
   conditionCount,
 } from "~/utils/activityFilters";
 import {
@@ -80,35 +82,6 @@ const features = tableFeatures({
   // `numeric` right-aligns the column with tabular figures so values line up.
   columnMeta: metaHelper<{ minWidth?: number; numeric?: boolean }>(),
 });
-
-/**
- * The sport's icon in its color on a faint tile of that color. It is the only
- * colored mark on an activity row: the list reads by sport at a glance while
- * the rows themselves stay neutral.
- */
-function SportIconTile(props: {
-  type: string;
-  className?: string;
-  iconClassName?: string;
-}) {
-  const sport = getSportConfig(props.type);
-  const Icon = sport.icon;
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center",
-        props.className,
-      )}
-      style={{
-        color: sport.color,
-        backgroundColor: `color-mix(in oklab, ${sport.color} 14%, transparent)`,
-      }}
-    >
-      <Icon className={props.iconClassName} />
-    </span>
-  );
-}
 
 function ActivityRow(props: {
   row: Row<typeof features, ActivityWithoutMap>;
@@ -195,6 +168,9 @@ const createColumns = (t: TFunction) =>
         </span>
       ),
       header: () => <span>{t("activities.columns.date")}</span>,
+      // Newest first, like the default sort. Starting ascending would make
+      // clearing the default date sort fall back to itself, a dead click.
+      sortDescFirst: true,
       size: 150,
       meta: { minWidth: 140 },
     }),
@@ -299,18 +275,18 @@ export function ActivitiesTable() {
     [scope.display.columns],
   );
   const table = useTable({
-    enableSortingRemoval: false,
     features,
     data,
     columns,
     state: { sorting, columnVisibility },
     onSortingChange: (updater) => {
       const next = typeof updater === "function" ? updater(sorting) : updater;
-      if (next[0])
-        void scope.setDisplay({
-          ...scope.display,
-          sort: next[0] as ActivityDisplay["sort"],
-        });
+      // A view always has a sort, so clearing one falls back to the default.
+      const sort = next[0] ?? DEFAULT_ACTIVITY_DISPLAY.sort;
+      void scope.setDisplay({
+        ...scope.display,
+        sort: sort as ActivityDisplay["sort"],
+      });
     },
   });
   const sortedRows = table.getRowModel().rows;

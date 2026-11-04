@@ -99,6 +99,6 @@ export function invalidateActivityData(
     utils.analytics.invalidate(),
     utils.records.invalidate(),
     utils.views.summary.invalidate(),
-    utils.views.counts.invalidate(),
+    utils.views.stats.invalidate(),
   ]);
 }

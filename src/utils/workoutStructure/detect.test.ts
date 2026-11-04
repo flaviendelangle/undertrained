@@ -38,13 +38,13 @@ describe("detectWorkoutStructure — cycling", () => {
     const block = result!.blocks[0];
     expect(block.reps).toBe(10);
     expect(block.sets).toBeUndefined();
-    expect(block.workDuration).toBe(60);
-    expect(block.work.value).toBe(280);
-    expect(block.work.zoneName).toBe("VO2max");
-    expect(block.recoveryDuration).toBe(30);
-    expect(block.recovery?.value).toBe(100);
-    expect(block.recovery?.zoneName).toBe("Recovery");
-    expect(block.recovery?.zoneIndex).toBe(0);
+    expect(block.steps[0].workDuration).toBe(60);
+    expect(block.steps[0].work.value).toBe(280);
+    expect(block.steps[0].work.zoneName).toBe("VO2max");
+    expect(block.steps[0].recoveryDuration).toBe(30);
+    expect(block.steps[0].recovery?.value).toBe(100);
+    expect(block.steps[0].recovery?.zoneName).toBe("Recovery");
+    expect(block.steps[0].recovery?.zoneIndex).toBe(0);
     expect(result?.confidence).toBeGreaterThanOrEqual(0.9);
     expect(result?.confident).toBe(true);
   });
@@ -59,14 +59,18 @@ describe("detectWorkoutStructure — cycling", () => {
 
   it("classifies the block's laps as work vs recovery", () => {
     const block = detectRide(classic)!.blocks[0];
-    expect(block.workLapIndices).toEqual([1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
-    expect(block.recoveryLapIndices).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18]);
+    expect(block.steps[0].workLapIndices).toEqual([
+      1, 3, 5, 7, 9, 11, 13, 15, 17, 19,
+    ]);
+    expect(block.steps[0].recoveryLapIndices).toEqual([
+      2, 4, 6, 8, 10, 12, 14, 16, 18,
+    ]);
   });
 
   it("leaves zone labels null without rider settings", () => {
     const block = detectRide(classic)!.blocks[0];
-    expect(block.work.zoneName).toBeNull();
-    expect(block.work.zoneIndex).toBeNull();
+    expect(block.steps[0].work.zoneName).toBeNull();
+    expect(block.steps[0].work.zoneIndex).toBeNull();
   });
 
   it("rounds noisy laps to the planned 60s/280W/30s", () => {
@@ -84,10 +88,27 @@ describe("detectWorkoutStructure — cycling", () => {
     const result = detectRide(specs);
     const block = result!.blocks[0];
     expect(block.reps).toBe(10);
-    expect(block.workDuration).toBe(60);
-    expect(block.work.value).toBe(280);
-    expect(block.recoveryDuration).toBe(30);
+    expect(block.steps[0].workDuration).toBe(60);
+    expect(block.steps[0].work.value).toBe(280);
+    expect(block.steps[0].recoveryDuration).toBe(30);
     expect(result?.confident).toBe(true);
+  });
+
+  it("does not read lap jitter as a cycle", () => {
+    const durations = [60, 56, 64, 60, 60, 60, 60, 60, 60, 60];
+    const specs: LapSpec[] = [WARMUP_RIDE];
+    durations.forEach((duration, i) => {
+      specs.push({ duration, watts: 280 });
+      if (i < durations.length - 1) specs.push({ duration: 30, watts: 100 });
+    });
+    specs.push(COOLDOWN_RIDE);
+
+    const result = detectRide(specs);
+    expect(result?.blocks).toHaveLength(1);
+    const block = result!.blocks[0];
+    expect(block.reps).toBe(10);
+    expect(block.steps).toHaveLength(1);
+    expect(block.steps[0].workDuration).toBe(60);
   });
 
   it("keeps genuinely different blocks apart (5×30\"@330W then 4×4'@250W)", () => {
@@ -105,15 +126,15 @@ describe("detectWorkoutStructure — cycling", () => {
     expect(result?.blocks).toHaveLength(2);
     const [surges, vo2] = result!.blocks;
     expect(surges.reps).toBe(5);
-    expect(surges.workDuration).toBe(30);
-    expect(surges.work.value).toBe(330);
-    expect(surges.work.zoneName).toBe("Anaerobic");
-    expect(surges.recoveryDuration).toBe(30);
+    expect(surges.steps[0].workDuration).toBe(30);
+    expect(surges.steps[0].work.value).toBe(330);
+    expect(surges.steps[0].work.zoneName).toBe("Anaerobic");
+    expect(surges.steps[0].recoveryDuration).toBe(30);
     expect(vo2.reps).toBe(4);
-    expect(vo2.workDuration).toBe(240);
-    expect(vo2.work.value).toBe(250);
-    expect(vo2.work.zoneName).toBe("Threshold");
-    expect(vo2.recoveryDuration).toBe(120);
+    expect(vo2.steps[0].workDuration).toBe(240);
+    expect(vo2.steps[0].work.value).toBe(250);
+    expect(vo2.steps[0].work.zoneName).toBe("Threshold");
+    expect(vo2.steps[0].recoveryDuration).toBe(120);
   });
 
   it("absorbs one botched rep as an outlier with a confidence penalty", () => {
@@ -122,7 +143,7 @@ describe("detectWorkoutStructure — cycling", () => {
     specs[11].duration = 78; // 6th work lap (warmup + 5×(work+recovery))
     const noisy = detectRide(specs)!;
     expect(noisy.blocks[0].reps).toBe(10);
-    expect(noisy.blocks[0].workDuration).toBe(60);
+    expect(noisy.blocks[0].steps[0].workDuration).toBe(60);
     expect(noisy.confidence).toBeLessThan(clean.confidence);
   });
 
@@ -134,7 +155,7 @@ describe("detectWorkoutStructure — cycling", () => {
     ];
     const block = detectRide(specs)!.blocks[0];
     expect(block.reps).toBe(10);
-    expect(block.recoveryDuration).toBe(30);
+    expect(block.steps[0].recoveryDuration).toBe(30);
   });
 
   it("reports back-to-back work laps with a null recovery", () => {
@@ -145,8 +166,8 @@ describe("detectWorkoutStructure — cycling", () => {
     ];
     const block = detectRide(specs)!.blocks[0];
     expect(block.reps).toBe(4);
-    expect(block.recoveryDuration).toBeNull();
-    expect(block.recovery).toBeNull();
+    expect(block.steps[0].recoveryDuration).toBeNull();
+    expect(block.steps[0].recovery).toBeNull();
   });
 
   it("detects 2×20' via the long-rep rule", () => {
@@ -159,9 +180,9 @@ describe("detectWorkoutStructure — cycling", () => {
     ];
     const block = detectRide(specs)!.blocks[0];
     expect(block.reps).toBe(2);
-    expect(block.workDuration).toBe(1200);
-    expect(block.work.value).toBe(251);
-    expect(block.recoveryDuration).toBe(600);
+    expect(block.steps[0].workDuration).toBe(1200);
+    expect(block.steps[0].work.value).toBe(251);
+    expect(block.steps[0].recoveryDuration).toBe(600);
   });
 
   it("rejects two stray 30s surges", () => {
@@ -230,6 +251,52 @@ describe("detectWorkoutStructure — cycling", () => {
     expect(result?.metric).toBe("power");
     expect(result?.blocks[0].reps).toBe(10);
   });
+
+  it("ends a plain block where a repeated cycle starts", () => {
+    const specs = [
+      WARMUP_RIDE,
+      ...repeat(5, { duration: 60, watts: 280 }, { duration: 60, watts: 100 }),
+      ...Array.from({ length: 3 }, () => [
+        { duration: 60, watts: 280 },
+        { duration: 60, watts: 100 },
+        { duration: 60, watts: 340 },
+        { duration: 120, watts: 100 },
+      ]).flat(),
+      COOLDOWN_RIDE,
+    ];
+    const result = detectRide(specs);
+    expect(
+      result?.blocks.map((block) => ({
+        reps: block.reps,
+        work: block.steps.map((step) => step.work.value),
+      })),
+    ).toEqual([
+      { reps: 5, work: [280] },
+      { reps: 3, work: [280, 340] },
+    ]);
+  });
+
+  it("needs 3 repetitions of a cycle unless they are long", () => {
+    const cycle = (reps: number, laps: LapSpec[]) =>
+      Array.from({ length: reps }, () => laps).flat();
+    const short = cycle(2, [
+      { duration: 30, watts: 330 },
+      { duration: 30, watts: 100 },
+      { duration: 30, watts: 280 },
+      { duration: 60, watts: 100 },
+    ]);
+    expect(detectRide([WARMUP_RIDE, ...short, COOLDOWN_RIDE])).toBeNull();
+
+    const long = cycle(2, [
+      { duration: 600, watts: 230 },
+      { duration: 120, watts: 100 },
+      { duration: 300, watts: 270 },
+      { duration: 300, watts: 100 },
+    ]);
+    const block = detectRide([WARMUP_RIDE, ...long, COOLDOWN_RIDE])!.blocks[0];
+    expect(block.reps).toBe(2);
+    expect(block.steps.map((step) => step.workDuration)).toEqual([600, 300]);
+  });
 });
 
 describe("detectWorkoutStructure — running", () => {
@@ -244,10 +311,10 @@ describe("detectWorkoutStructure — running", () => {
     expect(result?.metric).toBe("pace");
     const block = result!.blocks[0];
     expect(block.reps).toBe(10);
-    expect(block.workDuration).toBe(180);
-    expect(block.work.value).toBe(270);
-    expect(block.recoveryDuration).toBe(60);
-    expect(block.recovery?.value).toBe(390);
+    expect(block.steps[0].workDuration).toBe(180);
+    expect(block.steps[0].work.value).toBe(270);
+    expect(block.steps[0].recoveryDuration).toBe(60);
+    expect(block.steps[0].recovery?.value).toBe(390);
     expect(result?.confident).toBe(true);
   });
 
@@ -267,17 +334,70 @@ describe("detectWorkoutStructure — running", () => {
     const block = result!.blocks[0];
     expect(block.sets).toBe(2);
     expect(block.reps).toBe(5);
-    expect(block.workDuration).toBe(180);
-    expect(block.work.value).toBe(270);
-    expect(block.work.zoneName).toBe("Zone 5b");
-    expect(block.recoveryDuration).toBe(60);
-    expect(block.recovery?.value).toBe(390);
-    expect(block.recovery?.zoneName).toBe("Zone 1");
+    expect(block.steps[0].workDuration).toBe(180);
+    expect(block.steps[0].work.value).toBe(270);
+    expect(block.steps[0].work.zoneName).toBe("Zone 5b");
+    expect(block.steps[0].recoveryDuration).toBe(60);
+    expect(block.steps[0].recovery?.value).toBe(390);
+    expect(block.steps[0].recovery?.zoneName).toBe("Zone 1");
     // The set-break lap (10) is consumed by the block but is neither a work
     // nor a within-set recovery lap.
     expect(block.lapIndices).toContain(10);
-    expect(block.workLapIndices).toEqual([1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
-    expect(block.recoveryLapIndices).toEqual([2, 4, 6, 8, 12, 14, 16, 18]);
+    expect(block.steps[0].workLapIndices).toEqual([
+      1, 3, 5, 7, 9, 11, 13, 15, 17, 19,
+    ]);
+    expect(block.steps[0].recoveryLapIndices).toEqual([
+      2, 4, 6, 8, 12, 14, 16, 18,
+    ]);
+    expect(result?.confident).toBe(true);
+  });
+
+  it("detects a cycle of two paces: 4 × (1' fast, 1' easy, 1' medium, 2' easy)", () => {
+    // Strava activity 20844528541, rounded. The two work paces are ~9% apart,
+    // beyond the 5% intensity tolerance, so they cannot share a plain block.
+    const fastPaces = [244, 235, 239, 239];
+    const mediumPaces = [260, 259, 269, 265];
+    const specs: LapSpec[] = [{ duration: 900, speed: paceToSpeed(340) }];
+    fastPaces.forEach((fastPace, i) => {
+      specs.push(
+        { duration: 60, speed: paceToSpeed(fastPace) },
+        { duration: 60, speed: paceToSpeed(334) },
+        { duration: 60, speed: paceToSpeed(mediumPaces[i]) },
+        { duration: 120, speed: paceToSpeed(345) },
+      );
+    });
+    specs.push({ duration: 611, speed: paceToSpeed(338) });
+
+    const result = detectRun(specs);
+    expect(result?.blocks).toHaveLength(1);
+    const block = result!.blocks[0];
+    expect(block.reps).toBe(4);
+    expect(block.sets).toBeUndefined();
+    expect(
+      block.steps.map((step) => ({
+        workDuration: step.workDuration,
+        work: step.work.value,
+        recoveryDuration: step.recoveryDuration,
+        workLapIndices: step.workLapIndices,
+        recoveryLapIndices: step.recoveryLapIndices,
+      })),
+    ).toEqual([
+      {
+        workDuration: 60,
+        work: 239,
+        recoveryDuration: 60,
+        workLapIndices: [1, 5, 9, 13],
+        recoveryLapIndices: [2, 6, 10, 14],
+      },
+      {
+        workDuration: 60,
+        work: 262,
+        recoveryDuration: 120,
+        workLapIndices: [3, 7, 11, 15],
+        // The 2' after the last rep runs into the cooldown.
+        recoveryLapIndices: [4, 8, 12],
+      },
+    ]);
     expect(result?.confident).toBe(true);
   });
 
