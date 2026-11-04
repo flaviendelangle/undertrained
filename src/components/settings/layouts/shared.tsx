@@ -21,7 +21,8 @@ import { getLoadAlgorithmConfigs } from "~/utils/sportConfig";
 
 /**
  * One setting: its label on the left, its control on the right, ruled off from
- * the row above like the rows of the profile table.
+ * the row above like the rows of the profile table. On phones the control goes
+ * under its label, full width.
  */
 export function SettingRow({
   label,
@@ -35,7 +36,7 @@ export function SettingRow({
   return (
     <Field
       className={cn(
-        "border-border/60 min-h-12 flex-row items-center justify-between gap-4 border-t py-2",
+        "border-border/60 min-h-12 gap-2 border-t py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-2",
         className,
       )}
     >
@@ -69,7 +70,7 @@ export function SettingsPanel({
   return (
     <section
       style={{ gridRow: `span ${rows}` }}
-      className={cn("flex flex-col md:grid md:grid-rows-subgrid", className)}
+      className={cn("flex flex-col lg:grid lg:grid-rows-subgrid", className)}
     >
       <CardTitle tooltip={tooltip} description={description}>
         {title}
@@ -135,7 +136,7 @@ export function EquipmentFields({
             min={0}
             step={step}
             smallStep={smallStep}
-            className="w-32 shrink-0"
+            className="w-full shrink-0 sm:w-32"
           />
         </SettingRow>
       ))}
@@ -179,7 +180,7 @@ export function LoadAlgorithmFields({
             value={timeline[config.key]}
             onValueChange={(v) => setTimeline({ ...timeline, [config.key]: v })}
           >
-            <SelectTrigger size="sm" className="w-60 shrink-0">
+            <SelectTrigger size="sm" className="w-full shrink-0 sm:w-60">
               <SelectValue>{renderLabel(config.options, t)}</SelectValue>
             </SelectTrigger>
             <SelectContent>

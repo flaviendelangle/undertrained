@@ -31,7 +31,7 @@ export function RiderProfile({
         {t("settings.profile.title")}
       </CardTitle>
 
-      <div className={cn(METRIC_ROW_GRID, "pb-2 max-md:hidden")} aria-hidden>
+      <div className={cn(METRIC_ROW_GRID, "pb-2 max-lg:hidden")} aria-hidden>
         <span className={LABEL_CLASS}>
           {t("settings.metric.column.metric")}
         </span>

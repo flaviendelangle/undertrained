@@ -21,7 +21,7 @@ export function LanguageSelect() {
         value={locale}
         onValueChange={(value) => setLocale(value as Locale)}
       >
-        <SelectTrigger size="sm" className="w-60 shrink-0">
+        <SelectTrigger size="sm" className="w-full shrink-0 sm:w-60">
           <SelectValue>{LOCALE_LABEL[locale]}</SelectValue>
         </SelectTrigger>
         <SelectContent>

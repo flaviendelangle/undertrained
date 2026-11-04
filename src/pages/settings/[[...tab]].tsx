@@ -78,22 +78,25 @@ const SettingsPage: NextPageWithLayout = () => {
             hasSettings={hasSettings}
           />
 
-          <div className="md:border-border md:bg-card flex flex-col gap-5 p-5 md:grid md:grid-cols-2 md:gap-0 md:rounded-sm md:border">
+          {/* Equipment | load algorithm side by side on lg+, their rows on
+              shared tracks, the vertical rule meeting the preferences' top
+              rule; stacked panels below lg, each ruled off from the last. */}
+          <div className="md:border-border md:bg-card flex flex-col gap-5 p-5 md:rounded-sm md:border lg:grid lg:grid-cols-2 lg:gap-0">
             <EquipmentFields
               timeline={timeline}
               setTimeline={setTimeline}
-              className="md:border-border md:border-r md:pr-6"
+              className="lg:border-border lg:border-r lg:pr-6 lg:pb-6"
             />
             <LoadAlgorithmFields
               timeline={timeline}
               setTimeline={setTimeline}
-              className="border-border -mx-5 border-t px-5 pt-5 md:mx-0 md:border-t-0 md:pt-0 md:pr-0 md:pl-6"
+              className="border-border -mx-5 border-t px-5 pt-5 lg:mx-0 lg:border-t-0 lg:pt-0 lg:pr-0 lg:pb-6 lg:pl-6"
             />
-            <section className="border-border -mx-5 border-t px-5 pt-5 md:col-span-2 md:mx-0 md:mt-6 md:px-0">
+            <section className="border-border -mx-5 border-t px-5 pt-5 lg:col-span-2 lg:mx-0 lg:px-0">
               <CardTitle description={t("settings.preferences.description")}>
                 {t("settings.preferences.title")}
               </CardTitle>
-              <div className="md:grid md:grid-cols-2 md:gap-x-12">
+              <div className="lg:grid lg:grid-cols-2 lg:gap-x-12">
                 <LanguageSelect />
                 <ResetHintsButton />
               </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { format, parseISO } from "date-fns";
 import { ChevronRightIcon, PlusIcon, XIcon } from "lucide-react";
@@ -43,10 +43,10 @@ const MetricSparkline = dynamic(
 /**
  * The columns every row of the profile table shares, so a metric's history
  * lines up under its summary: name, value, since, change, disclosure. Under
- * `md` only the name, the value and the last column remain.
+ * `lg` only the name, the value and the last column remain.
  */
 export const METRIC_ROW_GRID =
-  "grid grid-cols-[minmax(0,1fr)_auto_1.5rem] items-center gap-x-4 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1.5rem]";
+  "grid grid-cols-[minmax(0,1fr)_auto_1.5rem] items-center gap-x-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1.5rem]";
 
 function formatDay(date: string): string {
   return format(parseISO(date), "d MMM yyyy", {
@@ -73,6 +73,7 @@ export function MetricRow({
   hasSettings,
 }: MetricRowProps) {
   const t = useT();
+  const summaryId = useId();
   const field = config.field;
   const history = getFieldHistory(timeline, field);
   const changes = history.filter((entry) => !entry.isBaseline);
@@ -102,31 +103,58 @@ export function MetricRow({
         )}
       >
         <div className="min-w-0">
-          <Collapsible.Trigger className="group focus-visible:ring-ring rounded-sm text-left text-sm font-medium outline-none after:absolute after:inset-0 focus-visible:ring-2">
+          <Collapsible.Trigger
+            aria-describedby={`${summaryId}-value ${summaryId}-since ${summaryId}-change`}
+            className="focus-visible:ring-ring cursor-pointer rounded-sm text-left text-sm font-medium outline-none after:absolute after:inset-0 focus-visible:ring-2"
+          >
             {t(config.labelKey)}
           </Collapsible.Trigger>
-          <div className="text-muted-foreground mt-0.5 text-xs md:hidden">
-            {since}
+          <div
+            aria-hidden="true"
+            className="text-muted-foreground mt-0.5 text-xs lg:hidden"
+          >
+            {latest
+              ? t("settings.metric.sinceDate", {
+                  date: formatDay(latest.date!),
+                })
+              : since}
           </div>
         </div>
+        {/* Screen readers read these after the metric's name
+            (aria-describedby), each with the column it sits in. */}
         <div
+          id={`${summaryId}-value`}
           className={cn(
-            "text-right text-lg leading-tight font-semibold whitespace-nowrap tabular-nums md:text-left",
+            "text-right text-lg leading-tight font-semibold whitespace-nowrap tabular-nums lg:text-left",
             isDefault && "text-muted-foreground",
           )}
         >
           <Quantity text={formatFieldValue(config, shownValue)} />
         </div>
         <div
+          id={`${summaryId}-since`}
           className={cn(
-            "truncate text-sm max-md:hidden",
+            "truncate text-sm max-lg:hidden",
             latest ? "text-foreground/80" : "text-muted-foreground",
           )}
         >
+          <span className="sr-only">{t("settings.metric.column.since")} </span>
           {since}
         </div>
-        <div className="text-muted-foreground flex items-center gap-3 text-sm tabular-nums max-md:hidden">
-          {change && <span className="w-14 shrink-0">{change}</span>}
+        <div
+          id={`${summaryId}-change`}
+          className="text-muted-foreground flex items-center gap-3 text-sm tabular-nums max-lg:hidden"
+        >
+          {/* The history's rows compare with the previous value: the total
+                since the start steps aside while they show. */}
+          {change && (
+            <span className="w-14 shrink-0 group-data-open/metric:invisible">
+              <span className="sr-only">
+                {t("settings.metric.changeSinceStart")}{" "}
+              </span>
+              {change}
+            </span>
+          )}
           <MetricSparkline
             timeline={timeline}
             field={field}
@@ -152,12 +180,12 @@ export function MetricRow({
 }
 
 /**
- * A history row on the profile table's columns: on `md` the value, its date
- * and its change sit under the Value, Since and Change headers; below `md`,
+ * A history row on the profile table's columns: on `lg` the value, its date
+ * and its change sit under the Value, Since and Change headers; below `lg`,
  * the date leads and the value follows.
  */
 const HISTORY_ROW =
-  "grid min-h-9 grid-cols-[minmax(0,1fr)_auto_1.5rem] items-center gap-x-4 py-0.5 md:col-span-4 md:grid-cols-subgrid";
+  "grid min-h-9 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 py-0.5 pointer-coarse:min-h-11 lg:col-span-4 lg:grid-cols-subgrid";
 
 /**
  * The dated values of one metric, newest first, above its start value, with
@@ -171,7 +199,14 @@ function MetricHistory({
 }: MetricRowProps) {
   const t = useT();
   const [adding, setAdding] = useState(false);
+  const listRef = useRef<HTMLUListElement>(null);
+  // Where focus goes once the row holding it is gone: the next row's delete
+  // button (by change id) or the start value. Applied after the re-render.
+  const focusAfterDelete = useRef<string | null>(null);
+  // Set when the add form closes, so its trigger regains focus.
+  const restoreAddFocus = useRef(false);
   const field = config.field;
+  const label = t(config.labelKey);
   const history = getFieldHistory(timeline, field);
   const changes = history.filter((entry) => !entry.isBaseline);
   const startValue = hasSettings ? timeline.initialValues[field] : null;
@@ -187,82 +222,121 @@ function MetricHistory({
     })
     .reverse();
 
+  useEffect(() => {
+    const key = focusAfterDelete.current;
+    if (key == null) return;
+    focusAfterDelete.current = null;
+    const target = listRef.current?.querySelector<HTMLElement>(
+      `[data-focus-key="${key}"]`,
+    );
+    (target?.matches("button")
+      ? target
+      : target?.querySelector<HTMLElement>("button")
+    )?.focus();
+  });
+
+  const closeAddForm = () => {
+    restoreAddFocus.current = true;
+    setAdding(false);
+  };
+
   return (
     <div className={cn(METRIC_ROW_GRID, "items-start pb-3")}>
       {config.tooltipKey && (
-        <p className="text-muted-foreground col-span-3 pb-2 text-xs leading-relaxed md:col-span-1 md:row-span-2 md:pt-2.5 md:pb-0">
+        <p className="text-muted-foreground col-span-3 pb-2 text-xs leading-relaxed lg:col-span-1 lg:row-span-2 lg:pt-2.5 lg:pb-0">
           {t(config.tooltipKey)}
         </p>
       )}
 
-      <ul className="col-span-3 text-sm md:col-span-4 md:col-start-2 md:grid md:grid-cols-subgrid">
-        {rows.map(({ entry, delta }) => (
-          <li key={entry.id} className={HISTORY_ROW}>
-            <EditableValue
-              config={config}
-              value={entry.value}
-              onCommit={(value) =>
-                onTimelineChange(setField(timeline, field, entry.date!, value))
-              }
-              displayClassName="font-medium tabular-nums max-md:justify-self-end md:-ml-1"
-            />
-            <span className="text-muted-foreground truncate max-md:order-first">
-              {formatDay(entry.date!)}
-            </span>
-            <span className="text-muted-foreground tabular-nums max-md:hidden">
-              {delta}
-            </span>
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label={t("settings.metric.deleteValue", {
-                date: formatDay(entry.date!),
-              })}
-              className="text-muted-foreground hover:text-destructive justify-self-end"
-              onClick={() =>
-                onTimelineChange(deleteField(timeline, field, entry.date!))
-              }
-            >
-              <XIcon />
-            </Button>
-          </li>
-        ))}
+      <ul
+        ref={listRef}
+        className="col-span-3 text-sm lg:col-span-4 lg:col-start-2 lg:grid lg:grid-cols-subgrid"
+      >
+        {rows.map(({ entry, delta }, index) => {
+          const day = formatDay(entry.date!);
+          return (
+            <li key={entry.id} className={HISTORY_ROW}>
+              <EditableValue
+                config={config}
+                value={entry.value}
+                name={`${label}, ${day}`}
+                onCommit={(value) =>
+                  onTimelineChange(
+                    setField(timeline, field, entry.date!, value),
+                  )
+                }
+                displayClassName="font-medium tabular-nums max-lg:justify-self-end lg:-ml-1"
+              />
+              <span className="text-muted-foreground truncate max-lg:order-first">
+                {day}
+              </span>
+              <span className="text-muted-foreground tabular-nums max-lg:hidden">
+                {delta && (
+                  <span className="sr-only">
+                    {t("settings.metric.changeFromPrevious")}{" "}
+                  </span>
+                )}
+                {delta}
+              </span>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                data-focus-key={entry.id}
+                aria-label={t("settings.metric.deleteValue", { date: day })}
+                className="text-muted-foreground hover:text-destructive justify-self-end pointer-coarse:size-10"
+                onClick={() => {
+                  focusAfterDelete.current =
+                    rows[index + 1]?.entry.id ?? "start";
+                  onTimelineChange(deleteField(timeline, field, entry.date!));
+                }}
+              >
+                <XIcon />
+              </Button>
+            </li>
+          );
+        })}
 
-        <li className={HISTORY_ROW}>
+        <li className={HISTORY_ROW} data-focus-key="start">
           <EditableValue
             config={config}
             value={startValue}
             placeholderValue={DEFAULTS[field]}
+            name={`${label}, ${t("settings.metric.start")}`}
             onCommit={(value) =>
               onTimelineChange(setBaselineField(timeline, field, value))
             }
-            displayClassName="font-medium tabular-nums max-md:justify-self-end md:-ml-1"
+            displayClassName="font-medium tabular-nums max-lg:justify-self-end lg:-ml-1"
           />
-          <span className="text-muted-foreground truncate max-md:order-first">
-            {t("settings.metric.start")}
-          </span>
-          <span className="text-muted-foreground max-md:hidden">
-            {startValue == null ? t("settings.metric.default") : null}
+          <span className="text-muted-foreground truncate max-lg:order-first lg:col-span-2">
+            {startValue == null
+              ? t("settings.metric.startDefault")
+              : t("settings.metric.start")}
           </span>
         </li>
       </ul>
 
-      <div className="col-span-3 pt-1 md:col-span-4 md:col-start-2 md:grid md:grid-cols-subgrid">
+      <div className="col-span-3 pt-1 lg:col-span-4 lg:col-start-2 lg:grid lg:grid-cols-subgrid">
         {adding ? (
           <AddValueRow
             config={config}
             existingDates={changes.map((entry) => entry.date!)}
-            onCancel={() => setAdding(false)}
+            onCancel={closeAddForm}
             onAdd={(date, value) => {
               onTimelineChange(setField(timeline, field, date, value));
-              setAdding(false);
+              closeAddForm();
             }}
           />
         ) : (
           <Button
+            ref={(node) => {
+              if (node && restoreAddFocus.current) {
+                restoreAddFocus.current = false;
+                node.focus();
+              }
+            }}
             size="xs"
             variant="ghost"
-            className="text-muted-foreground -ml-2 justify-self-start"
+            className="text-muted-foreground -ml-2 justify-self-start pointer-coarse:h-10"
             onClick={() => setAdding(true)}
           >
             <PlusIcon />
@@ -276,7 +350,7 @@ function MetricHistory({
 
 /**
  * A dated value being added: the value under the Value header, its date under
- * Since, then confirm or cancel.
+ * Since, then confirm or cancel. Opens with the value focused; Escape cancels.
  */
 function AddValueRow({
   config,
@@ -293,14 +367,37 @@ function AddValueRow({
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [value, setValue] = useState<number | null>(null);
   const replaces = existingDates.includes(date);
+  const label = t(config.labelKey);
+  const canAdd = value != null && date !== "";
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    containerRef.current?.querySelector("input")?.focus();
+  }, []);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 py-1 md:col-span-4 md:grid md:grid-cols-subgrid md:gap-x-4">
+    <div
+      ref={containerRef}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onCancel();
+        } else if (
+          event.key === "Enter" &&
+          canAdd &&
+          !(event.target instanceof HTMLButtonElement)
+        ) {
+          event.preventDefault();
+          onAdd(date, value);
+        }
+      }}
+      className="flex flex-wrap items-center gap-2 py-1 lg:col-span-4 lg:grid lg:grid-cols-subgrid lg:gap-x-4"
+    >
       {config.inputType === "pace" && config.paceUnit ? (
         <PaceInput
           value={value}
           paceUnit={config.paceUnit}
-          inputClassName="w-14"
+          label={label}
           onChange={setValue}
         />
       ) : (
@@ -311,6 +408,7 @@ function AddValueRow({
           step={config.step}
           smallStep={config.smallStep}
           className="w-28"
+          aria-label={label}
         />
       )}
       <input
@@ -320,12 +418,12 @@ function AddValueRow({
         onChange={(event) => setDate(event.target.value)}
         className="border-input bg-background focus-visible:ring-ring/50 h-8 w-fit rounded-md border px-2 text-sm outline-none focus-visible:ring-2"
       />
-      <div className="flex items-center gap-2 md:col-span-2">
+      <div className="flex items-center gap-2 lg:col-span-2">
         <Button
           size="sm"
-          disabled={value == null || date === ""}
+          disabled={!canAdd}
           onClick={() => {
-            if (value != null && date !== "") onAdd(date, value);
+            if (canAdd) onAdd(date, value);
           }}
         >
           {replaces ? t("settings.metric.replace") : t("settings.metric.add")}

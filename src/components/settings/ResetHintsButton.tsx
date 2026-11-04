@@ -19,7 +19,7 @@ export function ResetHintsButton() {
         variant="outline"
         size="sm"
         disabled={didReset}
-        className="shrink-0"
+        className="shrink-0 self-start sm:self-auto"
         onClick={() => {
           resetAll();
           setDidReset(true);

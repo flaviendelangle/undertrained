@@ -159,5 +159,5 @@ export function formatFieldValue(
   if (config.inputType === "pace" && config.paceUnit) {
     return formatPace(value, config.paceUnit);
   }
-  return `${value}${config.unit}`;
+  return `${formatNumber(value, 2, 0)} ${config.unit}`;
 }

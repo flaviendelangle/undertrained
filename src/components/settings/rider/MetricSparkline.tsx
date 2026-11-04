@@ -48,7 +48,9 @@ export function MetricSparkline({
 
   return (
     <ChartThemeProvider>
-      <div className={className}>
+      {/* Decorative: the delta beside it says the same in words, so keep the
+          chart's own focus layer out of the tab order and the a11y tree. */}
+      <div className={className} inert>
         <SparkLineChart
           data={data}
           curve="stepAfter"
