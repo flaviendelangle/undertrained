@@ -194,14 +194,41 @@ test("views persist rules and display, stay private, and survive folder deletion
       display: fields.display,
     }),
   ]);
+  const empty = await f.client.views.create.mutate({
+    ...fields,
+    name: "Swims",
+    rules: {
+      ...selection,
+      children: [condition("sport", "sport", "in", "", ["Swim"])],
+    },
+  });
+  // Activities start at 07:30Z on the 11th but 22:30 local on the 10th.
   expect(
-    (
-      await f.client.views.stats.query({
-        athleteId: f.athleteId,
-        today: "2026-01-10",
-      })
-    )[view.id].count,
-  ).toBe(2);
+    await f.client.views.stats.query({
+      athleteId: f.athleteId,
+      today: "2026-01-10",
+    }),
+  ).toEqual({
+    [view.id]: {
+      count: 2,
+      distance: 62000,
+      movingTime: 7200,
+      elevation: 1000,
+      firstDay: "2026-01-10",
+      lastDay: "2026-01-10",
+      sports: ["Ride", "Run"],
+    },
+    [empty.id]: {
+      count: 0,
+      distance: 0,
+      movingTime: 0,
+      elevation: 0,
+      firstDay: null,
+      lastDay: null,
+      sports: [],
+    },
+  });
+  await f.client.views.delete.mutate({ athleteId: f.athleteId, id: empty.id });
   await expect(
     f.client.views.update.mutate({
       ...fields,
@@ -235,14 +262,23 @@ test("views persist rules and display, stay private, and survive folder deletion
     folderId: null,
     rules: { ...selection, children: [] },
   });
+  // Three rides and two runs: the most frequent sport comes first.
   expect(
     (
       await f.client.views.stats.query({
         athleteId: f.athleteId,
         today: "2026-01-10",
       })
-    )[view.id].count,
-  ).toBe(5);
+    )[view.id],
+  ).toEqual({
+    count: 5,
+    distance: 147000,
+    movingTime: 18000,
+    elevation: 2500,
+    firstDay: "2026-01-10",
+    lastDay: "2026-01-10",
+    sports: ["Ride", "Run"],
+  });
 });
 
 for (const viewport of [
