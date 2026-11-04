@@ -49,6 +49,7 @@ import { cn } from "~/lib/utils";
 import {
   ACTIVITY_COLUMNS,
   type ActivityDisplay,
+  DEFAULT_ACTIVITY_DISPLAY,
   conditionCount,
 } from "~/utils/activityFilters";
 import {
@@ -167,6 +168,9 @@ const createColumns = (t: TFunction) =>
         </span>
       ),
       header: () => <span>{t("activities.columns.date")}</span>,
+      // Newest first, like the default sort. Starting ascending would make
+      // clearing the default date sort fall back to itself, a dead click.
+      sortDescFirst: true,
       size: 150,
       meta: { minWidth: 140 },
     }),
@@ -271,18 +275,18 @@ export function ActivitiesTable() {
     [scope.display.columns],
   );
   const table = useTable({
-    enableSortingRemoval: false,
     features,
     data,
     columns,
     state: { sorting, columnVisibility },
     onSortingChange: (updater) => {
       const next = typeof updater === "function" ? updater(sorting) : updater;
-      if (next[0])
-        void scope.setDisplay({
-          ...scope.display,
-          sort: next[0] as ActivityDisplay["sort"],
-        });
+      // A view always has a sort, so clearing one falls back to the default.
+      const sort = next[0] ?? DEFAULT_ACTIVITY_DISPLAY.sort;
+      void scope.setDisplay({
+        ...scope.display,
+        sort: sort as ActivityDisplay["sort"],
+      });
     },
   });
   const sortedRows = table.getRowModel().rows;
