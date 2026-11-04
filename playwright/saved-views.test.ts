@@ -748,6 +748,68 @@ test("move a view between folders by dragging its row", async ({
   await expect.poll(folderOf).toBe(folder.id);
 });
 
+test("create a view from the views page without leaving it", async ({
+  page,
+  viewsFixture: f,
+}) => {
+  const folder = await f.client.views.createFolder.mutate({
+    athleteId: f.athleteId,
+    name: "Training",
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${origin}/views`);
+  await page
+    .getByRole("navigation", { name: "Folders", exact: true })
+    .getByRole("button", { name: folder.name, exact: true })
+    .click();
+  await page.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New view", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New view", exact: true });
+  await dialog
+    .getByRole("textbox", { name: "Name", exact: true })
+    .fill("Long activities");
+  // It defaults to the folder on screen.
+  await expect(
+    dialog.getByRole("combobox", { name: "Folder", exact: true }),
+  ).toContainText(folder.name);
+  await dialog
+    .getByRole("button", { name: "Add condition", exact: true })
+    .click();
+  await dialog
+    .getByRole("combobox", { name: "Activity property", exact: true })
+    .click();
+  await page.getByRole("option", { name: "Distance, km", exact: true }).click();
+  await dialog
+    .getByRole("combobox", { name: "Comparison", exact: true })
+    .click();
+  await page.getByRole("option", { name: "is at least", exact: true }).click();
+  await dialog
+    .getByRole("spinbutton", { name: "Value", exact: true })
+    .fill("40");
+  await expect(dialog.getByText("2 activities", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Save view", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page).toHaveURL(`${origin}/views`);
+  await expect(
+    page.getByRole("link", { name: "Long activities", exact: true }),
+  ).toBeVisible();
+  expect(await f.client.views.list.query({ athleteId: f.athleteId })).toEqual([
+    expect.objectContaining({
+      name: "Long activities",
+      folderId: folder.id,
+      rules: expect.objectContaining({
+        children: [
+          expect.objectContaining({
+            field: "distance",
+            operator: "ge",
+            value: "40",
+          }),
+        ],
+      }),
+    }),
+  ]);
+});
+
 test("move a view and switch folders on mobile", async ({
   page,
   context,

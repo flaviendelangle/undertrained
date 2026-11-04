@@ -43,7 +43,7 @@ const fr: Messages = {
     folderHelp:
       "Les dossiers organisent les vues sans ajouter de filtres ni combiner leurs activités.",
     empty:
-      "Aucune vue enregistrée. Filtrez les activités puis enregistrez la sélection à retrouver plus tard.",
+      "Aucune vue enregistrée. Une vue enregistre une sélection d’activités à retrouver plus tard.",
     manage: "Gérer les vues",
     manageItem: "Gérer {name}",
     folders: "Dossiers",

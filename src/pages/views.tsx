@@ -5,7 +5,6 @@ import {
   FolderOpenIcon,
   MoreHorizontalIcon,
 } from "lucide-react";
-import Link from "next/link";
 
 import { Draggable } from "@base-ui/react/draggable";
 
@@ -17,7 +16,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLinkItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
@@ -31,6 +29,7 @@ import {
 } from "~/components/ui/responsive-dialog";
 import { showErrorToast } from "~/components/ui/toast";
 import { viewInputClass } from "~/components/views/ActivityFilterEditor";
+import { NewViewDialog } from "~/components/views/NewViewDialog";
 import {
   type SavedViewActions,
   SavedViewCards,
@@ -53,9 +52,8 @@ import { useAthleteId } from "~/hooks/useAthleteId";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useT } from "~/i18n/useT";
 import type { NextPageWithLayout } from "~/pages/_app";
+import { DEFAULT_ACTIVITY_DISPLAY } from "~/utils/activityFilters";
 import { trpc } from "~/utils/trpc";
-
-const NEW_VIEW_HREF = "/activities?edit=filters";
 
 type Action =
   | {
@@ -64,6 +62,7 @@ type Action =
         view: SavedActivityView;
       };
     }["rename" | "duplicate" | "delete"]
+  | { kind: "newView" }
   | { kind: "folder"; folder?: ViewFolder }
   | { kind: "deleteFolder"; folder: ViewFolder };
 
@@ -181,9 +180,9 @@ const ViewsPage: NextPageWithLayout = () => {
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-max min-w-48">
-        <DropdownMenuLinkItem render={<Link href={NEW_VIEW_HREF} />}>
+        <DropdownMenuItem onClick={() => setAction({ kind: "newView" })}>
           {t("views.newView")}
-        </DropdownMenuLinkItem>
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setAction({ kind: "folder" })}>
           {t("views.newFolder")}
         </DropdownMenuItem>
@@ -274,6 +273,14 @@ const ViewsPage: NextPageWithLayout = () => {
                 <p>
                   {t(scope.views.length ? "views.emptyFolder" : "views.empty")}
                 </p>
+                {!scope.views.length && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setAction({ kind: "newView" })}
+                  >
+                    {t("views.newView")}
+                  </Button>
+                )}
               </QueryState>
             ) : isMobile ? (
               <SavedViewCards {...listProps} />
@@ -289,6 +296,31 @@ const ViewsPage: NextPageWithLayout = () => {
           selected={current.scope}
           onSelect={setSelected}
           onClose={() => setFolderDrawer(false)}
+        />
+      )}
+      {action?.kind === "newView" && (
+        <NewViewDialog
+          initialFolder={folder?.id ?? null}
+          busy={busy}
+          onClose={() => setAction(null)}
+          onSave={(name, folderId, rules) =>
+            create.mutate(
+              {
+                athleteId,
+                name,
+                folderId,
+                rules,
+                display: DEFAULT_ACTIVITY_DISPLAY,
+              },
+              {
+                // Show the new view even when it went to another folder.
+                onSuccess: (view) => {
+                  if (folder && view.folderId !== folder.id)
+                    setSelected(view.folderId ?? "all");
+                },
+              },
+            )
+          }
         />
       )}
       {action?.kind === "rename" && (

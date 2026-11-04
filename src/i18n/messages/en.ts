@@ -45,7 +45,7 @@ const en = {
     folderHelp:
       "Folders organize views. They do not add conditions or combine their activities.",
     empty:
-      "No saved views yet. Filter Activities, then save the selection you want to revisit.",
+      "No saved views yet. A view saves a selection of activities to revisit.",
     manage: "Manage saved views",
     manageItem: "Manage {name}",
     folders: "Folders",
