@@ -356,90 +356,91 @@ function SavedViewRow({
   const t = useT();
   const summary = useViewSummary(stats?.[view.id], today);
   return (
-    <Draggable.Root
-      kind={savedViewKind}
-      payload={view}
-      disabled={busy}
-      render={<TableRow />}
-      className={cn(
-        COLUMNS,
-        "border-border/60 relative h-12 data-dragging:opacity-40",
-      )}
-    >
-      <TableCell className={cn("px-0", SPORTS_UP)}>
-        {summary && <SportTiles sports={summary.sports} size="row" />}
-      </TableCell>
-      <TableCell className="min-w-0 px-0">
-        {/* The link stretches over the row and is its drag handle: links
-            can't start a drag otherwise, and a press that doesn't move still
-            opens the view. */}
-        <Draggable.Handle
-          render={<Link href={actions.href(view)} />}
-          className="text-foreground focus-visible:after:ring-ring block truncate font-medium outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-inset"
-        >
-          {view.name}
-        </Draggable.Handle>
-      </TableCell>
-      <TableCell className={cn("min-w-0 px-0", PERIOD_UP)}>
-        <span className="truncate">{summary?.period}</span>
-      </TableCell>
-      <TableCell className="px-0 text-right tabular-nums">
-        {summary?.count}
-      </TableCell>
-      <TableCell className={cn("justify-end px-0 tabular-nums", TOTALS_UP)}>
-        {summary?.distance}
-      </TableCell>
-      <TableCell className={cn("justify-end px-0 tabular-nums", TOTALS_UP)}>
-        {summary?.elevation}
-      </TableCell>
-      <TableCell className={cn("justify-end px-0 tabular-nums", TOTALS_UP)}>
-        {summary?.time}
-      </TableCell>
-      <TableCell className="relative flex justify-end gap-0.5 px-0">
-        {PRESENTATIONS.map(({ id, label, icon: Icon }) => (
-          <Button
-            key={id}
-            variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground"
-            nativeButton={false}
-            render={
-              <Link
-                href={actions.href(view, ACTIVITY_PRESENTATION_PATHS[id])}
-              />
-            }
-            aria-label={t("views.openAs", {
-              presentation: t(label),
-              name: view.name,
-            })}
-            title={t(label)}
+    <Draggable.Root kind={savedViewKind} payload={view} disabled={busy}>
+      <Draggable.Trigger
+        render={<TableRow />}
+        className={cn(
+          COLUMNS,
+          "border-border/60 relative h-12 data-dragging:opacity-40",
+        )}
+      >
+        <TableCell className={cn("px-0", SPORTS_UP)}>
+          {summary && <SportTiles sports={summary.sports} size="row" />}
+        </TableCell>
+        <TableCell className="min-w-0 px-0">
+          {/* The link stretches over the row and is its drag handle: links
+              can't start a drag otherwise, and a press that doesn't move still
+              opens the view. */}
+          <Draggable.Handle
+            render={<Link href={actions.href(view)} />}
+            className="text-foreground focus-visible:after:ring-ring block truncate font-medium outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-inset"
           >
-            <Icon />
-          </Button>
-        ))}
-        <ViewMenu
-          view={view}
-          folders={folders}
-          actions={actions}
-          trigger={
+            {view.name}
+          </Draggable.Handle>
+        </TableCell>
+        <TableCell className={cn("min-w-0 px-0", PERIOD_UP)}>
+          <span className="truncate">{summary?.period}</span>
+        </TableCell>
+        <TableCell className="px-0 text-right tabular-nums">
+          {summary?.count}
+        </TableCell>
+        <TableCell className={cn("justify-end px-0 tabular-nums", TOTALS_UP)}>
+          {summary?.distance}
+        </TableCell>
+        <TableCell className={cn("justify-end px-0 tabular-nums", TOTALS_UP)}>
+          {summary?.elevation}
+        </TableCell>
+        <TableCell className={cn("justify-end px-0 tabular-nums", TOTALS_UP)}>
+          {summary?.time}
+        </TableCell>
+        <TableCell className="relative flex justify-end gap-0.5 px-0">
+          {PRESENTATIONS.map(({ id, label, icon: Icon }) => (
             <Button
+              key={id}
               variant="ghost"
               size="icon-sm"
               className="text-muted-foreground"
-            />
-          }
-        />
-      </TableCell>
-      <Draggable.Preview
-        container={previewContainer}
-        offset={({ container }) => ({
-          x: container.getBoundingClientRect().width / 2,
-          y: -8,
-        })}
-        className="bg-popover text-popover-foreground border-border pointer-events-none w-max max-w-64 truncate rounded-md border px-2.5 py-1.5 text-sm font-medium shadow-md"
-      >
-        {view.name}
-      </Draggable.Preview>
+              nativeButton={false}
+              render={
+                <Link
+                  href={actions.href(view, ACTIVITY_PRESENTATION_PATHS[id])}
+                />
+              }
+              aria-label={t("views.openAs", {
+                presentation: t(label),
+                name: view.name,
+              })}
+              title={t(label)}
+            >
+              <Icon />
+            </Button>
+          ))}
+          <ViewMenu
+            view={view}
+            folders={folders}
+            actions={actions}
+            trigger={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+              />
+            }
+          />
+        </TableCell>
+      </Draggable.Trigger>
+      <Draggable.Portal container={previewContainer}>
+        <Draggable.Positioner
+          offset={({ element }) => ({
+            x: element.getBoundingClientRect().width / 2,
+            y: -8,
+          })}
+        >
+          <Draggable.Preview className="bg-popover text-popover-foreground border-border w-max max-w-64 truncate rounded-md border px-2.5 py-1.5 text-sm font-medium shadow-md">
+            {view.name}
+          </Draggable.Preview>
+        </Draggable.Positioner>
+      </Draggable.Portal>
     </Draggable.Root>
   );
 }

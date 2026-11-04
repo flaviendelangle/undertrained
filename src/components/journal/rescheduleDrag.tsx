@@ -8,7 +8,6 @@ import {
   type DraggableRootModifier as DragModifier,
   type DraggableRootModifierContext as DragModifierContext,
   type DraggablePosition as DragPosition,
-  type DraggablePreviewSettings as DragPreviewSettings,
   Draggable,
   type DraggableViewportDragScrollEventDetails,
 } from "@base-ui/react/draggable";
@@ -226,7 +225,6 @@ export function useRescheduleDrag(weeks: JournalWeek[]): {
       slot?.minutes !== state.slot?.minutes
     ) {
       store.setState({ ...state, slot });
-      Draggable.updatePreview();
     }
   };
 
@@ -366,7 +364,9 @@ function keepPreviewInsideGrid(
 
 interface RescheduleSurface {
   drag: RescheduleDrag;
-  previewSettings: DragPreviewSettings;
+  /** Constrain the preview, which renders in `previewContainer`. */
+  previewModifiers: DragModifier[];
+  previewContainer: React.RefObject<HTMLDivElement | null>;
 }
 
 // Horizontal edge scrolling is intentionally disabled: each virtualized item
@@ -426,10 +426,8 @@ export function RescheduleViewport({
   const surface = React.useMemo<RescheduleSurface>(
     () => ({
       drag,
-      previewSettings: {
-        modifiers: [snapToSlot, keepInsideGrid],
-        container: viewportRef,
-      },
+      previewModifiers: [snapToSlot, keepInsideGrid],
+      previewContainer: viewportRef,
     }),
     [drag, snapToSlot, keepInsideGrid],
   );
@@ -485,13 +483,16 @@ interface ReschedulePreview {
 function RescheduleSourcePreview({
   drag,
   renderPreview,
-  ...size
 }: {
   drag: RescheduleDrag;
   renderPreview: (preview: ReschedulePreview) => React.ReactNode;
-  width: number;
-  height: number;
 }) {
+  // Mounts with the drag, so this measures the block that was picked up.
+  const source = Draggable.useActiveDrag(trainingKind);
+  const [size] = React.useState(() => {
+    const rect = source?.element.getBoundingClientRect();
+    return { width: rect?.width ?? 0, height: rect?.height ?? 0 };
+  });
   const time = useStore(drag, selectPreviewTime);
   return renderPreview({ time, ...size });
 }
@@ -518,35 +519,24 @@ export function RescheduleSource({
   style?: React.CSSProperties;
   children?: React.ReactNode;
 }) {
-  const { drag, previewSettings } = useRescheduleSurface();
+  const { drag, previewModifiers, previewContainer } = useRescheduleSurface();
   const dimmed = useStore(drag, selectDimmed, training.id);
 
   return (
-    <Draggable.Root
-      kind={trainingKind}
-      payload={training}
-      disabled={disabled}
-      data-dimmed={dimmed ? "" : undefined}
-      {...props}
-    >
-      {children}
-      <Draggable.Preview
-        kind={trainingKind}
-        {...previewSettings}
-        className="pointer-events-none"
-      >
-        {({ source }) => {
-          const rect = source.element.getBoundingClientRect();
-          return (
+    <Draggable.Root kind={trainingKind} payload={training} disabled={disabled}>
+      <Draggable.Trigger data-dimmed={dimmed ? "" : undefined} {...props}>
+        {children}
+      </Draggable.Trigger>
+      <Draggable.Portal container={previewContainer}>
+        <Draggable.Positioner modifiers={previewModifiers}>
+          <Draggable.Preview>
             <RescheduleSourcePreview
               drag={drag}
               renderPreview={renderPreview}
-              width={rect.width}
-              height={rect.height}
             />
-          );
-        }}
-      </Draggable.Preview>
+          </Draggable.Preview>
+        </Draggable.Positioner>
+      </Draggable.Portal>
     </Draggable.Root>
   );
 }

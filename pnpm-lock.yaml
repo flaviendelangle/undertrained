@@ -5,23 +5,23 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@base-ui/react>@base-ui/utils': https://pkg.pr.new/mui/base-ui/@base-ui/utils@2484cb57e
-  '@base-ui/plus>@base-ui/react': https://pkg.pr.new/mui/base-ui/@base-ui/react@2484cb57e
-  '@base-ui/plus>@base-ui/utils': https://pkg.pr.new/mui/base-ui/@base-ui/utils@2484cb57e
+  '@base-ui/react>@base-ui/utils': https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95
+  '@base-ui/plus>@base-ui/react': https://pkg.pr.new/mui/base-ui/@base-ui/react@5e87aeb95
+  '@base-ui/plus>@base-ui/utils': https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95
 
 importers:
 
   .:
     dependencies:
       '@base-ui/plus':
-        specifier: https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1187437
-        version: https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1187437(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1aaf180
+        version: https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1aaf180(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@base-ui/react':
-        specifier: https://pkg.pr.new/mui/base-ui/@base-ui/react@2484cb57e
-        version: https://pkg.pr.new/mui/base-ui/@base-ui/react@2484cb57e(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: https://pkg.pr.new/mui/base-ui/@base-ui/react@5e87aeb95
+        version: https://pkg.pr.new/mui/base-ui/@base-ui/react@5e87aeb95(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@base-ui/utils':
-        specifier: https://pkg.pr.new/mui/base-ui/@base-ui/utils@2484cb57e
-        version: https://pkg.pr.new/mui/base-ui/@base-ui/utils@2484cb57e(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95
+        version: https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@emotion/react':
         specifier: ^11.14.0
         version: 11.14.0(@types/react@19.3.0)(react@19.3.1)
@@ -379,8 +379,8 @@ packages:
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
 
-  '@base-ui/plus@https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1187437':
-    resolution: {tarball: https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1187437}
+  '@base-ui/plus@https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1aaf180':
+    resolution: {tarball: https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1aaf180}
     version: 0.0.0
     peerDependencies:
       '@types/react': ^17 || ^18 || ^19
@@ -390,8 +390,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@base-ui/react@https://pkg.pr.new/mui/base-ui/@base-ui/react@2484cb57e':
-    resolution: {tarball: https://pkg.pr.new/mui/base-ui/@base-ui/react@2484cb57e}
+  '@base-ui/react@https://pkg.pr.new/mui/base-ui/@base-ui/react@5e87aeb95':
+    resolution: {tarball: https://pkg.pr.new/mui/base-ui/@base-ui/react@5e87aeb95}
     version: 1.9.0
     peerDependencies:
       '@date-fns/tz': ^1.2.0
@@ -427,8 +427,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@base-ui/utils@https://pkg.pr.new/mui/base-ui/@base-ui/utils@2484cb57e':
-    resolution: {tarball: https://pkg.pr.new/mui/base-ui/@base-ui/utils@2484cb57e}
+  '@base-ui/utils@https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95':
+    resolution: {tarball: https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95}
     version: 0.5.0
     peerDependencies:
       '@types/react': ^17 || ^18 || ^19
@@ -5884,11 +5884,11 @@ snapshots:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
 
-  '@base-ui/plus@https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1187437(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@base-ui/plus@https://pkg.pr.new/mui/base-ui-plus/@base-ui/plus@1aaf180(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@babel/runtime': 8.0.7
-      '@base-ui/react': https://pkg.pr.new/mui/base-ui/@base-ui/react@2484cb57e(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
-      '@base-ui/utils': https://pkg.pr.new/mui/base-ui/@base-ui/utils@2484cb57e(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@base-ui/react': https://pkg.pr.new/mui/base-ui/@base-ui/react@5e87aeb95(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@base-ui/utils': https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@floating-ui/utils': 0.2.12
       '@mui/x-virtualizer': 0.6.3(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react: 19.3.1
@@ -5899,10 +5899,10 @@ snapshots:
       - '@date-fns/tz'
       - date-fns
 
-  '@base-ui/react@https://pkg.pr.new/mui/base-ui/@base-ui/react@2484cb57e(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@base-ui/react@https://pkg.pr.new/mui/base-ui/@base-ui/react@5e87aeb95(@date-fns/tz@1.5.0)(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@babel/runtime': 8.0.7
-      '@base-ui/utils': https://pkg.pr.new/mui/base-ui/@base-ui/utils@2484cb57e(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@base-ui/utils': https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@floating-ui/react-dom': 2.1.9(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@floating-ui/utils': 0.2.12
       react: 19.3.1
@@ -5935,7 +5935,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
-  '@base-ui/utils@https://pkg.pr.new/mui/base-ui/@base-ui/utils@2484cb57e(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@base-ui/utils@https://pkg.pr.new/mui/base-ui/@base-ui/utils@5e87aeb95(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@babel/runtime': 8.0.7
       '@floating-ui/utils': 0.2.12
