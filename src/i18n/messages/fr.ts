@@ -98,6 +98,7 @@ const fr: Messages = {
     groupNone: "Aucun",
     groupSport: "Sport",
     groupMonth: "Mois",
+    descending: "Décroissant",
     copy: "Copie",
     noPower:
       "Aucune activité de cette sélection ne contient de données de puissance.",
@@ -156,6 +157,7 @@ const fr: Messages = {
     noActivities: "Jour de repos, aucune activité enregistrée.",
   },
   common: {
+    sortBy: "Trier par",
     retry: "Réessayer",
     loadError: "Impossible de charger ce contenu.",
     saving: "Enregistrement…",

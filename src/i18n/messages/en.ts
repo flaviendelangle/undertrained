@@ -100,6 +100,7 @@ const en = {
     groupNone: "None",
     groupSport: "Sport",
     groupMonth: "Month",
+    descending: "Descending",
     copy: "Copy",
     noPower: "No activities in this selection have power data.",
     powerSource:
@@ -156,6 +157,7 @@ const en = {
     noActivities: "Rest day, no activities recorded.",
   },
   common: {
+    sortBy: "Sort by",
     retry: "Retry",
     loadError: "Could not load this content.",
     saving: "Saving…",

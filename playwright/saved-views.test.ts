@@ -388,6 +388,8 @@ for (const viewport of [
       });
       await drawer.getByText("Display", { exact: true }).click();
       await pick(drawer, "Group by", "Month");
+      // The mobile list has no column headers, so the drawer keeps sorting.
+      await pick(drawer, "Sort by", "Distance");
     } else {
       await page.getByRole("button", { name: "Display", exact: true }).click();
       const displayDialog = page.getByRole("dialog", {
@@ -475,7 +477,10 @@ for (const viewport of [
     expect(saved.folderId).toBe(folders[0].id);
     expect(saved.display).toMatchObject({
       groupBy: "month",
-      sort: { id: "startDateLocal", desc: true },
+      sort:
+        viewport.width < 768
+          ? { id: "distance" }
+          : { id: "startDateLocal", desc: true },
     });
     for (const name of ["All activities", saved.name]) {
       await openViewOptions();
