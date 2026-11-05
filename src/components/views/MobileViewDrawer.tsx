@@ -114,7 +114,11 @@ export function MobileViewDrawer({
                 {t("views.display")}
               </summary>
               <div className="pb-3">
-                <ActivityDisplayEditor value={display} onChange={setDisplay} />
+                <ActivityDisplayEditor
+                  value={display}
+                  onChange={setDisplay}
+                  sortable
+                />
               </div>
             </details>
           )}

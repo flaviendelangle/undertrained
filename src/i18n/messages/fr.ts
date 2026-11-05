@@ -457,6 +457,9 @@ const fr: Messages = {
       movingTime: "Temps actif",
       pace: "Allure",
       load: "Charge",
+      cadence: "Cadence",
+      calories: "Calories",
+      rpe: "RPE",
     },
     metric: {
       distance: "Distance (km)",

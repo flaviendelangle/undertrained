@@ -451,6 +451,9 @@ const en = {
       movingTime: "Moving Time",
       pace: "Pace",
       load: "Load",
+      cadence: "Cadence",
+      calories: "Calories",
+      rpe: "RPE",
     },
     metric: {
       distance: "Distance (km)",
