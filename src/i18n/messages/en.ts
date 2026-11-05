@@ -100,7 +100,6 @@ const en = {
     groupNone: "None",
     groupSport: "Sport",
     groupMonth: "Month",
-    descending: "Descending",
     copy: "Copy",
     noPower: "No activities in this selection have power data.",
     powerSource:
@@ -157,7 +156,6 @@ const en = {
     noActivities: "Rest day, no activities recorded.",
   },
   common: {
-    sortBy: "Sort by",
     retry: "Retry",
     loadError: "Could not load this content.",
     saving: "Saving…",
@@ -451,6 +449,9 @@ const en = {
       movingTime: "Moving Time",
       pace: "Pace",
       load: "Load",
+      cadence: "Cadence",
+      calories: "Calories",
+      rpe: "RPE",
     },
     metric: {
       distance: "Distance (km)",

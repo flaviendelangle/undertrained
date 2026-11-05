@@ -15,6 +15,9 @@ const columnLabels: Record<(typeof ACTIVITY_COLUMNS)[number], AppMessageKey> = {
   movingTime: "activities.columns.movingTime",
   averageSpeed: "activities.columns.pace",
   load: "activities.columns.load",
+  averageCadence: "activities.columns.cadence",
+  calories: "activities.columns.calories",
+  perceivedExertion: "activities.columns.rpe",
 };
 
 export function ActivityDisplayEditor({
@@ -64,33 +67,6 @@ export function ActivityDisplayEditor({
           ]}
         />
       </div>
-      <div className="flex flex-col gap-2 text-sm">
-        <Select
-          label={t("common.sortBy")}
-          className="w-full"
-          value={draft.sort.id}
-          onValueChange={(id) =>
-            onChange({ ...draft, sort: { ...draft.sort, id } })
-          }
-          options={ACTIVITY_COLUMNS.map((id) => ({
-            value: id,
-            label: t(columnLabels[id]),
-          }))}
-        />
-      </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={draft.sort.desc}
-          onChange={(event) =>
-            onChange({
-              ...draft,
-              sort: { ...draft.sort, desc: event.target.checked },
-            })
-          }
-        />
-        {t("views.descending")}
-      </label>
     </div>
   );
 }

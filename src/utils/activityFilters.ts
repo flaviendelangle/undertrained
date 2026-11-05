@@ -240,6 +240,9 @@ export const ACTIVITY_COLUMNS = [
   "movingTime",
   "averageSpeed",
   "load",
+  "averageCadence",
+  "calories",
+  "perceivedExertion",
 ] as const;
 export const activityDisplaySchema = z.object({
   columns: z
@@ -252,7 +255,16 @@ export const activityDisplaySchema = z.object({
 });
 export type ActivityDisplay = z.infer<typeof activityDisplaySchema>;
 export const DEFAULT_ACTIVITY_DISPLAY: ActivityDisplay = {
-  columns: [...ACTIVITY_COLUMNS],
+  columns: [
+    "type",
+    "name",
+    "startDateLocal",
+    "distance",
+    "totalElevationGain",
+    "movingTime",
+    "averageSpeed",
+    "load",
+  ],
   sort: { id: "startDateLocal", desc: true },
   groupBy: "none",
 };

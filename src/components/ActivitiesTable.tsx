@@ -225,6 +225,50 @@ const createColumns = (t: TFunction) =>
       size: 70,
       meta: { numeric: true },
     }),
+    columnHelper.accessor((activity) => activity.averageCadence ?? undefined, {
+      id: "averageCadence",
+      cell: (info) => {
+        const value = info.getValue();
+        return value != null
+          ? `${Math.round(value)} ${getSportConfig(info.row.original.type).cadenceUnit}`
+          : "";
+      },
+      header: () => <span>{t("activities.columns.cadence")}</span>,
+      sortFn: "basic",
+      sortDescFirst: true,
+      sortUndefined: "last",
+      size: 100,
+      meta: { numeric: true, minWidth: 100 },
+    }),
+    columnHelper.accessor((activity) => activity.calories ?? undefined, {
+      id: "calories",
+      cell: (info) => {
+        const value = info.getValue();
+        return value != null ? `${Math.round(value)} kcal` : "";
+      },
+      header: () => <span>{t("activities.columns.calories")}</span>,
+      sortFn: "basic",
+      sortDescFirst: true,
+      sortUndefined: "last",
+      size: 100,
+      meta: { numeric: true, minWidth: 100 },
+    }),
+    columnHelper.accessor(
+      (activity) => activity.perceivedExertion ?? undefined,
+      {
+        id: "perceivedExertion",
+        cell: (info) => {
+          const value = info.getValue();
+          return value != null ? `${value}/10` : "";
+        },
+        header: () => <span>{t("activities.columns.rpe")}</span>,
+        sortFn: "basic",
+        sortDescFirst: true,
+        sortUndefined: "last",
+        size: 70,
+        meta: { numeric: true, minWidth: 70 },
+      },
+    ),
   ]);
 
 const ROW_HEIGHT = 48;
@@ -443,6 +487,15 @@ export function ActivitiesTable() {
                   shown.includes("load") &&
                     activity.load != null &&
                     `${t("activities.columns.load")}: ${Math.round(activity.load)}`,
+                  shown.includes("averageCadence") &&
+                    activity.averageCadence != null &&
+                    `${Math.round(activity.averageCadence)} ${sport.cadenceUnit}`,
+                  shown.includes("calories") &&
+                    activity.calories != null &&
+                    `${Math.round(activity.calories)} kcal`,
+                  shown.includes("perceivedExertion") &&
+                    activity.perceivedExertion != null &&
+                    `${t("activities.columns.rpe")}: ${activity.perceivedExertion}/10`,
                 ].filter((part) => typeof part === "string");
                 return (
                   <div
