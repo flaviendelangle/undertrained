@@ -27,6 +27,9 @@ const SPAN_DAYS: Record<Exclude<ChartSpan, "all">, number> = {
 };
 const spanSchema = z.enum(CHART_SPANS);
 
+/** How many windows the power curve compares with at most. */
+export const MAX_COMPARISONS = 20;
+
 /**
  * The inclusive calendar days `span` covers up to `today`, ending today like a
  * view's "last N days" condition. `all` sets no bound.
@@ -57,7 +60,11 @@ const chartSettingsSchema = z.object({
     span: spanSchema.catch("all"),
     unit: z.enum(["watts", "wattsPerKg"]).catch("watts"),
     // Comparison ids (see `parseComparison`); unknown ones are skipped there.
-    compare: z.array(z.string().max(40)).max(20).catch([]),
+    // Past the cap, the extra ones are dropped rather than the whole list.
+    compare: z
+      .array(z.string().max(40))
+      .catch([])
+      .transform((ids) => ids.slice(0, MAX_COMPARISONS)),
   }),
 });
 

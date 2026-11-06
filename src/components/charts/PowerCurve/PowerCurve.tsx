@@ -52,6 +52,7 @@ import {
 import { createSliceWidthStore } from "../shared/createSliceWidthStore";
 import {
   CHART_SPANS,
+  MAX_COMPARISONS,
   chartSpanDates,
   useViewChartSettings,
 } from "../shared/viewChartSettings";
@@ -512,12 +513,14 @@ function RangeToggle({
   color,
   active,
   locked = false,
+  disabled = false,
   onToggle,
 }: {
   label: string;
   color: string | null;
   active: boolean;
   locked?: boolean;
+  disabled?: boolean;
   onToggle?: () => void;
 }) {
   // Both states keep the same box (1px border + a dot slot) so toggling only
@@ -527,7 +530,7 @@ function RangeToggle({
     "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
     active
       ? "border-transparent bg-muted text-foreground"
-      : "border-border text-muted-foreground hover:bg-muted border-dashed",
+      : "border-border text-muted-foreground hover:bg-muted border-dashed disabled:pointer-events-none disabled:opacity-50",
   );
   const dot = (
     <span
@@ -554,6 +557,7 @@ function RangeToggle({
       type="button"
       onClick={onToggle}
       aria-pressed={active}
+      disabled={disabled}
       className={className}
     >
       {dot}
@@ -721,12 +725,15 @@ function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
     };
   }, [queryResults, ranges, tokens.palette, resolveForDate]);
 
-  const toggleComparison = (id: string) =>
-    updateSettings({
-      compare: compare.includes(id)
-        ? compare.filter((other) => other !== id)
-        : [...compare, id],
-    });
+  // Only as many as the settings keep, so none disappears on reload.
+  const comparisonsFull = compare.length >= MAX_COMPARISONS;
+  const toggleComparison = (id: string) => {
+    if (compare.includes(id)) {
+      updateSettings({ compare: compare.filter((other) => other !== id) });
+    } else if (!comparisonsFull) {
+      updateSettings({ compare: [...compare, id] });
+    }
+  };
 
   const tabs = [
     {
@@ -784,6 +791,7 @@ function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
                 return index < 0 ? null : colorAt(index);
               }}
               onToggle={toggleComparison}
+              full={comparisonsFull}
               athleteId={athleteId}
               activityTypes={activityTypes}
             />
@@ -917,6 +925,7 @@ function CompareMenu({
   primaryId,
   colorOf,
   onToggle,
+  full,
   athleteId,
   activityTypes,
 }: {
@@ -924,6 +933,8 @@ function CompareMenu({
   /** The colour of a plotted window, `null` when it isn't plotted. */
   colorOf: (id: string) => string | null;
   onToggle: (id: string) => void;
+  /** No more windows can be added, only removed. */
+  full: boolean;
   athleteId: number;
   activityTypes?: string[];
 }) {
@@ -955,6 +966,7 @@ function CompareMenu({
           primaryId={primaryId}
           colorOf={colorOf}
           onToggle={onToggle}
+          full={full}
           athleteId={athleteId}
           activityTypes={activityTypes}
         />
@@ -968,6 +980,7 @@ function CompareOptions({
   primaryId,
   colorOf,
   onToggle,
+  full,
   athleteId,
   activityTypes,
 }: React.ComponentProps<typeof CompareMenu>) {
@@ -993,6 +1006,7 @@ function CompareOptions({
       color={colorOf(id)}
       active={colorOf(id) != null}
       locked={id === primaryId}
+      disabled={full && colorOf(id) == null}
       onToggle={() => onToggle(id)}
     />
   );
@@ -1039,7 +1053,7 @@ function CompareOptions({
           size="sm"
           variant="outline"
           className="self-start"
-          disabled={!customId || colorOf(customId) != null}
+          disabled={full || !customId || colorOf(customId) != null}
           onClick={() => {
             if (!customId) return;
             onToggle(customId);

@@ -52,3 +52,20 @@ it.each([
     expect(chartSpanDates(span, "2026-11-06")).toEqual(dates);
   },
 );
+
+it("keeps the first comparisons when more than the cap were stored", async () => {
+  const { MAX_COMPARISONS, useViewChartSettings } =
+    await import("./viewChartSettings");
+  const ids = Array.from(
+    { length: MAX_COMPARISONS + 1 },
+    (_, i) => `year:${2000 + i}`,
+  );
+  localStorage.setItem(
+    "undertrained:chart-settings:1",
+    JSON.stringify({ 7: { powerCurve: { compare: ids } } }),
+  );
+  expect(
+    renderHook(() => useViewChartSettings("powerCurve")).result.current[0]
+      .compare,
+  ).toEqual(ids.slice(0, MAX_COMPARISONS));
+});
