@@ -5,7 +5,9 @@ import { GripVerticalIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { Tree } from "@base-ui/plus/tree";
 import { Draggable } from "@base-ui/react/draggable";
 
+import { SportList, SportMultiPicker } from "~/components/SportPicker";
 import { Button, buttonVariants } from "~/components/ui/button";
+import { ComboboxTrigger } from "~/components/ui/combobox";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -24,7 +26,6 @@ import {
 import { useActivityFilterOptions } from "~/hooks/useActivityFilterOptions";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import type { AppMessageKey } from "~/i18n/I18nProvider";
-import { sportTypeLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import {
   type ActivityFilterGroup,
@@ -45,6 +46,7 @@ import {
 import { WORKOUT_KINDS, type WorkoutKind } from "~/utils/sportConfig";
 import { trpc } from "~/utils/trpc";
 
+const NO_SPORT_TYPES: string[] = [];
 const inputClass =
   "border-input bg-background h-9 min-w-0 rounded-md border px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const workoutLabels: Record<string, AppMessageKey> = {
@@ -268,7 +270,27 @@ export function ActivityFilterBuilder({
                             patch({ operator: operator as FilterOperator })
                           }
                         />
-                        {definition?.kind === "set" ? (
+                        {definition?.kind === "set" &&
+                        node.field === "sport" ? (
+                          <SportMultiPicker
+                            value={node.values}
+                            onChange={(values) => patch({ values })}
+                            sportTypes={allTypes ?? NO_SPORT_TYPES}
+                          >
+                            <Tree.ItemButton
+                              render={<ComboboxTrigger size="sm" />}
+                              className="max-w-full min-w-32"
+                              aria-label={t("views.values")}
+                              aria-invalid={!!error}
+                            >
+                              {node.values.length ? (
+                                <SportList sportTypes={node.values} />
+                              ) : (
+                                t("views.values")
+                              )}
+                            </Tree.ItemButton>
+                          </SportMultiPicker>
+                        ) : definition?.kind === "set" ? (
                           <Select
                             multiple
                             value={node.values}
@@ -283,29 +305,15 @@ export function ActivityFilterBuilder({
                               <SelectValue>
                                 {node.values.length
                                   ? node.values
-                                      .map((v) =>
-                                        node.field === "sport"
-                                          ? sportTypeLabel(v, t)
-                                          : t(workoutLabels[v]),
-                                      )
+                                      .map((v) => t(workoutLabels[v]))
                                       .join(", ")
                                   : t("views.values")}
                               </SelectValue>
                             </Tree.ItemButton>
                             <SelectContent>
-                              {(node.field === "sport"
-                                ? [
-                                    ...new Set([
-                                      ...(allTypes ?? []),
-                                      ...node.values,
-                                    ]),
-                                  ].sort()
-                                : WORKOUT_KINDS
-                              ).map((v) => (
+                              {WORKOUT_KINDS.map((v) => (
                                 <SelectItem key={v} value={v}>
-                                  {node.field === "sport"
-                                    ? sportTypeLabel(v, t)
-                                    : t(workoutLabels[v])}
+                                  {t(workoutLabels[v])}
                                 </SelectItem>
                               ))}
                             </SelectContent>
