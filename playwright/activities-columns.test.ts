@@ -52,21 +52,37 @@ test("optional activity metrics render, sort and persist in saved views", async 
     "100% Alpine_ride",
     "84 rpm",
     "1200 kcal",
-    "7.5/10",
+    "7.5",
   ]);
   await expect(race.getByRole("cell")).toHaveText([
     "race",
     "176 spm",
     "951 kcal",
-    "10/10",
+    "10",
   ]);
   await expect(easy.getByRole("cell")).toHaveText([
     "easy",
     "0 spm",
     "0 kcal",
-    "1/10",
+    "1",
   ]);
   await expect(missing.getByRole("cell")).toHaveText(["short", "", "", ""]);
+  for (const [row, share] of [
+    [long, 0.75],
+    [race, 1],
+    [easy, 0.1],
+  ] as const) {
+    const filled = await row
+      .getByRole("cell")
+      .nth(3)
+      .locator("[aria-hidden]")
+      .evaluate(
+        (track) =>
+          track.firstElementChild!.getBoundingClientRect().width /
+          track.getBoundingClientRect().width,
+      );
+    expect(filled).toBeCloseTo(share, 2);
+  }
 
   for (const [name, highest] of [
     ["Cadence", "race"],
@@ -96,7 +112,7 @@ test("optional activity metrics render, sort and persist in saved views", async 
     display: state!.display!,
   });
   await page.goto(`${origin}/activities?view=${view.id}`);
-  await expect(long.getByRole("cell").nth(3)).toHaveText("7.5/10");
+  await expect(long.getByRole("cell").nth(3)).toHaveText("7.5");
   await page.reload();
   await expect(
     table.getByRole("columnheader", { name: "RPE" }),
