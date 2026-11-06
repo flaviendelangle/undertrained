@@ -432,8 +432,6 @@ test.describe("mobile", () => {
     viewsFixture: _f,
   }) => {
     const snapshot = {
-      metric: "movingTime",
-      precision: "week",
       hidden: [],
       zoom: { start: 0, end: 100 },
     };

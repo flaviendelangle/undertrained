@@ -9,16 +9,10 @@ import {
 } from "~/utils/activityFilters";
 import { endOf } from "~/utils/dateUtils";
 
+// The inspection only: the metric and precision are the view's chart settings
+// (see `useViewChartSettings`). Links from before that split still carry them,
+// which parsing ignores.
 const schema = z.object({
-  metric: z.enum([
-    "movingTime",
-    "elapsedTime",
-    "distance",
-    "elevation",
-    "load",
-    "activities",
-  ]),
-  precision: z.enum(["week", "month", "quarter", "year"]),
   period: z.string().refine(isCalendarDate).optional(),
   sport: z.string().max(100).optional(),
   hidden: z.array(z.string().max(100)).max(100),
@@ -32,11 +26,7 @@ const schema = z.object({
 });
 
 export type TimelineState = z.infer<typeof schema>;
-export const DEFAULT_TIMELINE_STATE: TimelineState = {
-  metric: "movingTime",
-  precision: "week",
-  hidden: [],
-};
+export const DEFAULT_TIMELINE_STATE: TimelineState = { hidden: [] };
 
 export function readTimelineState(value: unknown): TimelineState {
   try {

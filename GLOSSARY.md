@@ -23,7 +23,14 @@ A set of conditions or nested filter groups joined with AND or OR.
 The currently edited definition of a saved view. Its changes remain temporary until the athlete explicitly updates the saved view or saves a new one.
 
 **Display preference**:
-A choice about how selected activities are shown, such as table columns, sorting, grouping, chart units or aggregation. It does not change which activities belong to the selection.
+A choice about how selected activities are shown, such as table columns, sorting or grouping. It is part of a saved view and does not change which activities belong to the selection.
+
+**Chart setting**:
+A chart's own choice on the charts page, such as its metric, granularity or time span, remembered per saved view on each device. It is not part of the saved view, so changing it never modifies the view.
+
+**Time span**:
+How far back a chart looks inside the activity selection, ending today.
+_Avoid_: Duration, period
 
 **Overall fitness**:
 The athlete's Fitness, Fatigue and Form calculated from their full recorded training history. A visible date window does not truncate the history used by the calculation.

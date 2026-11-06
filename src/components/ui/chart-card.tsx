@@ -51,6 +51,11 @@ interface ChartCardProps {
    * `ml-auto`, responsive controls) so existing toolbars move over verbatim.
    */
   actions?: React.ReactNode;
+  /**
+   * A second header row under the title, for what describes the plotted data
+   * (time span, legend) rather than how it is drawn.
+   */
+  toolbar?: React.ReactNode;
   /** Extra classes for the body wrapper (e.g. `flex` for a side readout). */
   bodyClassName?: string;
   /**
@@ -73,11 +78,38 @@ export function ChartCard({
   info,
   headerSlot,
   actions,
+  toolbar,
   bodyClassName,
   height = "fixed",
   children,
 }: ChartCardProps) {
   const surface = React.useContext(ChartCardSurfaceContext);
+  const headerBorder =
+    surface === "card"
+      ? "border-border border-b"
+      : "md:border-border md:border-b";
+  const titleRow = (title || info || headerSlot || actions) && (
+    <div
+      className={cn(
+        "flex items-center gap-2",
+        !toolbar && ["p-4", headerBorder],
+      )}
+    >
+      <h3 className="shrink-0 text-lg font-semibold">{title}</h3>
+      {info && (
+        <Tooltip label={info}>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <InfoIcon className="size-3.5" />
+          </button>
+        </Tooltip>
+      )}
+      {headerSlot}
+      {actions}
+    </div>
+  );
 
   return (
     <div
@@ -87,29 +119,13 @@ export function ChartCard({
         surface === "card" ? "bg-card rounded-sm" : "md:bg-card md:rounded-sm",
       )}
     >
-      {(title || info || headerSlot || actions) && (
-        <div
-          className={cn(
-            "flex items-center gap-2 p-4",
-            surface === "card"
-              ? "border-border border-b"
-              : "md:border-border md:border-b",
-          )}
-        >
-          <h3 className="shrink-0 text-lg font-semibold">{title}</h3>
-          {info && (
-            <Tooltip label={info}>
-              <button
-                type="button"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <InfoIcon className="size-3.5" />
-              </button>
-            </Tooltip>
-          )}
-          {headerSlot}
-          {actions}
+      {toolbar ? (
+        <div className={cn("flex flex-col gap-3 p-4", headerBorder)}>
+          {titleRow}
+          {toolbar}
         </div>
+      ) : (
+        titleRow
       )}
       {/* One calm fade-up on mount, shared by every chart (gated on
           prefers-reduced-motion inside the utility). */}

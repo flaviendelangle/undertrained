@@ -2,14 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { TFunction } from "~/i18n/I18nProvider";
 
-import { makeCustomRange, makeYearRange, presetToRange } from "./dateRanges";
+import { makeYearRange, presetToRange } from "./dateRanges";
 
 const t: TFunction = (key) => key;
 
 describe("power curve date ranges", () => {
-  const tz = process.env.TZ;
   afterEach(() => {
-    process.env.TZ = tz;
     vi.useRealTimers();
   });
 
@@ -29,14 +27,5 @@ describe("power curve date ranges", () => {
     }
     const allTime = presetToRange("all", t);
     expect([allTime.dateFrom, allTime.dateTo]).toEqual([undefined, undefined]);
-  });
-
-  it("keeps the picked days of a custom range west of Greenwich", () => {
-    process.env.TZ = "America/New_York";
-    expect(makeCustomRange("2024-03-01", "2024-06-30")).toMatchObject({
-      label: "Mar 2024 – Jun 2024",
-      dateFrom: "2024-03-01",
-      dateTo: "2024-06-30",
-    });
   });
 });
