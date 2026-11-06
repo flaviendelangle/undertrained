@@ -624,6 +624,14 @@ const fr: Messages = {
     displayOptions: "Options d'affichage",
     metric: "Métrique",
     precision: "Précision",
+    timeSpan: {
+      label: "Période",
+      all: "Tout l'historique",
+      last7Days: "7 derniers jours",
+      last30Days: "30 derniers jours",
+      last90Days: "90 derniers jours",
+      lastYear: "Dernière année",
+    },
     tooltip: {
       total: "Total",
     },

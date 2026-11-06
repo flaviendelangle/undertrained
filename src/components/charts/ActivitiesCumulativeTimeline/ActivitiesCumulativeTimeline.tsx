@@ -38,6 +38,10 @@ import { getLoadPreferences } from "~/utils/getActivityLoad";
 import { METRICS, type MetricContext, MetricSelect } from "../../MetricSelect";
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { ChartTooltip } from "../ChartTooltip";
+import {
+  type ChartSettings,
+  useViewChartSettings,
+} from "../shared/viewChartSettings";
 
 // Every year is plotted against the same 366 day slots so that the curves can
 // be compared day by day. The slots are dated in a leap year: a common year
@@ -56,7 +60,9 @@ const getDayIndex = (date: Date) =>
 
 export default function ActivitiesCumulativeTimeline() {
   const t = useT();
-  const [metric, setMetric] = React.useState("distance");
+  const [{ metric }, updateSettings] = useViewChartSettings("cumulative");
+  const setMetric = (metric: string) =>
+    updateSettings({ metric: metric as ChartSettings["cumulative"]["metric"] });
   const tokens = useChartTokens();
   const isMobile = useIsMobile();
   const activitiesQuery = useActivitiesFilteredByType([]);

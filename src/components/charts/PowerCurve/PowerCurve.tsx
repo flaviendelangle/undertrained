@@ -29,6 +29,7 @@ import {
 import { useActivitySelection } from "~/hooks/useActivitySelection";
 import { useActivityView } from "~/hooks/useActivityView";
 import { useAthleteId } from "~/hooks/useAthleteId";
+import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
 import { useT } from "~/i18n/useT";
 import {
@@ -46,10 +47,17 @@ import { MetricSliceDistribution } from "../MetricAnalysis/MetricSliceDistributi
 import { MetricZoneDistribution } from "../MetricAnalysis/MetricZoneDistribution";
 import {
   ChartSettingsPopover,
+  ChartSpanSelect,
   SliceWidthSettings,
   iconTabOption,
+  useChartSpanLabel,
 } from "../shared/chartSettings";
 import { createSliceWidthStore } from "../shared/createSliceWidthStore";
+import {
+  type ChartSpan,
+  chartSpanDates,
+  useViewChartSettings,
+} from "../shared/viewChartSettings";
 import {
   type PowerCurveMode,
   PowerCurveWebGLChart,
@@ -582,16 +590,21 @@ function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
     addRange,
     removeRange,
   } = useDateRanges(() => [{ id: SELECTION_RANGE_ID, label: "" }]);
-  const selectionLabel = scope.view?.name ?? t("views.allActivities");
+  const [{ span }, updateSettings] = useViewChartSettings("powerCurve");
+  const spanLabel = useChartSpanLabel();
+  const { dateFrom, dateTo } = chartSpanDates(span, scope.today);
+  const viewName = scope.view?.name ?? t("views.allActivities");
+  const selectionLabel =
+    span === "all" ? viewName : `${viewName} · ${spanLabel(span)}`;
   // Stable while the ranges and label are: the chart-data memo depends on it.
   const ranges = React.useMemo(
     () =>
       rawRanges.map((range) =>
         range.id === SELECTION_RANGE_ID
-          ? { ...range, label: selectionLabel }
+          ? { ...range, label: selectionLabel, dateFrom, dateTo }
           : range,
       ),
-    [rawRanges, selectionLabel],
+    [rawRanges, selectionLabel, dateFrom, dateTo],
   );
   const [mode, setMode] = React.useState<PowerCurveMode>("watts");
   const [tab, setTab] = React.useState<Exclude<PowerTab, "timeline">>("curve");
@@ -599,11 +612,11 @@ function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
   const { resolveForDate } = useRiderSettingsTimeline();
 
   const selectedActivities = trpc.activities.list.useQuery(
-    { athleteId, ...selection },
+    { athleteId, ...selection, dateFrom, dateTo },
     { enabled: scope.ready && tab === "zones" },
   );
   const selectedDistribution = trpc.analytics.getPowerDistribution.useQuery(
-    { athleteId, ...selection },
+    { athleteId, ...selection, dateFrom, dateTo },
     { enabled: scope.ready && tab === "distribution" },
   );
 
@@ -705,6 +718,8 @@ function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
       activityTypes={activityTypes}
       mode={mode}
       onModeChange={setMode}
+      span={span}
+      onSpanChange={(span) => updateSettings({ span })}
     />
   );
 
@@ -766,17 +781,26 @@ function SelectionPowerToolbar(props: {
   activityTypes?: string[];
   mode: PowerCurveMode;
   onModeChange: (mode: PowerCurveMode) => void;
+  span: ChartSpan;
+  onSpanChange: (span: ChartSpan) => void;
 }) {
   const t = useT();
   const tokens = useChartTokens();
+  // The header has no room for the time span on mobile, so it moves into the
+  // drawer, which then opens on every tab.
+  const isMobile = useIsMobile();
+  const spanSelect = (
+    <ChartSpanSelect value={props.span} onValueChange={props.onSpanChange} />
+  );
+  const settingsTitle =
+    props.tab === "curve"
+      ? t("charts.power.curveSettings")
+      : props.tab === "distribution"
+        ? t("charts.power.distributionSettings")
+        : null;
   const settings =
     props.tab === "curve" ? (
       <>
-        <ResponsivePopoverHeader>
-          <ResponsivePopoverTitle>
-            {t("charts.power.curveSettings")}
-          </ResponsivePopoverTitle>
-        </ResponsivePopoverHeader>
         <div className="flex flex-col gap-1.5">
           <Label>{t("charts.power.unit")}</Label>
           <ModeToggle mode={props.mode} onModeChange={props.onModeChange} />
@@ -803,7 +827,11 @@ function SelectionPowerToolbar(props: {
         </div>
       </>
     ) : props.tab === "distribution" ? (
-      <PowerSliceWidthSettings />
+      <SliceWidthSettings
+        store={powerSliceWidth}
+        label={t("charts.power.sliceWidth")}
+        hint={t("charts.power.sliceWidthHint")}
+      />
     ) : null;
 
   const tabOptions = [
@@ -819,8 +847,20 @@ function SelectionPowerToolbar(props: {
   return (
     <>
       <div className="flex-1" />
-      {settings && (
+      {!isMobile && spanSelect}
+      {(settings || isMobile) && (
         <ChartSettingsPopover label={t("charts.power.settings")}>
+          <ResponsivePopoverHeader>
+            <ResponsivePopoverTitle>
+              {settingsTitle ?? t("charts.displayOptions")}
+            </ResponsivePopoverTitle>
+          </ResponsivePopoverHeader>
+          {isMobile && (
+            <div className="flex flex-col gap-1.5">
+              <Label>{t("charts.timeSpan.label")}</Label>
+              {spanSelect}
+            </div>
+          )}
           {settings}
         </ChartSettingsPopover>
       )}

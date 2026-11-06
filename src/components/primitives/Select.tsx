@@ -12,7 +12,7 @@ import { cn } from "~/lib/utils";
 export function Select<TValue extends string = string>(
   props: SelectProps<TValue>,
 ) {
-  const { options, value, onValueChange, label, className } = props;
+  const { options, value, onValueChange, label, ariaLabel, className } = props;
 
   return (
     <ShadSelect
@@ -26,7 +26,10 @@ export function Select<TValue extends string = string>(
       }
     >
       {label && <SelectPrimitive.Label>{label}</SelectPrimitive.Label>}
-      <SelectTrigger className={cn("sm:min-w-36", className)}>
+      <SelectTrigger
+        aria-label={ariaLabel}
+        className={cn("sm:min-w-36", className)}
+      >
         <SelectValue placeholder={options[0]?.label}>
           {(value: string | null) => {
             if (value == null) return options[0]?.label;
@@ -51,5 +54,7 @@ export interface SelectProps<TValue extends string = string> {
   options: { value: TValue; label: string }[];
   /** Visible label, rendered before the trigger; the caller lays the two out. */
   label?: string;
+  /** Accessible name for a select shown without a visible label. */
+  ariaLabel?: string;
   className?: string;
 }

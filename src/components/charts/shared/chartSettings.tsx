@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { type LucideIcon, SlidersHorizontalIcon } from "lucide-react";
 
+import { Select } from "~/components/primitives/Select";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { NumberField } from "~/components/ui/number-field";
@@ -12,8 +13,47 @@ import {
   ResponsivePopoverTitle,
   ResponsivePopoverTrigger,
 } from "~/components/ui/responsive-popover";
+import { useT } from "~/i18n/useT";
 
 import type { SliceWidthStore } from "./createSliceWidthStore";
+import { CHART_SPANS, type ChartSpan } from "./viewChartSettings";
+
+const SPAN_LABEL_KEYS = {
+  all: "charts.timeSpan.all",
+  "7d": "charts.timeSpan.last7Days",
+  "30d": "charts.timeSpan.last30Days",
+  "90d": "charts.timeSpan.last90Days",
+  "1y": "charts.timeSpan.lastYear",
+} as const satisfies Record<ChartSpan, string>;
+
+/** The label of a chart's time span, as its select shows it. */
+export function useChartSpanLabel() {
+  const t = useT();
+  return (span: ChartSpan) => t(SPAN_LABEL_KEYS[span]);
+}
+
+/** How far back a chart looks inside the selection. */
+export function ChartSpanSelect({
+  value,
+  onValueChange,
+}: {
+  value: ChartSpan;
+  onValueChange: (span: ChartSpan) => void;
+}) {
+  const t = useT();
+  const spanLabel = useChartSpanLabel();
+  return (
+    <Select
+      value={value}
+      onValueChange={onValueChange}
+      options={CHART_SPANS.map((span) => ({
+        value: span,
+        label: spanLabel(span),
+      }))}
+      ariaLabel={t("charts.timeSpan.label")}
+    />
+  );
+}
 
 /** An icon-only tab option for a chart card's `SegmentedToggle`. */
 export function iconTabOption<T extends string>(
@@ -65,7 +105,10 @@ export function ChartSettingsPopover({
   );
 }
 
-/** Distribution-tab parameter: the histogram slice width. */
+/**
+ * Distribution-tab parameter: the histogram slice width. Without a `title`,
+ * the popover it joins brings its own header.
+ */
 export function SliceWidthSettings({
   store,
   title,
@@ -73,16 +116,18 @@ export function SliceWidthSettings({
   hint,
 }: {
   store: SliceWidthStore;
-  title: string;
+  title?: string;
   label: string;
   hint: string;
 }) {
   const [sliceWidth, setSliceWidth] = store.useSliceWidth();
   return (
     <>
-      <ResponsivePopoverHeader>
-        <ResponsivePopoverTitle>{title}</ResponsivePopoverTitle>
-      </ResponsivePopoverHeader>
+      {title && (
+        <ResponsivePopoverHeader>
+          <ResponsivePopoverTitle>{title}</ResponsivePopoverTitle>
+        </ResponsivePopoverHeader>
+      )}
       <div className="flex flex-col gap-1.5">
         <Label>{label}</Label>
         <NumberField

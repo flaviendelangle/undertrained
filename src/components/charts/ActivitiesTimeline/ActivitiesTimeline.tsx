@@ -45,6 +45,10 @@ import {
 import { PrecisionSelect } from "../../PrecisionSelect";
 import { ChartThemeProvider } from "../ChartThemeProvider";
 import { ChartTooltip, ChartTooltipTotalProvider } from "../ChartTooltip";
+import {
+  type ChartSettings,
+  useViewChartSettings,
+} from "../shared/viewChartSettings";
 import { TimelineInspection } from "./TimelineInspection";
 import { timelineSelection } from "./timelineState";
 import { useTimelineState } from "./useTimelineState";
@@ -58,14 +62,17 @@ type HighlightedAxis = NonNullable<
 export default function ActivitiesTimeline() {
   const t = useT();
   const scope = useActivityView();
+  const [{ metric, precision }, updateSettings] =
+    useViewChartSettings("timeline");
+  // The inspected period and zoom are buckets of this precision: another one,
+  // picked here or by switching views, starts a new inspection.
   const { state, update, returnHref } = useTimelineState(
-    JSON.stringify(scope.rules),
+    `${precision}\n${JSON.stringify(scope.rules)}`,
   );
-  const { metric, precision } = state;
   const setMetric = (metric: string) =>
-    update({ metric: metric as typeof state.metric });
+    updateSettings({ metric: metric as ChartSettings["timeline"]["metric"] });
   const setPrecision = (precision: SlicePrecision) =>
-    update({ precision, period: undefined, sport: undefined, zoom: undefined });
+    updateSettings({ precision });
   const chartRef = React.useRef<HTMLDivElement>(null);
   const plotRef = React.useRef<HTMLDivElement>(null);
   const [hoveredAxis, setHoveredAxis] = React.useState<HighlightedAxis>([]);

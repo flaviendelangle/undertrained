@@ -9,22 +9,24 @@ import {
 } from "./timelineState";
 
 describe("timeline links", () => {
-  it("restores inspection settings and falls back for malformed or unsafe chart parameters", () => {
+  it("restores the inspection and falls back for malformed or unsafe chart parameters", () => {
     const snapshot = {
-      metric: "distance",
-      precision: "week",
       period: "2026-01-05",
       sport: "Ride",
       hidden: ["Run"],
       zoom: { start: 70, end: 100 },
     };
     expect(readTimelineState(JSON.stringify(snapshot))).toEqual(snapshot);
+    // Older links also carry the metric and precision, now view settings.
+    expect(
+      readTimelineState(
+        JSON.stringify({ ...snapshot, metric: "distance", precision: "week" }),
+      ),
+    ).toEqual(snapshot);
     for (const value of [
       "{",
       [JSON.stringify(snapshot)],
       ...[
-        { metric: "invalid" },
-        { precision: "day" },
         { period: "2026-02-30" },
         { zoom: { start: 100, end: 0 } },
         { zoom: { start: -1, end: 100 } },

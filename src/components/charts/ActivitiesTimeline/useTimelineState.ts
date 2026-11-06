@@ -8,8 +8,8 @@ import { type TimelineState, readTimelineState } from "./timelineState";
 
 /**
  * URL snapshots let activity links and browser Back restore this inspection.
- * A new selection resets the period, sport and zoom, unless browser history
- * restored a snapshot taken with that selection.
+ * A new `selectionKey` resets the period, sport and zoom, unless browser
+ * history restored a snapshot taken with that key.
  */
 export function useTimelineState(selectionKey: string) {
   const router = useRouter();

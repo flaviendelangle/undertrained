@@ -2,18 +2,27 @@ import * as React from "react";
 
 import { ChartCard } from "~/components/ui/chart-card";
 import { useActivitiesFilteredByType } from "~/hooks/useActivitiesFilteredByType";
+import { useActivityView } from "~/hooks/useActivityView";
 import { powerZoneLabel } from "~/i18n/labels";
 import { useT } from "~/i18n/useT";
 import { useChartTokens } from "~/lib/chartTokens";
+import { activityLocalDay } from "~/utils/dateUtils";
 import { formatElapsed } from "~/utils/format";
 
 import { ChartMessage } from "../ChartMessage";
 import { ChartThemeProvider } from "../ChartThemeProvider";
+import { ChartSpanSelect } from "../shared/chartSettings";
+import {
+  chartSpanDates,
+  useViewChartSettings,
+} from "../shared/viewChartSettings";
 import { aggregateTimeInZones, buildZoneRows } from "./timeInZones";
 
 export default function TimeInZones() {
   const t = useT();
   const tokens = useChartTokens();
+  const { today } = useActivityView();
+  const [{ span }, updateSettings] = useViewChartSettings("timeInZones");
   const activitiesQuery = useActivitiesFilteredByType([]);
 
   const {
@@ -24,7 +33,13 @@ export default function TimeInZones() {
     totalSeconds,
     maxSeconds,
   } = React.useMemo(() => {
-    const agg = aggregateTimeInZones(activitiesQuery.activities ?? []);
+    const { dateFrom, dateTo } = chartSpanDates(span, today);
+    const agg = aggregateTimeInZones(
+      (activitiesQuery.activities ?? []).filter((activity) => {
+        const day = activityLocalDay(activity);
+        return (!dateFrom || day >= dateFrom) && (!dateTo || day <= dateTo);
+      }),
+    );
     const rows = buildZoneRows(agg);
     const maxSeconds = Math.max(
       1,
@@ -40,7 +55,7 @@ export default function TimeInZones() {
       totalSeconds: agg.totalSeconds,
       maxSeconds,
     };
-  }, [activitiesQuery.activities]);
+  }, [activitiesQuery.activities, span, today]);
 
   const renderRow = (
     key: string,
@@ -91,6 +106,15 @@ export default function TimeInZones() {
       <ChartCard
         title={t("charts.timeInZones.title")}
         info={t("charts.timeInZones.info")}
+        actions={
+          <>
+            <div className="flex-1" />
+            <ChartSpanSelect
+              value={span}
+              onValueChange={(span) => updateSettings({ span })}
+            />
+          </>
+        }
       >
         {totalSeconds === 0 ? (
           <ChartMessage>{t("charts.timeInZones.empty")}</ChartMessage>

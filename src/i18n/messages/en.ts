@@ -612,6 +612,14 @@ const en = {
     displayOptions: "Display options",
     metric: "Metric",
     precision: "Precision",
+    timeSpan: {
+      label: "Time span",
+      all: "All time",
+      last7Days: "Last 7 days",
+      last30Days: "Last 30 days",
+      last90Days: "Last 90 days",
+      lastYear: "Last year",
+    },
     tooltip: {
       total: "Total",
     },
