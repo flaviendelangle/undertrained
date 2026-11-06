@@ -5,7 +5,10 @@ import {
   type ActivityFilterGroup,
   DEFAULT_ACTIVITY_DISPLAY,
 } from "../src/utils/activityFilters";
-import { activityViewHref } from "../src/utils/activityViewState";
+import {
+  activityViewHref,
+  readActivityViewState,
+} from "../src/utils/activityViewState";
 import { expect, origin, test } from "./helpers/activityViews";
 
 const condition = (
@@ -1021,4 +1024,59 @@ test("routes have a standalone library and legacy links redirect", async ({
   await expect(page).toHaveURL(`${origin}/routes/new`);
   await page.goto(`${origin}/map/routes`);
   await expect(page).toHaveURL(`${origin}/routes`);
+});
+
+test("pick filter sports by searching the sport picker", async ({
+  page,
+  // Signs the page in as the seeded athlete.
+  viewsFixture: _,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${origin}/activities?edit=filters`);
+  const dialog = page.getByRole("dialog", {
+    name: "Activity filters",
+    exact: true,
+  });
+  const rows = dialog.getByRole("treegrid").getByRole("row");
+  await dialog
+    .getByRole("button", { name: "Add condition", exact: true })
+    .click();
+  await expect(rows).toHaveCount(2);
+  const trigger = dialog.getByRole("combobox", { name: "Values", exact: true });
+  await trigger.click();
+  const search = page.getByPlaceholder("Search sports");
+  await search.fill("ru");
+  await expect(page.getByRole("option")).toHaveText(["Run"]);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await search.fill("rid");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  // The popup stays open for further picks, and typing never edits the tree.
+  await expect(search).toBeVisible();
+  await expect(rows).toHaveCount(2);
+  await expect(trigger).toContainText("Ride, Run");
+  await expect(dialog.getByText("5 activities", { exact: true })).toBeVisible();
+  await search.fill("");
+  await page.getByRole("option", { name: "Ride", exact: true }).click();
+  await expect(trigger).not.toContainText("Ride");
+  await expect(trigger).toContainText("Run");
+  await expect(dialog.getByText("2 activities", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(search).not.toBeVisible();
+  await expect(dialog).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Apply filters", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  const { rules } = readActivityViewState(
+    Object.fromEntries(new URL(page.url()).searchParams),
+  )!;
+  expect(rules?.children).toEqual([
+    expect.objectContaining({
+      field: "sport",
+      operator: "in",
+      values: ["Run"],
+    }),
+  ]);
 });

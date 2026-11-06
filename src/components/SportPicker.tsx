@@ -31,6 +31,32 @@ export function SportOption({ sportType }: { sportType: string }) {
   );
 }
 
+/** Sports sorted by label, comma-separated with their coloured icons, ellipsed on one line. */
+export function SportList({ sportTypes }: { sportTypes: readonly string[] }) {
+  const t = useT();
+  const sorted = [...sportTypes].sort((a, b) =>
+    sportTypeLabel(a, t).localeCompare(sportTypeLabel(b, t)),
+  );
+  return (
+    <span className="min-w-0 truncate">
+      {sorted.map((sportType, index) => {
+        const config = getSportConfig(sportType);
+        const Icon = config.icon;
+        return (
+          <React.Fragment key={sportType}>
+            {index > 0 && ", "}
+            <Icon
+              className="mr-1.5 inline size-4 align-[-3px]"
+              style={{ color: config.color }}
+            />
+            {sportTypeLabel(sportType, t)}
+          </React.Fragment>
+        );
+      })}
+    </span>
+  );
+}
+
 /** Group shape consumed by the sport Combobox. */
 interface SportGroup {
   value: string;
@@ -38,36 +64,20 @@ interface SportGroup {
 }
 
 /**
- * Sport picker built on the searchable Combobox. The athlete's four most
- * recently practised sports are surfaced in a "Favorite sports" group ahead of
- * the rest, derived from their activity history. `extraSportTypes` adds entries
- * outside the plannable set (e.g. an activity's current, unusual sport) so they
- * stay selectable.
+ * Groups `sportTypes` for a sport Combobox. The athlete's four most recently
+ * practised sports are surfaced in a "Favorite sports" group ahead of the rest,
+ * derived from their activity history. Both groups are sorted by label.
  */
-export function SportPicker({
-  value,
-  onChange,
-  extraSportTypes,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  extraSportTypes?: string[];
-}) {
+function useSportGroups(sportTypes: readonly string[]): SportGroup[] {
   const t = useT();
   // Unfiltered, all-time history, regardless of the global activity filter.
   const { data: activities } = useActivitiesQuery("sportPicker");
 
-  const groups = React.useMemo<SportGroup[]>(() => {
-    const allSports = [...PLANNABLE_SPORT_TYPES];
-    for (const extra of extraSportTypes ?? []) {
-      if (!allSports.includes(extra)) {
-        allSports.push(extra);
-      }
-    }
-
+  return React.useMemo(() => {
+    const candidates = new Set(sportTypes);
     const latestByType = new Map<string, string>();
     for (const activity of activities ?? []) {
-      if (!allSports.includes(activity.type)) {
+      if (!candidates.has(activity.type)) {
         continue;
       }
       const previous = latestByType.get(activity.type);
@@ -93,7 +103,7 @@ export function SportPicker({
         items: favorites,
       });
     }
-    const rest = allSports
+    const rest = [...candidates]
       .filter((type) => !favorites.includes(type))
       .sort(byLabel);
     if (rest.length > 0) {
@@ -106,7 +116,60 @@ export function SportPicker({
       });
     }
     return result;
-  }, [activities, t, extraSportTypes]);
+  }, [activities, t, sportTypes]);
+}
+
+/** Searchable popup listing the sport groups, shared by both pickers. */
+function SportComboboxContent({
+  className,
+  align,
+}: {
+  className?: string;
+  align?: "start" | "center" | "end";
+}) {
+  const t = useT();
+  return (
+    <ComboboxContent className={className} align={align}>
+      <ComboboxInput placeholder={t("journal.dialog.searchSports")} />
+      <ComboboxEmpty>{t("journal.dialog.noSportFound")}</ComboboxEmpty>
+      <ComboboxList>
+        {(group: SportGroup) => (
+          <ComboboxGroup key={group.value} items={group.items}>
+            <ComboboxGroupLabel>{group.value}</ComboboxGroupLabel>
+            <ComboboxCollection>
+              {(sportType: string) => (
+                <ComboboxItem key={sportType} value={sportType}>
+                  <SportOption sportType={sportType} />
+                </ComboboxItem>
+              )}
+            </ComboboxCollection>
+          </ComboboxGroup>
+        )}
+      </ComboboxList>
+    </ComboboxContent>
+  );
+}
+
+/**
+ * Sport picker built on the searchable Combobox, offering the plannable sports.
+ * `extraSportTypes` adds entries outside the plannable set (e.g. an activity's
+ * current, unusual sport) so they stay selectable.
+ */
+export function SportPicker({
+  value,
+  onChange,
+  extraSportTypes,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  extraSportTypes?: string[];
+}) {
+  const t = useT();
+  const sportTypes = React.useMemo(
+    () => [...new Set([...PLANNABLE_SPORT_TYPES, ...(extraSportTypes ?? [])])],
+    [extraSportTypes],
+  );
+  const groups = useSportGroups(sportTypes);
 
   return (
     <Combobox
@@ -120,24 +183,47 @@ export function SportPicker({
           {(selected: string) => <SportOption sportType={selected} />}
         </ComboboxValue>
       </ComboboxTrigger>
-      <ComboboxContent>
-        <ComboboxInput placeholder={t("journal.dialog.searchSports")} />
-        <ComboboxEmpty>{t("journal.dialog.noSportFound")}</ComboboxEmpty>
-        <ComboboxList>
-          {(group: SportGroup) => (
-            <ComboboxGroup key={group.value} items={group.items}>
-              <ComboboxGroupLabel>{group.value}</ComboboxGroupLabel>
-              <ComboboxCollection>
-                {(sportType: string) => (
-                  <ComboboxItem key={sportType} value={sportType}>
-                    <SportOption sportType={sportType} />
-                  </ComboboxItem>
-                )}
-              </ComboboxCollection>
-            </ComboboxGroup>
-          )}
-        </ComboboxList>
-      </ComboboxContent>
+      <SportComboboxContent />
+    </Combobox>
+  );
+}
+
+/**
+ * Multiple-selection variant of `SportPicker`, grouped and searchable the same
+ * way. It offers `sportTypes` plus the selected values, so a selected sport can
+ * always be deselected. `children` is the trigger, to let callers wrap it.
+ */
+export function SportMultiPicker({
+  value,
+  onChange,
+  sportTypes,
+  children,
+}: {
+  value: string[];
+  onChange: (value: string[]) => void;
+  sportTypes: readonly string[];
+  children: React.ReactNode;
+}) {
+  const t = useT();
+  const candidates = React.useMemo(
+    () => [...new Set([...sportTypes, ...value])],
+    [sportTypes, value],
+  );
+  const groups = useSportGroups(candidates);
+
+  return (
+    <Combobox
+      multiple
+      items={groups}
+      value={value}
+      onValueChange={onChange}
+      itemToStringLabel={(type) => sportTypeLabel(type, t)}
+    >
+      {children}
+      <SportComboboxContent
+        align="start"
+        className="w-[max(var(--anchor-width),15rem)]"
+      />
     </Combobox>
   );
 }
