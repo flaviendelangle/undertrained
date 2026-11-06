@@ -53,7 +53,12 @@ const chartSettingsSchema = z.object({
   }),
   cumulative: section({ metric: metricSchema.catch("distance") }),
   timeInZones: section({ span: spanSchema.catch("all") }),
-  powerCurve: section({ span: spanSchema.catch("all") }),
+  powerCurve: section({
+    span: spanSchema.catch("all"),
+    unit: z.enum(["watts", "wattsPerKg"]).catch("watts"),
+    // Comparison ids (see `parseComparison`); unknown ones are skipped there.
+    compare: z.array(z.string().max(40)).max(20).catch([]),
+  }),
 });
 
 export type ChartSettings = z.infer<typeof chartSettingsSchema>;

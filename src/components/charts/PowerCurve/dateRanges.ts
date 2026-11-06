@@ -1,4 +1,4 @@
-import { format, parseISO, subDays } from "date-fns";
+import { format, subDays } from "date-fns";
 
 import { type TFunction } from "~/i18n/I18nProvider";
 
@@ -57,19 +57,4 @@ export function presetToRange(preset: string, t: TFunction): DateRange {
     default:
       return makeRollingRange(365, t("charts.powerCurve.preset.lastYear"));
   }
-}
-
-/**
- * `from` and `to` come from date inputs, already YYYY-MM-DD. `parseISO` reads
- * them as local midnight for the label; `new Date` would read UTC midnight,
- * which is the day before anywhere west of Greenwich.
- */
-export function makeCustomRange(from: string, to: string): DateRange {
-  const label = `${format(parseISO(from), "MMM yyyy")} – ${format(parseISO(to), "MMM yyyy")}`;
-  return {
-    id: `custom-${crypto.randomUUID()}`,
-    label,
-    dateFrom: from,
-    dateTo: to,
-  };
 }

@@ -4,6 +4,7 @@ import {
   ActivityIcon,
   BarChart3Icon,
   LayersIcon,
+  PlusIcon,
   TrendingUpIcon,
   X,
 } from "lucide-react";
@@ -19,18 +20,12 @@ import {
   ResponsivePopoverTrigger,
 } from "~/components/ui/responsive-popover";
 import { SegmentedToggle } from "~/components/ui/segmented-toggle";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import { useActivitySelection } from "~/hooks/useActivitySelection";
 import { useActivityView } from "~/hooks/useActivityView";
 import { useAthleteId } from "~/hooks/useAthleteId";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useRiderSettingsTimeline } from "~/hooks/useRiderSettings";
+import { getActiveDateLocale } from "~/i18n/activeDateLocale";
 import { useT } from "~/i18n/useT";
 import {
   activitySettingsDay,
@@ -48,13 +43,15 @@ import { MetricZoneDistribution } from "../MetricAnalysis/MetricZoneDistribution
 import {
   ChartSettingsPopover,
   ChartSpanSelect,
+  ChipSelect,
   SliceWidthSettings,
+  Swatch,
   iconTabOption,
   useChartSpanLabel,
 } from "../shared/chartSettings";
 import { createSliceWidthStore } from "../shared/createSliceWidthStore";
 import {
-  type ChartSpan,
+  CHART_SPANS,
   chartSpanDates,
   useViewChartSettings,
 } from "../shared/viewChartSettings";
@@ -63,10 +60,17 @@ import {
   PowerCurveWebGLChart,
 } from "./PowerCurveWebGLChart";
 import {
+  type Comparison,
+  customComparisonId,
+  customComparisonLabel,
+  parseComparison,
+  spanComparisonId,
+  yearComparisonId,
+} from "./comparisons";
+import {
   type DateRange,
   createPresetOptions,
   formatDateOnly,
-  makeCustomRange,
   makeYearRange,
   presetToRange,
 } from "./dateRanges";
@@ -571,45 +575,63 @@ function PowerSliceWidthSettings() {
   );
 }
 
-// --- Aggregated mode with multi-range support ---
+// --- Selection mode ---
 
-// The range covering the whole selection, labelled with the view's name.
-const SELECTION_RANGE_ID = "selection";
-const LOCKED_RANGE_IDS = new Set([SELECTION_RANGE_ID]);
+type SelectionTab = Exclude<PowerTab, "timeline">;
+
+/** Watts per bar the Distribution tab offers, besides a width stored elsewhere. */
+const BAR_WIDTHS = [5, 10, 25, 50, 100];
+
+/** The legend label of a plotted window. */
+function useComparisonLabel() {
+  const spanLabel = useChartSpanLabel();
+  return React.useCallback(
+    (comparison: Comparison) =>
+      comparison.kind === "span"
+        ? spanLabel(comparison.span)
+        : comparison.kind === "year"
+          ? String(comparison.year)
+          : customComparisonLabel(
+              comparison.dateFrom,
+              comparison.dateTo,
+              getActiveDateLocale(),
+            ),
+    [spanLabel],
+  );
+}
 
 function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
   const t = useT();
   const tokens = useChartTokens();
   const athleteId = useAthleteId();
   const scope = useActivityView();
+  const isMobile = useIsMobile();
   const selection = useActivitySelection("statisticsPowerCurve", {
     activityTypes,
   });
-  const {
-    ranges: rawRanges,
-    addRange,
-    removeRange,
-  } = useDateRanges(() => [{ id: SELECTION_RANGE_ID, label: "" }]);
-  const [{ span }, updateSettings] = useViewChartSettings("powerCurve");
-  const spanLabel = useChartSpanLabel();
-  const { dateFrom, dateTo } = chartSpanDates(span, scope.today);
-  const viewName = scope.view?.name ?? t("views.allActivities");
-  const selectionLabel =
-    span === "all" ? viewName : `${viewName} · ${spanLabel(span)}`;
-  // Stable while the ranges and label are: the chart-data memo depends on it.
+  const [{ span, unit, compare }, updateSettings] =
+    useViewChartSettings("powerCurve");
+  const comparisonLabel = useComparisonLabel();
+  const [tab, setTab] = React.useState<SelectionTab>("curve");
+  const [sliceWidth, setSliceWidth] = powerSliceWidth.useSliceWidth();
+  const { resolveForDate } = useRiderSettingsTimeline();
+
+  // The time span draws the main curve, so comparing with the same window
+  // would only draw it twice.
+  const primaryId = spanComparisonId(span);
   const ranges = React.useMemo(
     () =>
-      rawRanges.map((range) =>
-        range.id === SELECTION_RANGE_ID
-          ? { ...range, label: selectionLabel, dateFrom, dateTo }
-          : range,
-      ),
-    [rawRanges, selectionLabel, dateFrom, dateTo],
+      [primaryId, ...compare.filter((id) => id !== primaryId)].flatMap((id) => {
+        const comparison = parseComparison(id, scope.today);
+        return comparison
+          ? [{ ...comparison, label: comparisonLabel(comparison) }]
+          : [];
+      }),
+    [primaryId, compare, scope.today, comparisonLabel],
   );
-  const [mode, setMode] = React.useState<PowerCurveMode>("watts");
-  const [tab, setTab] = React.useState<Exclude<PowerTab, "timeline">>("curve");
-  const [sliceWidth] = powerSliceWidth.useSliceWidth();
-  const { resolveForDate } = useRiderSettingsTimeline();
+  const { dateFrom, dateTo } = chartSpanDates(span, scope.today);
+  const colorAt = (index: number) =>
+    tokens.palette[index % tokens.palette.length];
 
   const selectedActivities = trpc.activities.list.useQuery(
     { athleteId, ...selection, dateFrom, dateTo },
@@ -639,15 +661,15 @@ function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
     [resolveForDate],
   );
 
-  // One query per range. `combine` reduces the results to their data arrays and
+  // One query per range. `combine` reduces the results to their data and
   // React Query memoizes that output (replaceEqualDeep), so `queryResults` stays
   // referentially stable until the data changes — keeping the chart-data memo
   // from recomputing on every render (the raw `useQueries` array is fresh each
-  // render).
+  // render). `undefined` is a range still loading.
   const queryResults = trpc.useQueries(
-    (t) =>
+    (q) =>
       ranges.map((range) =>
-        t.analytics.getPowerCurve(
+        q.analytics.getPowerCurve(
           {
             athleteId,
             ...selection,
@@ -657,17 +679,14 @@ function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
           { enabled: scope.ready },
         ),
       ),
-    { combine: (results) => results.map((r) => r.data ?? []) },
+    { combine: (results) => results.map((r) => r.data) },
   );
+  const isEmpty = (index: number) => queryResults[index]?.length === 0;
 
-  // Build multi-series chart data
   const { xData, series, activityMetadata } = React.useMemo(() => {
-    // Union of all durations
     const durationSet = new Set<number>();
     for (const result of queryResults) {
-      for (const d of result) {
-        durationSet.add(d.duration);
-      }
+      for (const d of result ?? []) durationSet.add(d.duration);
     }
     const durations = [...durationSet].sort((a, b) => a - b);
 
@@ -680,20 +699,16 @@ function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
     }
 
     const metadata: ActivityMetadataMap = {};
-
-    const chartSeries: PowerCurveSeriesData[] = queryResults.map((data, i) => {
-      const seriesId = `range-${i}`;
+    const chartSeries: PowerCurveSeriesData[] = ranges.map((range, i) => {
       const { metadata: rangeMetadata, ...values } = buildRangeSeries(
-        data,
+        queryResults[i] ?? [],
         durations,
         resolveForDate,
       );
-      metadata[seriesId] = rangeMetadata;
+      metadata[range.id] = rangeMetadata;
       return {
-        id: seriesId,
-        label:
-          ranges[i]?.label ??
-          t("charts.powerCurve.rangeFallback", { index: i + 1 }),
+        id: range.id,
+        label: range.label,
         color: tokens.palette[i % tokens.palette.length],
         ...values,
       };
@@ -704,343 +719,342 @@ function AggregatedPowerCurve({ activityTypes }: { activityTypes?: string[] }) {
       series: chartSeries,
       activityMetadata: metadata,
     };
-  }, [queryResults, ranges, tokens.palette, resolveForDate, t]);
+  }, [queryResults, ranges, tokens.palette, resolveForDate]);
 
+  const toggleComparison = (id: string) =>
+    updateSettings({
+      compare: compare.includes(id)
+        ? compare.filter((other) => other !== id)
+        : [...compare, id],
+    });
+
+  const tabs = [
+    {
+      value: "curve",
+      Icon: TrendingUpIcon,
+      label: t("charts.powerCurve.tabs.curve"),
+    },
+    {
+      value: "zones",
+      Icon: LayersIcon,
+      label: t("charts.powerCurve.tabs.zones"),
+    },
+    {
+      value: "distribution",
+      Icon: BarChart3Icon,
+      label: t("charts.powerCurve.tabs.distribution"),
+    },
+  ] as const;
+
+  const width = powerSliceWidth.clampSliceWidth(sliceWidth);
+  const barWidths = BAR_WIDTHS.includes(width)
+    ? BAR_WIDTHS
+    : [...BAR_WIDTHS, width].sort((a, b) => a - b);
+
+  // What is plotted, and how: the time span leads, as the main curve's legend
+  // entry on the Curve tab, then the comparisons and how to add one. Each
+  // tab's own drawing option sits at the end.
   const toolbar = (
-    <SelectionPowerToolbar
-      tab={tab}
-      onTabChange={setTab}
-      ranges={ranges}
-      onAddRange={addRange}
-      onRemoveRange={removeRange}
-      lockedRangeIds={LOCKED_RANGE_IDS}
-      athleteId={athleteId}
-      activityTypes={activityTypes}
-      mode={mode}
-      onModeChange={setMode}
-      span={span}
-      onSpanChange={(span) => updateSettings({ span })}
-    />
+    <div className="flex items-start gap-3">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        <ChartSpanSelect
+          value={span}
+          onValueChange={(span) => updateSettings({ span })}
+          swatch={
+            tab === "curve" ? (
+              <Swatch color={colorAt(0)} empty={isEmpty(0)} />
+            ) : undefined
+          }
+        />
+        {tab === "curve" && (
+          <>
+            {ranges.slice(1).map((range, i) => (
+              <ComparisonChip
+                key={range.id}
+                label={range.label}
+                color={colorAt(i + 1)}
+                empty={isEmpty(i + 1)}
+                onRemove={() => toggleComparison(range.id)}
+              />
+            ))}
+            <CompareMenu
+              primaryId={primaryId}
+              colorOf={(id) => {
+                const index = ranges.findIndex((range) => range.id === id);
+                return index < 0 ? null : colorAt(index);
+              }}
+              onToggle={toggleComparison}
+              athleteId={athleteId}
+              activityTypes={activityTypes}
+            />
+          </>
+        )}
+      </div>
+      {/* Centred on the first row of chips, however many rows they wrap to. */}
+      <div className="flex h-7 shrink-0 items-center">
+        {tab === "curve" && (
+          <SegmentedToggle
+            value={unit}
+            onChange={(unit) => updateSettings({ unit })}
+            options={MODE_OPTIONS}
+            ariaLabel={t("charts.power.unit")}
+          />
+        )}
+        {tab === "distribution" && (
+          <ChipSelect
+            value={String(width)}
+            onValueChange={(value) => setSliceWidth(Number(value))}
+            options={barWidths.map((watts) => ({
+              value: String(watts),
+              label: t("charts.power.barWidth", { watts }),
+            }))}
+            ariaLabel={t("charts.power.sliceWidth")}
+          />
+        )}
+      </div>
+    </div>
   );
 
   return (
     <ChartCard
       title={t("charts.powerCurve.cardTitle")}
       info={t("views.powerSource")}
-      actions={toolbar}
+      actions={
+        <>
+          <div className="flex-1" />
+          <SegmentedToggle
+            value={tab}
+            onChange={setTab}
+            options={tabs.map(({ value, Icon, label }) =>
+              isMobile ? iconTabOption(value, Icon, label) : { value, label },
+            )}
+          />
+        </>
+      }
+      toolbar={toolbar}
+      height="auto"
     >
-      {tab === "curve" &&
-        (xData.length === 0 ? (
-          <ChartMessage>{t("views.noPower")}</ChartMessage>
-        ) : (
-          <PowerCurveWebGLChart
-            xData={xData}
-            series={series}
-            activityMetadata={activityMetadata}
-            mode={mode}
-          />
-        ))}
-      {tab === "zones" &&
-        (selectedActivities.isLoading ? (
-          <StreamLoading />
-        ) : (
-          <MetricZoneDistribution
-            metric={POWER_METRIC}
-            values={[]}
-            threshold={selectedFtp}
-            zoneSeconds={selectedZones.seconds}
-            zeroSeconds={selectedZones.coastingSeconds}
-            aggregate
-          />
-        ))}
-      {tab === "distribution" &&
-        (selectedDistribution.isLoading ? (
-          <StreamLoading />
-        ) : (
-          <MetricSliceDistribution
-            metric={POWER_METRIC}
-            values={[]}
-            frequency={selectedDistribution.data ?? []}
-            threshold={selectedFtp}
-            sliceWidth={powerSliceWidth.clampSliceWidth(sliceWidth)}
-            reference={null}
-          />
-        ))}
+      <div className="h-80">
+        {tab === "curve" &&
+          (xData.length === 0 ? (
+            <ChartMessage>{t("views.noPower")}</ChartMessage>
+          ) : (
+            <PowerCurveWebGLChart
+              xData={xData}
+              series={series}
+              activityMetadata={activityMetadata}
+              mode={unit}
+            />
+          ))}
+        {tab === "zones" &&
+          (selectedActivities.isLoading ? (
+            <StreamLoading />
+          ) : (
+            <MetricZoneDistribution
+              metric={POWER_METRIC}
+              values={[]}
+              threshold={selectedFtp}
+              zoneSeconds={selectedZones.seconds}
+              zeroSeconds={selectedZones.coastingSeconds}
+              aggregate
+            />
+          ))}
+        {tab === "distribution" &&
+          (selectedDistribution.isLoading ? (
+            <StreamLoading />
+          ) : (
+            <MetricSliceDistribution
+              metric={POWER_METRIC}
+              values={[]}
+              frequency={selectedDistribution.data ?? []}
+              threshold={selectedFtp}
+              sliceWidth={width}
+              reference={null}
+            />
+          ))}
+      </div>
     </ChartCard>
   );
 }
 
-function SelectionPowerToolbar(props: {
-  tab: Exclude<PowerTab, "timeline">;
-  onTabChange: (tab: Exclude<PowerTab, "timeline">) => void;
-  ranges: DateRange[];
-  onAddRange: (range: DateRange) => void;
-  onRemoveRange: (id: string) => void;
-  lockedRangeIds?: Set<string>;
-  athleteId: number;
-  activityTypes?: string[];
-  mode: PowerCurveMode;
-  onModeChange: (mode: PowerCurveMode) => void;
-  span: ChartSpan;
-  onSpanChange: (span: ChartSpan) => void;
+/** A comparison's legend entry, removable. */
+function ComparisonChip({
+  label,
+  color,
+  empty,
+  onRemove,
+}: {
+  label: string;
+  color: string;
+  empty: boolean;
+  onRemove: () => void;
 }) {
   const t = useT();
-  const tokens = useChartTokens();
-  // The header has no room for the time span on mobile, so it moves into the
-  // drawer, which then opens on every tab.
-  const isMobile = useIsMobile();
-  const spanSelect = (
-    <ChartSpanSelect value={props.span} onValueChange={props.onSpanChange} />
-  );
-  const settingsTitle =
-    props.tab === "curve"
-      ? t("charts.power.curveSettings")
-      : props.tab === "distribution"
-        ? t("charts.power.distributionSettings")
-        : null;
-  const settings =
-    props.tab === "curve" ? (
-      <>
-        <div className="flex flex-col gap-1.5">
-          <Label>{t("charts.power.unit")}</Label>
-          <ModeToggle mode={props.mode} onModeChange={props.onModeChange} />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label>{t("charts.powerCurve.dateRanges")}</Label>
-          <div className="flex flex-wrap gap-1.5">
-            {props.ranges.map((range, index) => (
-              <RangeChip
-                key={range.id}
-                range={range}
-                color={tokens.palette[index % tokens.palette.length]}
-                onRemove={() => props.onRemoveRange(range.id)}
-                removable={!props.lockedRangeIds?.has(range.id)}
-              />
-            ))}
-            <PresetSelect
-              onSelect={props.onAddRange}
-              athleteId={props.athleteId}
-              activityTypes={props.activityTypes}
-            />
-            <CustomRangePopover onAdd={props.onAddRange} />
-          </div>
-        </div>
-      </>
-    ) : props.tab === "distribution" ? (
-      <SliceWidthSettings
-        store={powerSliceWidth}
-        label={t("charts.power.sliceWidth")}
-        hint={t("charts.power.sliceWidthHint")}
-      />
-    ) : null;
-
-  const tabOptions = [
-    iconTabOption("curve", TrendingUpIcon, t("charts.power.tabCurve")),
-    iconTabOption("zones", LayersIcon, t("charts.power.tabZones")),
-    iconTabOption(
-      "distribution",
-      BarChart3Icon,
-      t("charts.power.tabDistribution"),
-    ),
-  ];
-
   return (
-    <>
-      <div className="flex-1" />
-      {!isMobile && spanSelect}
-      {(settings || isMobile) && (
-        <ChartSettingsPopover label={t("charts.power.settings")}>
-          <ResponsivePopoverHeader>
-            <ResponsivePopoverTitle>
-              {settingsTitle ?? t("charts.displayOptions")}
-            </ResponsivePopoverTitle>
-          </ResponsivePopoverHeader>
-          {isMobile && (
-            <div className="flex flex-col gap-1.5">
-              <Label>{t("charts.timeSpan.label")}</Label>
-              {spanSelect}
-            </div>
-          )}
-          {settings}
-        </ChartSettingsPopover>
+    <span
+      className={cn(
+        "bg-muted inline-flex h-7 items-center gap-1.5 rounded-full pr-1 pl-2.5 text-xs",
+        empty && "text-muted-foreground",
       )}
-      <SegmentedToggle
-        value={props.tab}
-        onChange={props.onTabChange}
-        options={tabOptions}
-      />
-    </>
+    >
+      <Swatch color={color} empty={empty} />
+      {label}
+      {empty && <span className="sr-only">{t("charts.power.emptyRange")}</span>}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={t("charts.power.removeComparison", { label })}
+        className="hover:bg-foreground/10 rounded-full p-1"
+      >
+        <X className="size-3" />
+      </button>
+    </span>
   );
 }
 
-// --- Mode Toggle ---
+/** Adds and removes the windows plotted next to the time span. */
+function CompareMenu({
+  primaryId,
+  colorOf,
+  onToggle,
+  athleteId,
+  activityTypes,
+}: {
+  primaryId: string;
+  /** The colour of a plotted window, `null` when it isn't plotted. */
+  colorOf: (id: string) => string | null;
+  onToggle: (id: string) => void;
+  athleteId: number;
+  activityTypes?: string[];
+}) {
+  const t = useT();
+  return (
+    <ResponsivePopover>
+      <ResponsivePopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-muted-foreground h-7 rounded-full"
+          >
+            <PlusIcon className="size-3.5" />
+            {t("charts.power.compare")}
+          </Button>
+        }
+      />
+      <ResponsivePopoverContent
+        align="start"
+        className="flex flex-col gap-4 sm:w-80"
+      >
+        <ResponsivePopoverHeader>
+          <ResponsivePopoverTitle>
+            {t("charts.power.compareWith")}
+          </ResponsivePopoverTitle>
+        </ResponsivePopoverHeader>
+        <CompareOptions
+          primaryId={primaryId}
+          colorOf={colorOf}
+          onToggle={onToggle}
+          athleteId={athleteId}
+          activityTypes={activityTypes}
+        />
+      </ResponsivePopoverContent>
+    </ResponsivePopover>
+  );
+}
+
+// Mounted only while the menu is open, so the years load on demand.
+function CompareOptions({
+  primaryId,
+  colorOf,
+  onToggle,
+  athleteId,
+  activityTypes,
+}: React.ComponentProps<typeof CompareMenu>) {
+  const t = useT();
+  const scope = useActivityView();
+  const spanLabel = useChartSpanLabel();
+  const selection = useActivitySelection("statisticsPowerCurve", {
+    activityTypes,
+  });
+  const { data: years } = trpc.analytics.getPowerCurveYears.useQuery(
+    { athleteId, ...selection },
+    { enabled: scope.ready },
+  );
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
+  const customId =
+    from && to && from <= to ? customComparisonId(from, to) : null;
+
+  const toggle = (id: string, label: string) => (
+    <RangeToggle
+      key={id}
+      label={label}
+      color={colorOf(id)}
+      active={colorOf(id) != null}
+      locked={id === primaryId}
+      onToggle={() => onToggle(id)}
+    />
+  );
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        {CHART_SPANS.map((span) =>
+          toggle(spanComparisonId(span), spanLabel(span)),
+        )}
+      </div>
+      {years && years.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label>{t("charts.power.years")}</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {years.map((year) => toggle(yearComparisonId(year), String(year)))}
+          </div>
+        </div>
+      )}
+      <div className="flex flex-col gap-1.5">
+        <Label>{t("charts.powerCurve.customRangeTitle")}</Label>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            aria-label={t("charts.powerCurve.from")}
+            value={from}
+            max={to || undefined}
+            onChange={(e) => setFrom(e.target.value)}
+            className="border-input bg-input/30 h-8 min-w-0 flex-1 rounded-md border px-2 text-sm"
+          />
+          <span aria-hidden className="text-muted-foreground">
+            –
+          </span>
+          <input
+            type="date"
+            aria-label={t("charts.powerCurve.to")}
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+            className="border-input bg-input/30 h-8 min-w-0 flex-1 rounded-md border px-2 text-sm"
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="self-start"
+          disabled={!customId || colorOf(customId) != null}
+          onClick={() => {
+            if (!customId) return;
+            onToggle(customId);
+            setFrom("");
+            setTo("");
+          }}
+        >
+          {t("charts.powerCurve.addRangeButton")}
+        </Button>
+      </div>
+    </>
+  );
+}
 
 const MODE_OPTIONS: { value: PowerCurveMode; label: string }[] = [
   { value: "watts", label: "W" },
   { value: "wattsPerKg", label: "W/kg" },
 ];
-
-function ModeToggle({
-  mode,
-  onModeChange,
-}: {
-  mode: PowerCurveMode;
-  onModeChange: (mode: PowerCurveMode) => void;
-}) {
-  return (
-    <SegmentedToggle
-      value={mode}
-      onChange={onModeChange}
-      options={MODE_OPTIONS}
-    />
-  );
-}
-
-// --- Toolbar ---
-
-function RangeChip({
-  range,
-  color,
-  onRemove,
-  removable = true,
-}: {
-  range: DateRange;
-  color: string;
-  onRemove: () => void;
-  removable?: boolean;
-}) {
-  return (
-    <span className="bg-muted text-muted-foreground inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs">
-      <span
-        className="inline-block size-2 rounded-full"
-        style={{ backgroundColor: color }}
-      />
-      {range.label}
-      {removable && (
-        <button
-          type="button"
-          onClick={onRemove}
-          className="hover:bg-foreground/10 rounded-full p-0.5"
-        >
-          <X className="size-3" />
-        </button>
-      )}
-    </span>
-  );
-}
-
-function PresetSelect({
-  onSelect,
-  athleteId,
-  activityTypes,
-}: {
-  onSelect: (range: DateRange) => void;
-  athleteId: number;
-  activityTypes?: string[];
-}) {
-  const t = useT();
-  const scope = useActivityView();
-  const selection = useActivitySelection("statisticsPowerCurve", {
-    activityTypes,
-  });
-  const presetOptions = React.useMemo(() => createPresetOptions(t), [t]);
-  const { data: years } = trpc.analytics.getPowerCurveYears.useQuery(
-    { athleteId, ...selection },
-    { enabled: scope.ready },
-  );
-
-  return (
-    <Select
-      value=""
-      onValueChange={(v) => {
-        if (!v) return;
-        if (v.startsWith("year-")) {
-          onSelect(makeYearRange(Number(v.slice(5))));
-        } else {
-          onSelect(presetToRange(v, t));
-        }
-      }}
-    >
-      <SelectTrigger className="text-muted-foreground h-7 min-w-28 border-dashed text-xs">
-        <SelectValue placeholder={t("charts.powerCurve.addRange")} />
-      </SelectTrigger>
-      <SelectContent>
-        {presetOptions.map((opt) => (
-          <SelectItem key={opt.value} value={opt.value}>
-            {opt.label}
-          </SelectItem>
-        ))}
-        {years && years.length > 0 && (
-          <>
-            <div className="bg-border mx-2 my-1 h-px" />
-            {years.map((year) => (
-              <SelectItem key={`year-${year}`} value={`year-${year}`}>
-                {year}
-              </SelectItem>
-            ))}
-          </>
-        )}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function CustomRangePopover({ onAdd }: { onAdd: (range: DateRange) => void }) {
-  const t = useT();
-  const [open, setOpen] = React.useState(false);
-  const [from, setFrom] = React.useState("");
-  const [to, setTo] = React.useState("");
-  const handleAdd = () => {
-    if (!from || !to) return;
-    onAdd(makeCustomRange(from, to));
-    setFrom("");
-    setTo("");
-    setOpen(false);
-  };
-
-  return (
-    <ResponsivePopover open={open} onOpenChange={setOpen}>
-      <ResponsivePopoverTrigger
-        render={
-          <Button
-            variant="outline"
-            size="xs"
-            className="text-muted-foreground border-dashed"
-          >
-            {t("charts.powerCurve.customRange")}
-          </Button>
-        }
-      />
-      <ResponsivePopoverContent align="start" className="sm:w-64">
-        <ResponsivePopoverHeader>
-          <ResponsivePopoverTitle>
-            {t("charts.powerCurve.customRangeTitle")}
-          </ResponsivePopoverTitle>
-        </ResponsivePopoverHeader>
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>{t("charts.powerCurve.from")}</Label>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="border-input bg-input/30 h-8 rounded-md border px-2 text-sm"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>{t("charts.powerCurve.to")}</Label>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="border-input bg-input/30 h-8 rounded-md border px-2 text-sm"
-            />
-          </div>
-          <Button size="sm" onClick={handleAdd} disabled={!from || !to}>
-            {t("charts.powerCurve.addRangeButton")}
-          </Button>
-        </div>
-      </ResponsivePopoverContent>
-    </ResponsivePopover>
-  );
-}
