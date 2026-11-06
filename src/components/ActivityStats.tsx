@@ -8,6 +8,7 @@ import type { Activity } from "@server/db/types";
 import { placeTrackLabels } from "~/components/powerTrackLabels";
 import { CardTitle } from "~/components/primitives/CardTitle";
 import { Quantity } from "~/components/primitives/Quantity";
+import { RPE_STEP_RAMP } from "~/components/primitives/RpeBar";
 import { SettingsCallout } from "~/components/primitives/SettingsCallout";
 import {
   Tooltip,
@@ -758,9 +759,6 @@ function RpeMeter({ rpe }: { rpe: number }) {
     </div>
   );
 }
-
-/** Zone-ramp index for each RPE step: easy steps cool, maximal ones hot. */
-const RPE_STEP_RAMP = [1, 1, 1, 2, 2, 3, 3, 4, 4, 5];
 
 /**
  * Elapsed time split into moving time (in the sport's color) and pauses; a

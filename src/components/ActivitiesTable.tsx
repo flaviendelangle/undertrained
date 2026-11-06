@@ -26,6 +26,7 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { QueryState } from "~/components/primitives/QueryState";
+import { RpeBar } from "~/components/primitives/RpeBar";
 import { SportIconTile } from "~/components/primitives/SportIconTile";
 import { Button } from "~/components/ui/button";
 import {
@@ -259,14 +260,14 @@ const createColumns = (t: TFunction) =>
         id: "perceivedExertion",
         cell: (info) => {
           const value = info.getValue();
-          return value != null ? `${value}/10` : "";
+          return value != null ? <RpeBar rpe={value} /> : "";
         },
         header: () => <span>{t("activities.columns.rpe")}</span>,
         sortFn: "basic",
         sortDescFirst: true,
         sortUndefined: "last",
-        size: 70,
-        meta: { numeric: true, minWidth: 70 },
+        size: 100,
+        meta: { numeric: true, minWidth: 120 },
       },
     ),
   ]);
