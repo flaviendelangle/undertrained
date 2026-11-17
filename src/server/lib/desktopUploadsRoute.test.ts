@@ -104,6 +104,7 @@ describe("desktop recording uploads", () => {
     ];
     expect(url).toBe("https://www.strava.com/api/v3/uploads");
     expect(options.headers.Authorization).toBe("Bearer upstream-private");
+    expect(options.body.get("sport_type")).toBe("VirtualRide");
     expect(options.body.get("trainer")).toBe("1");
     expect(options.body.get("external_id")).toMatch(
       /^undertrained-7-[a-f0-9]+\.fit$/,

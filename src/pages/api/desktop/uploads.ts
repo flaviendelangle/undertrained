@@ -62,6 +62,9 @@ export default async function handler(
         "ride.fit",
       );
       form.append("data_type", "fit");
+      // The FIT file says cycling/indoor_cycling, which Strava files as a plain Ride.
+      // Ask for VirtualRide explicitly, the type Zwift and other trainer apps land on.
+      form.append("sport_type", "VirtualRide");
       form.append("trainer", "1");
       form.append("name", body.data.name);
       // Stable identity helps upstream duplicate detection after an uncertain response.
